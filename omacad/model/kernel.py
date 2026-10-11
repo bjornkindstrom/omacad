@@ -219,6 +219,34 @@ class CadKernel:
         return solid
 
     @staticmethod
+    def foot_fill_tool(body: m3d.Manifold, edge, size: float, kind: str) -> m3d.Manifold:
+        """Filling tool for the foot of a wall (a LoopEdge with convex=False). The fillet lies on the face next to
+        the wall, so it needs flat face under it. Where an earlier rounding has already cut that face away (a
+        shelf narrower than the radius) the tool would hang over the cut like a lip; the radius is then reduced
+        to the widest one that still rests on the face, so the fillet runs out smoothly into the other rounding."""
+        n = np.asarray(edge.n, dtype=float)
+        u = np.cross(n, [1.0, 0.0, 0.0] if abs(n[0]) < 0.9 else [0.0, 1.0, 0.0])
+        u /= np.linalg.norm(u)
+        basis = np.column_stack([u, np.cross(n, u), n])
+        below = m3d.Manifold.cube((1e5, 1e5, 1e5), True).transform(
+            np.column_stack([basis, np.asarray(edge.pts[0], dtype=float) - n * 5e4]))   # everything under the face plane
+
+        def hangs(tool) -> bool:
+            return ((tool ^ below) - body).volume() > 1e-6 * max(float(size), 1.0) ** 3
+
+        tool = CadKernel.loop_round_tool(edge, size, kind)
+        if not hangs(tool):
+            return tool
+        lo, hi = 0.0, float(size)
+        for _ in range(12):
+            mid = (lo + hi) / 2.0
+            if hangs(CadKernel.loop_round_tool(edge, mid, kind)):
+                hi = mid
+            else:
+                lo = mid
+        return CadKernel.loop_round_tool(edge, lo, kind) if lo > 1e-3 else m3d.Manifold()
+
+    @staticmethod
     def _loop_tool_pieces(P, n, t, inw, sec) -> m3d.Manifold:
         """The corner cross-section extruded along every straight piece of the outline (arcs are many short
         pieces), merged. Where the radius is larger than a corner arc the pieces overlap and cut a dome."""

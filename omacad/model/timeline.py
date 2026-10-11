@@ -385,7 +385,10 @@ class FilletFeature(Feature):
                 return  # the same edge selected twice
             seen.append((body, edge))
             ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
-            tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
+            if getattr(edge, "kind", "") == "loop" and not edge.convex:
+                tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
+            else:
+                tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
             (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
 
         missing = []
