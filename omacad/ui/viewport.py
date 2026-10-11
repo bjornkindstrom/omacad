@@ -1127,7 +1127,7 @@ class Viewport3D(QOpenGLWidget):
         return self.doc.active_sketch.hit_test(uv[0], uv[1], self._entity_tolerance())
 
     def _update_entity_hover(self, x: float, y: float):
-        active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and (self.sketch_tool == "DIMENSION" or self.measure is not None))
+        active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and (self.sketch_tool in ("DIMENSION", "OFFSET") or self.measure is not None))
         ent = self._pick_entity(x, y) if active else None
         hid = ent.entity_id if ent else None
         if hid != self.hover_entity_id:
@@ -1145,6 +1145,18 @@ class Viewport3D(QOpenGLWidget):
             self.selected_entities = {ent.entity_id}
         self.selection_changed.emit()
         self.update()
+
+    def _offset_status(self):
+        n = len(self.selected_entities)
+        self.status_message.emit(f"Offset: click a curve to take its whole connected chain, click more to add (Alt+click = one element, click again to drop). "
+                                 f"{n} selected. Press Enter or right-click to set the distance. Esc cancels.")
+
+    def _offset_go(self):
+        if not self.selected_entities:
+            self.status_message.emit("Offset: click the curves to offset first.")
+            return
+        self.offset_selected()
+        self.set_sketch_tool("NONE")
 
     def offset_selected(self):
         """Offset (O): parallel copies of the selected sketch elements at a typed distance."""
@@ -1173,7 +1185,7 @@ class Viewport3D(QOpenGLWidget):
             self.update()
 
         try:
-            res = self.prompt_dimension_value("Offset", "Distance (positive = outward / to the left of a line, negative = the other way):",
+            res = self.prompt_dimension_value("Offset", "Distance (negative = inward for a closed shape, positive = outward; for a single line: positive = left of its direction):",
                                               5.0, lo=-5000.0, hi=5000.0, on_change=preview)
         finally:
             self.offset_preview = None
@@ -1645,6 +1657,8 @@ class Viewport3D(QOpenGLWidget):
         self.sketch_second_uv = None
         self.sketch_current_uv = None
         self.sketch_tool_changed.emit(tool_name)
+        if tool_name == "OFFSET":
+            self._offset_status()
         if tool_name == "MIRROR":
             self._mirror_status()
         if tool_name == "TRIM":
@@ -2961,8 +2975,9 @@ class Viewport3D(QOpenGLWidget):
                 banner_text
             )
 
-        if self.doc.active_sketch and self.sketch_tool in ("MIRROR", "TRIM"):
+        if self.doc.active_sketch and self.sketch_tool in ("MIRROR", "TRIM", "OFFSET"):
             hint = {"TRIM": "TRIM: click the piece to remove",
+                    "OFFSET": f"OFFSET: click curves ({len(self.selected_entities)} picked), then Enter",
                     "MIRROR": ("MIRROR 1/2: click shapes, then Enter" if self._mirror_phase == "pick"
                                else "MIRROR 2/2: click the mirror line / an axis")}[self.sketch_tool]
             hf = QFont(); hf.setBold(True); hf.setPointSize(11)
@@ -3744,6 +3759,29 @@ class Viewport3D(QOpenGLWidget):
 
         self.last_mouse_pos = event.position().toPoint()
 
+        # Handle Offset Tool Click (Fusion style: a click takes the whole connected chain)
+        if self.doc.active_sketch and self.sketch_tool == "OFFSET":
+            if event.button() == Qt.MouseButton.RightButton:
+                if self.selected_entities:
+                    self._offset_go()
+                else:
+                    self.set_sketch_tool("NONE")
+                return
+            if event.button() == Qt.MouseButton.LeftButton:
+                ent = self._pick_entity(x, y)
+                if ent is not None:
+                    mods = event.modifiers()
+                    single = bool(mods & Qt.KeyboardModifier.AltModifier)       # Alt+click: just this element
+                    ids = {ent.entity_id} if single else self.doc.active_sketch.connected_entities(ent.entity_id)
+                    if ids <= self.selected_entities:
+                        self.selected_entities -= ids
+                    else:
+                        self.selected_entities |= ids   # clicks add; click a picked chain again to drop it
+                    self.selection_changed.emit()
+                    self._offset_status()
+                    self.update()
+                return
+
         # Handle Mirror Tool Click
         if self.doc.active_sketch and self.sketch_tool == "MIRROR":
             if event.button() == Qt.MouseButton.RightButton:   # right-click: next step / back / cancel
@@ -3869,12 +3907,12 @@ class Viewport3D(QOpenGLWidget):
                     return
 
         # Press on a sketch element: select it and prepare a drag-move
-        if (event.button() == Qt.MouseButton.LeftButton and self._can_select_sketch_entities()
-                and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier)):
+        if event.button() == Qt.MouseButton.LeftButton and self._can_select_sketch_entities():
             ent = self._pick_entity(x, y)
             if ent is not None:
-                if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-                    self.selected_entities ^= {ent.entity_id}
+                if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
+                    self.selected_entities ^= {ent.entity_id}   # Shift/Ctrl+click: add or remove one element
+                    self._press_pos = None
                     self.selection_changed.emit()
                     self.update()
                     return
@@ -3995,7 +4033,7 @@ class Viewport3D(QOpenGLWidget):
         self.hovered_dim_id = hovered
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "DIMENSION", "MOVE"):
+        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE"):
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -4177,7 +4215,7 @@ class Viewport3D(QOpenGLWidget):
         elif key == "fillet":
             self.set_sketch_tool("FILLET")
         elif key == "offset":
-            self.offset_selected()
+            self.set_sketch_tool("OFFSET")
         elif key == "delete":
             self.delete_selected_entities()
 
@@ -4335,6 +4373,13 @@ class Viewport3D(QOpenGLWidget):
                 self.status_message.emit("Fillet: picked corners cleared.")
                 self.update()
                 return
+        if self.doc.active_sketch and self.sketch_tool == "OFFSET":
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+                self._offset_go()
+                return
+            if event.key() == Qt.Key.Key_Escape:
+                self.set_sketch_tool("NONE")
+                return
         if self.doc.active_sketch and self.sketch_tool == "MIRROR":
             k = event.key()
             if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self._mirror_phase == "pick":
@@ -4393,7 +4438,7 @@ class Viewport3D(QOpenGLWidget):
                 self.set_sketch_tool("MOVE")
                 return
             elif event.key() == Qt.Key.Key_O:
-                self.offset_selected()
+                self.set_sketch_tool("OFFSET")
                 return
             elif event.key() == Qt.Key.Key_F:
                 self.set_sketch_tool("FILLET")

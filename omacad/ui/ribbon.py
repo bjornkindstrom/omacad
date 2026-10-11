@@ -310,6 +310,12 @@ class Ribbon(QWidget):
         self.btn_mirror_sk.clicked.connect(lambda: self.select_sketch_tool("MIRROR"))
         h_layout.addWidget(self.btn_mirror_sk)
 
+        self.btn_offset_sk = RibbonButton("Offset\n(O)", "⧉")
+        self.btn_offset_sk.setCheckable(True)
+        self.btn_offset_sk.setToolTip("Offset (O): click curves (a click takes the whole connected chain, click more to add), then Enter and type the distance")
+        self.btn_offset_sk.clicked.connect(lambda: self.select_sketch_tool("OFFSET"))
+        h_layout.addWidget(self.btn_offset_sk)
+
         # Separator
         sep_dim = QFrame()
         sep_dim.setFrameShape(QFrame.Shape.VLine)
@@ -397,6 +403,8 @@ class Ribbon(QWidget):
         self.btn_slot.setChecked(tool_name == "SLOT")
         if hasattr(self, "btn_fillet_sk"):
             self.btn_fillet_sk.setChecked(tool_name == "FILLET")
+        if hasattr(self, "btn_offset_sk"):
+            self.btn_offset_sk.setChecked(tool_name == "OFFSET")
         if hasattr(self, "btn_mirror_sk"):
             self.btn_mirror_sk.setChecked(tool_name == "MIRROR")
         if hasattr(self, "btn_trim_sk"):
