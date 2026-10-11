@@ -385,7 +385,10 @@ class Exporter:
                 doc.timeline.add_feature(feat)
             elif ft == "revolve":
                 feat = RevolveFeature(fid, fname, f_data["sketch_id"], f_data["profile_idx"],
-                                      f_data.get("segments", 48), f_data.get("operation", "new_body"))
+                                      f_data.get("segments", 96), f_data.get("operation", "new_body"),
+                                      axis=f_data.get("axis", ["v"]), angle=f_data.get("angle", 360.0),
+                                      direction=f_data.get("direction", "one_side"), angle2=f_data.get("angle2", 0.0),
+                                      extra_profiles=f_data.get("extra_profiles", []))
                 doc.timeline.add_feature(feat)
             elif ft == "fillet":
                 feat = FilletFeature(fid, fname, [tuple(e) if e and isinstance(e[0], str) else (e[0], e[1]) for e in f_data["edges"]],

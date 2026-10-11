@@ -8,7 +8,7 @@ from typing import Dict, Optional, List, Callable, Tuple
 import numpy as np
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
-    SphereFeature, ExtrudeFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
+    SphereFeature, ExtrudeFeature, RevolveFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
     ImportMeshFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
@@ -282,6 +282,19 @@ class Document:
         self.hide_used_sketches()
         self.notify_changed()
 
+    def add_revolve(self, sketch_id: str, profile_idx: int, axis=("v",), angle: float = 360.0, operation: str = "new_body",
+                    direction: str = "one_side", angle2: float = 0.0, extra_profiles=None, exprs=None):
+        feat_id = f"revolve_{len(self.timeline.features) + 1}"
+        feat_name = f"Revolve {len([f for f in self.timeline.features if f.feature_type == 'revolve']) + 1}"
+        feat = RevolveFeature(feat_id, feat_name, sketch_id, profile_idx, operation=operation, axis=axis, angle=angle,
+                              direction=direction, angle2=angle2, extra_profiles=extra_profiles)
+        feat.exprs = dict(exprs or {})
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.hide_used_sketches()
+        self.notify_changed()
+        return feat
+
     def select_body(self, body_id: Optional[str], multi: bool = False) -> None:
         if not multi:
             for b in self.bodies.values():
@@ -419,7 +432,7 @@ class Document:
         "cylinder": ("radius", "height", "center"),
         "sphere": ("radius",),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "operation"),
-        "revolve": ("sketch_id", "profile_idx", "segments", "operation"),
+        "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
         "combine": ("operation",),
         "fillet": ("size", "kind"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",

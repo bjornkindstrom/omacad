@@ -822,7 +822,78 @@ class MainWindow(QMainWindow):
         refresh_preview()
 
     def prompt_revolve(self):
-        QMessageBox.information(self, "Revolve", "Revolve dialog will be activated in the next step!")
+        """Revolve: profile (click it in the view), axis, angle, direction and operation, with live preview."""
+        if not self.doc.sketches or not any(sk.profiles for sk in self.doc.sketches.values()):
+            QMessageBox.information(self, "Revolve", "Draw a closed sketch profile first (and a construction line for the axis), then revolve it.")
+            return
+        if getattr(self, "_revolve_dlg", None) is not None:
+            self._revolve_dlg.raise_()
+            return
+        from omacad.model.timeline import RevolveFeature
+        from omacad.ui.dialogs import RevolveDialog
+        dlg = RevolveDialog(self.doc, self.viewport, embedded=True)
+        dlg.place(self.viewport.size())
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self._revolve_dlg = dlg
+
+        def extras(s_id):
+            return [i for (sid, i) in self.doc.selected_extra if sid == s_id]
+
+        def make(operation=None):
+            s_id, p_idx = dlg.get_values()
+            if s_id is None:
+                return None
+            return RevolveFeature("preview", "preview", s_id, p_idx, operation=operation or dlg.get_operation(), axis=dlg.get_axis(),
+                                  angle=dlg.spn_angle.value(), direction=dlg.get_direction(), angle2=dlg.spn_angle2.value(),
+                                  extra_profiles=extras(s_id))
+
+        def refresh_preview():
+            feat = make()
+            solid, op = None, dlg.get_operation()
+            dlg.lbl_info.setText("")
+            if feat is not None:
+                try:
+                    solid = feat.build_solid(self.doc)
+                    if op == "auto":
+                        op = feat.resolve_operation(self.doc)
+                        dlg.set_auto_result(op)
+                except Exception:
+                    solid = None
+                dlg.lbl_info.setText(feat.problem)
+                if self.doc.selected_profile != dlg.get_values():
+                    self.doc.selected_profile = dlg.get_values()
+                    self.doc.selected_extra = []
+                    self.viewport.update()
+            self.viewport.set_preview(solid, op)
+            self.status_label.setText("Revolve: click a profile, pick the axis, set the angle." if feat is None else
+                                      f"Revolve: {1 + len(self.doc.selected_extra)} profile(s). Enter = OK, Esc = cancel.")
+
+        def on_pick():
+            if self.doc.selected_profile:
+                dlg.select_profile(self.doc.selected_profile)
+            refresh_preview()
+
+        def on_finished(result):
+            self.viewport.profile_picked.disconnect(on_pick)
+            self.viewport.set_preview(None)
+            self._revolve_dlg = None
+            if result:
+                feat = make()
+                if feat is not None:
+                    new = self.doc.add_revolve(feat.sketch_id, feat.profile_idx, axis=feat.axis, angle=feat.angle, operation=feat.operation,
+                                               direction=feat.direction, angle2=feat.angle2, extra_profiles=feat.extra_profiles,
+                                               exprs=dlg.get_expressions())
+                    self.doc.selected_profile = None
+                    self.doc.selected_extra = []
+                    self.viewport.zoom_fit()
+                    self.status_label.setText(new.problem or f"{new.name}: {new.angle:g}° ({new.operation}).")
+            self.viewport.update()
+
+        dlg.changed.connect(refresh_preview)
+        self.viewport.profile_picked.connect(on_pick)
+        dlg.finished.connect(on_finished)
+        dlg.show()
+        refresh_preview()
 
     def prompt_box(self):
         dlg = BoxDialog(self)
