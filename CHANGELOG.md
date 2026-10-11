@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.5 - 2026-10-11
+
+### Changed
+- A sketch on a face now has its origin in the middle of the face (the origin snap locks to the centre; edges, corners and midpoints already snap) and a grid on the face plane, centred there and sized to the face, instead of the ground grid around the world origin.
+
 ## 0.6.4 - 2026-10-11
 
 ### Added

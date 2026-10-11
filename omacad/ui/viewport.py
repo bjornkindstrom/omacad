@@ -2192,7 +2192,7 @@ class Viewport3D(QOpenGLWidget):
             return SketchPlane.create_named(payload)
         if kind == "cplane":
             return self.doc.construction_plane(payload)
-        p = SketchPlane.from_face(payload.normal, payload.origin)
+        p = SketchPlane.from_face(payload.normal, payload.origin).centered_on(payload.tris)
         p.face = payload
         return p
 
@@ -2403,6 +2403,9 @@ class Viewport3D(QOpenGLWidget):
         # 1. Draw 3D Ground Grid
         if self.show_grid:
             self.render_ground_grid(mvp)
+            sk = self.doc.active_sketch
+            if sk is not None and sk.plane.name == "FACE":
+                self.render_plane_grid(mvp, sk.plane)
 
         # 2. Draw Canvases / Reference Images
         self.render_canvases(mvp)
@@ -2575,6 +2578,29 @@ class Viewport3D(QOpenGLWidget):
                 GL.glUniform4f(loc_c, 0.2, 0.65, 1.0, 0.7)
                 self.draw_buffer_arrays(GL.GL_LINES, loc_p, border_lines)
                 GL.glUseProgram(0)
+
+    def render_plane_grid(self, mvp: np.ndarray, plane):
+        """Grid on the sketch plane itself, centred on its origin (the face centre) and sized to the
+        face, drawn a hair above it so it shows on the face."""
+        if not self.prog_flat:
+            return
+        step = 10.0
+        ref = self._reference_segments()
+        half = float(np.abs(ref).max()) if len(ref) else 50.0
+        n = max(5, int(math.ceil(half * 1.2 / step)))
+        ext = n * step
+        pts = []
+        for i in range(-n, n + 1):
+            c = i * step
+            pts += [(-ext, c), (ext, c), (c, -ext), (c, ext)]
+        lift = np.asarray(plane.normal, dtype=np.float64) * 0.05
+        data = np.array([plane.uv_to_world(u, v) + lift for u, v in pts], dtype=np.float32)
+        GL.glUseProgram(self.prog_flat)
+        GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
+        GL.glUniform4f(GL.glGetUniformLocation(self.prog_flat, "u_color"), *theme.palette().grid_rgb01(), 0.5)
+        self.set_line_width(1.0)
+        self.draw_buffer_arrays(GL.GL_LINES, GL.glGetAttribLocation(self.prog_flat, "in_pos"), data.reshape(-1))
+        GL.glUseProgram(0)
 
     def render_ground_grid(self, mvp: np.ndarray):
         """Renders concentric grid and colored X/Y/Z coordinate axes."""

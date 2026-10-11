@@ -77,6 +77,15 @@ class SketchPlane:
         f32 = lambda a: np.asarray(a, dtype=np.float32)
         return cls(name=name, origin=f32(origin), u_axis=f32(u), v_axis=f32(v), normal=f32(n))
 
+    def centered_on(self, tris: np.ndarray) -> "SketchPlane":
+        """Same plane with the origin moved to the middle of the given world triangles (a face), so
+        (0, 0) is the face centre and the grid and the origin snap work from there."""
+        pts = np.asarray(tris, dtype=np.float64).reshape(-1, 3) - np.asarray(self.origin, dtype=np.float64)
+        u, v = pts @ np.asarray(self.u_axis, dtype=np.float64), pts @ np.asarray(self.v_axis, dtype=np.float64)
+        c = self.uv_to_world((u.min() + u.max()) / 2, (v.min() + v.max()) / 2)
+        return SketchPlane(name=self.name, origin=np.asarray(c, dtype=np.float32), u_axis=self.u_axis,
+                           v_axis=self.v_axis, normal=self.normal)
+
     def uv_to_world(self, u: float, v: float) -> np.ndarray:
         """Convert local 2D (u, v) coordinates on the plane to 3D world (x, y, z)."""
         return self.origin + float(u) * self.u_axis + float(v) * self.v_axis
