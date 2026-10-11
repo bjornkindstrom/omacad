@@ -16,7 +16,7 @@ Nuvarande version: **0.5.2**. Den här planen skrevs 2026-10-11. `ROADMAP.md` ä
 | Version | Tema | Innehåll |
 |---|---|---|
 | **0.6** | Trygghet | **Global ångra/gör om** för allt (se Del A), `delete_body` som riktigt steg, **pytest-svit** i `tests/` (de scriptade volymtesterna blir riktiga tester: fillet/chamfer med exakta volymer, shell, revolve, offset/trim/mirror, ytkanter, ångra/gör om, spara/ladda-rundtur) och ett CI-jobb som kör testerna före EXE-bygget |
-| **0.65** | Säkerhetsnät + AI-återkoppling | **Autosave-historik**, krasch-återställning, versionshistorik med miniatyrer, säker laddning, **"Det blev fel"-knappen** (se Del C) |
+| **0.65** | Säkerhetsnät + AI-återkoppling | **Autosave-historik**, krasch-återställning, versionshistorik med miniatyrer, säker laddning, **"Starta om med ny version"** (sparar allt och fortsätter där du slutade), **"Det blev fel"-knappen** (se Del C) |
 | **0.7** | Modellera | Hole-dialog, Extrude: Taper + Start + All/To object, Press/Pull (Q), **Text i skiss + extrudera/emboss/deboss**. Smart: **S1 Markera liknande** |
 | **0.8** | Smart I | **S2 Stämpla**, **S3 Klicka-till-källa**, **S4 Print-verktygslåda**, **S5 Runda allt med regler** |
 | **0.9** | Smart II + vy | **S6 Kommandorad + makron/konsol** (och inbyggd AI-hjälp), **S7 Varianter + scrub**, ortografisk/perspektiv, visningslägen, Home-vy, Fusion-musmappning, Delete, kopiera/klistra, Move/Copy |
@@ -64,6 +64,12 @@ Fusion: *Sketch > Text* öppnar en dialog (text, font, höjd, teckenavstånd, ju
 - **Versionshistorik** (Arkiv-menyn): lista med miniatyrbild per version; öppna en gammal version som nytt dokument eller återställ den på plats (och det går att ångra).
 - **Säker spara och ladda**: `.bak` av föregående fil vid varje spara, redan atomisk skrivning. Okända eller trasiga steg i en fil *bevaras* (och hoppas över med en varning) i stället för att tappas, så en nyare fil aldrig förstörs av en äldre version. En trasig fil faller tillbaka på `.bak` och historiken.
 - **Varje rättad bugg blir ett regressionstest** med det inskickade dokumentet som fixtur (se nedan).
+
+**Starta om med ny version (`Ctrl+Shift+R`)** – utvecklingsloopen och uppdateringar:
+- Du trycker, programmet sparar en **sessionsbild** i `~/.local/share/omacad/session/` (dokumentet inklusive osparade ändringar, filens sökväg, kamera, aktiv skiss och verktyg, markering, och ångra-stacken), startar sig självt på nytt med den senaste koden (`app.py --restore-session`) och stänger sig. Det nya fönstret öppnas med samma dokument, samma vy och samma skiss, så du fortsätter exakt där du var, och en bugg som just rättats är redan borta.
+- **Utvecklingsläge** (`./run.sh --dev`): en filbevakare på `omacad/*.py` visar en liten notis "Ny version finns, ladda om (Ctrl+Shift+R)" varje gång jag sparat en rättning, så att du kan prova den direkt utan att stänga något.
+- **Den installerade EXE:n**: samma knapp kollar GitHub efter en nyare release (`v<version>`) och erbjuder "Uppdatera och starta om" (hämtar, sparar sessionen, byter fil, återställer).
+- Misslyckas återställningen (till exempel att en ny version inte kan läsa sessionsbilden) faller programmet tillbaka på senaste autosave och säger det tydligt; sessionsbilden raderas aldrig innan det nya fönstret har bekräftat att det laddat klart.
 
 **"Det blev fel"-knappen och AI-återkoppling** – så bygger vi appen vidare:
 - Knapp i verktygsraden (och kortkommando) som öppnar en liten dialog: du kan peka ut stället (klick i vyn, rektangel eller pil) och skriva en rad om vad som är fel.
