@@ -27,6 +27,9 @@ def main():
     fmt.setProfile(QSurfaceFormat.OpenGLContextProfile.CompatibilityProfile)
     QSurfaceFormat.setDefaultFormat(fmt)
 
+    from omacad import applog
+    applog.install()   # what the app prints and any error end up in problem reports
+
     # Initialize Qt Application
     app = QApplication(sys.argv)
     from omacad.ui.theme import BigIconStyle

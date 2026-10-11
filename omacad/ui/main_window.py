@@ -9,7 +9,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QDockWidget,
-    QFileDialog, QMessageBox, QLabel, QMenu
+    QFileDialog, QMessageBox, QLabel, QMenu, QPushButton
 )
 from PySide6.QtGui import QAction, QKeySequence, QIcon
 
@@ -29,6 +29,15 @@ from omacad.ui.dialogs import (
     SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog, MoveBodyDialog
 )
 from omacad.io.exporter import Exporter
+
+
+class _LoggedLabel(QLabel):
+    """The status line; everything shown there also goes into the log that travels with problem reports."""
+
+    def setText(self, text):
+        from omacad import applog
+        applog.log("status", text)
+        super().setText(text)
 
 
 class MainWindow(QMainWindow):
@@ -95,8 +104,13 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.browser_dock)
 
         # 5. Status Bar
-        self.status_label = QLabel("Ready")
+        self.status_label = _LoggedLabel("Ready")
         self.statusBar().addWidget(self.status_label)
+        btn_report = QPushButton("🐞 Report problem (F9)")
+        btn_report.setFlat(True)
+        btn_report.setToolTip("Something wrong? Describe it: the AI gets a screenshot, the model and the log and fixes it")
+        btn_report.clicked.connect(self.on_report_problem)
+        self.statusBar().addPermanentWidget(btn_report)
         self.statusBar().addPermanentWidget(QLabel("Units: mm  |  Omarchy Wayland Native"))
 
         # Setup Menus & Actions
@@ -273,6 +287,11 @@ class MainWindow(QMainWindow):
 
         # Help Menu
         menu_help = menubar.addMenu("Help")
+        act_report = QAction("Report problem…", self)
+        act_report.setShortcut(QKeySequence("F9"))
+        act_report.setToolTip("Describe what is wrong; the AI gets a screenshot, the model and the log, and fixes it")
+        act_report.triggered.connect(self.on_report_problem)
+        menu_help.addAction(act_report)
         menu_help.addAction("About Omacad", self.on_about)
 
         # Icons for the menu entries (drawn from emoji at a size the menu font can't give)
@@ -1366,6 +1385,37 @@ class MainWindow(QMainWindow):
             if ok:
                 QMessageBox.information(self, "Export STEP", f"Successfully exported {body.name} to:\n{filepath}")
                 self.status_label.setText(f"Exported {body.name} to {filepath}")
+
+    def on_report_problem(self):
+        """Screenshot first (before any dialog covers the problem), then the note, then the report goes to the AI agent."""
+        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+        from PySide6.QtGui import QPixmap
+        from omacad import feedback
+        from omacad.ui.feedback_dialog import FeedbackDialog
+
+        def png(image):
+            data, buf = QByteArray(), QBuffer()
+            buf.setBuffer(data)
+            buf.open(QIODevice.OpenModeFlag.WriteOnly)
+            image.save(buf, "PNG")
+            return bytes(data)
+
+        window_shot = self.grab()
+        view_shot = self.viewport.grabFramebuffer()
+        dlg = FeedbackDialog(self, window_shot)
+        if not dlg.exec():
+            return
+        v = self.viewport
+        extra = {"camera": {"azimuth": v.azimuth, "elevation": v.elevation, "distance": v.distance,
+                            "target": [float(x) for x in v.target]},
+                 "sketch_tool": v.sketch_tool, "selected_sketch_entities": sorted(v.selected_entities),
+                 "window_size": [self.width(), self.height()]}
+        folder = feedback.build_bundle(self.doc, dlg.text(), {"screenshot_window.png": png(window_shot.toImage()),
+                                                              "screenshot_view.png": png(view_shot)}, extra)
+        if dlg.fix_now() and feedback.launch_agent(folder):
+            self.status_label.setText(f"Report sent to the AI agent (a terminal opened). Saved in {folder}")
+        else:
+            self.status_label.setText(f"Report saved in {folder}")
 
     def on_about(self):
         QMessageBox.about(
