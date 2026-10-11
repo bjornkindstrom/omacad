@@ -614,13 +614,16 @@ class PatternDialog(BaseFeatureDialog):
         self.spn_margin = ExprDoubleSpinBox(); self.spn_margin.setRange(0.0, 100000); self.spn_margin.setSuffix(" mm"); self.spn_margin.setValue(3.0)
         self.spn_margin.setToolTip("How far the copies stay from the edge of the face")
         self.cmb_layout = QComboBox(); self.cmb_layout.addItems(["Grid", "Staggered (honeycomb)"])
+        self.spn_partial = QSpinBox(); self.spn_partial.setRange(0, 100); self.spn_partial.setValue(25); self.spn_partial.setSuffix(" %")
+        self.spn_partial.setToolTip("Copies at the edge may be cut off by the frame. Pieces smaller than this share of a whole copy are left out. "
+                                    "0 = only whole copies.")
 
         self.rows = {
             "linear": [("Direction:", self.cmb_axis1), ("Copies:", self.spn_count1), ("Spacing:", self.spn_space1),
                        ("", self.chk_second), ("Direction 2:", self.cmb_axis2), ("Copies 2:", self.spn_count2), ("Spacing 2:", self.spn_space2)],
             "mirror": [("Mirror:", self.cmb_mirror), ("About:", self.cmb_about)],
             "circular": [("Copies:", self.spn_count1), ("Angle:", self.spn_angle), ("About:", self.cmb_about)],
-            "fill": [("Gap between copies:", self.spn_gap), ("Margin to the edge:", self.spn_margin), ("Layout:", self.cmb_layout)],
+            "fill": [("Gap between copies:", self.spn_gap), ("Margin to the edge:", self.spn_margin), ("Layout:", self.cmb_layout), ("Smallest cut piece:", self.spn_partial)],
         }
         self._kind_form = QFormLayout()
         self.lbl_info = QLabel("")
@@ -632,7 +635,7 @@ class PatternDialog(BaseFeatureDialog):
         self.cmb_kind.currentIndexChanged.connect(self._show_kind)
         for w_ in (self.cmb_kind, self.cmb_axis1, self.cmb_axis2, self.cmb_mirror, self.cmb_about, self.cmb_layout):
             w_.currentIndexChanged.connect(lambda *_: self.changed.emit())
-        for w_ in (self.spn_count1, self.spn_count2, self.spn_space1, self.spn_space2, self.spn_angle, self.spn_gap, self.spn_margin):
+        for w_ in (self.spn_count1, self.spn_count2, self.spn_space1, self.spn_space2, self.spn_angle, self.spn_gap, self.spn_margin, self.spn_partial):
             w_.valueChanged.connect(lambda *_: self.changed.emit())
         self.chk_second.toggled.connect(lambda *_: (self._show_kind(), self.changed.emit()))
         self.lst.itemChanged.connect(lambda *_: self.changed.emit())
@@ -683,7 +686,7 @@ class PatternDialog(BaseFeatureDialog):
         self.cmb_about.setCurrentIndex(0 if f.about == "body" else 1)
         self.spn_angle.setValue(f.angle)
         if f.kind == "fill":
-            self.spn_gap.setValue(f.spacing1); self.spn_margin.setValue(f.spacing2)
+            self.spn_gap.setValue(f.spacing1); self.spn_margin.setValue(f.spacing2); self.spn_partial.setValue(int(round(f.count1)))
             self.cmb_layout.setCurrentIndex(1 if f.mirror_mode == "stagger" else 0)
             for key, spin in (("spacing1", self.spn_gap), ("spacing2", self.spn_margin)):
                 if f.exprs.get(key):
@@ -703,7 +706,7 @@ class PatternDialog(BaseFeatureDialog):
     def get_params(self) -> dict:
         second = self.chk_second.isChecked()
         if self.kind() == "fill":   # gap and margin travel in the spacing fields, the layout in mirror_mode
-            return {"axis1": "x", "count1": 2, "spacing1": self.spn_gap.value(), "axis2": "y", "count2": 1,
+            return {"axis1": "x", "count1": self.spn_partial.value(), "spacing1": self.spn_gap.value(), "axis2": "y", "count2": 1,
                     "spacing2": self.spn_margin.value(), "mirror_mode": "stagger" if self.cmb_layout.currentIndex() else "grid",
                     "about": "body", "angle": 360.0}
         return {

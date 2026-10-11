@@ -472,6 +472,31 @@ class PatternFeature(Feature):
                     return sk.plane
         return None
 
+    @staticmethod
+    def _room_prism(clip, before):
+        """The allowed region of the face as a tall prism (through the whole body) in world space."""
+        room, o, ua, va, n = clip
+        from shapely.geometry import Polygon
+        from shapely.geometry.polygon import orient
+        bb = before.bounding_box()
+        h = 2.0 * float(np.max(np.array(bb[3:]) - np.array(bb[:3]))) + 10.0
+        cs = None
+        for poly in (room.geoms if hasattr(room, "geoms") else [room]):
+            if poly.is_empty or poly.geom_type != "Polygon":
+                continue
+            poly = orient(poly, sign=1.0)
+            part = m3d.CrossSection([list(poly.exterior.coords)[:-1]])
+            for hole in poly.interiors:
+                ring = list(hole.coords)[:-1]
+                if Polygon(ring).exterior.is_ccw is False:
+                    ring.reverse()
+                part = part - m3d.CrossSection([ring])
+            cs = part if cs is None else cs + part
+        if cs is None:
+            return None
+        mat = np.column_stack([ua, va, n, o]).astype(float)
+        return m3d.Manifold.extrude(cs, height=h).translate((0, 0, -h / 2.0)).transform(mat)
+
     def _fill_funcs(self, doc, before, removed, added):
         """Fill the flat face the source sketch is on: copies on a lattice that keeps exactly `gap` mm between
         neighbours (measured edge to edge, so hexagons, circles and triangles all pack right), staying
@@ -552,6 +577,10 @@ class PatternFeature(Feature):
         reach_y = max(abs(ry1 - c0.y), abs(ry0 - c0.y)) + bh
         imax, jmax = int(reach_x / dx) + 2, int(reach_y / dy) + 2
         funcs = []
+        # count1 = smallest piece (% of a whole copy) worth keeping at the frame; 0 = whole copies only
+        min_frac = max(0.0, min(100.0, float(self.count1))) / 100.0
+        self._fill_clip = (room, o, ua, va, n) if min_frac > 0 else None
+        foot_area = max(foot.area, 1e-9)
         # footprint test works on a prepared polygon for speed
         from shapely.prepared import prep
         prepared = prep(room)
@@ -561,7 +590,11 @@ class PatternFeature(Feature):
                 a, b = i * dx + off, j * dy
                 if i == 0 and j == 0:
                     continue
-                if not prepared.contains(affinity.translate(foot, a, b)):
+                moved = affinity.translate(foot, a, b)
+                if min_frac > 0:
+                    if not prepared.intersects(moved) or moved.intersection(room).area < min_frac * foot_area:
+                        continue
+                elif not prepared.contains(moved):
                     continue
                 vec = tuple(ua * a + va * b)
                 funcs.append(lambda m, vec=vec: m.translate(vec))
@@ -645,6 +678,12 @@ class PatternFeature(Feature):
         if not added.is_empty():
             parts = [f(added) for f in funcs]
             add = m3d.Manifold.batch_boolean(parts, m3d.OpType.Add) if len(parts) > 1 else parts[0]
+        clip = getattr(self, "_fill_clip", None) if self.kind == "fill" else None
+        if clip is not None:   # partial copies at the frame are cut off at the inset outline
+            prism = self._room_prism(clip, before)
+            if prism is not None:
+                rem = (rem ^ prism) if rem is not None else None
+                add = (add ^ prism) if add is not None else None
         self.copies = len(funcs)
         return rem, add
 

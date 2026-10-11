@@ -20,7 +20,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - Box, Cylinder, Sphere, Combine (Join/Cut/Intersect).
 - **Fillet och Chamfer** på raka kanter, cirklar (skruvhål, försänkningar) och hela konturer med rundade hörn. Inre och yttre kanter, dubbelklick väljer hela loopen, förhandsvisning.
 - **Pattern / Mirror**: jämnt fördelade kopior, speglade hörn (kopierar t.ex. hål med chamfers) eller runt en axel, med förhandsvisning.
-- **Fill the face** (Pattern/Mirror → *Fill the face*): fyller en yta med kopior med exakt fast mellanrum (kant till kant, så hexagoner, cirklar och trianglar packas rätt), valfri marginal mot kanten, rutnät eller förskjutet (bikake).
+- **Fill the face** (Pattern/Mirror → *Fill the face*): fyller en yta med kopior med exakt fast mellanrum (kant till kant, så hexagoner, cirklar och trianglar packas rätt), valfri ramkant (offset) mot kanten, rutnät eller förskjutet (bikake). Kopior som hamnar vid ramen klipps av mot den (halva hexagoner), med en minsta bitstorlek så att inga flisor blir kvar.
 - **Offset Plane** i två klick: välj XY/XZ/YZ, peka på valfri yta (även cylindrar) – planet läggs tangent mot ytan.
 
 **Se in i modellen**
