@@ -26,6 +26,7 @@ class ImageCanvasWidget(QWidget):
     """Interactive canvas widget displaying the image with crop box and calibration tape measure."""
 
     point_picked = Signal(float, float)
+    zoom_changed = Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,11 +44,25 @@ class ImageCanvasWidget(QWidget):
         self.crop_start: Optional[QPointF] = None
         self.crop_current: Optional[QPointF] = None
 
+        # Zoom & Pan state
         self.zoom: float = 1.0
+        self.pan_offset: QPointF = QPointF(0.0, 0.0)
+        self.is_panning: bool = False
+        self.last_pan_pos: QPointF = QPointF(0.0, 0.0)
+
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
         self.setMinimumSize(420, 420)
         style(self, "background-color: #1A1C1E; border: 1px solid #33373D; border-radius: 4px;")
+        self.update_cursor()
+
+    def update_cursor(self):
+        if self.calibrate_mode or self.crop_mode:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif self.processed_pixmap and not self.processed_pixmap.isNull():
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -65,6 +80,50 @@ class ImageCanvasWidget(QWidget):
 
     def set_pixmap(self, pix: QPixmap):
         self.processed_pixmap = pix
+        self.update_cursor()
+        self.update()
+
+    def zoom_fit(self):
+        self.zoom = 1.0
+        self.pan_offset = QPointF(0.0, 0.0)
+        self.zoom_changed.emit(self.zoom)
+        self.update()
+
+    def zoom_in(self):
+        self.set_zoom(self.zoom * 1.25)
+
+    def zoom_out(self):
+        self.set_zoom(self.zoom / 1.25)
+
+    def set_zoom(self, z: float):
+        self.zoom = max(0.1, min(30.0, z))
+        self.zoom_changed.emit(self.zoom)
+        self.update()
+
+    def wheelEvent(self, event):
+        if not self.processed_pixmap or self.processed_pixmap.isNull():
+            return
+        delta = event.angleDelta().y()
+        if delta == 0:
+            return
+        factor = 1.15 if delta > 0 else 1.0 / 1.15
+        new_zoom = max(0.1, min(30.0, self.zoom * factor))
+        if abs(new_zoom - self.zoom) < 1e-4:
+            return
+
+        pos = event.position()
+        w_half = self.width() / 2.0
+        h_half = self.height() / 2.0
+
+        rel_x = pos.x() - w_half - self.pan_offset.x()
+        rel_y = pos.y() - h_half - self.pan_offset.y()
+        ratio = new_zoom / self.zoom
+        self.pan_offset = QPointF(
+            pos.x() - w_half - rel_x * ratio,
+            pos.y() - h_half - rel_y * ratio
+        )
+        self.zoom = new_zoom
+        self.zoom_changed.emit(self.zoom)
         self.update()
 
     def image_to_widget_rect(self) -> QRectF:
@@ -72,10 +131,10 @@ class ImageCanvasWidget(QWidget):
             return QRectF()
         pw, ph = self.processed_pixmap.width(), self.processed_pixmap.height()
         ww, wh = self.width() - 16, self.height() - 16
-        scale = min(ww / max(pw, 1), wh / max(ph, 1))
+        scale = min(ww / max(pw, 1), wh / max(ph, 1)) * self.zoom
         dw, dh = pw * scale, ph * scale
-        dx = (self.width() - dw) / 2.0
-        dy = (self.height() - dh) / 2.0
+        dx = (self.width() - dw) / 2.0 + self.pan_offset.x()
+        dy = (self.height() - dh) / 2.0 + self.pan_offset.y()
         return QRectF(dx, dy, dw, dh)
 
     def widget_to_image_coords(self, wx: float, wy: float) -> Optional[QPointF]:
@@ -106,6 +165,15 @@ class ImageCanvasWidget(QWidget):
                     p.choose_image()
             return
 
+        # Panning with middle button or right button or left button (when not in calibrate/crop mode)
+        if event.button() in (Qt.MouseButton.MiddleButton, Qt.MouseButton.RightButton) or (
+            event.button() == Qt.MouseButton.LeftButton and not self.calibrate_mode and not self.crop_mode
+        ):
+            self.is_panning = True
+            self.last_pan_pos = event.position()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            return
+
         if event.button() == Qt.MouseButton.LeftButton:
             pt = self.widget_to_image_coords(event.position().x(), event.position().y())
             if not pt:
@@ -125,6 +193,13 @@ class ImageCanvasWidget(QWidget):
                 self.update()
 
     def mouseMoveEvent(self, event):
+        if self.is_panning:
+            delta = event.position() - self.last_pan_pos
+            self.last_pan_pos = event.position()
+            self.pan_offset = QPointF(self.pan_offset.x() + delta.x(), self.pan_offset.y() + delta.y())
+            self.update()
+            return
+
         if self.crop_mode and self.crop_start is not None and event.buttons() & Qt.MouseButton.LeftButton:
             pt = self.widget_to_image_coords(event.position().x(), event.position().y())
             if pt:
@@ -132,6 +207,11 @@ class ImageCanvasWidget(QWidget):
                 self.update()
 
     def mouseReleaseEvent(self, event):
+        if self.is_panning and event.button() in (Qt.MouseButton.MiddleButton, Qt.MouseButton.RightButton, Qt.MouseButton.LeftButton):
+            self.is_panning = False
+            self.update_cursor()
+            return
+
         if self.crop_mode and self.crop_start and self.crop_current:
             x0 = min(self.crop_start.x(), self.crop_current.x())
             y0 = min(self.crop_start.y(), self.crop_current.y())
@@ -219,9 +299,55 @@ class CanvasEditorDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
 
-        # Left / Center: Interactive Image Viewer
+        # Left / Center: Interactive Image Viewer with Zoom Controls
+        left_box = QWidget()
+        left_layout = QVBoxLayout(left_box)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(6)
+
+        # Zoom & Navigation toolbar
+        zoom_bar = QHBoxLayout()
+        self.btn_zoom_in = QPushButton("🔍 +")
+        self.btn_zoom_in.setToolTip("Zooma in (eller scrolla upp med mushjulet)")
+        self.btn_zoom_in.setFixedWidth(44)
+
+        self.btn_zoom_out = QPushButton("🔍 −")
+        self.btn_zoom_out.setToolTip("Zooma ut (eller scrolla ner med mushjulet)")
+        self.btn_zoom_out.setFixedWidth(44)
+
+        self.btn_zoom_100 = QPushButton("1:1")
+        self.btn_zoom_100.setToolTip("Återställ till 100% skala")
+        self.btn_zoom_100.setFixedWidth(44)
+
+        self.btn_zoom_fit = QPushButton("🔲 Anpassa")
+        self.btn_zoom_fit.setToolTip("Anpassa bilden till fönstret")
+
+        self.lbl_zoom = QLabel("Zoom: 100%")
+        self.lbl_zoom.setStyleSheet("font-weight: bold; color: #A0AAB8; min-width: 80px;")
+
+        lbl_hint = QLabel("💡 Scrolla: zooma • Dra: panorera")
+        lbl_hint.setStyleSheet("color: #717885; font-size: 11px;")
+
+        zoom_bar.addWidget(self.btn_zoom_in)
+        zoom_bar.addWidget(self.btn_zoom_out)
+        zoom_bar.addWidget(self.btn_zoom_100)
+        zoom_bar.addWidget(self.btn_zoom_fit)
+        zoom_bar.addWidget(self.lbl_zoom)
+        zoom_bar.addSpacing(10)
+        zoom_bar.addWidget(lbl_hint)
+        zoom_bar.addStretch()
+
         self.canvas_view = ImageCanvasWidget(self)
-        layout.addWidget(self.canvas_view, stretch=3)
+
+        self.btn_zoom_in.clicked.connect(self.canvas_view.zoom_in)
+        self.btn_zoom_out.clicked.connect(self.canvas_view.zoom_out)
+        self.btn_zoom_100.clicked.connect(lambda: self.canvas_view.set_zoom(1.0))
+        self.btn_zoom_fit.clicked.connect(self.canvas_view.zoom_fit)
+        self.canvas_view.zoom_changed.connect(lambda z: self.lbl_zoom.setText(f"Zoom: {int(round(z * 100))}%"))
+
+        left_layout.addLayout(zoom_bar)
+        left_layout.addWidget(self.canvas_view, stretch=1)
+        layout.addWidget(left_box, stretch=3)
 
         # Right: Tool Panel
         tools_widget = QWidget()
@@ -409,6 +535,7 @@ class CanvasEditorDialog(QDialog):
             self.lbl_calib_status.setText("Klicka på punkt 1 och punkt 2 på bilden.")
         else:
             self.lbl_calib_status.setText("Kalibrering avslutad.")
+        self.canvas_view.update_cursor()
 
     def on_points_picked(self, x, y):
         p1 = self.canvas_view.calib_pt1
@@ -448,6 +575,7 @@ class CanvasEditorDialog(QDialog):
         if checked:
             self.canvas_view.calibrate_mode = False
             self.btn_calib.setChecked(False)
+        self.canvas_view.update_cursor()
 
     def apply_crop(self):
         if not self.canvas_view.crop_rect or not self.current_image:
@@ -464,6 +592,8 @@ class CanvasEditorDialog(QDialog):
         self.canvas_view.crop_rect = None
         self.btn_crop_tool.setChecked(False)
         self.canvas_view.crop_mode = False
+        self.canvas_view.update_cursor()
+        self.canvas_view.zoom_fit()
         self.refresh_image_processing()
 
     def refresh_image_processing(self):

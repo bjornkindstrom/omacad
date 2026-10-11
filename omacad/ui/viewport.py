@@ -155,6 +155,7 @@ class Viewport3D(QOpenGLWidget):
     status_message = Signal(str)
     edges_selection_changed = Signal()
     extrude_handle_dragged = Signal(float)  # signed distance along the extrude arrow while it is dragged
+    extrude_handle_drag_finished = Signal()  # emitted when dragging the handle finishes
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
 
@@ -1691,7 +1692,9 @@ class Viewport3D(QOpenGLWidget):
             return SketchPlane.create_named(payload)
         if kind == "cplane":
             return self.doc.construction_plane(payload)
-        return SketchPlane.from_face(payload.normal, payload.origin)
+        p = SketchPlane.from_face(payload.normal, payload.origin)
+        p.face = payload
+        return p
 
     def render_plane_pick(self, mvp: np.ndarray):
         """Translucent origin-plane quads and hovered face while choosing a sketch plane."""
@@ -3771,6 +3774,7 @@ class Viewport3D(QOpenGLWidget):
         if self._handle_drag and event.button() == Qt.MouseButton.LeftButton:
             self._handle_drag = False
             self.setCursor(Qt.CursorShape.OpenHandCursor if self._handle_hover else Qt.CursorShape.ArrowCursor)
+            self.extrude_handle_drag_finished.emit()
             self.update()
             return
         if event.button() == Qt.MouseButton.RightButton and self._rpress is not None:
@@ -3825,7 +3829,8 @@ class Viewport3D(QOpenGLWidget):
             if target is not None:
                 plane = self.plane_from_target(target)
                 purpose = self.plane_pick_purpose
-                self.end_plane_pick()
+                if purpose not in ("move_body", "shell_face"):
+                    self.end_plane_pick()
                 if purpose == "offset_base":
                     self.offset_base_picked.emit(plane)
                 elif purpose == "section_base":

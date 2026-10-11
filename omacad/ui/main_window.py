@@ -899,7 +899,7 @@ class MainWindow(QMainWindow):
         self.dock(dlg)
 
         def on_face_picked(plane):
-            if getattr(plane, "name", "") == "FACE" and getattr(plane, "face", None):
+            if getattr(plane, "face", None):
                 dlg.toggle_face(plane.face)
 
         self.viewport.plane_picked.connect(on_face_picked)
@@ -914,9 +914,10 @@ class MainWindow(QMainWindow):
             self.viewport.end_plane_pick()
             self.inspector.undock_tool()
 
-        if dlg.exec():
+        def on_finished(result):
             b_id, thickness, open_faces = dlg.get_values()
-            if b_id and thickness > 0:
+            cleanup()
+            if result and b_id and thickness > 0:
                 feat = self.doc.add_shell(b_id, thickness, open_faces, exprs=dlg.get_expressions())
                 if feat:
                     body = self.doc.bodies.get(b_id)
@@ -924,7 +925,12 @@ class MainWindow(QMainWindow):
                     n_open = len(open_faces)
                     self.status_label.setText(f"Shell skapad på {b_name}: tjocklek {thickness:g} mm ({n_open} öppna ytor).")
                     self.viewport.update()
-        cleanup()
+            else:
+                self.status_label.setText("Shell avbröts.")
+                self.viewport.update()
+
+        dlg.finished.connect(on_finished)
+        dlg.show()
 
     def prompt_move_body(self, target_body_id: str = ""):
         """Move / Rotate: Translates and rotates a 3D solid body parametrically with interactive 3D gizmo."""
@@ -940,16 +946,39 @@ class MainWindow(QMainWindow):
         self.dock(dlg)
 
         current_hidden_id = [None]
+        drag_state = {
+            "dragging": False,
+            "start_val": 0.0,
+            "start_axis_val": 0.0,
+        }
 
-        def update_handle(center, axis_name, dist):
+        def get_body_center(body):
+            if body.render_mesh is not None and len(body.render_mesh.vertices) > 0:
+                return (np.asarray(body.render_mesh.bounds_min, dtype=float) + np.asarray(body.render_mesh.bounds_max, dtype=float)) * 0.5
+            pts = body.manifold.to_mesh().vert_properties[:, :3]
+            if len(pts):
+                return (pts.min(axis=0) + pts.max(axis=0)) * 0.5
+            return np.array([0.0, 0.0, 0.0])
+
+        def update_handle():
+            bid, dx, dy, dz, rx, ry, rz, pivot, _ = dlg.get_values()
+            if not bid or bid not in self.doc.bodies:
+                self.viewport.clear_extrude_handle()
+                return
+
+            body = self.doc.bodies[bid]
+            center = get_body_center(body)
+            moved_center = center + np.array([dx, dy, dz])
+
+            active_ax = dlg.active_axis
             axis_map = {
                 "X": ([1.0, 0.0, 0.0], (1.0, 0.25, 0.25)),
                 "Y": ([0.0, 1.0, 0.0], (0.25, 0.9, 0.25)),
                 "Z": ([0.0, 0.0, 1.0], (0.25, 0.6, 1.0)),
             }
-            ax, col = axis_map.get(axis_name, ([1.0, 0.0, 0.0], (1.0, 0.25, 0.25)))
-            d = dist if abs(dist) > 0.1 else 10.0
-            self.viewport.set_extrude_handle(center, ax, d, color=col)
+            ax, col = axis_map.get(active_ax, ([1.0, 0.0, 0.0], (1.0, 0.25, 0.25)))
+            arrow_len = max(25.0, min(80.0, self.viewport.distance * 0.18))
+            self.viewport.set_extrude_handle(moved_center, ax, arrow_len, color=col)
 
         def refresh_preview():
             bid, dx, dy, dz, rx, ry, rz, pivot, _ = dlg.get_values()
@@ -969,13 +998,7 @@ class MainWindow(QMainWindow):
             current_hidden_id[0] = bid
 
             m = body.manifold
-            center = np.array([0.0, 0.0, 0.0])
-            if body.render_mesh is not None:
-                center = (np.asarray(body.render_mesh.bounds_min, dtype=float) + np.asarray(body.render_mesh.bounds_max, dtype=float)) * 0.5
-            else:
-                pts = m.to_mesh().vert_properties[:, :3]
-                if len(pts):
-                    center = (pts.min(axis=0) + pts.max(axis=0)) * 0.5
+            center = get_body_center(body)
 
             if abs(rx) > 1e-4 or abs(ry) > 1e-4 or abs(rz) > 1e-4:
                 if pivot == "center":
@@ -987,30 +1010,32 @@ class MainWindow(QMainWindow):
                 m = m.translate([dx, dy, dz])
 
             self.viewport.set_preview(m, "new_body")
-
-            moved_center = center + np.array([dx, dy, dz])
-            active_ax = dlg.active_axis
-            dist_val = dx if active_ax == "X" else (dy if active_ax == "Y" else dz)
-            update_handle(moved_center, active_ax, dist_val)
+            if not drag_state["dragging"]:
+                update_handle()
 
         def on_handle_drag(val: float):
-            dlg.set_active_axis_value(round(val, 2))
+            active_ax = dlg.active_axis
+            if not drag_state["dragging"]:
+                drag_state["dragging"] = True
+                drag_state["start_val"] = val
+                cur_v = dlg.spn_dx.value() if active_ax == "X" else (dlg.spn_dy.value() if active_ax == "Y" else dlg.spn_dz.value())
+                drag_state["start_axis_val"] = cur_v
+
+            delta = val - drag_state["start_val"]
+            new_val = round(drag_state["start_axis_val"] + delta, 2)
+            dlg.set_active_axis_value(new_val)
+
+        def on_drag_finished():
+            drag_state["dragging"] = False
+            update_handle()
 
         def on_axis_changed(_axis: str):
-            refresh_preview()
+            drag_state["dragging"] = False
+            update_handle()
 
         def on_face_picked(plane):
             if getattr(plane, "face", None) and hasattr(plane.face, "body_id"):
                 dlg.select_body(plane.face.body_id)
-
-        dlg.changed.connect(refresh_preview)
-        dlg.axis_changed.connect(on_axis_changed)
-        self.viewport.extrude_handle_dragged.connect(on_handle_drag)
-        self.viewport.plane_picked.connect(on_face_picked)
-        self.viewport.begin_plane_pick("move_body")
-        self.status_label.setText("Move: Dra i 3D-pilen eller ange mm/grader. Klicka på en annan kropp i 3D för att välja den.")
-
-        refresh_preview()
 
         def cleanup():
             try:
@@ -1021,6 +1046,10 @@ class MainWindow(QMainWindow):
                 self.viewport.extrude_handle_dragged.disconnect(on_handle_drag)
             except Exception:
                 pass
+            try:
+                self.viewport.extrude_handle_drag_finished.disconnect(on_drag_finished)
+            except Exception:
+                pass
             self.viewport.end_plane_pick()
             self.viewport.clear_extrude_handle()
             self.viewport.set_preview(None)
@@ -1029,17 +1058,30 @@ class MainWindow(QMainWindow):
                 current_hidden_id[0] = None
             self.inspector.undock_tool()
 
-        if dlg.exec():
+        def on_finished(result):
             bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
             cleanup()
-            if bid:
+            if result and bid and bid in self.doc.bodies:
                 feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs)
                 if feat:
                     b_name = self.doc.bodies[bid].name if bid in self.doc.bodies else bid
                     self.status_label.setText(f"Flyttade {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
                     self.viewport.update()
-        else:
-            cleanup()
+            else:
+                self.status_label.setText("Flytt avbröts.")
+                self.viewport.update()
+
+        dlg.changed.connect(refresh_preview)
+        dlg.axis_changed.connect(on_axis_changed)
+        dlg.finished.connect(on_finished)
+        self.viewport.extrude_handle_dragged.connect(on_handle_drag)
+        self.viewport.extrude_handle_drag_finished.connect(on_drag_finished)
+        self.viewport.plane_picked.connect(on_face_picked)
+        self.viewport.begin_plane_pick("move_body")
+        self.status_label.setText("Move: Dra i 3D-pilen eller ange mm/grader. Klicka på en annan kropp i 3D för att välja den.")
+
+        refresh_preview()
+        dlg.show()
 
     def prompt_insert_canvas(self, preselected_plane_id: str = ""):
         """Insert reference image onto a plane, edit/crop/calibrate with tape measure."""
