@@ -1117,6 +1117,21 @@ class HoleFeature(Feature):
                 "cs_diameter": self.cs_diameter, "cs_angle": self.cs_angle, "tip": self.tip, "tip_angle": self.tip_angle}
 
 
+class DeleteBodyFeature(Feature):
+    """Removes a body from the model (a step in the history, so a rebuild keeps it removed)."""
+
+    def __init__(self, feature_id: str, name: str, target_body_id: str):
+        super().__init__(feature_id, "delete_body", name)
+        self.target_body_id = target_body_id
+
+    def execute(self, doc: Any) -> None:
+        doc.bodies.pop(self.target_body_id, None)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"feature_id": self.feature_id, "feature_type": self.feature_type, "name": self.name,
+                "suppressed": self.suppressed, "target_body_id": self.target_body_id}
+
+
 class CombineFeature(Feature):
     def __init__(self, feature_id: str, name: str, target_body_id: str, tool_body_id: str, operation: str = "join"):
         super().__init__(feature_id, "combine", name)

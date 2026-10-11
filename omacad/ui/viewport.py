@@ -1981,6 +1981,14 @@ class Viewport3D(QOpenGLWidget):
         self.selection_changed.emit()
         self.update()
 
+    def is_busy(self) -> bool:
+        """True while a gesture or pick mode is in progress (undo must not interleave with it)."""
+        if self._handle_drag or self._move or self._rubber is not None or self.edge_pick_mode or self.plane_pick_mode:
+            return True
+        if self.move_gizmo and self.move_gizmo.get("dragging"):
+            return True
+        return bool(self._drag and self._drag.get("moved"))
+
     def _fillet_apply_picked(self):
         """One radius for all corners picked with Shift (live preview, one undo step)."""
         sk = self.doc.active_sketch

@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         central_layout.addLayout(view_row, stretch=1)
         _dialogs.SIDE_HOST = self
         self.doc.add_change_listener(self.inspector.refresh_info)
+        self._init_undo_listener = True   # registered once the Edit menu exists (see _build_menus)
 
         # 3. Bottom Timeline
         self.timeline_bar = TimelineBar(self.doc, self)
@@ -202,14 +203,16 @@ class MainWindow(QMainWindow):
 
         # Edit Menu
         menu_edit = menubar.addMenu("Edit")
-        act_undo = QAction("Undo", self)
+        act_undo = self.act_undo = QAction("Undo", self)
         act_undo.setShortcut(QKeySequence("Ctrl+Z"))
         act_undo.triggered.connect(self.on_undo)
         menu_edit.addAction(act_undo)
-        act_redo = QAction("Redo", self)
+        act_redo = self.act_redo = QAction("Redo", self)
         act_redo.setShortcuts([QKeySequence("Ctrl+Shift+Z"), QKeySequence("Ctrl+Y")])
         act_redo.triggered.connect(self.on_redo)
         menu_edit.addAction(act_redo)
+        self.doc.history_listeners.append(self._update_undo_actions)
+        self._update_undo_actions()
         menu_edit.addSeparator()
         act_settings = QAction("Settings…", self)
         act_settings.setShortcut(QKeySequence("Ctrl+,"))
@@ -454,13 +457,44 @@ class MainWindow(QMainWindow):
         ParametersDialog(self.doc, self).exec()
         self.viewport.update()
 
+    def _busy_reason(self):
+        """Why undo/redo must wait: a tool panel is open or something is being dragged."""
+        if self.inspector.current_tool_dlg is not None or any(getattr(self, a, None) is not None for a in ("_extrude_dlg", "_revolve_dlg", "_round_dlg")):
+            return "Finish or cancel the open tool first (Esc)."
+        if self.viewport.is_busy():
+            return "Finish what you are doing first (Esc)."
+        return None
+
+    def _after_history_change(self):
+        self.viewport.set_preview(None)
+        self.viewport.clear_extrude_handle()
+        self.viewport.update()
+        self._update_undo_actions()
+
+    def _update_undo_actions(self):
+        u, r = self.doc.undo_label(), self.doc.redo_label()
+        self.act_undo.setText(f"Undo {u}" if u else "Undo")
+        self.act_undo.setEnabled(u is not None)
+        self.act_redo.setText(f"Redo {r}" if r else "Redo")
+        self.act_redo.setEnabled(r is not None)
+
     def on_undo(self):
+        busy = self._busy_reason()
+        if busy:
+            self.status_label.setText(busy)
+            return
         name = self.doc.undo()
-        self.status_label.setText(f"Undo ({name})." if name else "Nothing to undo.")
+        self._after_history_change()
+        self.status_label.setText(f"Undo: {name}." if name else "Nothing to undo.")
 
     def on_redo(self):
+        busy = self._busy_reason()
+        if busy:
+            self.status_label.setText(busy)
+            return
         name = self.doc.redo()
-        self.status_label.setText(f"Redo ({name})." if name else "Nothing to redo.")
+        self._after_history_change()
+        self.status_label.setText(f"Redo: {name}." if name else "Nothing to redo.")
 
     def prompt_create_sketch(self):
         """Pick the sketch plane directly in the viewport (origin plane or planar face)."""
@@ -1205,6 +1239,8 @@ class MainWindow(QMainWindow):
         self.viewport.set_document(doc)
         self.inspector.doc = doc
         doc.add_change_listener(self.inspector.refresh_info)
+        doc.history_listeners.append(self._update_undo_actions)
+        self._update_undo_actions()
         for panel, refresh in ((self.browser, "refresh_tree"), (self.timeline_bar, "refresh_timeline"),
                                (self.ribbon, "sync_active_tab")):
             panel.doc = doc

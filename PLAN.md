@@ -1,6 +1,6 @@
 # Omacad – färdplan
 
-Nuvarande version: **0.5.2**. Den här planen skrevs 2026-10-11. `ROADMAP.md` är historiken (vad som är gjort), den här filen är vad vi bygger härnäst och varför. Versionslogg: `CHANGELOG.md`.
+Nuvarande version: **0.6.0** (global ångra och testsvit är klara; resten av planen kvarstår). Den här planen skrevs 2026-10-11. `ROADMAP.md` är historiken (vad som är gjort), den här filen är vad vi bygger härnäst och varför. Versionslogg: `CHANGELOG.md`.
 
 ## Principer
 
@@ -15,7 +15,7 @@ Nuvarande version: **0.5.2**. Den här planen skrevs 2026-10-11. `ROADMAP.md` ä
 
 | Version | Tema | Innehåll |
 |---|---|---|
-| **0.6** | Trygghet | **Global ångra/gör om** för allt (se Del A), `delete_body` som riktigt steg, **pytest-svit** i `tests/` (de scriptade volymtesterna blir riktiga tester: fillet/chamfer med exakta volymer, shell, revolve, offset/trim/mirror, ytkanter, ångra/gör om, spara/ladda-rundtur) och ett CI-jobb som kör testerna före EXE-bygget |
+| **0.6** ✔ | Trygghet | **Global ångra/gör om** för allt (se Del A), `delete_body` som riktigt steg, **pytest-svit** i `tests/` (de scriptade volymtesterna blir riktiga tester: fillet/chamfer med exakta volymer, shell, revolve, offset/trim/mirror, ytkanter, ångra/gör om, spara/ladda-rundtur) och ett CI-jobb som kör testerna före EXE-bygget |
 | **0.65** | Säkerhetsnät + AI-återkoppling | **Autosave-historik**, krasch-återställning, versionshistorik med miniatyrer, säker laddning, **"Starta om med ny version"** (sparar allt och fortsätter där du slutade), **"Det blev fel"-knappen** (se Del C) |
 | **0.7** | Modellera | Hole-dialog, Extrude: Taper + Start + All/To object, Press/Pull (Q), **Text i skiss + extrudera/emboss/deboss**. Smart: **S1 Markera liknande** |
 | **0.8** | Smart I | **S2 Stämpla**, **S3 Klicka-till-källa**, **S4 Print-verktygslåda**, **S5 Runda allt med regler** |

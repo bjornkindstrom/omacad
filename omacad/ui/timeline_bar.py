@@ -30,6 +30,7 @@ class FeatureNodeWidget(QFrame):
         "extrude": "⬆️",
         "revolve": "🔄",
         "hole": "🕳️",
+        "delete_body": "🗑️",
         "combine": "🔗",
         "fillet": "🔘",
         "pattern": "🔁",

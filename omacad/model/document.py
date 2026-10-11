@@ -5,16 +5,40 @@ Holds active bodies, sketches, origin reference geometry, and timeline.
 
 from dataclasses import dataclass
 from typing import Dict, Optional, List, Callable, Tuple
+import copy
+import functools
 import numpy as np
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
-    SphereFeature, ExtrudeFeature, RevolveFeature, HoleFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
+    SphereFeature, ExtrudeFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
     ImportMeshFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
 from omacad.model.sketch_solver import solve_sketch, SolveResult
 from omacad.model import expr as exprlib
 from omacad.model.faces import in_plane_edges
+
+
+def undoable(label: str):
+    """Marks a Document method as one undo step. Only the outermost call counts (a step that calls other steps is one
+    step), and only if it changed something; the whole document state before it is kept."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            if self._undo_depth > 0 or self._restoring:
+                return fn(self, *args, **kwargs)
+            self._undo_depth += 1
+            before = self.snapshot()
+            try:
+                return fn(self, *args, **kwargs)
+            finally:
+                self._undo_depth -= 1
+                try:
+                    self._push_doc_undo(label, before)
+                except Exception as e:   # never let book-keeping break the operation itself
+                    print(f"Undo book-keeping failed for {label}: {e}")
+        return wrapper
+    return deco
 
 
 @dataclass
@@ -64,8 +88,12 @@ class Document:
         self.parameters: List[Parameter] = []
         self.step_states: dict = {}
         self.last_message: str = ""  # feedback from the last constraint/dimension operation
-        self.undo_stack: List[Tuple[str, dict]] = []
-        self.redo_stack: List[Tuple[str, dict]] = []
+        # Undo / redo: ("sketch", sketch_id, snapshot) for edits inside a sketch, ("doc", label, snapshot) for everything else
+        self.undo_stack: List[tuple] = []
+        self.redo_stack: List[tuple] = []
+        self._undo_depth = 0
+        self._restoring = False
+        self.history_listeners: List[Callable[[], None]] = []   # told when the undo/redo stacks change
 
         # Callbacks
         self.change_listeners: List[Callable[[], None]] = []
@@ -81,38 +109,103 @@ class Document:
             except Exception as e:
                 print(f"Error in document change listener: {e}")
 
-    # ---- Undo / redo (sketch edits) -------------------------------------------
-    UNDO_LIMIT = 200
+    # ---- Undo / redo ------------------------------------------------------------
+    UNDO_LIMIT = 200       # edits inside sketches
+    DOC_UNDO_LIMIT = 100   # whole-document steps
+
+    def snapshot(self) -> dict:
+        """The whole document state as plain data. Big read-only data (imported meshes) is shared, not copied."""
+        from omacad.io.exporter import Exporter
+        data = Exporter.document_to_dict(self)
+        memo = {}
+        for f in data["timeline"]:
+            for key in ("vertices", "triangles"):
+                if key in f:
+                    memo[id(f[key])] = f[key]
+        return copy.deepcopy(data, memo)
+
+    def restore(self, snapshot: dict) -> None:
+        """Puts the document back to a snapshot, in place (same object, same listeners), and rebuilds all bodies."""
+        from omacad.io.exporter import Exporter
+        memo = {}
+        for f in snapshot.get("timeline", []):
+            for key in ("vertices", "triangles"):
+                if key in f:
+                    memo[id(f[key])] = f[key]
+        data = copy.deepcopy(snapshot, memo)
+        self._restoring = True
+        try:
+            Exporter.apply_dict(self, data)
+        finally:
+            self._restoring = False
+
+    def _history_changed(self) -> None:
+        for fn in self.history_listeners:
+            try:
+                fn()
+            except Exception as e:
+                print(f"Error in history listener: {e}")
+
+    def _push_doc_undo(self, label: str, before: dict) -> bool:
+        if before == self.snapshot():
+            return False
+        self.undo_stack.append(("doc", label, before))
+        del self.undo_stack[:-(self.UNDO_LIMIT + self.DOC_UNDO_LIMIT)]
+        self.redo_stack.clear()
+        self._history_changed()
+        return True
 
     def record_sketch_change(self, sketch: Sketch, before: dict) -> bool:
         """Call after mutating a sketch with `before = sketch.to_dict()` taken first.
         Pushes an undo step only if something actually changed."""
         if before == sketch.to_dict():
             return False
-        self.undo_stack.append((sketch.sketch_id, before))
-        del self.undo_stack[:-self.UNDO_LIMIT]
+        self.undo_stack.append(("sketch", sketch.sketch_id, before))
+        del self.undo_stack[:-(self.UNDO_LIMIT + self.DOC_UNDO_LIMIT)]
         self.redo_stack.clear()
+        self._history_changed()
         return True
 
-    def _swap_sketch_state(self, source: List, target: List) -> Optional[str]:
-        if not source:
-            return None
-        sketch_id, snapshot = source.pop()
-        sketch = self.sketches.get(sketch_id)
-        if sketch is None:
-            return self._swap_sketch_state(source, target)
-        target.append((sketch_id, sketch.to_dict()))
-        sketch.restore_from_dict(snapshot)
-        self.timeline.recompute(self)
-        self.notify_changed()
-        return sketch.name
+    def _swap_state(self, source: List, target: List) -> Optional[str]:
+        while source:
+            entry = source.pop()
+            if entry[0] == "doc":
+                _, label, snap = entry
+                target.append(("doc", label, self.snapshot()))
+                self.restore(snap)
+                return label
+            _, sketch_id, snap = entry
+            sketch = self.sketches.get(sketch_id)
+            if sketch is None:
+                continue
+            target.append(("sketch", sketch_id, sketch.to_dict()))
+            sketch.restore_from_dict(snap)
+            self.timeline.recompute(self)
+            self.notify_changed()
+            return sketch.name
+        return None
 
     def undo(self) -> Optional[str]:
-        return self._swap_sketch_state(self.undo_stack, self.redo_stack)
+        name = self._swap_state(self.undo_stack, self.redo_stack)
+        self._history_changed()
+        return name
 
     def redo(self) -> Optional[str]:
-        return self._swap_sketch_state(self.redo_stack, self.undo_stack)
+        name = self._swap_state(self.redo_stack, self.undo_stack)
+        self._history_changed()
+        return name
 
+    @staticmethod
+    def _entry_label(entry) -> str:
+        return entry[1] if entry[0] == "doc" else "Sketch Edit"
+
+    def undo_label(self) -> Optional[str]:
+        return self._entry_label(self.undo_stack[-1]) if self.undo_stack else None
+
+    def redo_label(self) -> Optional[str]:
+        return self._entry_label(self.redo_stack[-1]) if self.redo_stack else None
+
+    @undoable("Box")
     def add_box(self, length: float, width: float, height: float, center: bool = False, name: Optional[str] = None) -> Body:
         feat_id = f"box_{len(self.timeline.features) + 1}"
         feat_name = name or f"Box {len([f for f in self.timeline.features if f.feature_type == 'box']) + 1}"
@@ -122,6 +215,7 @@ class Document:
         self.notify_changed()
         return self.bodies[f"body_{feat_id}"]
 
+    @undoable("Cylinder")
     def add_cylinder(self, radius: float, height: float, center: bool = False, name: Optional[str] = None) -> Body:
         feat_id = f"cylinder_{len(self.timeline.features) + 1}"
         feat_name = name or f"Cylinder {len([f for f in self.timeline.features if f.feature_type == 'cylinder']) + 1}"
@@ -131,6 +225,7 @@ class Document:
         self.notify_changed()
         return self.bodies[f"body_{feat_id}"]
 
+    @undoable("Sphere")
     def add_sphere(self, radius: float, name: Optional[str] = None) -> Body:
         feat_id = f"sphere_{len(self.timeline.features) + 1}"
         feat_name = name or f"Sphere {len([f for f in self.timeline.features if f.feature_type == 'sphere']) + 1}"
@@ -145,6 +240,7 @@ class Document:
         sketch.reference_segments = in_plane_edges(self.bodies.values(), sketch.plane)
         sketch.solve_profiles()
 
+    @undoable("Start Sketch")
     def start_sketch(self, plane_name: str = "XY") -> Sketch:
         plane = self.origin_planes.get(plane_name.upper(), self.origin_planes["XY"])
         sketch_id = f"sketch_{len(self.sketches) + 1}"
@@ -156,6 +252,7 @@ class Document:
         self.notify_changed()
         return sketch
 
+    @undoable("Start Sketch")
     def start_sketch_on_plane(self, plane: SketchPlane) -> Sketch:
         """Starts a sketch on an arbitrary plane (origin plane or body face)."""
         sketch_id = f"sketch_{len(self.sketches) + 1}"
@@ -168,6 +265,7 @@ class Document:
         self.notify_changed()
         return sketch
 
+    @undoable("Face to Sketch")
     def face_to_sketch(self, face):
         """A flat body face as a sketch (its outline, holes included) so it can be extruded like any
         profile: pull it into the body to cut a pocket, or out to build up. Returns (sketch, profile
@@ -214,6 +312,7 @@ class Document:
             if sk.sketch_id in used and sk is not self.active_sketch:
                 sk.visible = False
 
+    @undoable("Finish Sketch")
     def finish_sketch(self) -> Optional[Sketch]:
         if not self.active_sketch:
             return None
@@ -240,6 +339,7 @@ class Document:
             return sketch
         return None
 
+    @undoable("Fillet")
     def add_fillet(self, edges, size: float, kind: str = "fillet", exprs=None) -> FilletFeature:
         """Fillet or chamfer the given edges ((p0, p1) world coordinates each)."""
         n = len([f for f in self.timeline.features if f.feature_type == "fillet"]) + 1
@@ -252,6 +352,7 @@ class Document:
         self.notify_changed()
         return feat
 
+    @undoable("Pattern")
     def add_pattern(self, source_ids, kind: str = "linear", exprs=None, **params) -> PatternFeature:
         """Copy what the given steps did (evenly spaced, mirrored or around an axis)."""
         self.timeline.recompute(self)  # makes sure the before/after states of the steps are current
@@ -265,6 +366,7 @@ class Document:
         self.notify_changed()
         return feat
 
+    @undoable("Extrude")
     def extrude_profile(
         self,
         sketch_id: str,
@@ -285,6 +387,7 @@ class Document:
         self.hide_used_sketches()
         self.notify_changed()
 
+    @undoable("Revolve")
     def add_revolve(self, sketch_id: str, profile_idx: int, axis=("v",), angle: float = 360.0, operation: str = "new_body",
                     direction: str = "one_side", angle2: float = 0.0, extra_profiles=None, exprs=None):
         feat_id = f"revolve_{len(self.timeline.features) + 1}"
@@ -298,6 +401,7 @@ class Document:
         self.notify_changed()
         return feat
 
+    @undoable("Hole")
     def add_hole(self, points, exprs=None, **params) -> HoleFeature:
         feat_id = f"hole_{len(self.timeline.features) + 1}"
         feat = HoleFeature(feat_id, f"Hole {len([f for f in self.timeline.features if f.feature_type == 'hole']) + 1}", points, **params)
@@ -362,6 +466,7 @@ class Document:
         problems += [f"{n}: {m}" for n, m in errors.items()]
         return problems
 
+    @undoable("Change Parameters")
     def set_parameters(self, params) -> List[str]:
         """Replaces the parameter list and rebuilds the model. Returns problems (nothing is changed then)."""
         problems = self.validate_parameters(params)
@@ -455,6 +560,7 @@ class Document:
         "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot"),
     }
 
+    @undoable("Edit Feature")
     def edit_feature(self, index: int, **params) -> bool:
         """Changes the parameters of a step and rebuilds everything after it."""
         if not (0 <= index < len(self.timeline.features)):
@@ -476,6 +582,7 @@ class Document:
             self.notify_changed()
         return changed
 
+    @undoable("Rename")
     def rename_feature(self, index: int, name: str) -> bool:
         name = name.strip()
         if not name or not (0 <= index < len(self.timeline.features)):
@@ -488,6 +595,7 @@ class Document:
         self.notify_changed()
         return True
 
+    @undoable("Suppress")
     def toggle_suppress(self, index: int) -> bool:
         """Switches a step off/on without deleting it."""
         if not (0 <= index < len(self.timeline.features)):
@@ -514,6 +622,7 @@ class Document:
                 out.append(j)
         return out
 
+    @undoable("Delete Feature")
     def delete_feature(self, index: int, with_dependents: bool = True) -> list:
         """Removes a step (and, by default, the steps built on it). Returns the removed names."""
         if not (0 <= index < len(self.timeline.features)):
@@ -537,6 +646,7 @@ class Document:
         self.notify_changed()
         return removed
 
+    @undoable("Rename")
     def rename_item(self, kind: str, item_id: str, name: str) -> bool:
         """Renames a sketch or body. The creating feature is renamed too, so the name survives
         recompute, save and load."""
@@ -570,6 +680,7 @@ class Document:
         self.notify_changed()
         return True
 
+    @undoable("Split Body")
     def split_body(self, body_id: str, plane_id: str, new_body_name: Optional[str] = None) -> Optional[SplitBodyFeature]:
         """Splits an existing body using an offset (construction) plane or origin plane into two separate bodies."""
         if body_id not in self.bodies:
@@ -595,6 +706,7 @@ class Document:
         self.notify_changed()
         return feat
 
+    @undoable("Shell")
     def add_shell(self, body_id: str, thickness: float, open_faces=None, exprs=None, direction: str = "inside", thickness2: float = 2.0) -> Optional[ShellFeature]:
         """Hollows out the body with a given wall thickness, optionally leaving selected faces open."""
         if body_id not in self.bodies:
@@ -608,6 +720,7 @@ class Document:
         self.notify_changed()
         return feat
 
+    @undoable("Move")
     def move_body(
         self,
         body_id: str,
@@ -634,6 +747,7 @@ class Document:
         self.notify_changed()
         return feat
 
+    @undoable("Import")
     def import_mesh(
         self,
         name: str,
@@ -650,6 +764,7 @@ class Document:
         return feat
 
     # ---- Canvases / Reference Images ----------------------------------------
+    @undoable("Insert Canvas")
     def add_canvas(self, name: str, plane_id: str, image_data: str, width_mm: float, height_mm: float,
                    origin_uv: Tuple[float, float] = (0.0, 0.0), rotation_deg: float = 0.0,
                    opacity: float = 0.5, visible: bool = True) -> str:
@@ -670,11 +785,13 @@ class Document:
         self.notify_changed()
         return cid
 
+    @undoable("Edit Canvas")
     def update_canvas(self, cid: str, **kw) -> None:
         if cid in self.canvases:
             self.canvases[cid].update(kw)
             self.notify_changed()
 
+    @undoable("Delete Canvas")
     def delete_canvas(self, cid: str) -> None:
         if self.canvases.pop(cid, None) is not None:
             self.notify_changed()
@@ -689,6 +806,7 @@ class Document:
             self.bodies[body_id].visible = not self.bodies[body_id].visible
             self.notify_changed()
 
+    @undoable("Offset Plane")
     def add_construction_plane(self, base_plane, distance: float, name: str = None) -> str:
         """A plane parallel to `base_plane`, `distance` mm along its normal."""
         n = np.asarray(base_plane.normal, dtype=float)
@@ -702,6 +820,7 @@ class Document:
         self.notify_changed()
         return pid
 
+    @undoable("Section View")
     def add_section(self, origin, normal, offset: float, flip: bool = False, name: str = None, activate: bool = True) -> str:
         sid = f"section_{len(self.sections) + 1}"
         while sid in self.sections:
@@ -714,6 +833,7 @@ class Document:
             self.notify_changed()
         return sid
 
+    @undoable("Edit Section View")
     def update_section(self, sid: str, **kw) -> None:
         if sid in self.sections:
             self.sections[sid].update(kw)
@@ -726,6 +846,7 @@ class Document:
             v["active"] = (k == sid) and on        # one section at a time
         self.notify_changed()
 
+    @undoable("Delete Section View")
     def delete_section(self, sid: str) -> None:
         if self.sections.pop(sid, None) is not None:
             self.notify_changed()
@@ -738,6 +859,7 @@ class Document:
         c = self.construction_planes[pid]
         return SketchPlane.from_face(np.array(c["normal"]), np.array(c["origin"]), name="PLANE")
 
+    @undoable("Delete Plane")
     def delete_construction_plane(self, pid: str) -> None:
         if self.construction_planes.pop(pid, None) is not None:
             self.notify_changed()
@@ -752,10 +874,17 @@ class Document:
             self.sketches[sketch_id].visible = not self.sketches[sketch_id].visible
             self.notify_changed()
 
+    @undoable("Delete Body")
     def delete_body(self, body_id: str) -> None:
-        if body_id in self.bodies:
-            del self.bodies[body_id]
-            self.notify_changed()
+        """A real step in the history, so it survives a rebuild (and can be undone)."""
+        body = self.bodies.get(body_id)
+        if body is None:
+            return
+        feat = DeleteBodyFeature(f"delete_{len(self.timeline.features) + 1}", f"Delete {body.name}", body_id)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.selected_body_ids = [b for b in self.selected_body_ids if b in self.bodies]
+        self.notify_changed()
 
     def delete_sketch_entities(self, sketch_id: str, entity_ids) -> int:
         """Deletes sketch entities and recomputes features that depend on the sketch."""

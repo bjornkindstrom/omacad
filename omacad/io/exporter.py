@@ -13,7 +13,7 @@ import trimesh
 from omacad.model.document import Document, Parameter
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
                                     ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature,
-                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature)
+                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature)
 from omacad.model.sketch import Sketch
 
 
@@ -315,18 +315,28 @@ class Exporter:
             return imported_bodies
 
     @staticmethod
-    def save_project(doc: Document, filepath: str) -> bool:
-        """Saves parametric timeline and sketches to an Omacad (.omacad) JSON file."""
-        data = {
+    def document_to_dict(doc: Document) -> dict:
+        """The whole document as plain data (what a project file holds, plus the replay marker and the sketch being
+        edited). Bodies are not part of it: they are rebuilt from the timeline."""
+        return {
             "name": doc.name,
             "units": doc.units,
             "parameters": [{"name": q.name, "expr": q.expr, "comment": q.comment} for q in doc.parameters],
             "timeline": [dict(f.to_dict(), exprs=dict(f.exprs)) for f in doc.timeline.features],
+            "marker_index": doc.timeline.marker_index,
             "sketches": [s.to_dict() for s in doc.sketches.values()],
+            "active_sketch": doc.active_sketch.sketch_id if doc.active_sketch is not None else None,
             "construction_planes": doc.construction_planes,
             "sections": doc.sections,
             "canvases": getattr(doc, "canvases", {}),
         }
+
+    @staticmethod
+    def save_project(doc: Document, filepath: str) -> bool:
+        """Saves parametric timeline and sketches to an Omacad (.omacad) JSON file."""
+        data = Exporter.document_to_dict(doc)
+        data.pop("marker_index", None)      # replay position and sketch mode are session state, not file content
+        data.pop("active_sketch", None)
         # write to a temp file first so an interrupted save never leaves a half-written project
         tmp = f"{filepath}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
@@ -339,8 +349,23 @@ class Exporter:
         """Loads an Omacad project from disk."""
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         doc = Document(data.get("name", "Omacad - Project"))
+        Exporter.apply_dict(doc, data)
+        return doc
+
+    @staticmethod
+    def apply_dict(doc: Document, data: dict) -> None:
+        """Replaces the content of `doc` with `data` (a project file or a snapshot), keeping the Document object and its
+        listeners, then rebuilds every body."""
+        doc.timeline.features.clear()
+        doc.timeline.marker_index = 0
+        doc.sketches.clear()
+        doc.bodies.clear()
+        doc.active_sketch = None
+        doc.selected_body_ids = []
+        doc.selected_profile = None
+        doc.selected_extra = []
+        doc.name = data.get("name", doc.name)
         doc.units = data.get("units", "mm")
         doc.parameters = [Parameter(q["name"], q["expr"], q.get("comment", "")) for q in data.get("parameters", [])]
 
@@ -389,6 +414,9 @@ class Exporter:
                                       axis=f_data.get("axis", ["v"]), angle=f_data.get("angle", 360.0),
                                       direction=f_data.get("direction", "one_side"), angle2=f_data.get("angle2", 0.0),
                                       extra_profiles=f_data.get("extra_profiles", []))
+                doc.timeline.add_feature(feat)
+            elif ft == "delete_body":
+                feat = DeleteBodyFeature(fid, fname, f_data["target_body_id"])
                 doc.timeline.add_feature(feat)
             elif ft == "hole":
                 feat = HoleFeature(fid, fname, f_data.get("points", []),
@@ -443,6 +471,10 @@ class Exporter:
             feat.suppressed = f_data.get("suppressed", False)
             feat.exprs = dict(f_data.get("exprs", {}))
 
+        if "marker_index" in data:
+            doc.timeline.marker_index = max(0, min(int(data["marker_index"]), len(doc.timeline.features)))
+        active = data.get("active_sketch")
+        if active and active in doc.sketches:
+            doc.active_sketch = doc.sketches[active]
         doc.timeline.recompute(doc)
         doc.notify_changed()
-        return doc
