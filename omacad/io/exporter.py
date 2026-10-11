@@ -9,7 +9,7 @@ from typing import Optional
 import trimesh
 from omacad.model.document import Document, Parameter
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
-                                    ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature, PatternFeature)
+                                    ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature, PatternFeature, SplitBodyFeature, ShellFeature)
 from omacad.model.sketch import Sketch
 
 
@@ -78,6 +78,7 @@ class Exporter:
             "sketches": [s.to_dict() for s in doc.sketches.values()],
             "construction_planes": doc.construction_planes,
             "sections": doc.sections,
+            "canvases": getattr(doc, "canvases", {}),
         }
         # write to a temp file first so an interrupted save never leaves a half-written project
         tmp = f"{filepath}.tmp"
@@ -98,6 +99,7 @@ class Exporter:
 
         doc.construction_planes = dict(data.get("construction_planes", {}))
         doc.sections = dict(data.get("sections", {}))
+        doc.canvases = dict(data.get("canvases", {}))
 
         # Load sketches
         for s_data in data.get("sketches", []):
@@ -150,6 +152,20 @@ class Exporter:
             elif ft == "combine":
                 feat = CombineFeature(fid, fname, f_data["target_body_id"], f_data["tool_body_id"],
                                       f_data.get("operation", "join"))
+                doc.timeline.add_feature(feat)
+            elif ft == "split_body":
+                feat = SplitBodyFeature(
+                    fid, fname, f_data["target_body_id"], f_data["plane_id"],
+                    plane_origin=f_data.get("plane_origin"),
+                    plane_normal=f_data.get("plane_normal"),
+                    new_body_name=f_data.get("new_body_name"),
+                )
+                doc.timeline.add_feature(feat)
+            elif ft == "shell":
+                feat = ShellFeature(
+                    fid, fname, f_data["target_body_id"], f_data.get("thickness", 2.0),
+                    open_faces=f_data.get("open_faces", [])
+                )
                 doc.timeline.add_feature(feat)
             else:
                 continue

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Any
 import math
 import numpy as np
+import shapely
 from shapely.geometry import LineString, Polygon, Point, MultiPoint
 from shapely.geometry.polygon import orient
 from shapely.ops import polygonize, unary_union, snap
@@ -322,6 +323,9 @@ class SketchArc(SketchEntity):
         for i in range(segments + 1):
             ang = a1 + i * step
             pts.append((cx + r * math.cos(ang), cy + r * math.sin(ang)))
+        if pts:
+            pts[0] = self.p_start
+            pts[-1] = self.p_end
         return pts
 
     def to_lines(self, segments: int = 32) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
@@ -332,7 +336,7 @@ class SketchArc(SketchEntity):
         return lines
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "entity_id": self.entity_id,
             "entity_type": "arc",
             "p_start": list(self.p_start),
@@ -340,16 +344,22 @@ class SketchArc(SketchEntity):
             "p_end": list(self.p_end),
             "is_construction": self.is_construction,
         }
+        if hasattr(self, "fillet_info") and self.fillet_info:
+            d["fillet_info"] = self.fillet_info
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SketchArc":
-        return cls(
+        arc = cls(
             entity_id=data["entity_id"],
             p_start=tuple(data["p_start"]),
             p_mid=tuple(data["p_mid"]),
             p_end=tuple(data["p_end"]),
             is_construction=data.get("is_construction", False),
         )
+        if "fillet_info" in data:
+            arc.fillet_info = data["fillet_info"]
+        return arc
 
 
 class SketchSlot(SketchEntity):
@@ -801,13 +811,16 @@ class Sketch:
             elif isinstance(ent, SketchSlot):
                 ent.radius = target_dim.value
             elif isinstance(ent, SketchArc):
-                params = ent.get_circle_params()
-                if params and params[1] > 1e-5:
-                    scale = target_dim.value / params[1]
-                    cx, cy = params[0]
-                    ent.p_start = (cx + (ent.p_start[0] - cx) * scale, cy + (ent.p_start[1] - cy) * scale)
-                    ent.p_mid = (cx + (ent.p_mid[0] - cx) * scale, cy + (ent.p_mid[1] - cy) * scale)
-                    ent.p_end = (cx + (ent.p_end[0] - cx) * scale, cy + (ent.p_end[1] - cy) * scale)
+                if getattr(ent, "fillet_info", None):
+                    self._update_fillet_arc(ent, target_dim.value)
+                else:
+                    params = ent.get_circle_params()
+                    if params and params[1] > 1e-5:
+                        scale = target_dim.value / params[1]
+                        cx, cy = params[0]
+                        ent.p_start = (cx + (ent.p_start[0] - cx) * scale, cy + (ent.p_start[1] - cy) * scale)
+                        ent.p_mid = (cx + (ent.p_mid[0] - cx) * scale, cy + (ent.p_mid[1] - cy) * scale)
+                        ent.p_end = (cx + (ent.p_end[0] - cx) * scale, cy + (ent.p_end[1] - cy) * scale)
 
         self.solve_profiles()
         return True
@@ -1010,6 +1023,192 @@ class Sketch:
         self.solve_profiles()
         return slot
 
+    def _update_fillet_arc(self, arc: SketchArc, new_radius: float) -> bool:
+        """Parametrically updates a fillet arc and its connected lines when the fillet dimension changes."""
+        info = getattr(arc, "fillet_info", None)
+        if not info or new_radius <= 0.001:
+            return False
+        line_a = self.get_entity(info.get("line_a"))
+        line_b = self.get_entity(info.get("line_b"))
+        V = info.get("corner")
+        end_a = info.get("end_a")
+        end_b = info.get("end_b")
+        if not (isinstance(line_a, SketchLine) and isinstance(line_b, SketchLine) and V and end_a and end_b):
+            return False
+
+        Pa = line_a.p2 if end_a == "p1" else line_a.p1
+        Pb = line_b.p2 if end_b == "p1" else line_b.p1
+
+        va = np.array([Pa[0] - V[0], Pa[1] - V[1]], dtype=float)
+        vb = np.array([Pb[0] - V[0], Pb[1] - V[1]], dtype=float)
+        la, lb = float(np.linalg.norm(va)), float(np.linalg.norm(vb))
+        if la < 1e-5 or lb < 1e-5:
+            return False
+
+        ua, ub = va / la, vb / lb
+        cos_th = float(np.dot(ua, ub))
+        if abs(cos_th) > 0.9999:
+            return False
+
+        half_ang = math.acos(max(-1.0, min(1.0, cos_th))) * 0.5
+        tan_half = math.tan(half_ang)
+        sin_half = math.sin(half_ang)
+
+        d = new_radius / tan_half
+        max_d = min(la, lb) * 0.995
+        if d > max_d:
+            return False
+
+        Ta = tuple(np.array(V) + d * ua)
+        Tb = tuple(np.array(V) + d * ub)
+
+        bsum = ua + ub
+        b = bsum / np.linalg.norm(bsum)
+        C = np.array(V) + (new_radius / sin_half) * b
+        M = tuple(C - new_radius * b)
+
+        setattr(line_a, end_a, Ta)
+        setattr(line_b, end_b, Tb)
+        arc.p_start = Ta
+        arc.p_mid = M
+        arc.p_end = Tb
+
+        # Update length dimensions on trimmed lines
+        for line in (line_a, line_b):
+            new_len = math.hypot(line.p2[0] - line.p1[0], line.p2[1] - line.p1[1])
+            for dim in self.dimensions:
+                if dim.dim_type == "LENGTH" and dim.target_entity_id == line.entity_id:
+                    dim.value = float(new_len)
+        return True
+
+    def find_corners(self, entities: Optional[List[SketchEntity]] = None) -> List[Tuple[Tuple[float, float], SketchLine, SketchLine, str, str]]:
+        """Returns all corner vertices (point, line_a, line_b, end_a, end_b) where two non-collinear lines meet."""
+        corners = []
+        cands = [e for e in (entities or self.entities) if isinstance(e, SketchLine) and not e.is_construction]
+        tol = 1e-3
+        for i in range(len(cands)):
+            for j in range(i + 1, len(cands)):
+                la, lb = cands[i], cands[j]
+                for ea, pa in (("p1", la.p1), ("p2", la.p2)):
+                    for eb, pb in (("p1", lb.p1), ("p2", lb.p2)):
+                        if math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < tol:
+                            other_a = la.p2 if ea == "p1" else la.p1
+                            other_b = lb.p2 if eb == "p1" else lb.p1
+                            va = (other_a[0] - pa[0], other_a[1] - pa[1])
+                            vb = (other_b[0] - pb[0], other_b[1] - pb[1])
+                            na, nb = math.hypot(*va), math.hypot(*vb)
+                            if na > 1e-5 and nb > 1e-5:
+                                cos_th = (va[0] * vb[0] + va[1] * vb[1]) / (na * nb)
+                                if abs(cos_th) < 0.9999:
+                                    corners.append((pa, la, lb, ea, eb))
+                            break
+        return corners
+
+    def fillet_corner(self, line_a: SketchLine, line_b: SketchLine, radius: float,
+                      corner_pt: Optional[Tuple[float, float]] = None) -> Tuple[Optional[SketchArc], str]:
+        """Rounds the corner where line_a and line_b meet with a circular arc of given radius."""
+        if radius <= 0.001:
+            return None, "Radien måste vara större än 0."
+
+        tol = 1e-3
+        end_a, end_b = None, None
+        V = None
+
+        if corner_pt is not None:
+            best_d = 1e9
+            for ea, pa in (("p1", line_a.p1), ("p2", line_a.p2)):
+                for eb, pb in (("p1", line_b.p1), ("p2", line_b.p2)):
+                    d_meeting = math.hypot(pa[0] - pb[0], pa[1] - pb[1])
+                    if d_meeting < tol:
+                        d_c = math.hypot(pa[0] - corner_pt[0], pa[1] - corner_pt[1])
+                        if d_c < best_d:
+                            best_d = d_c
+                            end_a, end_b = ea, eb
+                            V = pa
+        if end_a is None:
+            for ea, pa in (("p1", line_a.p1), ("p2", line_a.p2)):
+                for eb, pb in (("p1", line_b.p1), ("p2", line_b.p2)):
+                    if math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < tol:
+                        end_a, end_b = ea, eb
+                        V = pa
+                        break
+                if end_a:
+                    break
+
+        if end_a is None or V is None:
+            return None, "Linjerna möts inte i ett gemensamt hörn."
+
+        Pa = line_a.p2 if end_a == "p1" else line_a.p1
+        Pb = line_b.p2 if end_b == "p1" else line_b.p1
+
+        va = np.array([Pa[0] - V[0], Pa[1] - V[1]], dtype=float)
+        vb = np.array([Pb[0] - V[0], Pb[1] - V[1]], dtype=float)
+        la, lb = float(np.linalg.norm(va)), float(np.linalg.norm(vb))
+        if la < 1e-5 or lb < 1e-5:
+            return None, "En av linjerna är för kort."
+
+        ua, ub = va / la, vb / lb
+        cos_th = float(np.dot(ua, ub))
+        if abs(cos_th) > 0.9999:
+            return None, "Linjerna är parallella eller i linje med varandra."
+
+        half_ang = math.acos(max(-1.0, min(1.0, cos_th))) * 0.5
+        tan_half = math.tan(half_ang)
+        sin_half = math.sin(half_ang)
+
+        d = radius / tan_half
+        max_d = min(la, lb) * 0.995
+        if d > max_d:
+            max_r = max_d * tan_half
+            return None, f"Radien är för stor för detta hörn (max {max_r:.1f} mm)."
+
+        Ta = tuple(np.array(V) + d * ua)
+        Tb = tuple(np.array(V) + d * ub)
+
+        bsum = ua + ub
+        b = bsum / np.linalg.norm(bsum)
+        C = np.array(V) + (radius / sin_half) * b
+        M = tuple(C - radius * b)
+
+        # Trim lines
+        setattr(line_a, end_a, Ta)
+        setattr(line_b, end_b, Tb)
+
+        # Remove coincident constraint between line_a and line_b at this corner
+        self.constraints = [
+            c for c in self.constraints
+            if not (c.ctype == "COINCIDENT" and set(c.refs) == {line_a.entity_id, line_b.entity_id})
+        ]
+
+        # Update length dimensions on trimmed lines
+        for line in (line_a, line_b):
+            new_len = math.hypot(line.p2[0] - line.p1[0], line.p2[1] - line.p1[1])
+            for dim in self.dimensions:
+                if dim.dim_type == "LENGTH" and dim.target_entity_id == line.entity_id:
+                    dim.value = float(new_len)
+
+        # Create fillet arc
+        arc_id = self._new_entity_id("arc")
+        arc = SketchArc(arc_id, Ta, M, Tb, is_construction=line_a.is_construction and line_b.is_construction)
+        arc.fillet_info = {
+            "line_a": line_a.entity_id,
+            "line_b": line_b.entity_id,
+            "corner": (float(V[0]), float(V[1])),
+            "end_a": end_a,
+            "end_b": end_b,
+        }
+        self.entities.append(arc)
+
+        # Add coincident constraints to connect lines with arc endpoints
+        self.constraints.append(SketchConstraint(self.new_constraint_id(), "COINCIDENT", [line_a.entity_id, arc.entity_id], [end_a, "p_start"]))
+        self.constraints.append(SketchConstraint(self.new_constraint_id(), "COINCIDENT", [line_b.entity_id, arc.entity_id], [end_b, "p_end"]))
+
+        # Add dimension for fillet radius
+        self.add_dimension("RADIUS", arc_id, radius, offset_distance=12.0, name="Fillet")
+
+        self.solve_profiles()
+        return arc, "OK"
+
     def solve_profiles(self) -> List[SketchProfile]:
         """Finds all closed 2D loops and builds SketchProfile objects."""
         all_lines = []
@@ -1033,7 +1232,7 @@ class Sketch:
             return self.profiles
 
         try:
-            sketch_union = unary_union(shapely_lines)
+            sketch_union = unary_union(shapely.set_precision(shapely_lines, 1e-4))
             if self.reference_segments:
                 ref_union = unary_union([LineString([a, b]) for a, b in self.reference_segments
                                          if abs(a[0] - b[0]) > 1e-9 or abs(a[1] - b[1]) > 1e-9])

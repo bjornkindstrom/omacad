@@ -14,18 +14,19 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QKeySequence, QIcon
 
 from omacad.model.document import Document
-from omacad.model.timeline import CombineFeature
+from omacad.model.timeline import ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature
 from omacad.ui import theme
 from omacad.ui.theme import style
 from omacad.ui.ribbon import Ribbon
 from omacad.ui.viewport import Viewport3D
 from omacad.ui.browser import BrowserTree
 from omacad.ui.timeline_bar import TimelineBar
-from omacad.model.timeline import ExtrudeFeature
+from omacad.ui.side_panel import InspectorPanel
+from omacad.ui.canvas_dialog import CanvasEditorDialog
 from omacad.ui.dialogs import (
     RoundEdgesDialog, PatternDialog,
     SketchPlaneDialog, ExtrudeDialog, BoxDialog, CylinderDialog,
-    SphereDialog, CombineDialog
+    SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog
 )
 from omacad.io.exporter import Exporter
 
@@ -71,15 +72,11 @@ class MainWindow(QMainWindow):
         view_row.setContentsMargins(0, 0, 0, 0)
         view_row.setSpacing(0)
         view_row.addWidget(self.viewport, stretch=1)
-        self.side_panel = QWidget()
-        self.side_panel.setFixedWidth(350)
-        self.side_layout = QVBoxLayout(self.side_panel)
-        self.side_layout.setContentsMargins(8, 8, 8, 8)
-        self.side_layout.addStretch()
-        self.side_panel.hide()
-        view_row.addWidget(self.side_panel)
+        self.inspector = InspectorPanel(self.doc, self)
+        view_row.addWidget(self.inspector)
         central_layout.addLayout(view_row, stretch=1)
         _dialogs.SIDE_HOST = self
+        self.doc.add_change_listener(self.inspector.refresh_info)
 
         # 3. Bottom Timeline
         self.timeline_bar = TimelineBar(self.doc, self)
@@ -124,8 +121,12 @@ class MainWindow(QMainWindow):
         self.ribbon.cylinder_clicked.connect(self.prompt_cylinder)
         self.ribbon.sphere_clicked.connect(self.prompt_sphere)
         self.ribbon.combine_clicked.connect(self.prompt_combine)
+        self.ribbon.split_body_clicked.connect(self.prompt_split_body)
+        self.ribbon.shell_clicked.connect(self.prompt_shell)
+        self.ribbon.canvas_clicked.connect(self.prompt_insert_canvas)
         self.ribbon.delete_clicked.connect(self.on_delete_selected)
         self.ribbon.inspect_clicked.connect(self.on_inspect)
+        self.ribbon.settings_clicked.connect(self.on_open_settings)
         self.ribbon.sketch_tool_selected.connect(self.on_sketch_tool_selected)
         self.viewport.sketch_tool_changed.connect(self.sync_sketch_tool_from_viewport)
         self.ribbon.toggle_construction_clicked.connect(self.viewport.toggle_construction_mode)
@@ -142,6 +143,9 @@ class MainWindow(QMainWindow):
         self.browser.edit_section_requested.connect(self.edit_section)
         self.timeline_bar.edit_sketch_requested.connect(self.on_edit_sketch)
         self.browser.export_body_stl.connect(self.export_single_body_stl)
+        self.browser.split_body_requested.connect(self.prompt_split_body)
+        self.browser.shell_body_requested.connect(self.prompt_shell)
+        self.browser.insert_canvas_requested.connect(self.prompt_insert_canvas)
 
     def setup_menu_bar(self):
         menubar = self.menuBar()
@@ -192,6 +196,11 @@ class MainWindow(QMainWindow):
         act_redo.setShortcuts([QKeySequence("Ctrl+Shift+Z"), QKeySequence("Ctrl+Y")])
         act_redo.triggered.connect(self.on_redo)
         menu_edit.addAction(act_redo)
+        menu_edit.addSeparator()
+        act_settings = QAction("Settings…", self)
+        act_settings.setShortcut(QKeySequence("Ctrl+,"))
+        act_settings.triggered.connect(self.on_open_settings)
+        menu_edit.addAction(act_settings)
 
         # Create Menu
         menu_create = menubar.addMenu("Create")
@@ -201,6 +210,9 @@ class MainWindow(QMainWindow):
         act_extrude.triggered.connect(self.prompt_extrude)
         menu_create.addAction(act_extrude)
         menu_create.addAction("Offset Plane…", self.prompt_offset_plane)
+        act_canvas = QAction("Insert Canvas (Image)…", self)
+        act_canvas.triggered.connect(self.prompt_insert_canvas)
+        menu_create.addAction(act_canvas)
         menu_create.addSeparator()
         menu_create.addAction("Box", self.prompt_box)
         menu_create.addAction("Cylinder", self.prompt_cylinder)
@@ -214,6 +226,9 @@ class MainWindow(QMainWindow):
         act_chamfer = QAction("Chamfer…", self)
         act_chamfer.triggered.connect(lambda: self.prompt_round_edges("chamfer"))
         menu_modify.addAction(act_chamfer)
+        act_shell = QAction("Shell…", self)
+        act_shell.triggered.connect(self.prompt_shell)
+        menu_modify.addAction(act_shell)
         act_pattern = QAction("Pattern / Mirror…", self)
         act_pattern.triggered.connect(self.prompt_pattern)
         menu_modify.addAction(act_pattern)
@@ -222,6 +237,9 @@ class MainWindow(QMainWindow):
         act_params.triggered.connect(self.on_change_parameters)
         menu_modify.addAction(act_params)
         menu_modify.addAction("Combine", self.prompt_combine)
+        act_split = QAction("Split Body…", self)
+        act_split.triggered.connect(self.prompt_split_body)
+        menu_modify.addAction(act_split)
         menu_modify.addAction("Delete Selected", self.on_delete_selected, QKeySequence.StandardKey.Delete)
 
         # View Menu
@@ -239,9 +257,11 @@ class MainWindow(QMainWindow):
         # Icons for the menu entries (drawn from emoji at a size the menu font can't give)
         icons = {
             "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
-            "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️",
-            "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
+            "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️", "Insert Canvas": "🖼️",
+            "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚",
+            "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
             "Fit View": "🔲", "Section View": "✂️", "Measure": "📏", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
+            "Settings": "⚙️",
         }
         for menu in menubar.findChildren(QMenu):
             for act in menu.actions():
@@ -249,6 +269,11 @@ class MainWindow(QMainWindow):
                     if act.text().startswith(label):
                         act.setIcon(theme.emoji_icon(emoji, 24))
                         break
+
+    def on_open_settings(self):
+        from omacad.ui.settings_dialog import SettingsDialog
+        dlg = SettingsDialog(self)
+        dlg.exec()
 
     # ------------------ Action Handlers ------------------
 
@@ -279,12 +304,38 @@ class MainWindow(QMainWindow):
             return
         self.doc.hide_used_sketches()  # finished sketches only get in the way of picking edges
         self.doc.notify_changed()
-        dlg = RoundEdgesDialog(self.viewport, kind, embedded=True)   # a small panel inside the view, draggable
-        dlg.place(self.viewport.size())
+        dlg = RoundEdgesDialog(self.viewport, kind, embedded=True)
+        self.dock(dlg)
         self._round_dlg = dlg
         self.viewport.begin_edge_pick()
-        self.status_label.setText("Fillet/Chamfer: click edges (double-click selects the whole loop around a face). "
-                                  "Circles, holes and inside corners work too. Esc cancels.")
+        self.status_label.setText("Fillet/Chamfer: click edges (double-click selects loop). Drag arrow to resize. Esc cancels.")
+
+        def update_arrow():
+            edges = self.viewport.selected_edges
+            if edges:
+                e0 = edges[0]
+                if hasattr(e0, "p0") and hasattr(e0, "p1"):
+                    mid = (np.asarray(e0.p0) + np.asarray(e0.p1)) * 0.5
+                    d1 = getattr(e0, "d1", None)
+                    d2 = getattr(e0, "d2", None)
+                    if d1 is not None and d2 is not None:
+                        axis = np.asarray(d1) + np.asarray(d2)
+                        n_axis = np.linalg.norm(axis)
+                        axis = axis / n_axis if n_axis > 1e-6 else np.array([0.0, 0.0, 1.0])
+                    else:
+                        axis = np.array([0.0, 0.0, 1.0])
+                elif hasattr(e0, "c"):
+                    mid = np.asarray(e0.c)
+                    axis = np.asarray(getattr(e0, "n", [0.0, 0.0, 1.0]))
+                elif hasattr(e0, "pts") and len(e0.pts):
+                    mid = np.mean(e0.pts, axis=0)
+                    axis = np.asarray(getattr(e0, "n", [0.0, 0.0, 1.0]))
+                else:
+                    mid = np.array([0.0, 0.0, 0.0])
+                    axis = np.array([0.0, 0.0, 1.0])
+                self.viewport.set_extrude_handle(mid, axis, max(0.5, dlg.spn_size.value()), color=(0.10, 0.75, 1.0))
+            else:
+                self.viewport.clear_extrude_handle()
 
         def preview():
             from omacad.model.kernel import CadKernel
@@ -300,6 +351,11 @@ class MainWindow(QMainWindow):
             if problem:
                 self.status_label.setText(f"Fillet/Chamfer: {problem}")
             self.viewport.set_preview(solid, "new_body")
+            update_arrow()
+
+        def on_handle_drag(val: float):
+            v = max(0.2, abs(val))
+            dlg.spn_size.setValue(round(v, 2))
 
         def on_cancel_pick():
             dlg.reject()
@@ -307,9 +363,15 @@ class MainWindow(QMainWindow):
         def on_finished(result):
             self.viewport.edges_selection_changed.disconnect(preview)
             self.viewport.edge_pick_cancelled.disconnect(on_cancel_pick)
+            try:
+                self.viewport.extrude_handle_dragged.disconnect(on_handle_drag)
+            except Exception:
+                pass
+            self.viewport.clear_extrude_handle()
             edges = [e.ref() for e in self.viewport.selected_edges]
             self._round_dlg = None
             dlg.deleteLater()
+            self.inspector.undock_tool()
             self.viewport.end_edge_pick()
             self.viewport.set_preview(None)
             if result and edges:
@@ -322,30 +384,14 @@ class MainWindow(QMainWindow):
 
         self.viewport.edges_selection_changed.connect(preview)
         self.viewport.edge_pick_cancelled.connect(on_cancel_pick)
+        self.viewport.extrude_handle_dragged.connect(on_handle_drag)
         dlg.changed.connect(preview)
         dlg.finished.connect(on_finished)
         dlg.show()
 
     def dock(self, dlg):
-        """Put a tool dialog into the right-hand panel (it leaves again when it finishes)."""
-        if dlg.parent() is self.side_panel:
-            return
-        dlg._embedded = False
-        dlg.setParent(self.side_panel)
-        dlg.setWindowFlags(Qt.WindowType.Widget)
-        dlg.setMinimumWidth(0)
-        dlg.setFixedWidth(334)
-        dlg.unsetCursor()
-        self.side_layout.insertWidget(self.side_layout.count() - 1, dlg)
-        self.side_panel.show()
-        dlg.show()
-
-        def undock(*_):
-            self.side_layout.removeWidget(dlg)
-            dlg.hide()
-            if self.side_layout.count() <= 1:
-                self.side_panel.hide()
-        dlg.finished.connect(undock)
+        """Put a tool dialog into the right-hand inspector panel."""
+        self.inspector.dock_tool(dlg)
 
     def prompt_pattern(self):
         """Copy what some steps did: evenly spaced, mirrored around the body, or around an axis."""
@@ -776,6 +822,77 @@ class MainWindow(QMainWindow):
                 self.doc.notify_changed()
                 self.status_label.setText(f"Combined bodies with operation: {op}.")
 
+    def prompt_split_body(self, target_body_id: str = "", plane_id: str = ""):
+        if not self.doc.bodies:
+            QMessageBox.information(
+                self, "Split Body", "No bodies found to split. Create a 3D body first!"
+            )
+            return
+
+        dlg = SplitBodyDialog(
+            self.doc, self,
+            preselected_body_id=target_body_id or None,
+            preselected_plane_id=plane_id or None,
+        )
+        if dlg.exec():
+            b_id, p_id = dlg.get_values()
+            if b_id and p_id:
+                feat = self.doc.split_body(b_id, p_id)
+                if feat:
+                    target = self.doc.bodies.get(b_id)
+                    new_body = self.doc.bodies.get(f"body_{feat.feature_id}")
+                    t_name = target.name if target else b_id
+                    n_name = new_body.name if new_body else "Split"
+                    self.status_label.setText(f"Split body {t_name} into {t_name} and {n_name}.")
+                    self.viewport.update()
+
+    def prompt_shell(self, target_body_id: str = ""):
+        """Shell: hollow out a 3D solid body with specified wall thickness and optional open faces."""
+        if not self.doc.bodies:
+            QMessageBox.information(self, "Shell", "Create a 3D body first before shelling!")
+            return
+
+        dlg = ShellDialog(self.doc, self, preselected_body_id=target_body_id or None)
+        self.dock(dlg)
+
+        def on_face_picked(plane):
+            if getattr(plane, "name", "") == "FACE" and getattr(plane, "face", None):
+                dlg.toggle_face(plane.face)
+
+        self.viewport.plane_picked.connect(on_face_picked)
+        self.viewport.begin_plane_pick("shell_face")
+        self.status_label.setText("Shell: Välj kropp och väggtjocklek. Klicka på ytor i 3D för att lämna dem öppna.")
+
+        def cleanup():
+            try:
+                self.viewport.plane_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            self.viewport.end_plane_pick()
+            self.inspector.undock_tool()
+
+        if dlg.exec():
+            b_id, thickness, open_faces = dlg.get_values()
+            if b_id and thickness > 0:
+                feat = self.doc.add_shell(b_id, thickness, open_faces, exprs=dlg.get_expressions())
+                if feat:
+                    body = self.doc.bodies.get(b_id)
+                    b_name = body.name if body else b_id
+                    n_open = len(open_faces)
+                    self.status_label.setText(f"Shell skapad på {b_name}: tjocklek {thickness:g} mm ({n_open} öppna ytor).")
+                    self.viewport.update()
+        cleanup()
+
+    def prompt_insert_canvas(self, preselected_plane_id: str = ""):
+        """Insert reference image onto a plane, edit/crop/calibrate with tape measure."""
+        dlg = CanvasEditorDialog(self.doc, self, preselected_plane_id=preselected_plane_id or None)
+        if dlg.exec():
+            data = dlg.get_canvas_data()
+            if data and data.get("image_data"):
+                cid = self.doc.add_canvas(**data)
+                self.viewport.update()
+                self.status_label.setText(f"Infogade bildreferens: {data['name']} ({data['width_mm']:.1f} × {data['height_mm']:.1f} mm).")
+
     def on_delete_selected(self):
         # In sketch mode Delete removes the selected sketch elements
         if self.doc.active_sketch and self.viewport.selected_entities:
@@ -808,6 +925,8 @@ class MainWindow(QMainWindow):
         self.doc = doc
         self.current_path = path
         self.viewport.set_document(doc)
+        self.inspector.doc = doc
+        doc.add_change_listener(self.inspector.refresh_info)
         for panel, refresh in ((self.browser, "refresh_tree"), (self.timeline_bar, "refresh_timeline"),
                                (self.ribbon, "sync_active_tab")):
             panel.doc = doc

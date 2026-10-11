@@ -497,10 +497,11 @@ class PatternFeature(Feature):
         mat = np.column_stack([ua, va, n, o]).astype(float)
         return m3d.Manifold.extrude(cs, height=h).translate((0, 0, -h / 2.0)).transform(mat)
 
-    def _fill_funcs(self, doc, before, removed, added, now=None):
+    def _fill_funcs(self, doc, before, removed, added, now=None, other_bodies=None):
         """Fill the flat face the source sketch is on: copies on a lattice that keeps exactly `gap` mm between
         neighbours (measured edge to edge, so hexagons, circles and triangles all pack right), staying
-        `margin` mm inside the face. The original stays where it is and anchors the lattice."""
+        `margin` mm inside the face. Avoids anything standing on or connected to the surface (bosses,
+        walls, cylinders, separate bodies) across all regions of the face."""
         from shapely.geometry import Polygon
         from shapely.ops import unary_union
         from shapely import affinity
@@ -524,10 +525,26 @@ class PatternFeature(Feature):
         if not shapes:
             return []
         foot = unary_union(shapes)
-        # the flat face in that plane (the biggest region around the footprint)
+        c0 = foot.representative_point()
+
+        # 1. Obstacles: any protrusion, boss, rib, cylinder, sphere or separate body connected to or
+        # standing on the face (material above z = 0.05 in plane space).
+        now_bodies = ([now] if now is not None and not now.is_empty() else []) + [b for b in (other_bodies or []) if not b.is_empty()]
+        obs_polys = []
+        for b in now_bodies:
+            m_plane = b.transform(inv)
+            above = m_plane.trim_by_plane([0.0, 0.0, 1.0], 0.05)
+            if not above.is_empty():
+                for ring in above.project().to_polygons():
+                    if len(ring) >= 3:
+                        p = Polygon(ring).buffer(0)
+                        if p.is_valid and p.area > 1e-6:
+                            obs_polys.append(p)
+        # Exclude the original feature's own spot so it isn't treated as an obstacle to itself
+        all_obs = unary_union(obs_polys).difference(foot.buffer(0.02)) if obs_polys else Polygon()
+
+        # 2. The flat face in that plane (coplanar triangles at z = 0)
         regions = []
-        # the face as it is NOW: bosses, cylinders and anything else added since leave holes in it, so the
-        # copies keep clear of them (plus the frame); the original's own spot is added back below
         for face in compute_planar_faces(now if now is not None else before):
             if abs(abs(float(face.normal @ n)) - 1.0) > 1e-3 or abs(float((face.origin - o) @ n)) > 1e-3:
                 continue
@@ -537,15 +554,99 @@ class PatternFeature(Feature):
                     regions.append(pg)
         if not regions:
             return []
-        face_poly = unary_union(regions + [foot.buffer(1e-4)])
-        parts = list(face_poly.geoms) if hasattr(face_poly, "geoms") else [face_poly]
-        c0 = foot.representative_point()
-        face_poly = next((pt for pt in parts if pt.buffer(1e-6).contains(c0)), max(parts, key=lambda q: q.area))
+        raw_face = unary_union(regions + [foot.buffer(1e-4)])
+        if all_obs and not all_obs.is_empty:
+            raw_face = raw_face.difference(all_obs)
+        parts = [p for p in (raw_face.geoms if hasattr(raw_face, "geoms") else [raw_face]) if p.area > 1e-6]
+        if not parts:
+            return []
+        face_poly = unary_union(parts)
         room = face_poly.buffer(-margin) if margin > 0 else face_poly
         if room.is_empty:
             return []
         minx, miny, maxx, maxy = foot.bounds
         bw, bh = maxx - minx, maxy - miny
+
+        # Check if shape is an equilateral triangle for triangular alternating tiling
+        tri_info = None
+        if self.mirror_mode in ("stagger", "triangular"):
+            coords = list(foot.exterior.coords)[:-1] if hasattr(foot, "exterior") else []
+            if len(coords) == 3:
+                p0, p1, p2 = np.array(coords[0]), np.array(coords[1]), np.array(coords[2])
+                d01, d12, d20 = np.linalg.norm(p1 - p0), np.linalg.norm(p2 - p1), np.linalg.norm(p0 - p2)
+                s_tri = float((d01 + d12 + d20) / 3.0)
+                if s_tri > 1e-4 and max(abs(d01 - s_tri), abs(d12 - s_tri), abs(d20 - s_tri)) < 0.08 * s_tri:
+                    c_tri = (p0 + p1 + p2) / 3.0
+                    v0 = p0 - c_tri
+                    if np.linalg.norm(v0) > 1e-5:
+                        a0 = float(np.arctan2(v0[1], v0[0]))
+                        tri_info = (s_tri, c_tri, a0)
+
+        funcs = []
+        min_frac = max(0.0, min(100.0, float(self.count1))) / 100.0
+        self._fill_clip = (room, o, ua, va, n) if min_frac > 0 else None
+        foot_area = max(foot.area, 1e-9)
+        from shapely.prepared import prep
+        prepared = prep(room)
+
+        if tri_info is not None:
+            s_tri, c_tri, a0 = tri_info
+            u_edge = np.array([-np.sin(a0), np.cos(a0)])
+            v_edge = np.array([np.cos(a0), np.sin(a0)])
+            dx = s_tri + np.sqrt(3) * gap
+            dy = dx * np.sqrt(3) / 2.0
+            v1 = dx * u_edge
+            v2 = (dx / 2.0) * u_edge + dy * v_edge
+            v_inv = (dx / 2.0) * u_edge + (dx / (2.0 * np.sqrt(3))) * v_edge
+
+            M = np.eye(4)
+            M[:3, 0], M[:3, 1], M[:3, 2], M[:3, 3] = ua, va, n, o
+            M_inv = np.linalg.inv(M)
+
+            foot_inv = affinity.rotate(foot, 180, origin=tuple(c_tri))
+            rx0, ry0, rx1, ry1 = room.bounds
+            reach_x = max(abs(rx1 - c0.x), abs(rx0 - c0.x)) + bw
+            reach_y = max(abs(ry1 - c0.y), abs(ry0 - c0.y)) + bh
+            step_sz = max(min(dx, dy), 1e-3)
+            imax = int(reach_x / step_sz) + 2
+            jmax = int(reach_y / step_sz) + 2
+
+            for j in range(-jmax, jmax + 1):
+                for i in range(-imax, imax + 1):
+                    # 1. Upright candidate
+                    p_up = i * v1 + j * v2
+                    if not (i == 0 and j == 0):
+                        m_up = affinity.translate(foot, *p_up)
+                        if min_frac > 0:
+                            if prepared.intersects(m_up) and m_up.intersection(room).area >= min_frac * foot_area:
+                                vec = tuple(ua * p_up[0] + va * p_up[1])
+                                funcs.append(lambda m, vec=vec: m.translate(vec))
+                        elif prepared.contains(m_up):
+                            vec = tuple(ua * p_up[0] + va * p_up[1])
+                            funcs.append(lambda m, vec=vec: m.translate(vec))
+
+                    # 2. Inverted candidate
+                    p_inv = i * v1 + j * v2 + v_inv
+                    m_inv = affinity.translate(foot_inv, *p_inv)
+                    if min_frac > 0:
+                        if prepared.intersects(m_inv) and m_inv.intersection(room).area >= min_frac * foot_area:
+                            T_plane = np.eye(4)
+                            T_plane[0, 0] = -1.0; T_plane[1, 1] = -1.0
+                            T_plane[0, 3] = 2.0 * c_tri[0] + p_inv[0]
+                            T_plane[1, 3] = 2.0 * c_tri[1] + p_inv[1]
+                            T_world = (M @ T_plane @ M_inv)[:3]
+                            funcs.append(lambda m, mat=T_world: m.transform(mat))
+                    elif prepared.contains(m_inv):
+                        T_plane = np.eye(4)
+                        T_plane[0, 0] = -1.0; T_plane[1, 1] = -1.0
+                        T_plane[0, 3] = 2.0 * c_tri[0] + p_inv[0]
+                        T_plane[1, 3] = 2.0 * c_tri[1] + p_inv[1]
+                        T_world = (M @ T_plane @ M_inv)[:3]
+                        funcs.append(lambda m, mat=T_world: m.transform(mat))
+
+                    if len(funcs) >= 1500:
+                        return funcs
+            return funcs
 
         def clear_dx(ax, ay, hi):   # smallest shift along (ax, ay) that leaves `gap` between two footprints
             lo_, hi_ = 0.0, hi
@@ -557,7 +658,7 @@ class PatternFeature(Feature):
                     lo_ = mid
             return hi_
 
-        stagger = self.mirror_mode == "stagger"
+        stagger = self.mirror_mode in ("stagger", "triangular")
         dx = clear_dx(1.0, 0.0, bw + gap + 1e-6)
         dy_grid = clear_dx(0.0, 1.0, bh + gap + 1e-6)
         if stagger:
@@ -578,14 +679,6 @@ class PatternFeature(Feature):
         reach_x = max(abs(rx1 - c0.x), abs(rx0 - c0.x)) + bw
         reach_y = max(abs(ry1 - c0.y), abs(ry0 - c0.y)) + bh
         imax, jmax = int(reach_x / dx) + 2, int(reach_y / dy) + 2
-        funcs = []
-        # count1 = smallest piece (% of a whole copy) worth keeping at the frame; 0 = whole copies only
-        min_frac = max(0.0, min(100.0, float(self.count1))) / 100.0
-        self._fill_clip = (room, o, ua, va, n) if min_frac > 0 else None
-        foot_area = max(foot.area, 1e-9)
-        # footprint test works on a prepared polygon for speed
-        from shapely.prepared import prep
-        prepared = prep(room)
         for j in range(-jmax, jmax + 1):
             off = sx if (j % 2) else 0.0
             for i in range(-imax, imax + 1):
@@ -667,8 +760,10 @@ class PatternFeature(Feature):
         centre = (bmin + bmax) / 2.0 if self.about == "body" else np.zeros(3)
         self._round_body = self._is_round(before)
         if self.kind == "fill":
-            now = doc.step_states.get(idx, {}).get(body_id, before)   # the body as it is when this step runs
-            funcs = self._fill_funcs(doc, before, removed, added, now)
+            step_bodies = doc.step_states.get(idx, {})
+            now = step_bodies.get(body_id, before)   # the body as it is when this step runs
+            other_bodies = [m for bid, m in step_bodies.items() if bid != body_id and not m.is_empty()]
+            funcs = self._fill_funcs(doc, before, removed, added, now, other_bodies=other_bodies)
         else:
             funcs = self._transforms(centre, (lo + hi) / 2.0, bmax - bmin)
         if not funcs:
@@ -808,6 +903,156 @@ class CombineFeature(Feature):
             "tool_body_id": self.tool_body_id,
             "operation": self.operation,
         }
+
+
+class SplitBodyFeature(Feature):
+    """Splits an existing solid body using a plane (construction plane or origin plane) into two separate bodies."""
+
+    def __init__(
+        self,
+        feature_id: str,
+        name: str,
+        target_body_id: str,
+        plane_id: str,
+        plane_origin: Optional[List[float]] = None,
+        plane_normal: Optional[List[float]] = None,
+        new_body_name: Optional[str] = None,
+    ):
+        super().__init__(feature_id, "split_body", name)
+        self.target_body_id = target_body_id
+        self.plane_id = plane_id
+        self.plane_origin = [float(x) for x in plane_origin] if plane_origin is not None else None
+        self.plane_normal = [float(x) for x in plane_normal] if plane_normal is not None else None
+        self.new_body_name = new_body_name
+
+    def execute(self, doc: Any) -> None:
+        target = doc.bodies.get(self.target_body_id)
+        if not target:
+            return
+
+        origin, normal = None, None
+        if hasattr(doc, "construction_planes") and self.plane_id in doc.construction_planes:
+            cp = doc.construction_planes[self.plane_id]
+            origin = np.array(cp["origin"], dtype=float)
+            normal = np.array(cp["normal"], dtype=float)
+        elif hasattr(doc, "origin_planes") and self.plane_id in doc.origin_planes:
+            op = doc.origin_planes[self.plane_id]
+            origin = np.array(op.origin, dtype=float)
+            normal = np.array(op.normal, dtype=float)
+        elif self.plane_origin is not None and self.plane_normal is not None:
+            origin = np.array(self.plane_origin, dtype=float)
+            normal = np.array(self.plane_normal, dtype=float)
+
+        if origin is None or normal is None:
+            return
+
+        norm = float(np.linalg.norm(normal))
+        if norm < 1e-9:
+            return
+        normal = normal / norm
+        d = float(np.dot(normal, origin))
+
+        # Split manifold into two watertight solid bodies
+        part1 = target.manifold.trim_by_plane(normal, d)
+        part2 = target.manifold.trim_by_plane(-normal, -d)
+
+        if part1.is_empty() or part2.is_empty() or part1.volume() < 1e-6 or part2.volume() < 1e-6:
+            return
+
+        target.manifold = part1
+        target.update_render_mesh()
+
+        new_body_id = f"body_{self.feature_id}"
+        name = self.new_body_name or f"{target.name} (Split)"
+        new_body = Body(
+            body_id=new_body_id,
+            name=name,
+            manifold=part2,
+            color=list(target.color),
+        )
+        new_body.update_render_mesh()
+        doc.bodies[new_body_id] = new_body
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "feature_id": self.feature_id,
+            "feature_type": self.feature_type,
+            "name": self.name,
+            "suppressed": self.suppressed,
+            "target_body_id": self.target_body_id,
+            "plane_id": self.plane_id,
+            "plane_origin": self.plane_origin,
+            "plane_normal": self.plane_normal,
+            "new_body_name": self.new_body_name,
+        }
+
+
+class ShellFeature(Feature):
+    """Hollows out a 3D solid body with a specified wall thickness, optionally opening selected faces."""
+
+    def __init__(
+        self,
+        feature_id: str,
+        name: str,
+        target_body_id: str,
+        thickness: float = 2.0,
+        open_faces: Optional[List[Dict[str, Any]]] = None,
+    ):
+        super().__init__(feature_id, "shell", name)
+        self.target_body_id = target_body_id
+        self.thickness = float(thickness)
+        self.open_faces = list(open_faces or [])
+
+    def execute(self, doc: Any) -> None:
+        target = doc.bodies.get(self.target_body_id)
+        if not target or self.thickness <= 0.001:
+            return
+
+        # 1. Create inner eroded solid via spherical Minkowski difference
+        sph = m3d.Manifold.sphere(self.thickness, 16)
+        try:
+            inner = target.manifold.minkowski_difference(sph)
+        except Exception as e:
+            print(f"ShellFeature Minkowski difference error: {e}")
+            return
+
+        if inner.is_empty() or inner.volume() < 1e-6:
+            print(f"ShellFeature: wall thickness {self.thickness} mm is too thick for body {target.name}.")
+            return
+
+        # 2. If open faces are specified, extend the inner cavity through those faces
+        cavity = inner
+        if self.open_faces:
+            for f in self.open_faces:
+                norm = np.array(f.get("normal", [0, 0, 1]), dtype=float)
+                norm_len = float(np.linalg.norm(norm))
+                if norm_len > 1e-6:
+                    norm = norm / norm_len
+                    # Translate inner solid out through the face boundary
+                    shift = norm * (self.thickness * 2.5 + 1.0)
+                    cavity = cavity + inner.translate(list(shift))
+
+        # 3. Subtract cavity from original solid body
+        try:
+            shelled = target.manifold - cavity
+            if not shelled.is_empty() and shelled.volume() > 1e-6:
+                target.manifold = shelled
+                target.update_render_mesh()
+        except Exception as e:
+            print(f"ShellFeature boolean subtraction error: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "feature_id": self.feature_id,
+            "feature_type": self.feature_type,
+            "name": self.name,
+            "suppressed": self.suppressed,
+            "target_body_id": self.target_body_id,
+            "thickness": self.thickness,
+            "open_faces": self.open_faces,
+        }
+
+
 
 
 class Timeline:

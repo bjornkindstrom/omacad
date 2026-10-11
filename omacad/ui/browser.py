@@ -26,6 +26,9 @@ class BrowserTree(QWidget):
     edit_section_requested = Signal(str)
     export_body_stl = Signal(str)
     edit_sketch_requested = Signal(str)
+    split_body_requested = Signal(str, str)
+    insert_canvas_requested = Signal(str)
+    shell_body_requested = Signal(str)
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -158,6 +161,16 @@ class BrowserTree(QWidget):
                 self._style_eye(it, bool(sec.get("active")))
                 it.setToolTip(1, "Click to turn the section off" if sec.get("active") else "Click to turn the section on")
 
+        if hasattr(self.doc, "canvases") and self.doc.canvases:
+            canv_group = QTreeWidgetItem(root, [f"🖼️ Canvases ({len(self.doc.canvases)})"])
+            canv_group.setExpanded(True)
+            for cid, c in self.doc.canvases.items():
+                it = QTreeWidgetItem(canv_group, [c["name"], ""])
+                it.setData(0, Qt.ItemDataRole.UserRole, ("canvas", cid))
+                it.setFlags(it.flags() | Qt.ItemFlag.ItemIsEditable)
+                self._style_eye(it, bool(c.get("visible", True)))
+                it.setToolTip(1, "Click to hide canvas" if c.get("visible", True) else "Click to show canvas")
+
     @staticmethod
     def _style_eye(item: QTreeWidgetItem, visible: bool):
         """Eye icon in column 1; hidden items are greyed out."""
@@ -170,9 +183,12 @@ class BrowserTree(QWidget):
 
     def on_item_renamed(self, item: QTreeWidgetItem, column: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
-        if column != 0 or not data or data[0] not in ("sketch", "body", "section"):
+        if column != 0 or not data or data[0] not in ("sketch", "body", "section", "canvas"):
             return
         kind, item_id = data
+        if kind == "canvas":
+            self.doc.update_canvas(item_id, name=item.text(0))
+            return
         if not self.doc.rename_item(kind, item_id, item.text(0)):
             self.refresh_tree()  # empty or invalid name: put the old one back
 
@@ -182,8 +198,10 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
-        if column == 1 and item_type in ("body", "sketch", "section"):
-            if item_type == "section":
+        if column == 1 and item_type in ("body", "sketch", "section", "canvas"):
+            if item_type == "canvas":
+                self.doc.toggle_canvas_visibility(item_id)
+            elif item_type == "section":
                 self.doc.set_section_active(item_id, not self.doc.sections[item_id].get("active"))
             elif item_type == "body":
                 self.doc.toggle_body_visibility(item_id)
@@ -228,10 +246,18 @@ class BrowserTree(QWidget):
         if item_type == "plane":
             act = theme.action_with_icon(menu, f"✏️ Create Sketch on {item_id} Plane")
             act.triggered.connect(lambda: self.start_sketch_on_plane.emit(item_id))
+            act_canv = theme.action_with_icon(menu, f"🖼️ Insert Canvas on {item_id} Plane…")
+            act_canv.triggered.connect(lambda: self.insert_canvas_requested.emit(item_id))
+            act_split = theme.action_with_icon(menu, f"🪚 Split Body with {item_id} Plane…")
+            act_split.triggered.connect(lambda: self.split_body_requested.emit("", item_id))
 
         elif item_type == "cplane":
             act = theme.action_with_icon(menu, "✏️ Create Sketch on this Plane")
             act.triggered.connect(lambda: self.start_sketch_on_cplane.emit(item_id))
+            act_canv = theme.action_with_icon(menu, "🖼️ Insert Canvas on this Plane…")
+            act_canv.triggered.connect(lambda: self.insert_canvas_requested.emit(item_id))
+            act_split = theme.action_with_icon(menu, "🪚 Split Body with this Plane…")
+            act_split.triggered.connect(lambda: self.split_body_requested.emit("", item_id))
             act_vis = theme.action_with_icon(menu, "👁️ Show / Hide")
             act_vis.triggered.connect(lambda: self.doc.toggle_construction_plane(item_id))
             menu.addSeparator()
@@ -242,6 +268,12 @@ class BrowserTree(QWidget):
             act_rename = theme.action_with_icon(menu, "🏷️ Rename (F2)")
             act_rename.triggered.connect(lambda: self.tree.editItem(item, 0))
 
+            act_shell = theme.action_with_icon(menu, "🐚 Shell Body…")
+            act_shell.triggered.connect(lambda: self.shell_body_requested.emit(item_id))
+
+            act_split = theme.action_with_icon(menu, "🪚 Split Body…")
+            act_split.triggered.connect(lambda: self.split_body_requested.emit(item_id, ""))
+
             act_vis = theme.action_with_icon(menu, "👁️ Toggle Visibility")
             act_vis.triggered.connect(lambda: self.doc.toggle_body_visibility(item_id))
 
@@ -251,6 +283,13 @@ class BrowserTree(QWidget):
             menu.addSeparator()
             act_del = theme.action_with_icon(menu, "🗑️ Delete Body")
             act_del.triggered.connect(lambda: self.doc.delete_body(item_id))
+
+        elif item_type == "canvas":
+            act_vis = theme.action_with_icon(menu, "👁️ Show / Hide")
+            act_vis.triggered.connect(lambda: self.doc.toggle_canvas_visibility(item_id))
+            menu.addSeparator()
+            act_del = theme.action_with_icon(menu, "🗑️ Delete Canvas")
+            act_del.triggered.connect(lambda: self.doc.delete_canvas(item_id))
 
         elif item_type == "section":
             on = bool(self.doc.sections[item_id].get("active"))

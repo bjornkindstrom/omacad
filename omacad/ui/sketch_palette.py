@@ -171,9 +171,22 @@ class SketchPalette(QFrame):
 
     # ---- Dragging: grab the palette anywhere that is not a control ----------
     def place_default(self, parent_size):
-        """Top-right corner until the user has moved it; afterwards just keep it on screen."""
+        """Places the palette according to user settings unless dragged by the user."""
         if not getattr(self, "user_moved", False):
-            self.move(parent_size.width() - self.width() - 24, 140)
+            from omacad.ui.settings import get_settings
+            pos_mode = get_settings().get("palette_position", "bottom_right")
+            margin_x = 20
+            w, h = self.width(), self.height()
+            pw, ph = parent_size.width(), parent_size.height()
+
+            if pos_mode == "top_left":
+                self.move(margin_x, 60)
+            elif pos_mode == "bottom_left":
+                self.move(margin_x, max(20, ph - h - 60))
+            elif pos_mode == "top_right":
+                self.move(max(20, pw - w - margin_x), 140)
+            else:  # "bottom_right" default
+                self.move(max(20, pw - w - margin_x), max(20, ph - h - 60))
         else:
             self._clamp(parent_size)
 

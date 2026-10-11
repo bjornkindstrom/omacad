@@ -73,11 +73,15 @@ class Ribbon(QWidget):
     sphere_clicked = Signal()
     combine_clicked = Signal()
     delete_clicked = Signal()
+    split_body_clicked = Signal()
+    shell_clicked = Signal()
+    canvas_clicked = Signal()
     inspect_clicked = Signal()
+    settings_clicked = Signal()
 
     # Sketch Tools
     constraint_clicked = Signal(str)  # HORIZONTAL, VERTICAL, PARALLEL, ...
-    sketch_tool_selected = Signal(str)  # "LINE", "RECT", "CENTER_RECT", "CIRCLE", "ARC", "SLOT", "DIMENSION"
+    sketch_tool_selected = Signal(str)  # "LINE", "RECT", "CENTER_RECT", "CIRCLE", "ARC", "SLOT", "FILLET", "DIMENSION"
     finish_sketch_clicked = Signal()
     toggle_construction_clicked = Signal()
 
@@ -141,6 +145,11 @@ class Ribbon(QWidget):
         btn_plane.clicked.connect(self.offset_plane_clicked)
         h_layout.addWidget(btn_plane)
 
+        btn_canvas = RibbonButton("Canvas\n(Bild)", "🖼️")
+        btn_canvas.setToolTip("Insert a reference image on a plane, calibrate with tape measure and trace over it")
+        btn_canvas.clicked.connect(self.canvas_clicked)
+        h_layout.addWidget(btn_canvas)
+
         btn_measure = RibbonButton("Measure\n(I)", "📏")
         btn_measure.setToolTip("Click a line, circle or edge for its size; click a second one for the distance or angle between them")
         btn_measure.clicked.connect(self.measure_clicked)
@@ -202,6 +211,16 @@ class Ribbon(QWidget):
         btn_combine.clicked.connect(self.combine_clicked)
         h_layout.addWidget(btn_combine)
 
+        btn_split = RibbonButton("Split\nBody", "🪚")
+        btn_split.setToolTip("Split a solid body into two using an offset plane or origin plane")
+        btn_split.clicked.connect(self.split_body_clicked)
+        h_layout.addWidget(btn_split)
+
+        btn_shell = RibbonButton("Shell", "🐚")
+        btn_shell.setToolTip("Hollow out a solid body with a specified wall thickness, opening selected faces")
+        btn_shell.clicked.connect(self.shell_clicked)
+        h_layout.addWidget(btn_shell)
+
         btn_del = RibbonButton("Delete", "🗑️")
         btn_del.clicked.connect(self.delete_clicked)
         h_layout.addWidget(btn_del)
@@ -216,6 +235,12 @@ class Ribbon(QWidget):
         btn_inspect = RibbonButton("Measure", "📏")
         btn_inspect.clicked.connect(self.inspect_clicked)
         h_layout.addWidget(btn_inspect)
+
+        # SETTINGS
+        btn_settings = RibbonButton("Settings", "⚙️")
+        btn_settings.setToolTip("Colors and app preferences (Ctrl+,)")
+        btn_settings.clicked.connect(self.settings_clicked)
+        h_layout.addWidget(btn_settings)
 
         h_layout.addStretch()
 
@@ -260,6 +285,12 @@ class Ribbon(QWidget):
         self.btn_slot.setCheckable(True)
         self.btn_slot.clicked.connect(lambda: self.select_sketch_tool("SLOT"))
         h_layout.addWidget(self.btn_slot)
+
+        self.btn_fillet_sk = RibbonButton("Fillet\n(F)", "╭")
+        self.btn_fillet_sk.setCheckable(True)
+        self.btn_fillet_sk.setToolTip("Fillet (F): Round corners between two lines (click a corner or select lines)")
+        self.btn_fillet_sk.clicked.connect(lambda: self.select_sketch_tool("FILLET"))
+        h_layout.addWidget(self.btn_fillet_sk)
 
         # Separator
         sep_dim = QFrame()
@@ -346,6 +377,8 @@ class Ribbon(QWidget):
         self.btn_polygon.setChecked(tool_name == "POLYGON")
         self.btn_arc.setChecked(tool_name == "ARC")
         self.btn_slot.setChecked(tool_name == "SLOT")
+        if hasattr(self, "btn_fillet_sk"):
+            self.btn_fillet_sk.setChecked(tool_name == "FILLET")
         self.btn_dim.setChecked(tool_name == "DIMENSION")
         self.btn_move.setChecked(tool_name == "MOVE")
         self.sketch_tool_selected.emit(tool_name)

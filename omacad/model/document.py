@@ -6,7 +6,10 @@ Holds active bodies, sketches, origin reference geometry, and timeline.
 from dataclasses import dataclass
 from typing import Dict, Optional, List, Callable, Tuple
 import numpy as np
-from omacad.model.timeline import PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature, SphereFeature, ExtrudeFeature, SketchFeature
+from omacad.model.timeline import (
+    PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
+    SphereFeature, ExtrudeFeature, SketchFeature, SplitBodyFeature, ShellFeature
+)
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
 from omacad.model.sketch_solver import solve_sketch, SolveResult
 from omacad.model import expr as exprlib
@@ -43,6 +46,9 @@ class Document:
 
         # Saved section views: id -> dict(name, origin, normal, offset, flip, active); at most one is active
         self.sections: Dict[str, dict] = {}
+
+        # Canvases / calibrated reference images: id -> dict(name, plane_id, image_data, width_mm, height_mm, origin_uv, rotation_deg, opacity, visible)
+        self.canvases: Dict[str, dict] = {}
 
         # Active sketch when in Sketch Mode
         self.active_sketch: Optional[Sketch] = None
@@ -417,6 +423,8 @@ class Document:
         "fillet": ("size", "kind"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
                     "mirror_mode", "about", "angle"),
+        "split_body": ("target_body_id", "plane_id"),
+        "shell": ("thickness",),
     }
 
     def edit_feature(self, index: int, **params) -> bool:
@@ -527,10 +535,84 @@ class Document:
             for f in self.timeline.features:
                 if f"body_{f.feature_id}" == item_id:
                     f.name = name
+                    if hasattr(f, "new_body_name"):
+                        f.new_body_name = name
         else:
             return False
         self.notify_changed()
         return True
+
+    def split_body(self, body_id: str, plane_id: str, new_body_name: Optional[str] = None) -> Optional[SplitBodyFeature]:
+        """Splits an existing body using an offset (construction) plane or origin plane into two separate bodies."""
+        if body_id not in self.bodies:
+            return None
+        n = len([f for f in self.timeline.features if f.feature_type == "split_body"]) + 1
+        feat_id = f"split_{len(self.timeline.features) + 1}"
+        plane_origin, plane_normal = None, None
+        if plane_id in self.construction_planes:
+            cp = self.construction_planes[plane_id]
+            plane_origin = list(cp["origin"])
+            plane_normal = list(cp["normal"])
+        elif plane_id in self.origin_planes:
+            op = self.origin_planes[plane_id]
+            plane_origin = list(op.origin)
+            plane_normal = list(op.normal)
+        feat = SplitBodyFeature(
+            feat_id, f"Split Body {n}", body_id, plane_id,
+            plane_origin=plane_origin, plane_normal=plane_normal,
+            new_body_name=new_body_name
+        )
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
+    def add_shell(self, body_id: str, thickness: float, open_faces=None) -> Optional[ShellFeature]:
+        """Hollows out the body with a given wall thickness, optionally leaving selected faces open."""
+        if body_id not in self.bodies:
+            return None
+        n = len([f for f in self.timeline.features if f.feature_type == "shell"]) + 1
+        feat_id = f"shell_{len(self.timeline.features) + 1}"
+        feat = ShellFeature(feat_id, f"Shell {n}", body_id, thickness, open_faces=open_faces)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
+    # ---- Canvases / Reference Images ----------------------------------------
+    def add_canvas(self, name: str, plane_id: str, image_data: str, width_mm: float, height_mm: float,
+                   origin_uv: Tuple[float, float] = (0.0, 0.0), rotation_deg: float = 0.0,
+                   opacity: float = 0.5, visible: bool = True) -> str:
+        cid = f"canvas_{len(self.canvases) + 1}"
+        while cid in self.canvases:
+            cid += "_"
+        self.canvases[cid] = {
+            "name": name or f"Canvas {len(self.canvases) + 1}",
+            "plane_id": plane_id,
+            "image_data": image_data,
+            "width_mm": float(width_mm),
+            "height_mm": float(height_mm),
+            "origin_uv": [float(origin_uv[0]), float(origin_uv[1])],
+            "rotation_deg": float(rotation_deg),
+            "opacity": float(opacity),
+            "visible": bool(visible),
+        }
+        self.notify_changed()
+        return cid
+
+    def update_canvas(self, cid: str, **kw) -> None:
+        if cid in self.canvases:
+            self.canvases[cid].update(kw)
+            self.notify_changed()
+
+    def delete_canvas(self, cid: str) -> None:
+        if self.canvases.pop(cid, None) is not None:
+            self.notify_changed()
+
+    def toggle_canvas_visibility(self, cid: str) -> None:
+        if cid in self.canvases:
+            self.canvases[cid]["visible"] = not self.canvases[cid].get("visible", True)
+            self.notify_changed()
 
     def toggle_body_visibility(self, body_id: str) -> None:
         if body_id in self.bodies:

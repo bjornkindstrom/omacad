@@ -17,6 +17,7 @@ This file lists what has been built, step by step, and what is left. (Swedish fe
 - Constraints via SolveSpace: horizontal, vertical, parallel, perpendicular, equal, tangent, concentric, coincident, fixed, point-on-circle.
 - Dimensions as real constraints: length, distance (H/V/aligned), point-to-line, angle, diameter; guided right-click menus; measuring from circle/polygon centres; formulas and named parameters in every field.
 - **Offset (`O`)** of sketch elements with live preview. **Measure (`I`)** for lines, circles and body edges (length, distance, angle).
+- **Fillet (`F`)**: Runda hörn mellan linjer i skisser med tangentbågar och parametriska radie-mått, fullt integrerat med profilupplösning och 3D-extrudering.
 
 ### 3. Solids
 - **Extrude**: draggable arrow *and* typed value, one side / symmetric / two sides, *To face…*, Auto / New / Join / Cut / Intersect, live preview, manual profile selection (Shift+click to add/remove; nothing auto-picked), extrude a whole face. Profiles with holes now extrude correctly.
@@ -31,6 +32,7 @@ This file lists what has been built, step by step, and what is left. (Swedish fe
 ### 5. UX
 - All tool dialogs dock in a right-hand panel so the model is never covered.
 - Context menus on faces, sketch elements, tree items; icons enlarged; themed with Omarchy.
+- **Settings (`Ctrl+,`)**: Persistent inställningar i `~/.config/omacad/settings.json`. Konfigurerbara färger för 3D-extrude pilar, mätverktyg (I), aktiva sketchlinjer, konstruktionslinjer, highlight, inverterat mushjul, standard-radie för fillets samt placering och autogömning av sketch-paletten.
 
 ### 6. Project and web
 - Private repo `bjornkindstrom/omacad`; screenshots in `screenshots/`.
@@ -40,7 +42,7 @@ This file lists what has been built, step by step, and what is left. (Swedish fe
 
 ### Sketching
 - Arcs and slots inside the constraint solver (radius/angle dimensions, tangent arcs).
-- Trim, sketch fillet, rotate, scale, copy, mirror/pattern *inside* a sketch, Project/Include of body edges.
+- Trim, rotate, scale, copy, mirror/pattern *inside* a sketch, Project/Include of body edges.
 - Dimensions on whole polygons across flats; centred (instead of anchored) fill lattice option.
 
 ### Solids

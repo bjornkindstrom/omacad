@@ -94,16 +94,16 @@ class BaseFeatureDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        btn_cancel = QPushButton("Cancel")
-        btn_cancel.setAutoDefault(False)
-        btn_cancel.clicked.connect(self.reject)
-        btn_layout.addWidget(btn_cancel)
+        self.btn_cancel = QPushButton("Cancel")
+        self.btn_cancel.setAutoDefault(False)
+        self.btn_cancel.clicked.connect(self.reject)
+        btn_layout.addWidget(self.btn_cancel)
 
-        btn_ok = QPushButton("OK")
-        btn_ok.setObjectName("PrimaryButton")
-        btn_ok.setDefault(True)  # Enter confirms, as in Fusion
-        btn_ok.clicked.connect(self.accept)
-        btn_layout.addWidget(btn_ok)
+        self.btn_ok = QPushButton("OK")
+        self.btn_ok.setObjectName("PrimaryButton")
+        self.btn_ok.setDefault(True)  # Enter confirms, as in Fusion
+        self.btn_ok.clicked.connect(self.accept)
+        btn_layout.addWidget(self.btn_ok)
 
         self.main_layout.addLayout(btn_layout)
 
@@ -613,7 +613,7 @@ class PatternDialog(BaseFeatureDialog):
         self.spn_gap.setToolTip("Clear space between neighbouring copies, edge to edge")
         self.spn_margin = ExprDoubleSpinBox(); self.spn_margin.setRange(0.0, 100000); self.spn_margin.setSuffix(" mm"); self.spn_margin.setValue(3.0)
         self.spn_margin.setToolTip("How far the copies stay from the edge of the face")
-        self.cmb_layout = QComboBox(); self.cmb_layout.addItems(["Grid", "Staggered (honeycomb)"])
+        self.cmb_layout = QComboBox(); self.cmb_layout.addItems(["Grid", "Staggered (honeycomb / auto)", "Triangular (alternating)"])
         self.spn_partial = QSpinBox(); self.spn_partial.setRange(0, 100); self.spn_partial.setValue(25); self.spn_partial.setSuffix(" %")
         self.spn_partial.setToolTip("Copies at the edge may be cut off by the frame. Pieces smaller than this share of a whole copy are left out. "
                                     "0 = only whole copies.")
@@ -687,7 +687,12 @@ class PatternDialog(BaseFeatureDialog):
         self.spn_angle.setValue(f.angle)
         if f.kind == "fill":
             self.spn_gap.setValue(f.spacing1); self.spn_margin.setValue(f.spacing2); self.spn_partial.setValue(int(round(f.count1)))
-            self.cmb_layout.setCurrentIndex(1 if f.mirror_mode == "stagger" else 0)
+            if f.mirror_mode == "triangular":
+                self.cmb_layout.setCurrentIndex(2)
+            elif f.mirror_mode == "stagger":
+                self.cmb_layout.setCurrentIndex(1)
+            else:
+                self.cmb_layout.setCurrentIndex(0)
             for key, spin in (("spacing1", self.spn_gap), ("spacing2", self.spn_margin)):
                 if f.exprs.get(key):
                     spin.set_expression(f.exprs[key])
@@ -706,8 +711,9 @@ class PatternDialog(BaseFeatureDialog):
     def get_params(self) -> dict:
         second = self.chk_second.isChecked()
         if self.kind() == "fill":   # gap and margin travel in the spacing fields, the layout in mirror_mode
+            mode = "triangular" if self.cmb_layout.currentIndex() == 2 else ("stagger" if self.cmb_layout.currentIndex() == 1 else "grid")
             return {"axis1": "x", "count1": self.spn_partial.value(), "spacing1": self.spn_gap.value(), "axis2": "y", "count2": 1,
-                    "spacing2": self.spn_margin.value(), "mirror_mode": "stagger" if self.cmb_layout.currentIndex() else "grid",
+                    "spacing2": self.spn_margin.value(), "mirror_mode": mode,
                     "about": "body", "angle": 360.0}
         return {
             "axis1": self.AXES[self.cmb_axis1.currentIndex()], "count1": self.spn_count1.value(), "spacing1": self.spn_space1.value(),
@@ -723,3 +729,191 @@ class PatternDialog(BaseFeatureDialog):
         out = {"spacing1": self.spn_space1.expression(), "spacing2": self.spn_space2.expression() if self.chk_second.isChecked() else None,
                "angle": self.spn_angle.expression()}
         return {k: v for k, v in out.items() if v}
+
+
+class SplitBodyDialog(BaseFeatureDialog):
+    """Dialog to split a body using an offset (construction) plane or origin plane into two bodies."""
+
+    def __init__(self, doc: Document, parent=None, preselected_body_id: Optional[str] = None, preselected_plane_id: Optional[str] = None):
+        super().__init__("Split Body", parent)
+        self.doc = doc
+        form = QFormLayout()
+
+        # Target Body
+        self.body_ids = list(doc.bodies.keys())
+        body_names = [doc.bodies[bid].name for bid in self.body_ids]
+        self.cmb_target = QComboBox()
+        self.cmb_target.addItems(body_names)
+        if preselected_body_id and preselected_body_id in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(preselected_body_id))
+        elif doc.selected_body_ids and doc.selected_body_ids[0] in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(doc.selected_body_ids[0]))
+        form.addRow("Target Body:", self.cmb_target)
+
+        # Splitting Plane
+        self.plane_keys = []
+        plane_labels = []
+        # Construction planes (offset planes) first
+        for pid, cp in doc.construction_planes.items():
+            self.plane_keys.append(pid)
+            plane_labels.append(f"📐 {cp['name']}")
+        # Origin planes
+        for op in ("XY", "XZ", "YZ"):
+            self.plane_keys.append(op)
+            plane_labels.append(f"🌐 {op} Plane")
+
+        self.cmb_plane = QComboBox()
+        self.cmb_plane.addItems(plane_labels)
+        if preselected_plane_id and preselected_plane_id in self.plane_keys:
+            self.cmb_plane.setCurrentIndex(self.plane_keys.index(preselected_plane_id))
+        form.addRow("Splitting Plane:", self.cmb_plane)
+
+        self.lbl_status = QLabel()
+        self.lbl_status.setWordWrap(True)
+        form.addRow(self.lbl_status)
+
+        self.main_layout.addLayout(form)
+        self.add_buttons()
+
+        self.cmb_target.currentIndexChanged.connect(self._update_status)
+        self.cmb_plane.currentIndexChanged.connect(self._update_status)
+        self._update_status()
+
+    def _update_status(self):
+        body_id, plane_id = self.get_values()
+        if not body_id or not plane_id:
+            self.lbl_status.setText("Select a body and a plane to split.")
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.setEnabled(False)
+            return
+
+        body = self.doc.bodies.get(body_id)
+        if not body:
+            self.lbl_status.setText("Body not found.")
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.setEnabled(False)
+            return
+
+        import numpy as np
+        origin, normal = None, None
+        if plane_id in self.doc.construction_planes:
+            cp = self.doc.construction_planes[plane_id]
+            origin = np.array(cp["origin"], dtype=float)
+            normal = np.array(cp["normal"], dtype=float)
+        elif plane_id in self.doc.origin_planes:
+            op = self.doc.origin_planes[plane_id]
+            origin = np.array(op.origin, dtype=float)
+            normal = np.array(op.normal, dtype=float)
+
+        if origin is None or normal is None:
+            self.lbl_status.setText("Plane not found.")
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.setEnabled(False)
+            return
+
+        norm = float(np.linalg.norm(normal))
+        if norm < 1e-9:
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.setEnabled(False)
+            return
+        normal = normal / norm
+        d = float(np.dot(normal, origin))
+
+        # Check cut
+        p1 = body.manifold.trim_by_plane(normal, d)
+        p2 = body.manifold.trim_by_plane(-normal, -d)
+        if p1.is_empty() or p2.is_empty() or p1.volume() < 1e-6 or p2.volume() < 1e-6:
+            self.lbl_status.setText("⚠️ Warning: Plane does not cut through the body.")
+            self.lbl_status.setStyleSheet("color: #E57373;")
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.setEnabled(False)
+        else:
+            self.lbl_status.setText(f"✓ Split produces 2 bodies ({p1.volume():.1f} mm³ + {p2.volume():.1f} mm³).")
+            self.lbl_status.setStyleSheet("color: #81C784;")
+            if hasattr(self, "btn_ok"):
+                self.btn_ok.setEnabled(True)
+
+    def get_values(self):
+        b_idx = self.cmb_target.currentIndex()
+        p_idx = self.cmb_plane.currentIndex()
+        if b_idx < 0 or b_idx >= len(self.body_ids) or p_idx < 0 or p_idx >= len(self.plane_keys):
+            return None, None
+        return self.body_ids[b_idx], self.plane_keys[p_idx]
+
+
+class ShellDialog(BaseFeatureDialog):
+    """Dialog to hollow out a 3D solid body with specified wall thickness and optional open faces."""
+
+    changed = Signal()
+
+    def __init__(self, doc: Document, parent=None, preselected_body_id: Optional[str] = None):
+        super().__init__("Shell", parent)
+        self.doc = doc
+        form = QFormLayout()
+
+        # Target Body
+        self.body_ids = list(doc.bodies.keys())
+        body_names = [doc.bodies[bid].name for bid in self.body_ids]
+        self.cmb_target = QComboBox()
+        self.cmb_target.addItems(body_names)
+        if preselected_body_id and preselected_body_id in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(preselected_body_id))
+        elif doc.selected_body_ids and doc.selected_body_ids[0] in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(doc.selected_body_ids[0]))
+        form.addRow("Target Body:", self.cmb_target)
+
+        # Wall Thickness
+        self.spn_thickness = ExprDoubleSpinBox()
+        self.spn_thickness.setRange(0.05, 500.0)
+        self.spn_thickness.setDecimals(2)
+        self.spn_thickness.setSuffix(" mm")
+        self.spn_thickness.setValue(2.0)
+        form.addRow("Wall Thickness:", self.spn_thickness)
+
+        # Open Faces
+        self.open_faces = []
+        self.lbl_faces = QLabel("0 open face(s) selected.\n(Click faces in viewport to leave them open, e.g. top of box)")
+        self.lbl_faces.setWordWrap(True)
+        form.addRow("Open Faces:", self.lbl_faces)
+
+        self.btn_clear_faces = QPushButton("Clear Open Faces")
+        self.btn_clear_faces.clicked.connect(self.clear_faces)
+        form.addRow("", self.btn_clear_faces)
+
+        self.main_layout.addLayout(form)
+        self.add_buttons()
+
+        self.spn_thickness.valueChanged.connect(lambda *_: self.changed.emit())
+        self.cmb_target.currentIndexChanged.connect(lambda *_: self.changed.emit())
+
+    def toggle_face(self, face):
+        """Add or remove an open face by user viewport pick."""
+        # Check if already in list
+        fn = [float(x) for x in face.normal]
+        fo = [float(x) for x in face.origin]
+        found_idx = -1
+        for i, f in enumerate(self.open_faces):
+            if np.allclose(f["normal"], fn, atol=1e-3) and np.allclose(f["origin"], fo, atol=1e-3):
+                found_idx = i
+                break
+        if found_idx >= 0:
+            self.open_faces.pop(found_idx)
+        else:
+            self.open_faces.append({"normal": fn, "origin": fo, "body_id": getattr(face, "body_id", "")})
+
+        count = len(self.open_faces)
+        self.lbl_faces.setText(f"{count} open face{'s' if count != 1 else ''} selected.\n(Click again to deselect)")
+        self.changed.emit()
+
+    def clear_faces(self):
+        self.open_faces = []
+        self.lbl_faces.setText("0 open face(s) selected.\n(Click faces in viewport to leave them open)")
+        self.changed.emit()
+
+    def get_values(self):
+        b_idx = self.cmb_target.currentIndex()
+        if b_idx < 0 or b_idx >= len(self.body_ids):
+            return None, 2.0, []
+        return self.body_ids[b_idx], self.spn_thickness.value(), list(self.open_faces)
+
+

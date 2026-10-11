@@ -87,6 +87,30 @@ void main() {
 }
 """
 
+VERTEX_SHADER_TEXTURE = """
+#version 120
+attribute vec3 in_pos;
+attribute vec2 in_uv;
+uniform mat4 u_mvp;
+varying vec2 v_uv;
+void main() {
+    v_uv = in_uv;
+    gl_Position = u_mvp * vec4(in_pos, 1.0);
+}
+"""
+
+FRAGMENT_SHADER_TEXTURE = """
+#version 120
+varying vec2 v_uv;
+uniform sampler2D u_tex;
+uniform float u_opacity;
+void main() {
+    vec4 col = texture2D(u_tex, v_uv);
+    gl_FragColor = vec4(col.rgb, col.a * u_opacity);
+}
+"""
+
+
 
 # Screen-space thick lines (glLineWidth > 1 is invalid in this context)
 VERTEX_SHADER_THICK = """
@@ -229,10 +253,20 @@ class Viewport3D(QOpenGLWidget):
         self.sketch_palette.settings_changed.connect(self.update)
         self.sketch_palette.hide()
 
+        # Fillet tool state
+        self.fillet_first_line = None
+        self.fillet_hover_corner = None
+        self.fillet_preview = None
+
+        from omacad.ui.settings import get_settings
+        get_settings().changed.connect(self.update)
+
         # OpenGL shader handles
         self.prog_solid = None
         self.prog_flat = None
         self.prog_thick = None
+        self.prog_tex = None
+        self._canvas_textures = {}
         self.vbo_thick = None
         self.vao = None
         self.vbo_pos = None
@@ -580,6 +614,9 @@ class Viewport3D(QOpenGLWidget):
         self.measure = {"mode": "sketch" if self.doc.active_sketch else "model", "picks": [], "text": [], "segs": []}
         self.selected_entities.clear()
         self.sketch_tool = "NONE" if self.doc.active_sketch else self.sketch_tool
+        from omacad.ui.settings import get_settings
+        if self.sketch_palette and get_settings().get("autohide_palette_on_measure", True):
+            self.sketch_palette.hide()
         self.status_message.emit("Measure: click a line, circle or edge; click a second one to measure between them. Esc ends.")
         self.setFocus()
         self.update()
@@ -587,6 +624,9 @@ class Viewport3D(QOpenGLWidget):
     def end_measure(self):
         if self.measure is not None:
             self.measure = None
+            if self.doc.active_sketch and self.sketch_palette:
+                self.sketch_palette.show()
+                self.sketch_palette.place_default(self.size())
             self.status_message.emit("Measure closed.")
             self.update()
 
@@ -618,7 +658,8 @@ class Viewport3D(QOpenGLWidget):
         sk = self.doc.active_sketch
         to_scr = (lambda q: self.world_to_screen(sk.plane.uv_to_world(q[0], q[1]))) if m["mode"] == "sketch" else \
                  (lambda q: self.world_to_screen(np.asarray(q, dtype=float)))
-        accent = theme.qcolor(255, 170, 60)
+        from omacad.ui.settings import get_settings
+        accent = get_settings().measure_color_qcolor()
         pen = QPen(accent, 3)
         painter.setPen(pen)
         for p in m["picks"]:
@@ -778,8 +819,12 @@ class Viewport3D(QOpenGLWidget):
         tip = origin + axis * dist
         size = self.distance * 0.04
         lit = self._handle_hover or self._handle_drag
+        from omacad.ui.settings import get_settings
+        custom_arrow = get_settings().arrow_color_rgb01()
         if h.get("color"):
             col = (*(min(1.0, c + (0.2 if lit else 0.0)) for c in h["color"]), 1.0)
+        elif custom_arrow is not None:
+            col = (*(min(1.0, c + (0.2 if lit else 0.0)) for c in custom_arrow), 1.0)
         else:
             col = (*theme.palette().highlight01(0.15 if lit else 0.0), 1.0)
         GL.glDisable(GL.GL_DEPTH_TEST)
@@ -1433,6 +1478,9 @@ class Viewport3D(QOpenGLWidget):
         self._dim_pending = []
         self._dim_place = None
         self._dim_side = None
+        self.fillet_first_line = None
+        self.fillet_hover_corner = None
+        self.fillet_preview = None
         if self._move:
             self._end_move(False)
         if tool_name == "MOVE" and not self.selected_entities:
@@ -1444,7 +1492,103 @@ class Viewport3D(QOpenGLWidget):
         self.sketch_second_uv = None
         self.sketch_current_uv = None
         self.sketch_tool_changed.emit(tool_name)
+        if tool_name == "FILLET":
+            if self.selected_entities:
+                self.fillet_selected_or_prompt()
+            else:
+                self.status_message.emit("Fillet: Klicka på ett hörn mellan två linjer, eller klicka två linjer (Esc avbryter).")
         self.update()
+
+    def prompt_fillet_radius(self, line_a, line_b, corner_pt=None):
+        """Interactive fillet creation with live OpenGL preview."""
+        sk = self.doc.active_sketch
+        if not sk:
+            return
+        from omacad.ui.settings import get_settings
+        default_r = float(get_settings().get("fillet_default_radius", 2.0))
+
+        def preview(radius):
+            segs = []
+            if radius > 0.05:
+                from omacad.model.sketch import Sketch
+                tmp = Sketch.from_dict(sk.to_dict())
+                la = tmp.get_entity(line_a.entity_id)
+                lb = tmp.get_entity(line_b.entity_id)
+                if la and lb:
+                    try:
+                        arc, _ = tmp.fillet_corner(la, lb, radius, corner_pt)
+                        if arc:
+                            for a, b in arc.to_lines(24):
+                                segs += [*sk.plane.uv_to_world(*a), *sk.plane.uv_to_world(*b)]
+                            for a, b in la.to_lines():
+                                segs += [*sk.plane.uv_to_world(*a), *sk.plane.uv_to_world(*b)]
+                            for a, b in lb.to_lines():
+                                segs += [*sk.plane.uv_to_world(*a), *sk.plane.uv_to_world(*b)]
+                    except Exception:
+                        pass
+            self.fillet_preview = np.array(segs, dtype=np.float32) if segs else None
+            self.update()
+
+        try:
+            res = self.prompt_dimension_value("Fillet", "Radius:", default_r, lo=0.1, hi=2000.0, on_change=preview)
+        finally:
+            self.fillet_preview = None
+            self.update()
+
+        if res is None or res[0] <= 0.001:
+            return
+
+        radius = res[0]
+        before = sk.to_dict()
+        arc, msg = sk.fillet_corner(line_a, line_b, radius, corner_pt)
+        if not arc:
+            self.status_message.emit(f"Fillet: {msg}")
+            return
+
+        get_settings().set("fillet_default_radius", radius)
+        self.doc.record_sketch_change(sk, before)
+        self.selected_entities = {arc.entity_id}
+        self.selection_changed.emit()
+        self.doc.timeline.recompute(self.doc)
+        self.doc.notify_changed()
+        self.status_message.emit(f"Fillet: hörnet avrundat med radie {radius:g} mm.")
+        self.update()
+
+    def fillet_selected_or_prompt(self):
+        """Fillet corner(s) from current selection (2 lines or a shape like rectangle/polygon)."""
+        sk = self.doc.active_sketch
+        if not sk or not self.selected_entities:
+            return
+        from omacad.model.sketch import SketchLine
+        cands = [sk.get_entity(eid) for eid in self.selected_entities if isinstance(sk.get_entity(eid), SketchLine)]
+        if len(cands) == 2:
+            self.prompt_fillet_radius(cands[0], cands[1])
+            return
+        elif len(cands) > 2:
+            corners = sk.find_corners(cands)
+            if corners:
+                from omacad.ui.settings import get_settings
+                default_r = float(get_settings().get("fillet_default_radius", 2.0))
+                res = self.prompt_dimension_value("Fillet", f"Radie för {len(corners)} hörn:", default_r, lo=0.1, hi=2000.0)
+                if res and res[0] > 0.001:
+                    radius = res[0]
+                    before = sk.to_dict()
+                    created_arcs = []
+                    for pt, la, lb, ea, eb in corners:
+                        arc, msg = sk.fillet_corner(la, lb, radius, pt)
+                        if arc:
+                            created_arcs.append(arc)
+                    if created_arcs:
+                        get_settings().set("fillet_default_radius", radius)
+                        self.doc.record_sketch_change(sk, before)
+                        self.selected_entities = {a.entity_id for a in created_arcs}
+                        self.selection_changed.emit()
+                        self.doc.timeline.recompute(self.doc)
+                        self.doc.notify_changed()
+                        self.status_message.emit(f"Fillet: {len(created_arcs)} hörn avrundade med radie {radius:g} mm.")
+                        self.update()
+                    return
+        self.status_message.emit("Fillet: Klicka på ett hörn mellan två linjer, eller klicka två linjer (Esc avbryter).")
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -1667,6 +1811,10 @@ class Viewport3D(QOpenGLWidget):
             vs_thick = shaders.compileShader(VERTEX_SHADER_THICK, GL.GL_VERTEX_SHADER)
             self.prog_thick = shaders.compileProgram(vs_thick, fs_flat)
             self.vbo_thick = GL.glGenBuffers(1)
+
+            vs_tex = shaders.compileShader(VERTEX_SHADER_TEXTURE, GL.GL_VERTEX_SHADER)
+            fs_tex = shaders.compileShader(FRAGMENT_SHADER_TEXTURE, GL.GL_FRAGMENT_SHADER)
+            self.prog_tex = shaders.compileProgram(vs_tex, fs_tex)
         except Exception as e:
             print(f"Error compiling CAD shaders: {e}")
 
@@ -1753,7 +1901,10 @@ class Viewport3D(QOpenGLWidget):
         if self.show_grid:
             self.render_ground_grid(mvp)
 
-        # 2. Draw 3D Solid Bodies
+        # 2. Draw Canvases / Reference Images
+        self.render_canvases(mvp)
+
+        # 3. Draw 3D Solid Bodies
         self.render_bodies(mvp)
 
         # 3. Draw Active or Visible Sketches
@@ -1764,9 +1915,10 @@ class Viewport3D(QOpenGLWidget):
         self.render_edge_pick(mvp)
         self.render_section_cap(mvp)
         self.render_extrude_handle(mvp)
-        if self.offset_preview is not None and self.prog_thick is not None:
+        if (self.offset_preview is not None or self.fillet_preview is not None) and self.prog_thick is not None:
+            prev_lines = self.fillet_preview if self.fillet_preview is not None else self.offset_preview
             GL.glDisable(GL.GL_DEPTH_TEST)
-            self.draw_thick_lines(mvp, self.offset_preview, (1.0, 0.65, 0.2, 1.0), 3.0, halo=True)
+            self.draw_thick_lines(mvp, prev_lines, (1.0, 0.65, 0.2, 1.0), 3.0, halo=True)
             GL.glEnable(GL.GL_DEPTH_TEST)
 
         # 4. Draw QPainter Overlay (ViewCube, HUD, sketch measurements)
@@ -1775,6 +1927,145 @@ class Viewport3D(QOpenGLWidget):
             self.draw_painter_overlays(painter)
         finally:
             painter.end()
+
+    def _get_canvas_texture(self, cid: str, b64_data: str) -> Optional[int]:
+        if cid in self._canvas_textures:
+            return self._canvas_textures[cid]
+        try:
+            import base64
+            from PySide6.QtGui import QImage
+            raw = base64.b64decode(b64_data)
+            img = QImage()
+            img.loadFromData(raw)
+            if img.isNull():
+                return None
+            img = img.convertToFormat(QImage.Format.Format_RGBA8888)
+            w, h = img.width(), img.height()
+            tex_id = int(GL.glGenTextures(1))
+            GL.glBindTexture(GL.GL_TEXTURE_2D, tex_id)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
+            bits = img.constBits()
+            GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, w, h, 0, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, bytes(bits))
+            GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+            self._canvas_textures[cid] = tex_id
+            return tex_id
+        except Exception as e:
+            print(f"Error creating canvas texture for {cid}: {e}")
+            return None
+
+    def render_canvases(self, mvp: np.ndarray):
+        """Renders calibrated reference images on their respective 3D planes."""
+        canvases = getattr(self.doc, "canvases", {})
+        if not canvases or not self.prog_tex:
+            return
+
+        for cid, c in canvases.items():
+            if not c.get("visible", True) or not c.get("image_data"):
+                continue
+
+            plane_id = c.get("plane_id", "XY")
+            plane = None
+            if plane_id in self.doc.origin_planes:
+                plane = self.doc.origin_planes[plane_id]
+            elif plane_id in self.doc.construction_planes:
+                plane = self.doc.construction_plane(plane_id)
+            if plane is None:
+                continue
+
+            tex_id = self._get_canvas_texture(cid, c["image_data"])
+            if not tex_id:
+                continue
+
+            w_mm = float(c.get("width_mm", 100.0))
+            h_mm = float(c.get("height_mm", 100.0))
+            ox, oy = c.get("origin_uv", [-w_mm / 2.0, -h_mm / 2.0])
+            rot_deg = float(c.get("rotation_deg", 0.0))
+            opacity = float(c.get("opacity", 0.5))
+
+            # 4 Corners in plane UV coordinates with rotation
+            cx, cy = ox + w_mm / 2.0, oy + h_mm / 2.0
+            rad = math.radians(rot_deg)
+            cos_r, sin_r = math.cos(rad), math.sin(rad)
+
+            def rot_pt(u, v):
+                du, dv = u - cx, v - cy
+                return cx + du * cos_r - dv * sin_r, cy + du * sin_r + dv * cos_r
+
+            uv_corners = [
+                rot_pt(ox, oy),
+                rot_pt(ox + w_mm, oy),
+                rot_pt(ox + w_mm, oy + h_mm),
+                rot_pt(ox, oy + h_mm),
+            ]
+            w_pts = [plane.uv_to_world(u, v) for u, v in uv_corners]
+
+            quad_pos = np.array([
+                w_pts[0], w_pts[1], w_pts[2],
+                w_pts[0], w_pts[2], w_pts[3]
+            ], dtype=np.float32)
+
+            quad_uv = np.array([
+                [0.0, 1.0], [1.0, 1.0], [1.0, 0.0],
+                [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]
+            ], dtype=np.float32)
+
+            GL.glUseProgram(self.prog_tex)
+            loc_mvp = GL.glGetUniformLocation(self.prog_tex, "u_mvp")
+            loc_op = GL.glGetUniformLocation(self.prog_tex, "u_opacity")
+            loc_tex = GL.glGetUniformLocation(self.prog_tex, "u_tex")
+            loc_pos = GL.glGetAttribLocation(self.prog_tex, "in_pos")
+            loc_uv = GL.glGetAttribLocation(self.prog_tex, "in_uv")
+
+            GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
+            GL.glUniform1f(loc_op, opacity)
+            GL.glUniform1i(loc_tex, 0)
+
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, tex_id)
+
+            GL.glBindVertexArray(self.vao)
+            pos_bytes = np.ascontiguousarray(quad_pos, dtype=np.float32)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vbo_pos)
+            GL.glBufferData(GL.GL_ARRAY_BUFFER, pos_bytes.nbytes, pos_bytes, GL.GL_DYNAMIC_DRAW)
+            GL.glEnableVertexAttribArray(loc_pos)
+            GL.glVertexAttribPointer(loc_pos, 3, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+
+            uv_bytes = np.ascontiguousarray(quad_uv, dtype=np.float32)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vbo_norm)
+            GL.glBufferData(GL.GL_ARRAY_BUFFER, uv_bytes.nbytes, uv_bytes, GL.GL_DYNAMIC_DRAW)
+            GL.glEnableVertexAttribArray(loc_uv)
+            GL.glVertexAttribPointer(loc_uv, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+
+            GL.glDepthMask(GL.GL_FALSE)
+            GL.glDrawArrays(GL.GL_TRIANGLES, 0, 6)
+            GL.glDepthMask(GL.GL_TRUE)
+
+            GL.glDisableVertexAttribArray(loc_pos)
+            GL.glDisableVertexAttribArray(loc_uv)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+            GL.glBindVertexArray(0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+            GL.glUseProgram(0)
+
+            # Draw canvas boundary border
+            if self.prog_flat:
+                border_lines = np.array([
+                    w_pts[0], w_pts[1],
+                    w_pts[1], w_pts[2],
+                    w_pts[2], w_pts[3],
+                    w_pts[3], w_pts[0]
+                ], dtype=np.float32)
+                GL.glUseProgram(self.prog_flat)
+                loc_m = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
+                loc_c = GL.glGetUniformLocation(self.prog_flat, "u_color")
+                loc_p = GL.glGetAttribLocation(self.prog_flat, "in_pos")
+                GL.glUniformMatrix4fv(loc_m, 1, GL.GL_TRUE, mvp.flatten())
+                GL.glUniform4f(loc_c, 0.2, 0.65, 1.0, 0.7)
+                self.draw_buffer_arrays(GL.GL_LINES, loc_p, border_lines)
+                GL.glUseProgram(0)
 
     def render_ground_grid(self, mvp: np.ndarray):
         """Renders concentric grid and colored X/Y/Z coordinate axes."""
@@ -1984,17 +2275,23 @@ class Viewport3D(QOpenGLWidget):
 
             if normal_lines:
                 if is_active:
-                    self.draw_thick_lines(mvp, normal_lines, (0.30, 0.88, 1.0, 1.0), 2.4)  # Vibrant cyan
+                    from omacad.ui.settings import get_settings
+                    scol = get_settings().sketch_line_color_rgb01()
+                    self.draw_thick_lines(mvp, normal_lines, (*scol, 1.0), 2.4)
                 else:
                     self.draw_thick_lines(mvp, normal_lines, (1.0, 0.65, 0.20, 1.0), 2.0)  # Orange sketch
 
             if hover_lines:
                 self.draw_thick_lines(mvp, hover_lines, (1.0, 1.0, 1.0, 1.0), 3.0)
             if selected_lines:
-                self.draw_thick_lines(mvp, selected_lines, (*theme.palette().highlight01(), 1.0), 3.4)
+                from omacad.ui.settings import get_settings
+                hl_col = get_settings().highlight_color_rgb01() or theme.palette().highlight01()
+                self.draw_thick_lines(mvp, selected_lines, (*hl_col, 1.0), 3.4)
 
             if construction_lines:
-                self.draw_thick_lines(mvp, construction_lines, (1.0, 0.80, 0.30, 1.0), 1.6)  # Amber construction lines
+                from omacad.ui.settings import get_settings
+                ccol = get_settings().sketch_construction_color_rgb01()
+                self.draw_thick_lines(mvp, construction_lines, (*ccol, 1.0), 1.6)
 
         GL.glEnable(GL.GL_DEPTH_TEST)
 
@@ -2090,6 +2387,60 @@ class Viewport3D(QOpenGLWidget):
         # 1. ViewCube
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
         self._draw_measure(painter)
+
+        # Fillet hover corner marker and arrow
+        if self.doc.active_sketch and self.sketch_tool == "FILLET" and self.fillet_hover_corner:
+            pt, la, lb = self.fillet_hover_corner
+            scr = self.world_to_screen(self.doc.active_sketch.plane.uv_to_world(*pt))
+            if scr:
+                painter.setPen(QPen(QColor(255, 170, 60), 2))
+                painter.setBrush(QColor(255, 170, 60, 160))
+                painter.drawEllipse(QPointF(*scr), 6.0, 6.0)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+
+                # Bisector arrow pointing into the corner
+                try:
+                    def line_dir(line):
+                        p1 = np.array(line.p1)
+                        p2 = np.array(line.p2)
+                        d1 = float(np.linalg.norm(p1 - pt))
+                        d2 = float(np.linalg.norm(p2 - pt))
+                        far = p2 if d1 < d2 else p1
+                        d = far - pt
+                        norm = float(np.linalg.norm(d))
+                        return d / norm if norm > 1e-6 else np.array([1.0, 0.0])
+
+                    da = line_dir(la)
+                    db = line_dir(lb)
+                    bisect = da + db
+                    b_norm = float(np.linalg.norm(bisect))
+                    if b_norm > 1e-6:
+                        bisect = bisect / b_norm
+                        from omacad.ui.settings import get_settings
+                        def_r = float(get_settings().get("fillet_default_radius", 2.0))
+                        arrow_len = max(6.0, min(30.0, def_r * 2.5))
+                        arrow_uv = np.array(pt) + bisect * arrow_len
+                        scr_arr = self.world_to_screen(self.doc.active_sketch.plane.uv_to_world(*arrow_uv))
+                        if scr_arr:
+                            painter.setPen(QPen(QColor(0, 195, 255), 2.5))
+                            painter.drawLine(QPointF(*scr), QPointF(*scr_arr))
+                            # Arrow head
+                            angle = math.atan2(scr_arr[1] - scr[1], scr_arr[0] - scr[0])
+                            head_len = 9.0
+                            h1 = QPointF(scr_arr[0] - head_len * math.cos(angle - 0.45), scr_arr[1] - head_len * math.sin(angle - 0.45))
+                            h2 = QPointF(scr_arr[0] - head_len * math.cos(angle + 0.45), scr_arr[1] - head_len * math.sin(angle + 0.45))
+                            painter.drawLine(QPointF(*scr_arr), h1)
+                            painter.drawLine(QPointF(*scr_arr), h2)
+                            # Handle circle at tip
+                            painter.setBrush(QColor(0, 195, 255, 180))
+                            painter.drawEllipse(QPointF(*scr_arr), 4.5, 4.5)
+                            painter.setBrush(Qt.BrushStyle.NoBrush)
+                            # Label
+                            painter.setFont(QFont("sans-serif", 9, QFont.Weight.Bold))
+                            painter.setPen(QColor(0, 225, 255))
+                            painter.drawText(QPointF(scr_arr[0] + 8, scr_arr[1] - 4), f"R {def_r:g} mm")
+                except Exception:
+                    pass
 
         # 2. Sketch Profiles Shading (when active or in sketch mode)
         if self.doc.active_sketch and self.sketch_palette.chk_show_profiles.isChecked():
@@ -3024,6 +3375,38 @@ class Viewport3D(QOpenGLWidget):
 
         self.last_mouse_pos = event.position().toPoint()
 
+        # Handle Fillet Tool Click
+        if self.doc.active_sketch and self.sketch_tool == "FILLET":
+            if event.button() == Qt.MouseButton.RightButton:
+                if self.fillet_first_line:
+                    self.fillet_first_line = None
+                    self.status_message.emit("Fillet: Klicka på ett hörn mellan två linjer, eller klicka två linjer (Esc avbryter).")
+                    self.update()
+                    return
+                self.set_sketch_tool("NONE")
+                return
+            if event.button() == Qt.MouseButton.LeftButton:
+                if self.fillet_hover_corner:
+                    pt, la, lb = self.fillet_hover_corner
+                    self.prompt_fillet_radius(la, lb, pt)
+                    return
+                ent = self._pick_entity(x, y)
+                from omacad.model.sketch import SketchLine
+                if ent and isinstance(ent, SketchLine):
+                    if self.fillet_first_line is None:
+                        self.fillet_first_line = ent
+                        self.status_message.emit("Fillet: Klicka nu på den andra linjen för att runda hörnet mellan dem.")
+                    else:
+                        first = self.fillet_first_line
+                        self.fillet_first_line = None
+                        if first.entity_id != ent.entity_id:
+                            self.prompt_fillet_radius(first, ent)
+                        else:
+                            self.status_message.emit("Fillet: Välj två olika linjer.")
+                    self.update()
+                    return
+                return
+
         # Handle Sketch Drawing Click
         if self.doc.active_sketch and self.sketch_tool != "NONE":
             # Right click finishes current line chain or cancels step
@@ -3175,13 +3558,29 @@ class Viewport3D(QOpenGLWidget):
         self.hovered_dim_id = hovered
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "DIMENSION", "MOVE"):
+        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "DIMENSION", "MOVE"):
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
 
         if hovered != prev_hovered:
             self.update()
+
+        if self.doc.active_sketch and self.sketch_tool == "FILLET":
+            sk = self.doc.active_sketch
+            best_c = None
+            corners = sk.find_corners()
+            best_d = 16.0  # pixels
+            for pt, la, lb, ea, eb in corners:
+                scr = self.world_to_screen(sk.plane.uv_to_world(*pt))
+                if scr:
+                    d = math.hypot(x - scr[0], y - scr[1])
+                    if d < best_d:
+                        best_d = d
+                        best_c = (pt, la, lb)
+            if best_c != self.fillet_hover_corner:
+                self.fillet_hover_corner = best_c
+                self.update()
 
         # Active sketch snapping and preview tracking
         if self.doc.active_sketch and self.sketch_tool != "NONE":
@@ -3295,6 +3694,7 @@ class Viewport3D(QOpenGLWidget):
         else:
             heading("Arcs and slots can't be dimensioned yet")
         menu.addSeparator()
+        add("fillet", "╭ Fillet corner…  (F)", "Rounds a corner between lines with an arc.")
         add("offset", "↔️ Offset…  (O)", "Makes a parallel copy at a distance you type (select several, or double-click, to offset a whole shape).")
         add("delete", "🗑️ Delete", "Removes this element (and its dimensions).")
 
@@ -3332,6 +3732,8 @@ class Viewport3D(QOpenGLWidget):
             self.apply_constraint(key.upper())
         elif key == "fix":
             self.apply_constraint("FIX")
+        elif key == "fillet":
+            self.set_sketch_tool("FILLET")
         elif key == "offset":
             self.offset_selected()
         elif key == "delete":
@@ -3458,6 +3860,9 @@ class Viewport3D(QOpenGLWidget):
 
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
+        from omacad.ui.settings import get_settings
+        if get_settings().get("invert_zoom", False):
+            delta = -delta
         factor = 0.9 if delta > 0 else 1.1
         self.distance = max(5.0, min(2000.0, self.distance * factor))
         self.update()
@@ -3513,6 +3918,9 @@ class Viewport3D(QOpenGLWidget):
                 return
             elif event.key() == Qt.Key.Key_O:
                 self.offset_selected()
+                return
+            elif event.key() == Qt.Key.Key_F:
+                self.set_sketch_tool("FILLET")
                 return
             elif event.key() == Qt.Key.Key_I:
                 self.begin_measure()
