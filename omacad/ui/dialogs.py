@@ -976,21 +976,21 @@ class MoveBodyDialog(BaseFeatureDialog):
         form.addRow("Dra i 3D-pil:", axis_layout)
 
         # Translation
-        self.spn_dx = ExprDoubleSpinBox(doc)
+        self.spn_dx = ExprDoubleSpinBox()
         self.spn_dx.setRange(-10000.0, 10000.0)
         self.spn_dx.setDecimals(2)
         self.spn_dx.setSuffix(" mm")
         self.spn_dx.setValue(0.0)
         form.addRow("Flytta X (dx):", self.spn_dx)
 
-        self.spn_dy = ExprDoubleSpinBox(doc)
+        self.spn_dy = ExprDoubleSpinBox()
         self.spn_dy.setRange(-10000.0, 10000.0)
         self.spn_dy.setDecimals(2)
         self.spn_dy.setSuffix(" mm")
         self.spn_dy.setValue(0.0)
         form.addRow("Flytta Y (dy):", self.spn_dy)
 
-        self.spn_dz = ExprDoubleSpinBox(doc)
+        self.spn_dz = ExprDoubleSpinBox()
         self.spn_dz.setRange(-10000.0, 10000.0)
         self.spn_dz.setDecimals(2)
         self.spn_dz.setSuffix(" mm")
@@ -1003,21 +1003,21 @@ class MoveBodyDialog(BaseFeatureDialog):
         form.addRow("Rotations-pivot:", self.cmb_pivot)
 
         # Rotation
-        self.spn_rx = ExprDoubleSpinBox(doc)
+        self.spn_rx = ExprDoubleSpinBox()
         self.spn_rx.setRange(-3600.0, 3600.0)
         self.spn_rx.setDecimals(2)
         self.spn_rx.setSuffix(" °")
         self.spn_rx.setValue(0.0)
         form.addRow("Rotera X (rx):", self.spn_rx)
 
-        self.spn_ry = ExprDoubleSpinBox(doc)
+        self.spn_ry = ExprDoubleSpinBox()
         self.spn_ry.setRange(-3600.0, 3600.0)
         self.spn_ry.setDecimals(2)
         self.spn_ry.setSuffix(" °")
         self.spn_ry.setValue(0.0)
         form.addRow("Rotera Y (ry):", self.spn_ry)
 
-        self.spn_rz = ExprDoubleSpinBox(doc)
+        self.spn_rz = ExprDoubleSpinBox()
         self.spn_rz.setRange(-3600.0, 3600.0)
         self.spn_rz.setDecimals(2)
         self.spn_rz.setSuffix(" °")
