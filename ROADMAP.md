@@ -32,7 +32,7 @@ This file lists what has been built, step by step, and what is left. (Swedish fe
 - **Offset Plane** (pick XY/XZ/YZ, then any surface incl. cylinders), **Section View** (draggable offset, saved in the tree, toggled with the eye).
 
 ### 4. Parametric history
-- Timeline editing (click a step to change it, roll back, suppress), parameters with formulas, automatic hiding of used sketches, delete/suppress with downstream rebuild.
+- Timeline editing (click a step to colour what it changed, double-click to edit it, roll back, suppress), parameters with formulas, automatic hiding of used sketches, delete/suppress with downstream rebuild.
 - Robustness: sliver clean-up after booleans, zero-area triangle handling in the renderer.
 
 - Fillet/Chamfer robustness: see-through edge picking, loop on the other face, moved edges are re-matched after upstream edits, inside corners are mitred, no notch at the foot of rounded corners.

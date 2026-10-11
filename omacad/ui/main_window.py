@@ -160,6 +160,8 @@ class MainWindow(QMainWindow):
         self.viewport.section_base_picked.connect(self.on_section_base_picked)
         self.browser.edit_section_requested.connect(self.edit_section)
         self.timeline_bar.edit_sketch_requested.connect(self.on_edit_sketch)
+        self.timeline_bar.highlight_changed.connect(
+            lambda added, removed: self.viewport.set_preview(added, "join", extra=removed, extra_op="cut"))
         self.browser.export_body_stl.connect(self.export_single_body_stl)
         self.browser.export_body_step.connect(self.export_single_body_step)
         self.browser.move_body_requested.connect(self.prompt_move_body)

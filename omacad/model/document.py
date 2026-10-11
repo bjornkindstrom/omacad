@@ -8,6 +8,7 @@ from typing import Dict, Optional, List, Callable, Tuple
 import copy
 import functools
 import numpy as np
+import manifold3d as m3d
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
     SphereFeature, ExtrudeFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
@@ -184,6 +185,27 @@ class Document:
             self.notify_changed()
             return sketch.name
         return None
+
+    def step_changes(self, index: int):
+        """(added, removed) material of timeline step `index` as manifolds (None where nothing), from the body
+        states recorded before and after it. Steps beyond the replay marker have no states and give (None, None)."""
+        before, after = self.step_states.get(index), self.step_states.get(index + 1)
+        if before is None or after is None:
+            return None, None
+        added, removed = [], []
+        for bid in set(before) | set(after):
+            a, b = after.get(bid), before.get(bid)
+            if a is None:
+                removed.append(b)
+            elif b is None:
+                added.append(a)
+            else:
+                added.append(a - b)
+                removed.append(b - a)
+        def merge(parts):
+            parts = [p for p in parts if not p.is_empty()]
+            return m3d.Manifold.batch_boolean(parts, m3d.OpType.Add) if parts else None
+        return merge(added), merge(removed)
 
     def undo(self) -> Optional[str]:
         name = self._swap_state(self.undo_stack, self.redo_stack)

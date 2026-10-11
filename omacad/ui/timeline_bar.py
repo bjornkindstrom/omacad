@@ -117,10 +117,12 @@ class TimelineBar(QWidget):
     """Bottom Parametric Timeline bar with history playback."""
 
     edit_sketch_requested = Signal(str)
+    highlight_changed = Signal(object, object)  # (material the step added, material it removed), or (None, None)
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.doc = document
+        self._highlighted: Optional[int] = None   # step number whose changes are coloured in the view
         self.doc.add_change_listener(self.refresh_timeline)
 
         self.setFixedHeight(48)
@@ -191,6 +193,9 @@ class TimelineBar(QWidget):
 
     def refresh_timeline(self):
         """Re-renders feature nodes according to timeline state."""
+        if self._highlighted is not None:
+            self._highlighted = None
+            self.highlight_changed.emit(None, None)
         # Clear existing nodes
         while self.nodes_layout.count() > 1:
             item = self.nodes_layout.takeAt(0)
@@ -209,7 +214,15 @@ class TimelineBar(QWidget):
             self.nodes_layout.insertWidget(idx, chip)
 
     def on_node_clicked(self, step_index: int):
-        pass  # a single click only selects; roll back with the arrows or the right-click menu
+        """A click colours what that step changed in the model (green = added, red = removed); a second click
+        on the same step clears it. Rolling back is done with the arrows or the right-click menu."""
+        if self._highlighted == step_index:
+            self._highlighted = None
+            self.highlight_changed.emit(None, None)
+            return
+        added, removed = self.doc.step_changes(step_index - 1)
+        self._highlighted = step_index
+        self.highlight_changed.emit(added, removed)
 
     def on_node_edit(self, step_index: int):
         """Double-click: edit that step (a sketch opens in sketch mode)."""
