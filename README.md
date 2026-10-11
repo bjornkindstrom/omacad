@@ -22,6 +22,9 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - **Pattern / Mirror**: jämnt fördelade kopior, speglade hörn (kopierar t.ex. hål med chamfers) eller runt en axel, med förhandsvisning.
 - **Offset Plane** i två klick: välj XY/XZ/YZ, peka på valfri yta (även cylindrar) – planet läggs tangent mot ytan.
 
+**Se in i modellen**
+- **Section View** (✂️ i bandet, View-menyn): välj XY/XZ/YZ, en yta eller ett eget plan, och skjut snittet genom modellen med reglage, inskrivet värde eller genom att dra i pilen. Snittytan färgas, med "se från andra sidan".
+
 **Parametriskt**
 - **Parametrar** med namn och formler (`bredd/2`, `10-1`, `2x(3+5)`) i alla fält.
 - **Tidslinje**: klicka på ett steg för att ändra det, dubbelklick redigerar, rulla tillbaka/framåt, undertrycka steg.

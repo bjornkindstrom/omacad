@@ -65,6 +65,7 @@ class Ribbon(QWidget):
     chamfer_clicked = Signal()
     pattern_clicked = Signal()
     offset_plane_clicked = Signal()
+    section_clicked = Signal()
     parameters_clicked = Signal()
     box_clicked = Signal()
     cylinder_clicked = Signal()
@@ -138,6 +139,11 @@ class Ribbon(QWidget):
         btn_plane.setToolTip("A new plane at a distance from a plane or face, or touching any surface (even a cylinder)")
         btn_plane.clicked.connect(self.offset_plane_clicked)
         h_layout.addWidget(btn_plane)
+
+        btn_section = RibbonButton("Section\nView", "✂️")
+        btn_section.setToolTip("Cut through the model at a plane or face and slide the cut until you see what you want")
+        btn_section.clicked.connect(self.section_clicked)
+        h_layout.addWidget(btn_section)
 
         btn_extrude = RibbonButton("Extrude\n(E)", "⬆️")
         btn_extrude.clicked.connect(self.extrude_clicked)

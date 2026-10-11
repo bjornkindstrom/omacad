@@ -114,6 +114,7 @@ class MainWindow(QMainWindow):
         self.ribbon.extrude_clicked.connect(self.prompt_extrude)
         self.ribbon.pattern_clicked.connect(self.prompt_pattern)
         self.ribbon.offset_plane_clicked.connect(self.prompt_offset_plane)
+        self.ribbon.section_clicked.connect(self.prompt_section)
         self.ribbon.fillet_clicked.connect(lambda: self.prompt_round_edges("fillet"))
         self.ribbon.chamfer_clicked.connect(lambda: self.prompt_round_edges("chamfer"))
         self.ribbon.parameters_clicked.connect(self.on_change_parameters)
@@ -136,6 +137,7 @@ class MainWindow(QMainWindow):
         self.browser.edit_sketch_requested.connect(self.on_edit_sketch)
         self.browser.start_sketch_on_cplane.connect(self.start_sketch_on_cplane)
         self.viewport.offset_base_picked.connect(self.on_offset_base_picked)
+        self.viewport.section_base_picked.connect(self.on_section_base_picked)
         self.timeline_bar.edit_sketch_requested.connect(self.on_edit_sketch)
         self.browser.export_body_stl.connect(self.export_single_body_stl)
 
@@ -223,6 +225,7 @@ class MainWindow(QMainWindow):
         # View Menu
         menu_view = menubar.addMenu("View")
         menu_view.addAction("Fit View (Home)", self.viewport.zoom_fit, QKeySequence("F"))
+        menu_view.addAction("Section View…", self.prompt_section)
         menu_view.addAction("Toggle Ground Grid", self.toggle_grid)
         menu_view.addAction("Toggle Feature Edges", self.toggle_edges)
 
@@ -235,7 +238,7 @@ class MainWindow(QMainWindow):
             "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
             "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️",
             "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
-            "Fit View": "🔲", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
+            "Fit View": "🔲", "Section View": "✂️", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
         }
         for menu in menubar.findChildren(QMenu):
             for act in menu.actions():
@@ -453,6 +456,57 @@ class MainWindow(QMainWindow):
         self.viewport.surface_hover.connect(on_hover)
         self.viewport.surface_picked.connect(on_picked)
         self.viewport.plane_pick_cancelled.connect(done)
+
+    def prompt_section(self):
+        """Section view: pick a plane or face, then slide the cut through the model (view only)."""
+        if self.doc.active_sketch:
+            self.on_finish_sketch()
+        if not self.doc.bodies:
+            QMessageBox.information(self, "Section View", "There is nothing to cut through yet.")
+            return
+        if self.viewport.section is not None:
+            self.viewport.clear_section()
+        self.viewport.begin_plane_pick("section_base")
+        self.status_label.setText("Section View: click an origin plane or a flat face to cut along (Esc cancels).")
+
+    def on_section_base_picked(self, base):
+        from omacad.ui.dialogs import SectionDialog
+        n = np.asarray(base.normal, dtype=float)
+        o = np.asarray(base.origin, dtype=float)
+        pts = [np.asarray(b.render_mesh.bounds_min, dtype=float) for b in self.doc.bodies.values() if b.render_mesh is not None] + \
+              [np.asarray(b.render_mesh.bounds_max, dtype=float) for b in self.doc.bodies.values() if b.render_mesh is not None]
+        pts = np.array(pts)
+        centre = (pts.min(axis=0) + pts.max(axis=0)) / 2.0
+        extent = float(np.linalg.norm(pts.max(axis=0) - pts.min(axis=0))) / 2.0
+        anchor = centre - n * float((centre - o) @ n)       # where the arrow stands on the base plane
+        # start in the middle of the model along the plane normal
+        start = float((centre - o) @ n)
+        dlg = SectionDialog("face" if base.name == "FACE" else f"{base.name} plane", extent + abs(start), self.viewport)
+        dlg.place(self.viewport.size())
+
+        def apply():
+            off = dlg.offset()
+            self.viewport.set_section(o, n, off, dlg.flip())
+            self.viewport.set_extrude_handle(anchor, n, off)
+
+        def dragged(val):
+            dlg.set_offset(val)
+
+        def finished(_):
+            self.viewport.extrude_handle_dragged.disconnect(dragged)
+            self.viewport.clear_section()
+            self._section_dlg = None
+            self.status_label.setText("Section view closed.")
+            dlg.deleteLater()
+
+        self._section_dlg = dlg
+        self.viewport.extrude_handle_dragged.connect(dragged)
+        dlg.changed.connect(apply)
+        dlg.finished.connect(finished)
+        dlg.show()
+        dlg.set_offset(round(start, 2))
+        apply()
+        self.status_label.setText("Section View: slide the offset until you are happy. Done closes the view.")
 
     def start_sketch_on_cplane(self, pid: str):
         if pid in self.doc.construction_planes:

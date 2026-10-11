@@ -123,6 +123,7 @@ class Viewport3D(QOpenGLWidget):
     profile_picked = Signal()
     plane_picked = Signal(object)       # SketchPlane chosen for a new sketch
     plane_pick_cancelled = Signal()
+    section_base_picked = Signal(object)   # plane a section view is cut along
     offset_base_picked = Signal(object)   # plane an offset plane is measured from
     surface_hover = Signal(object)        # same, while the mouse moves (None = no surface)
     surface_picked = Signal(object)       # dict(point, patch) of any body surface (planar or curved)
@@ -212,6 +213,7 @@ class Viewport3D(QOpenGLWidget):
         # Sketch plane picking (origin planes + planar body faces)
         self.plane_pick_mode: bool = False
         self.offset_preview = None  # flat segments of the sketch Offset being set up
+        self.section = None         # active section view: dict(origin, normal, offset, flip, meshes, cap)
         self.preview_plane = None   # SketchPlane drawn while an Offset Plane is being set up
         self.plane_pick_purpose: str = "sketch"  # "sketch" or "extrude_target"
         self.hover_plane = None  # ("origin", name) or ("face", PlanarFace)
@@ -564,6 +566,59 @@ class Viewport3D(QOpenGLWidget):
             self.selected_entities = {d["ent_id"]}  # plain click inside a multi-selection narrows it
             self.selection_changed.emit()
         self.update()
+
+    # ---- Section view -------------------------------------------------------------------
+    def set_section(self, origin, normal, offset: float, flip: bool = False):
+        """Cuts every body along a plane (base origin + normal * offset) and shows the cut face. View only."""
+        from omacad.model.sketch import SketchPlane
+        n = np.asarray(normal, dtype=float)
+        n = n / np.linalg.norm(n)
+        p = np.asarray(origin, dtype=float) + n * float(offset)
+        keep = n if flip else -n                       # the side that stays (the other side faces the viewer)
+        plane = SketchPlane.from_face(n, p)
+        inv = np.linalg.inv(np.vstack([plane.get_transform_matrix_3x4(), [0, 0, 0, 1]]))[:3]
+        meshes, cap_cs = {}, None
+        for bid, body in self.doc.bodies.items():
+            if not body.visible:
+                continue
+            try:
+                kept = body.manifold.trim_by_plane(tuple(keep), float(keep @ p))
+                meshes[bid] = CadKernel.extract_render_mesh(kept)   # empty when the whole body is cut away
+                polys = body.manifold.transform(inv).slice(1e-4 if not flip else -1e-4).to_polygons()
+                if polys:
+                    cs = m3d.CrossSection(polys)
+                    cap_cs = cs if cap_cs is None else cap_cs + cs
+            except Exception:
+                continue
+        cap = None
+        if cap_cs is not None:
+            slab = m3d.Manifold.extrude(cap_cs, 0.08).translate((0, 0, -0.04))
+            slab = slab.transform(plane.get_transform_matrix_3x4())
+            cap = CadKernel.extract_render_mesh(slab)
+        self.section = {"origin": np.asarray(origin, dtype=float), "normal": n, "offset": float(offset), "flip": flip,
+                        "meshes": meshes, "cap": cap}
+        self.set_preview_plane(plane)
+        self.update()
+
+    def clear_section(self):
+        self.section = None
+        self.set_preview_plane(None)
+        self.clear_extrude_handle()
+        self.update()
+
+    def render_section_cap(self, mvp: np.ndarray):
+        """The cut face, in the highlight colour, so the inside of the model reads clearly."""
+        sec = self.section
+        if not sec or sec["cap"] is None or not self.prog_flat or len(sec["cap"].vertices) == 0:
+            return
+        GL.glUseProgram(self.prog_flat)
+        loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
+        loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
+        loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
+        GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
+        GL.glUniform4f(loc_col, *theme.palette().highlight01(0.0), 1.0)
+        self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, sec["cap"].vertices)
+        GL.glUseProgram(0)
 
     # ---- Extrude arrow ------------------------------------------------------------------
     def set_extrude_handle(self, origin, axis, dist: float):
@@ -1578,6 +1633,7 @@ class Viewport3D(QOpenGLWidget):
         self.render_preview(mvp)
         self.render_plane_pick(mvp)
         self.render_edge_pick(mvp)
+        self.render_section_cap(mvp)
         self.render_extrude_handle(mvp)
         if self.offset_preview is not None and self.prog_thick is not None:
             GL.glDisable(GL.GL_DEPTH_TEST)
@@ -1652,6 +1708,8 @@ class Viewport3D(QOpenGLWidget):
                 continue
 
             mesh = body.render_mesh
+            if self.section is not None and body.body_id in self.section["meshes"]:
+                mesh = self.section["meshes"][body.body_id]   # the part left after the cut
             if len(mesh.vertices) == 0:
                 continue
 
@@ -3195,6 +3253,8 @@ class Viewport3D(QOpenGLWidget):
                 self.end_plane_pick()
                 if purpose == "offset_base":
                     self.offset_base_picked.emit(plane)
+                elif purpose == "section_base":
+                    self.section_base_picked.emit(plane)
                 elif purpose == "extrude_target":
                     self.target_plane_picked.emit(plane)
                 else:
