@@ -14,6 +14,14 @@ from omacad.ui.theme import style
 from omacad.model.document import Document
 
 
+# the rectangle kinds behind the one ribbon button: tool -> (label, icon)
+RECT_TOOLS = {
+    "RECT": ("2-Point\nRect (R)", "🔲"),
+    "CENTER_RECT": ("Center\nRect", "⛶"),
+    "ROUNDED_RECT": ("Rounded\nRect", "▢"),
+}
+
+
 class RibbonButton(QToolButton):
     """Large Fusion 360 style ribbon tool button with vertical icon and label."""
 
@@ -262,21 +270,8 @@ class Ribbon(QWidget):
         self.btn_line.clicked.connect(lambda: self.select_sketch_tool("LINE"))
         h_layout.addWidget(self.btn_line)
 
-        self.btn_rect = RibbonButton("2-Point\nRect (R)", "🔲")
-        self.btn_rect.setCheckable(True)
-        self.btn_rect.clicked.connect(lambda: self.select_sketch_tool("RECT"))
+        self._build_rect_button()
         h_layout.addWidget(self.btn_rect)
-
-        self.btn_crect = RibbonButton("Center\nRect", "⛶")
-        self.btn_crect.setCheckable(True)
-        self.btn_crect.clicked.connect(lambda: self.select_sketch_tool("CENTER_RECT"))
-        h_layout.addWidget(self.btn_crect)
-
-        self.btn_rrect = RibbonButton("Rounded\nRect", "▢")
-        self.btn_rrect.setCheckable(True)
-        self.btn_rrect.setToolTip("Rectangle with rounded corners: click two corners; the radius is set in the sketch palette")
-        self.btn_rrect.clicked.connect(lambda: self.select_sketch_tool("ROUNDED_RECT"))
-        h_layout.addWidget(self.btn_rrect)
 
         self.btn_circle = RibbonButton("Center\nCircle (C)", "⭕")
         self.btn_circle.setCheckable(True)
@@ -405,11 +400,49 @@ class Ribbon(QWidget):
         btn_finish.clicked.connect(self.finish_sketch_clicked)
         h_layout.addWidget(btn_finish)
 
+    def _build_rect_button(self):
+        """One rectangle button with a dropdown: the button itself draws the default rectangle,
+        the arrow lists all kinds and lets you pick which one is the default (remembered)."""
+        from PySide6.QtGui import QAction, QActionGroup
+        from PySide6.QtWidgets import QMenu, QToolButton
+        from omacad.ui.settings import get_settings
+        self.btn_rect = RibbonButton("Rounded\nRect", "▢")      # widest label sets the width
+        self.btn_rect.setCheckable(True)
+        self.btn_rect.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        menu = QMenu(self.btn_rect)
+        for tool, (label, _icon) in RECT_TOOLS.items():
+            act = menu.addAction(label.replace("\n", " "))
+            act.triggered.connect(lambda _=False, t=tool: self.select_sketch_tool(t))
+        menu.addSeparator()
+        default_menu = menu.addMenu("Button default")
+        group = QActionGroup(default_menu)
+        self._rect_default_actions = {}
+        for tool, (label, _icon) in RECT_TOOLS.items():
+            act = default_menu.addAction(label.replace("\n", " "))
+            act.setCheckable(True)
+            act.setActionGroup(group)
+            act.triggered.connect(lambda _=False, t=tool: self.set_rect_default(t))
+            self._rect_default_actions[tool] = act
+        self.btn_rect.setMenu(menu)
+        self.btn_rect.clicked.connect(lambda: self.select_sketch_tool(self.rect_default))
+        self.set_rect_default(get_settings().get("rect_default_tool", "RECT"), save=False)
+
+    def set_rect_default(self, tool: str, save: bool = True):
+        """The rectangle kind the button draws when clicked; shown on the button and remembered."""
+        from omacad.ui.settings import get_settings
+        if tool not in RECT_TOOLS:
+            tool = "RECT"
+        self.rect_default = tool
+        label, icon = RECT_TOOLS[tool]
+        self.btn_rect.setText(label)
+        self.btn_rect.setIcon(theme.emoji_icon(icon, 30))
+        self._rect_default_actions[tool].setChecked(True)
+        if save:
+            get_settings().set("rect_default_tool", tool)
+
     def select_sketch_tool(self, tool_name: str):
         self.btn_line.setChecked(tool_name == "LINE")
-        self.btn_rect.setChecked(tool_name == "RECT")
-        self.btn_crect.setChecked(tool_name == "CENTER_RECT")
-        self.btn_rrect.setChecked(tool_name == "ROUNDED_RECT")
+        self.btn_rect.setChecked(tool_name in RECT_TOOLS)
         self.btn_circle.setChecked(tool_name == "CIRCLE")
         self.btn_polygon.setChecked(tool_name == "POLYGON")
         self.btn_arc.setChecked(tool_name == "ARC")
@@ -436,7 +469,6 @@ class Ribbon(QWidget):
             self.tabs.setCurrentIndex(0)
             self.btn_line.setChecked(False)
             self.btn_rect.setChecked(False)
-            self.btn_crect.setChecked(False)
             self.btn_circle.setChecked(False)
             self.btn_arc.setChecked(False)
             self.btn_slot.setChecked(False)

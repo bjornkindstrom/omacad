@@ -26,6 +26,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "invert_zoom": False,
     "grid_step": 5.0,
     "fillet_default_radius": 2.0,
+    "rect_default_tool": "RECT",        # what the rectangle button draws: RECT, CENTER_RECT, ROUNDED_RECT
+    "auto_restart": True,               # restart the app (work saved and restored) when a new version is committed
 }
 
 

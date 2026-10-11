@@ -6,7 +6,7 @@ Connects Ribbon, Viewport, Browser, Timeline, and Menu Bar.
 from pathlib import Path
 from typing import Optional
 import numpy as np
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QDockWidget,
     QFileDialog, QMessageBox, QLabel, QMenu, QPushButton
@@ -17,7 +17,7 @@ from omacad.model.document import Document
 from omacad.model.timeline import ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature, MoveFeature
 from omacad.ui import theme
 from omacad.ui.theme import style
-from omacad.ui.ribbon import Ribbon
+from omacad.ui.ribbon import Ribbon, RECT_TOOLS
 from omacad.ui.viewport import Viewport3D
 from omacad.ui.browser import BrowserTree
 from omacad.ui.timeline_bar import TimelineBar
@@ -714,9 +714,7 @@ class MainWindow(QMainWindow):
 
     def sync_sketch_tool_from_viewport(self, tool_name: str):
         self.ribbon.btn_line.setChecked(tool_name == "LINE")
-        self.ribbon.btn_rect.setChecked(tool_name == "RECT")
-        self.ribbon.btn_crect.setChecked(tool_name == "CENTER_RECT")
-        self.ribbon.btn_rrect.setChecked(tool_name == "ROUNDED_RECT")
+        self.ribbon.btn_rect.setChecked(tool_name in RECT_TOOLS)
         self.ribbon.btn_circle.setChecked(tool_name == "CIRCLE")
         self.ribbon.btn_polygon.setChecked(tool_name == "POLYGON")
         self.ribbon.btn_arc.setChecked(tool_name == "ARC")
@@ -1386,6 +1384,75 @@ class MainWindow(QMainWindow):
             if ok:
                 QMessageBox.information(self, "Export STEP", f"Successfully exported {body.name} to:\n{filepath}")
                 self.status_label.setText(f"Exported {body.name} to {filepath}")
+
+    # ------------------ Restart with a new version ------------------
+
+    def start_restart_watch(self, interval_ms: int = 3000) -> None:
+        """When the source tree gets a new commit (the agent finished a fix), save everything and restart on it."""
+        from omacad import feedback, session
+        self._code_root = feedback.repo_root()
+        self._code_version = session.code_version(self._code_root)
+        if self._code_version is None:
+            return                                  # not a source checkout: nothing to watch
+        self._restart_timer = QTimer(self)
+        self._restart_timer.timeout.connect(self._check_code_version)
+        self._restart_timer.start(interval_ms)
+
+    def _check_code_version(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        from omacad import session
+        from omacad.ui.settings import get_settings
+        if not get_settings().get("auto_restart", True) or QApplication.activeModalWidget() is not None:
+            return                                  # never pull the app away under an open dialog
+        version = session.code_version(self._code_root)
+        if version and version != self._code_version:
+            self._restart_timer.stop()
+            self.status_label.setText("New version committed: saving your work and restarting ...")
+            QTimer.singleShot(1500, self.restart_app)
+
+    def restart_app(self) -> None:
+        """Saves the session and starts a fresh process that resumes it, then closes this one."""
+        import sys
+        from PySide6.QtCore import QProcess
+        from PySide6.QtWidgets import QApplication
+        from omacad import applog, session
+        v = self.viewport
+        camera = {"azimuth": v.azimuth, "elevation": v.elevation, "distance": v.distance,
+                  "target": [float(x) for x in v.target]}
+        try:
+            session.save(self.doc, self.current_path, camera)
+        except (OSError, TypeError, ValueError) as e:      # no restart if the work could not be saved
+            applog.log("ERROR", f"restart cancelled, could not save the session: {e}")
+            self.status_label.setText(f"Restart cancelled, could not save the session: {e}")
+            self._restart_timer.start()
+            return
+        script = str(Path(self._code_root) / "app.py")
+        if QProcess.startDetached(sys.executable, [script, session.RESUME_FLAG], str(self._code_root)):
+            QApplication.quit()
+        else:
+            applog.log("ERROR", "restart cancelled, could not start the new process")
+            self.status_label.setText("Restart cancelled, could not start the new process.")
+            self._restart_timer.start()
+
+    def restore_session(self) -> bool:
+        """Puts back what restart_app saved (document, sketch being edited, camera). Returns whether there was one."""
+        from omacad import session
+        data = session.load()
+        if not data:
+            return False
+        doc = Document()
+        Exporter.apply_dict(doc, data["document"])
+        self.attach_document(doc, data.get("path"))
+        cam = data.get("camera") or {}
+        v = self.viewport
+        v.azimuth = cam.get("azimuth", v.azimuth)
+        v.elevation = cam.get("elevation", v.elevation)
+        v.distance = cam.get("distance", v.distance)
+        if "target" in cam:
+            v.target = np.array(cam["target"], dtype=np.float32)
+        v.update()
+        self.status_label.setText(f"Restarted on Omacad {__import__('omacad').__version__}; your work is back.")
+        return True
 
     def on_report_problem(self):
         """Screenshot first (before any dialog covers the problem), then the note, then the report goes to the AI agent."""

@@ -190,6 +190,11 @@ class SettingsDialog(QDialog):
         fillet_row.addStretch()
         lay_sketch.addLayout(fillet_row)
 
+        # Restart on a new version
+        self.chk_auto_restart = QCheckBox("Starta om automatiskt när en ny version har committats (arbetet sparas och återställs)")
+        self.chk_auto_restart.setChecked(bool(self.settings.get("auto_restart", True)))
+        lay_sketch.addWidget(self.chk_auto_restart)
+
         lay_sketch.addStretch()
         self.tabs.addTab(tab_sketch, "📐 Sketch & Visning")
 
@@ -224,6 +229,7 @@ class SettingsDialog(QDialog):
         self.chk_invert_zoom.setChecked(False)
         self.spn_grid.setValue(5.0)
         self.spn_fillet.setValue(2.0)
+        self.chk_auto_restart.setChecked(True)
 
     def accept(self):
         self.save_and_close()
@@ -240,6 +246,7 @@ class SettingsDialog(QDialog):
             "invert_zoom": self.chk_invert_zoom.isChecked(),
             "grid_step": self.spn_grid.value(),
             "fillet_default_radius": self.spn_fillet.value(),
+            "auto_restart": self.chk_auto_restart.isChecked(),
         }
         self.settings.update(new_data)
         super().accept()

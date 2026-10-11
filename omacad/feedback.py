@@ -39,7 +39,7 @@ Everything about the moment is in this folder ({folder}):
 4. Add a regression test in `{root}/tests/` (use the document from this report when it is small enough).
 5. Run `.venv/bin/python -m pytest tests -q`. Nothing may break; if a test fails, fix it or revert.
 6. Add an entry to the "Solutions log" in `omacad.md` and a line in `CHANGELOG.md` (bump the patch version in `omacad/__init__.py`).
-7. Commit (do not push). Then tell the user in one or two sentences what was wrong and that the app can be restarted to get the fix.
+7. Commit (do not push). Then tell the user in one or two sentences what was wrong. The running app restarts itself on the new commit (work saved and restored), so only commit when the tests are green.
 
 If the report is unclear, say what you need instead of guessing. Never delete the user's data.
 """

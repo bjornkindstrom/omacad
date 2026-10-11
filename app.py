@@ -42,6 +42,10 @@ def main():
     window = MainWindow()
     
     window.show()
+    from omacad import session
+    if session.RESUME_FLAG in sys.argv:
+        window.restore_session()
+    window.start_restart_watch()
 
     sys.exit(app.exec())
 
