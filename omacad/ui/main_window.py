@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("Omacad - Native CAD for Omarchy")
+        self.setWindowTitle(f"Omacad {__import__('omacad').__version__} - Native CAD for Omarchy")
         self.resize(1340, 860)
 
         import os
@@ -1140,7 +1140,8 @@ class MainWindow(QMainWindow):
 
     def update_window_title(self):
         name = Path(self.current_path).name if getattr(self, "current_path", None) else "Untitled"
-        self.setWindowTitle(f"{name} - Omacad")
+        from omacad import __version__
+        self.setWindowTitle(f"{name} - Omacad {__version__}")
 
     def on_file_new(self):
         self.attach_document(Document("Omacad - Untitled"))
@@ -1259,7 +1260,7 @@ class MainWindow(QMainWindow):
     def on_about(self):
         QMessageBox.about(
             self, "About Omacad",
-            "<h3>Omacad</h3>"
+            f"<h3>Omacad {__import__('omacad').__version__}</h3>"
             "<p>A native CAD application for <b>Omarchy Linux</b>.</p>"
             "<p>Inspired by Autodesk Fusion 360, built with Python, PySide6 (Qt6), and Manifold3D.</p>"
             "<p>Features:</p>"

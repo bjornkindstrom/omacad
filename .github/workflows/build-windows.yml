@@ -38,7 +38,26 @@ jobs:
           path: dist/Omacad.exe
           if-no-files-found: error
 
-      - name: Release Omacad.exe
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          v=$(python -c "import re;print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', open('omacad/__init__.py').read()).group(1))")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          cp dist/Omacad.exe "dist/Omacad-$v.exe"
+
+      - name: Release versioned build
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: "Omacad ${{ steps.ver.outputs.version }}"
+          body_path: CHANGELOG.md
+          files: dist/Omacad-${{ steps.ver.outputs.version }}.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Omacad.exe (latest)
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
