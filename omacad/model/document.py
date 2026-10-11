@@ -8,7 +8,8 @@ from typing import Dict, Optional, List, Callable, Tuple
 import numpy as np
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
-    SphereFeature, ExtrudeFeature, SketchFeature, SplitBodyFeature, ShellFeature
+    SphereFeature, ExtrudeFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
+    ImportMeshFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
 from omacad.model.sketch_solver import solve_sketch, SolveResult
@@ -425,6 +426,7 @@ class Document:
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),
         "shell": ("thickness",),
+        "move": ("dx", "dy", "dz", "rx", "ry", "rz"),
     }
 
     def edit_feature(self, index: int, **params) -> bool:
@@ -574,6 +576,46 @@ class Document:
         n = len([f for f in self.timeline.features if f.feature_type == "shell"]) + 1
         feat_id = f"shell_{len(self.timeline.features) + 1}"
         feat = ShellFeature(feat_id, f"Shell {n}", body_id, thickness, open_faces=open_faces)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
+    def move_body(
+        self,
+        body_id: str,
+        dx: float = 0.0,
+        dy: float = 0.0,
+        dz: float = 0.0,
+        rx: float = 0.0,
+        ry: float = 0.0,
+        rz: float = 0.0,
+        exprs: Optional[dict] = None,
+    ) -> Optional[MoveFeature]:
+        """Translates and rotates a 3D solid body parametrically."""
+        if body_id not in self.bodies:
+            return None
+        n = len([f for f in self.timeline.features if f.feature_type == "move"]) + 1
+        feat_id = f"move_{len(self.timeline.features) + 1}"
+        target_name = self.bodies[body_id].name
+        feat = MoveFeature(feat_id, f"Move {target_name} ({n})", body_id, dx, dy, dz, rx, ry, rz)
+        if exprs:
+            feat.exprs = exprs
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
+    def import_mesh(
+        self,
+        name: str,
+        vertices: List[List[float]],
+        triangles: List[List[int]],
+        source_file: str = "",
+    ) -> ImportMeshFeature:
+        """Adds an imported 3D mesh (e.g. from 3MF) as a parametric solid body."""
+        feat_id = f"import_{len(self.timeline.features) + 1}"
+        feat = ImportMeshFeature(feat_id, name, vertices, triangles, source_file=source_file)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()

@@ -25,10 +25,12 @@ class BrowserTree(QWidget):
     start_sketch_on_cplane = Signal(str)
     edit_section_requested = Signal(str)
     export_body_stl = Signal(str)
+    export_body_step = Signal(str)
     edit_sketch_requested = Signal(str)
     split_body_requested = Signal(str, str)
     insert_canvas_requested = Signal(str)
     shell_body_requested = Signal(str)
+    move_body_requested = Signal(str)
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -271,6 +273,9 @@ class BrowserTree(QWidget):
             act_shell = theme.action_with_icon(menu, "🐚 Shell Body…")
             act_shell.triggered.connect(lambda: self.shell_body_requested.emit(item_id))
 
+            act_move = theme.action_with_icon(menu, "↔️ Move Body…")
+            act_move.triggered.connect(lambda: self.move_body_requested.emit(item_id))
+
             act_split = theme.action_with_icon(menu, "🪚 Split Body…")
             act_split.triggered.connect(lambda: self.split_body_requested.emit(item_id, ""))
 
@@ -279,6 +284,9 @@ class BrowserTree(QWidget):
 
             act_export = theme.action_with_icon(menu, "💾 Export as STL...")
             act_export.triggered.connect(lambda: self.export_body_stl.emit(item_id))
+
+            act_export_step = theme.action_with_icon(menu, "💾 Export as STEP...")
+            act_export_step.triggered.connect(lambda: self.export_body_step.emit(item_id))
 
             menu.addSeparator()
             act_del = theme.action_with_icon(menu, "🗑️ Delete Body")

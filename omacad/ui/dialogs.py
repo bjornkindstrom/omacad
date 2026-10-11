@@ -920,3 +920,97 @@ class ShellDialog(BaseFeatureDialog):
         return self.body_ids[b_idx], self.spn_thickness.value(), list(self.open_faces)
 
 
+class MoveBodyDialog(BaseFeatureDialog):
+    changed = Signal()
+
+    def __init__(self, doc: Document, parent=None, preselected_body_id=None):
+        super().__init__("Move / Rotate Body", parent)
+        self.doc = doc
+        form = QFormLayout()
+
+        self.cmb_target = QComboBox()
+        self.body_ids = []
+        target_idx = 0
+        for bid, b in doc.bodies.items():
+            self.body_ids.append(bid)
+            self.cmb_target.addItem(f"Body: {b.name}")
+            if bid == preselected_body_id:
+                target_idx = len(self.body_ids) - 1
+        if self.body_ids:
+            self.cmb_target.setCurrentIndex(target_idx)
+        form.addRow("Target Body:", self.cmb_target)
+
+        # Translation
+        self.spn_dx = ExprDoubleSpinBox(doc)
+        self.spn_dx.setRange(-10000.0, 10000.0)
+        self.spn_dx.setDecimals(2)
+        self.spn_dx.setSuffix(" mm")
+        self.spn_dx.setValue(0.0)
+        form.addRow("Translate X:", self.spn_dx)
+
+        self.spn_dy = ExprDoubleSpinBox(doc)
+        self.spn_dy.setRange(-10000.0, 10000.0)
+        self.spn_dy.setDecimals(2)
+        self.spn_dy.setSuffix(" mm")
+        self.spn_dy.setValue(0.0)
+        form.addRow("Translate Y:", self.spn_dy)
+
+        self.spn_dz = ExprDoubleSpinBox(doc)
+        self.spn_dz.setRange(-10000.0, 10000.0)
+        self.spn_dz.setDecimals(2)
+        self.spn_dz.setSuffix(" mm")
+        self.spn_dz.setValue(0.0)
+        form.addRow("Translate Z:", self.spn_dz)
+
+        # Rotation
+        self.spn_rx = ExprDoubleSpinBox(doc)
+        self.spn_rx.setRange(-3600.0, 3600.0)
+        self.spn_rx.setDecimals(2)
+        self.spn_rx.setSuffix(" °")
+        self.spn_rx.setValue(0.0)
+        form.addRow("Rotate X:", self.spn_rx)
+
+        self.spn_ry = ExprDoubleSpinBox(doc)
+        self.spn_ry.setRange(-3600.0, 3600.0)
+        self.spn_ry.setDecimals(2)
+        self.spn_ry.setSuffix(" °")
+        self.spn_ry.setValue(0.0)
+        form.addRow("Rotate Y:", self.spn_ry)
+
+        self.spn_rz = ExprDoubleSpinBox(doc)
+        self.spn_rz.setRange(-3600.0, 3600.0)
+        self.spn_rz.setDecimals(2)
+        self.spn_rz.setSuffix(" °")
+        self.spn_rz.setValue(0.0)
+        form.addRow("Rotate Z:", self.spn_rz)
+
+        self.main_layout.addLayout(form)
+        self.add_buttons()
+
+        for spn in (self.spn_dx, self.spn_dy, self.spn_dz, self.spn_rx, self.spn_ry, self.spn_rz):
+            spn.valueChanged.connect(lambda *_: self.changed.emit())
+        self.cmb_target.currentIndexChanged.connect(lambda *_: self.changed.emit())
+
+    def get_values(self):
+        b_idx = self.cmb_target.currentIndex()
+        if b_idx < 0 or b_idx >= len(self.body_ids):
+            return None, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, {}
+        bid = self.body_ids[b_idx]
+        exprs = {}
+        for k, spn in (("dx", self.spn_dx), ("dy", self.spn_dy), ("dz", self.spn_dz),
+                       ("rx", self.spn_rx), ("ry", self.spn_ry), ("rz", self.spn_rz)):
+            if spn.expression():
+                exprs[k] = spn.expression()
+        return (bid, self.spn_dx.value(), self.spn_dy.value(), self.spn_dz.value(),
+                self.spn_rx.value(), self.spn_ry.value(), self.spn_rz.value(), exprs)
+
+    def get_expressions(self) -> Dict[str, str]:
+        exprs = {}
+        for k, spn in (("dx", self.spn_dx), ("dy", self.spn_dy), ("dz", self.spn_dz),
+                       ("rx", self.spn_rx), ("ry", self.spn_ry), ("rz", self.spn_rz)):
+            if spn.expression():
+                exprs[k] = spn.expression()
+        return exprs
+
+
+

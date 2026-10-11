@@ -75,6 +75,7 @@ class Ribbon(QWidget):
     delete_clicked = Signal()
     split_body_clicked = Signal()
     shell_clicked = Signal()
+    move_clicked = Signal()
     canvas_clicked = Signal()
     inspect_clicked = Signal()
     settings_clicked = Signal()
@@ -220,6 +221,11 @@ class Ribbon(QWidget):
         btn_shell.setToolTip("Hollow out a solid body with a specified wall thickness, opening selected faces")
         btn_shell.clicked.connect(self.shell_clicked)
         h_layout.addWidget(btn_shell)
+
+        btn_move = RibbonButton("Move\n(M)", "↔️")
+        btn_move.setToolTip("Translate or rotate a 3D solid body parametrically")
+        btn_move.clicked.connect(self.move_clicked)
+        h_layout.addWidget(btn_move)
 
         btn_del = RibbonButton("Delete", "🗑️")
         btn_del.clicked.connect(self.delete_clicked)

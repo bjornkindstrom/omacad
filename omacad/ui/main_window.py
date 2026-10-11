@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QKeySequence, QIcon
 
 from omacad.model.document import Document
-from omacad.model.timeline import ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature
+from omacad.model.timeline import ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature, MoveFeature
 from omacad.ui import theme
 from omacad.ui.theme import style
 from omacad.ui.ribbon import Ribbon
@@ -26,7 +26,7 @@ from omacad.ui.canvas_dialog import CanvasEditorDialog
 from omacad.ui.dialogs import (
     RoundEdgesDialog, PatternDialog, OffsetPlaneDialog,
     SketchPlaneDialog, ExtrudeDialog, BoxDialog, CylinderDialog,
-    SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog
+    SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog, MoveBodyDialog
 )
 from omacad.io.exporter import Exporter
 
@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
         self.ribbon.shell_clicked.connect(self.prompt_shell)
+        self.ribbon.move_clicked.connect(self.prompt_move_body)
         self.ribbon.canvas_clicked.connect(self.prompt_insert_canvas)
         self.ribbon.delete_clicked.connect(self.on_delete_selected)
         self.ribbon.inspect_clicked.connect(self.on_inspect)
@@ -143,6 +144,8 @@ class MainWindow(QMainWindow):
         self.browser.edit_section_requested.connect(self.edit_section)
         self.timeline_bar.edit_sketch_requested.connect(self.on_edit_sketch)
         self.browser.export_body_stl.connect(self.export_single_body_stl)
+        self.browser.export_body_step.connect(self.export_single_body_step)
+        self.browser.move_body_requested.connect(self.prompt_move_body)
         self.browser.split_body_requested.connect(self.prompt_split_body)
         self.browser.shell_body_requested.connect(self.prompt_shell)
         self.browser.insert_canvas_requested.connect(self.prompt_insert_canvas)
@@ -175,9 +178,19 @@ class MainWindow(QMainWindow):
 
         menu_file.addSeparator()
 
+        act_import_3mf = QAction("Import 3MF Model...", self)
+        act_import_3mf.triggered.connect(self.on_import_3mf)
+        menu_file.addAction(act_import_3mf)
+
+        menu_file.addSeparator()
+
         act_export_stl = QAction("Export All as STL...", self)
         act_export_stl.triggered.connect(self.on_export_all_stl)
         menu_file.addAction(act_export_stl)
+
+        act_export_step = QAction("Export All as STEP...", self)
+        act_export_step.triggered.connect(self.on_export_all_step)
+        menu_file.addAction(act_export_step)
 
         menu_file.addSeparator()
 
@@ -240,6 +253,10 @@ class MainWindow(QMainWindow):
         act_split = QAction("Split Body…", self)
         act_split.triggered.connect(self.prompt_split_body)
         menu_modify.addAction(act_split)
+        act_move = QAction("Move Body… (M)", self)
+        act_move.setShortcut(QKeySequence("M"))
+        act_move.triggered.connect(self.prompt_move_body)
+        menu_modify.addAction(act_move)
         menu_modify.addAction("Delete Selected", self.on_delete_selected, QKeySequence.StandardKey.Delete)
 
         # View Menu
@@ -909,6 +926,44 @@ class MainWindow(QMainWindow):
                     self.viewport.update()
         cleanup()
 
+    def prompt_move_body(self, target_body_id: str = ""):
+        """Move / Rotate: Translates and rotates a 3D solid body parametrically."""
+        if not self.doc.bodies:
+            QMessageBox.information(self, "Move Body", "No bodies found to move. Create a 3D body first!")
+            return
+
+        dlg = MoveBodyDialog(self.doc, self, preselected_body_id=target_body_id or None)
+        self.dock(dlg)
+
+        def refresh_preview():
+            bid, dx, dy, dz, rx, ry, rz, _ = dlg.get_values()
+            if not bid or bid not in self.doc.bodies:
+                self.viewport.set_preview(None)
+                return
+            body = self.doc.bodies[bid]
+            m = body.manifold
+            if abs(rx) > 1e-4 or abs(ry) > 1e-4 or abs(rz) > 1e-4:
+                m = m.rotate([rx, ry, rz])
+            if abs(dx) > 1e-4 or abs(dy) > 1e-4 or abs(dz) > 1e-4:
+                m = m.translate([dx, dy, dz])
+            self.viewport.set_preview(m, "new_body")
+
+        dlg.changed.connect(refresh_preview)
+        refresh_preview()
+
+        if dlg.exec():
+            bid, dx, dy, dz, rx, ry, rz, exprs = dlg.get_values()
+            self.viewport.set_preview(None)
+            if bid:
+                feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, exprs=exprs)
+                if feat:
+                    b_name = self.doc.bodies[bid].name if bid in self.doc.bodies else bid
+                    self.status_label.setText(f"Moved {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
+                    self.viewport.update()
+        else:
+            self.viewport.set_preview(None)
+        self.inspector.undock_tool()
+
     def prompt_insert_canvas(self, preselected_plane_id: str = ""):
         """Insert reference image onto a plane, edit/crop/calibrate with tape measure."""
         dlg = CanvasEditorDialog(self.doc, self, preselected_plane_id=preselected_plane_id or None)
@@ -1034,6 +1089,49 @@ class MainWindow(QMainWindow):
             ok = Exporter.export_body_to_stl(body, filepath)
             if ok:
                 QMessageBox.information(self, "Export STL", f"Successfully exported {body.name} to:\n{filepath}")
+
+    def on_import_3mf(self):
+        filepath, _ = QFileDialog.getOpenFileName(self, "Import 3MF Model", "", "3MF Files (*.3mf)")
+        if not filepath:
+            return
+        try:
+            bodies = Exporter.import_3mf(filepath, self.doc)
+            if bodies:
+                self.viewport.zoom_fit()
+                names = ", ".join(b.name for b in bodies)
+                self.status_label.setText(f"Imported {len(bodies)} body(s) from {Path(filepath).name}: {names}")
+            else:
+                QMessageBox.warning(self, "Import 3MF", "No 3D meshes found in 3MF archive.")
+        except Exception as e:
+            QMessageBox.critical(self, "Import Failed", f"Could not import {filepath}:\n{e}")
+
+    def on_export_all_step(self):
+        if not self.doc.bodies:
+            QMessageBox.information(self, "Export STEP", "No bodies to export.")
+            return
+
+        filepath, _ = QFileDialog.getSaveFileName(self, "Export All Bodies to STEP", "", "STEP Files (*.step *.stp)")
+        if filepath:
+            if not (filepath.endswith(".step") or filepath.endswith(".stp")):
+                filepath += ".step"
+            ok = Exporter.export_all_to_step(self.doc, filepath)
+            if ok:
+                QMessageBox.information(self, "Export STEP", f"Successfully exported STEP to:\n{filepath}")
+                self.status_label.setText(f"Exported STEP to {filepath}")
+
+    def export_single_body_step(self, body_id: str):
+        body = self.doc.bodies.get(body_id)
+        if not body:
+            return
+
+        filepath, _ = QFileDialog.getSaveFileName(self, f"Export {body.name} to STEP", f"{body.name}.step", "STEP Files (*.step *.stp)")
+        if filepath:
+            if not (filepath.endswith(".step") or filepath.endswith(".stp")):
+                filepath += ".step"
+            ok = Exporter.export_body_to_step(body, filepath)
+            if ok:
+                QMessageBox.information(self, "Export STEP", f"Successfully exported {body.name} to:\n{filepath}")
+                self.status_label.setText(f"Exported {body.name} to {filepath}")
 
     def on_about(self):
         QMessageBox.about(
