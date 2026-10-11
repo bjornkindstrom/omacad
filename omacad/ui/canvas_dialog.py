@@ -45,8 +45,23 @@ class ImageCanvasWidget(QWidget):
 
         self.zoom: float = 1.0
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
         self.setMinimumSize(420, 420)
         style(self, "background-color: #1A1C1E; border: 1px solid #33373D; border-radius: 4px;")
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            if path:
+                p = self.window()
+                if hasattr(p, "load_image_file"):
+                    p.load_image_file(path)
+                    break
+        event.acceptProposedAction()
 
     def set_pixmap(self, pix: QPixmap):
         self.processed_pixmap = pix
@@ -84,6 +99,13 @@ class ImageCanvasWidget(QWidget):
         return QPointF(wx, wy)
 
     def mousePressEvent(self, event):
+        if not self.processed_pixmap or self.processed_pixmap.isNull():
+            if event.button() == Qt.MouseButton.LeftButton:
+                p = self.window()
+                if hasattr(p, "choose_image"):
+                    p.choose_image()
+            return
+
         if event.button() == Qt.MouseButton.LeftButton:
             pt = self.widget_to_image_coords(event.position().x(), event.position().y())
             if not pt:
@@ -126,8 +148,10 @@ class ImageCanvasWidget(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         if not self.processed_pixmap or self.processed_pixmap.isNull():
-            p.setPen(QColor(140, 145, 155))
-            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Ingen bild laddad.\nKlicka på 'Välj bild...' för att importera en ritning.")
+            p.setPen(QColor(160, 168, 180))
+            p.setFont(QFont("sans-serif", 12))
+            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                       "📁 Klicka här eller dra och släpp en bildfil\n(PNG, JPG, WEBP, BMP)\n\nDu kan även klicka på 'Välj bild...' till höger")
             return
 
         img_rect = self.image_to_widget_rect()
@@ -177,7 +201,7 @@ class ImageCanvasWidget(QWidget):
 class CanvasEditorDialog(QDialog):
     """Full-featured editor dialog for importing, pre-processing, and calibrating reference canvases."""
 
-    def __init__(self, doc: Document, parent=None, initial_image_path: Optional[str] = None):
+    def __init__(self, doc: Document, parent=None, initial_image_path: Optional[str] = None, preselected_plane_id: Optional[str] = None):
         super().__init__(parent)
         self.doc = doc
         self.setWindowTitle("Insert Canvas (Reference Image)")
@@ -209,9 +233,15 @@ class CanvasEditorDialog(QDialog):
         # 1. File Group
         grp_file = QGroupBox("Bildfil")
         form_file = QVBoxLayout(grp_file)
+        h_file_btns = QHBoxLayout()
         self.btn_load = QPushButton("📁 Välj bild...")
         self.btn_load.clicked.connect(self.choose_image)
-        form_file.addWidget(self.btn_load)
+        h_file_btns.addWidget(self.btn_load)
+        self.btn_paste = QPushButton("📋 Klistra in")
+        self.btn_paste.setToolTip("Klistra in bild från urklipp (Ctrl+V)")
+        self.btn_paste.clicked.connect(self.paste_image_from_clipboard)
+        h_file_btns.addWidget(self.btn_paste)
+        form_file.addLayout(h_file_btns)
         self.lbl_file_info = QLabel("Ingen fil vald")
         self.lbl_file_info.setWordWrap(True)
         form_file.addWidget(self.lbl_file_info)
@@ -295,6 +325,10 @@ class CanvasEditorDialog(QDialog):
         # Add construction planes
         for pid, cp in doc.construction_planes.items():
             self.cmb_plane.addItem(f"📐 {cp['name']}", pid)
+        if preselected_plane_id:
+            idx = self.cmb_plane.findData(preselected_plane_id)
+            if idx >= 0:
+                self.cmb_plane.setCurrentIndex(idx)
         form_place.addRow("Plan:", self.cmb_plane)
 
         self.sld_opacity = QSlider(Qt.Orientation.Horizontal)
@@ -329,10 +363,27 @@ class CanvasEditorDialog(QDialog):
 
     def choose_image(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Välj referensbild", "", "Bilder (*.png *.jpg *.jpeg *.bmp *.webp)"
+            self, "Välj referensbild", "", "Bilder (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff);;Alla filer (*.*)"
         )
         if path:
             self.load_image_file(path)
+
+    def paste_image_from_clipboard(self):
+        from PySide6.QtWidgets import QApplication
+        cb = QApplication.clipboard()
+        img = cb.image()
+        if not img.isNull():
+            self.original_image = img
+            self.current_image = img.copy()
+            self.lbl_file_info.setText(f"Urklipp ({img.width()}x{img.height()} px)")
+            self.rotation_quarter = 0
+            self.flip_h = False
+            self.flip_v = False
+            self.px_per_mm = 1.0
+            self.btn_ok.setEnabled(True)
+            self.refresh_image_processing()
+        else:
+            QMessageBox.information(self, "Urklipp", "Ingen bild hittades i urklipp. Kopiera en bild eller skärmdump först.")
 
     def load_image_file(self, path: str):
         img = QImage(path)

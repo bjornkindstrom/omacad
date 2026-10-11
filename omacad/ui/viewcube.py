@@ -7,7 +7,7 @@ import math
 from typing import Tuple, Optional, Callable
 import numpy as np
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPolygonF, QFont
+from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QRegion
 from omacad.ui.theme import qcolor
 
 
@@ -138,8 +138,8 @@ class ViewCube:
         faces_to_render = []
         for name, normal, corners in self.FACES:
             # Face normal dot eye gives visibility (positive means facing camera)
-            vis = np.dot(normal, eye)
-            if vis > -0.05:  # Slightly visible or facing forward
+            vis = float(np.dot(normal, eye))
+            if vis > 0.05:  # Facing camera (cull back faces)
                 pts_2d = [project(c) for c in corners]
                 avg_depth = sum(p[2] for p in pts_2d) / 4.0
                 poly = QPolygonF([QPointF(p[0], p[1]) for p in pts_2d])
@@ -149,9 +149,7 @@ class ViewCube:
         faces_to_render.sort(key=lambda x: x[2])
         self.rendered_faces = []
 
-        font = QFont()
-        font.setPointSize(9)
-        font.setBold(True)
+        font = QFont("sans-serif", 9, QFont.Weight.Bold)
         painter.setFont(font)
 
         for name, poly, depth, vis in faces_to_render:
@@ -173,10 +171,13 @@ class ViewCube:
             painter.setBrush(QBrush(fill_color))
             painter.drawPolygon(poly)
 
-            # Draw label in center of face
-            cx = sum(p.x() for p in poly) / 4.0
-            cy = sum(p.y() for p in poly) / 4.0
-
-            painter.setPen(QPen(text_color))
-            label_rect = QRectF(cx - 30, cy - 12, 60, 24)
-            painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, name)
+            # Draw label only if face is clearly oriented towards camera
+            if vis >= 0.28:
+                cx = sum(p.x() for p in poly) / 4.0
+                cy = sum(p.y() for p in poly) / 4.0
+                painter.setPen(QPen(text_color))
+                label_rect = QRectF(cx - 30, cy - 12, 60, 24)
+                painter.save()
+                painter.setClipRegion(QRegion(poly.toPolygon()))
+                painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, name)
+                painter.restore()

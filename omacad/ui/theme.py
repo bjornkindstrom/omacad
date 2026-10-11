@@ -304,6 +304,22 @@ QWidget {
     color: #E0E3E7;
 }
 
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #333842;
+    border-radius: 6px;
+    margin-top: 22px;
+    padding: 10px 8px 8px 8px;
+    background-color: #202226;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 10px;
+    padding: 0 4px;
+    color: #E26D28;
+}
+
 /* Menu Bar */
 QMenuBar {
     background-color: #1E2022;

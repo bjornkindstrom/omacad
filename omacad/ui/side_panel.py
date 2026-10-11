@@ -117,6 +117,25 @@ class InspectorPanel(QWidget):
             self.info_container.show()
             self.refresh_info()
 
+    def _make_card(self, title: str, layout) -> QFrame:
+        card = QFrame()
+        style(card, "QFrame { background-color: #1E2126; border: 1px solid #333842; border-radius: 6px; }")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(10, 8, 10, 10)
+        card_layout.setSpacing(6)
+
+        lbl_header = QLabel(title.upper())
+        style(lbl_header, "font-size: 11px; font-weight: bold; color: #E26D28; letter-spacing: 0.5px; border: none; background: transparent;")
+        card_layout.addWidget(lbl_header)
+
+        div = QFrame()
+        div.setFrameShape(QFrame.Shape.HLine)
+        style(div, "background-color: #2D323B; height: 1px; border: none;")
+        card_layout.addWidget(div)
+
+        card_layout.addLayout(layout)
+        return card
+
     def refresh_info(self, selected_entities=None, measure_info=None):
         """Updates the context info based on document, selection, or sketch state."""
         # Clear existing info widgets
@@ -127,22 +146,22 @@ class InspectorPanel(QWidget):
 
         # A. Measure active?
         if measure_info:
-            grp = QGroupBox("Mätresultat (Measure)")
-            form = QFormLayout(grp)
-            form.setContentsMargins(8, 8, 8, 8)
+            form = QFormLayout()
+            form.setContentsMargins(0, 4, 0, 0)
+            form.setSpacing(6)
             for line in measure_info:
                 lbl = QLabel(line)
-                style(lbl, "color: #FFC83B; font-weight: bold; font-size: 13px;")
+                style(lbl, "color: #FFC83B; font-weight: bold; font-size: 13px; border: none; background: transparent;")
                 form.addRow(lbl)
-            self.info_layout.addWidget(grp)
+            self.info_layout.addWidget(self._make_card("📏 Mätresultat (Measure)", form))
             return
 
         # B. Sketch mode active?
         sk = self.doc.active_sketch
         if sk is not None:
-            grp = QGroupBox(f"✏️ {sk.name}")
-            form = QFormLayout(grp)
-            form.setContentsMargins(8, 8, 8, 8)
+            form = QFormLayout()
+            form.setContentsMargins(0, 4, 0, 0)
+            form.setSpacing(6)
 
             plane_name = sk.plane.name if hasattr(sk.plane, "name") else "Sketch Plane"
             form.addRow("Plan:", QLabel(plane_name))
@@ -150,9 +169,9 @@ class InspectorPanel(QWidget):
             status_str = self.doc.sketch_status(sk)
             lbl_status = QLabel(status_str or "Under defined")
             if "Fully" in status_str:
-                style(lbl_status, "color: #66BB6A; font-weight: bold;")
+                style(lbl_status, "color: #66BB6A; font-weight: bold; border: none; background: transparent;")
             else:
-                style(lbl_status, "color: #FFA726;")
+                style(lbl_status, "color: #FFA726; border: none; background: transparent;")
             form.addRow("Status:", lbl_status)
 
             form.addRow("Element:", QLabel(f"{len(sk.entities)} st"))
@@ -163,19 +182,19 @@ class InspectorPanel(QWidget):
             if selected_entities:
                 n_sel = len(selected_entities)
                 lbl_sel = QLabel(f"{n_sel} element markerade")
-                style(lbl_sel, "color: #42A5F5; font-weight: bold;")
+                style(lbl_sel, "color: #42A5F5; font-weight: bold; border: none; background: transparent;")
                 form.addRow("Markering:", lbl_sel)
 
-            self.info_layout.addWidget(grp)
+            self.info_layout.addWidget(self._make_card(f"✏️ Skiss: {sk.name}", form))
             return
 
         # C. Body selected?
         selected_bodies = [self.doc.bodies[bid] for bid in self.doc.selected_body_ids if bid in self.doc.bodies]
         if selected_bodies:
             body = selected_bodies[0]
-            grp = QGroupBox(f"📦 {body.name}")
-            form = QFormLayout(grp)
-            form.setContentsMargins(8, 8, 8, 8)
+            form = QFormLayout()
+            form.setContentsMargins(0, 4, 0, 0)
+            form.setSpacing(6)
 
             vol = body.manifold.volume()
             area = body.manifold.surface_area()
@@ -185,7 +204,7 @@ class InspectorPanel(QWidget):
             dz = bbox[5] - bbox[2]
 
             lbl_vol = QLabel(f"{vol:,.1f} mm³".replace(",", " "))
-            style(lbl_vol, "color: #E0E0E0; font-weight: bold;")
+            style(lbl_vol, "color: #E0E0E0; font-weight: bold; border: none; background: transparent;")
             form.addRow("Volym:", lbl_vol)
 
             lbl_area = QLabel(f"{area:,.1f} mm²".replace(",", " "))
@@ -195,13 +214,13 @@ class InspectorPanel(QWidget):
             form.addRow("Plana ytor:", QLabel(f"{len(body.faces)} st"))
             form.addRow("Kanter:", QLabel(f"{len(body.edges)} st"))
 
-            self.info_layout.addWidget(grp)
+            self.info_layout.addWidget(self._make_card(f"📦 Kropp: {body.name}", form))
             return
 
         # D. Document Overview (Nothing specifically selected)
-        grp_doc = QGroupBox("Designöversikt")
-        form_doc = QFormLayout(grp_doc)
-        form_doc.setContentsMargins(8, 8, 8, 8)
+        form_doc = QFormLayout()
+        form_doc.setContentsMargins(0, 4, 0, 0)
+        form_doc.setSpacing(6)
         form_doc.addRow("Dokument:", QLabel(self.doc.name))
         form_doc.addRow("Bodies:", QLabel(f"{len(self.doc.bodies)} st"))
         form_doc.addRow("Skisser:", QLabel(f"{len(self.doc.sketches)} st"))
@@ -209,12 +228,12 @@ class InspectorPanel(QWidget):
         form_doc.addRow("Offset-plan:", QLabel(f"{len(self.doc.construction_planes)} st"))
         if hasattr(self.doc, "canvases"):
             form_doc.addRow("Canvases:", QLabel(f"{len(self.doc.canvases)} st"))
-        self.info_layout.addWidget(grp_doc)
+        self.info_layout.addWidget(self._make_card("📋 Designöversikt", form_doc))
 
         # Quick tips
-        grp_tips = QGroupBox("Snabbkommandon")
-        v_tips = QVBoxLayout(grp_tips)
-        v_tips.setContentsMargins(8, 8, 8, 8)
+        v_tips = QVBoxLayout()
+        v_tips.setContentsMargins(0, 4, 0, 0)
+        v_tips.setSpacing(4)
         tips = [
             "E - Extrudera profil",
             "F - Fit View / Centrera",
@@ -225,6 +244,6 @@ class InspectorPanel(QWidget):
         ]
         for tip in tips:
             lbl = QLabel(tip)
-            style(lbl, "color: #8E95A0; font-size: 11px;")
+            style(lbl, "color: #8E95A0; font-size: 11px; border: none; background: transparent;")
             v_tips.addWidget(lbl)
-        self.info_layout.addWidget(grp_tips)
+        self.info_layout.addWidget(self._make_card("⚡ Snabbkommandon", v_tips))
