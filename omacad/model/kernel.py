@@ -180,12 +180,22 @@ class CadKernel:
         d_in = np.roll(inner, -1, axis=0) - inner
         folded = bool((np.einsum("ij,ij->i", d_in, t) <= 1e-9).any())
         m = 0.05 * r + 1e-3
-        if kind == "chamfer":
-            sec = [(-m, m), (r, m), (r, 0.0), (0.0, -r), (-m, -r)]
+        convex = bool(getattr(edge, "convex", True))
+        if convex:
+            if kind == "chamfer":
+                sec = [(-m, m), (r, m), (r, 0.0), (0.0, -r), (-m, -r)]
+            else:
+                arc = [(r + r * math.cos(ph), -r + r * math.sin(ph))
+                       for ph in np.linspace(math.pi / 2, math.pi, arc_segments + 1)]
+                sec = [(-m, m), (r, m)] + arc + [(-m, -r)]
         else:
-            arc = [(r + r * math.cos(ph), -r + r * math.sin(ph))
-                   for ph in np.linspace(math.pi / 2, math.pi, arc_segments + 1)]
-            sec = [(-m, m), (r, m)] + arc + [(-m, -r)]
+            # the foot of a wall rising from the face: material is ADDED in the corner between face and wall
+            # (a = along the face away from the wall, h = up the wall); the margin overlaps the existing material
+            if kind == "chamfer":
+                sec = [(-m, -m), (r, -m), (r, 0.0), (0.0, r), (-m, r)]
+            else:
+                arc = [(r - r * math.cos(b), r - r * math.sin(b)) for b in np.linspace(math.pi / 2, 0.0, arc_segments + 1)]
+                sec = [(-m, -m), (r, -m)] + arc + [(-m, r)]
         if folded:
             return CadKernel._loop_tool_pieces(P, n, t, inw, sec)
         M = len(sec)

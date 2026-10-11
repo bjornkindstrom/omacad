@@ -322,7 +322,10 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
             n_pl = normals[pl_tri]
             third_nb = v[[i for i in f[nb_tri] if i not in (e0, e1)][0]]
             third_pl = v[[i for i in f[pl_tri] if i not in (e0, e1)][0]]
-            ok = abs(float(normals[nb_tri] @ n_pl)) < 0.1 and float(n_pl @ (third_nb - v[e0])) < -1e-9
+            square = abs(float(normals[nb_tri] @ n_pl)) < 0.1
+            side = float(n_pl @ (third_nb - v[e0]))
+            # +1: the wall falls away below the face (an outer rim), -1: the wall rises from the face (the foot of a block)
+            ok = (1 if side < -1e-9 else -1 if side > 1e-9 else 0) if square else 0
             by_face.setdefault(pr, []).append((int(e0), int(e1), ok, nr in planar, third_pl, n_pl))
     out = []
     for pr, segs in by_face.items():
@@ -342,8 +345,9 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
         for seg in segs:
             parts.setdefault(vfind(seg[0]), []).append(seg)
         for part in parts.values():
-            if not all(sg[2] for sg in part) or not any(sg[3] for sg in part) or all(sg[3] for sg in part):
-                continue   # needs both straight pieces (plane/plane) and arcs (plane/curved), all square and convex
+            kinds = {sg[2] for sg in part}
+            if len(kinds) != 1 or 0 in kinds or not any(sg[3] for sg in part) or all(sg[3] for sg in part):
+                continue   # needs both straight pieces (plane/plane) and arcs (plane/curved), all square, all on one side
             nbrs: dict = {}
             for e0, e1, *_ in part:
                 nbrs.setdefault(e0, []).append(e1)
@@ -368,7 +372,7 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
             ref_seg = next((sg for sg in part if {sg[0], sg[1]} == seg_pts), part[0])
             if float((ref_seg[4] - pts[0]) @ left) < 0:
                 pts = pts[::-1].copy()
-            out.append(LoopEdge(pts.copy(), n_pl.copy(), True))
+            out.append(LoopEdge(pts.copy(), n_pl.copy(), kinds == {1}))
     return out
 
 
