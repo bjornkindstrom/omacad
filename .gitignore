@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 *.tmp
 .pytest_cache/
+dist/
+build/
+*.spec.bak
