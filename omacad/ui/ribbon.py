@@ -272,6 +272,12 @@ class Ribbon(QWidget):
         self.btn_crect.clicked.connect(lambda: self.select_sketch_tool("CENTER_RECT"))
         h_layout.addWidget(self.btn_crect)
 
+        self.btn_rrect = RibbonButton("Rounded\nRect", "▢")
+        self.btn_rrect.setCheckable(True)
+        self.btn_rrect.setToolTip("Rectangle with rounded corners: click two corners; the radius is set in the sketch palette")
+        self.btn_rrect.clicked.connect(lambda: self.select_sketch_tool("ROUNDED_RECT"))
+        h_layout.addWidget(self.btn_rrect)
+
         self.btn_circle = RibbonButton("Center\nCircle (C)", "⭕")
         self.btn_circle.setCheckable(True)
         self.btn_circle.clicked.connect(lambda: self.select_sketch_tool("CIRCLE"))
@@ -403,6 +409,7 @@ class Ribbon(QWidget):
         self.btn_line.setChecked(tool_name == "LINE")
         self.btn_rect.setChecked(tool_name == "RECT")
         self.btn_crect.setChecked(tool_name == "CENTER_RECT")
+        self.btn_rrect.setChecked(tool_name == "ROUNDED_RECT")
         self.btn_circle.setChecked(tool_name == "CIRCLE")
         self.btn_polygon.setChecked(tool_name == "POLYGON")
         self.btn_arc.setChecked(tool_name == "ARC")

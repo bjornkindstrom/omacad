@@ -1101,6 +1101,37 @@ class Sketch:
         return self._add_rect_lines((x1, y1), (x2, y1), (x2, y2), (x1, y2), is_construction,
                                     abs(x2 - x1), abs(y2 - y1))
 
+    @staticmethod
+    def corner_radius_limit(p1, p2, radius: float) -> float:
+        """The radius a rounded rectangle can really have: just under half the shorter side."""
+        return min(radius, 0.495 * min(abs(p2[0] - p1[0]), abs(p2[1] - p1[1])))
+
+    @staticmethod
+    def rounded_rect_outline(p1, p2, radius: float, steps: int = 8) -> List[Tuple[float, float]]:
+        """Closed outline of a rounded rectangle as points (for the live preview)."""
+        x0, x1 = sorted((p1[0], p2[0]))
+        y0, y1 = sorted((p1[1], p2[1]))
+        r = Sketch.corner_radius_limit(p1, p2, radius)
+        if r <= 0.001:
+            return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        pts = []
+        for cx, cy, a0 in ((x1 - r, y0 + r, -90), (x1 - r, y1 - r, 0), (x0 + r, y1 - r, 90), (x0 + r, y0 + r, 180)):
+            for k in range(steps + 1):
+                a = math.radians(a0 + 90.0 * k / steps)
+                pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        return pts
+
+    def add_rounded_rect(self, p1: Tuple[float, float], p2: Tuple[float, float], radius: float,
+                         is_construction: bool = False) -> List[SketchLine]:
+        """A rectangle with all four corners filleted in one step. The radius is capped just under
+        half the shorter side, so the straight pieces never vanish."""
+        lines = self.add_rect(p1, p2, is_construction)
+        r = self.corner_radius_limit(p1, p2, radius)
+        if r > 0.001:
+            for pt, la, lb, _ea, _eb in self.find_corners(lines):
+                self.fillet_corner(la, lb, r, pt)
+        return lines
+
     def add_center_rect(self, center: Tuple[float, float], corner: Tuple[float, float], is_construction: bool = False) -> List[SketchLine]:
         cx, cy = center
         dx, dy = abs(corner[0] - cx), abs(corner[1] - cy)

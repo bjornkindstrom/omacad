@@ -15,6 +15,7 @@ UV = Tuple[float, float]
 FIELDS: Dict[str, List[str]] = {
     "LINE": ["Length", "Angle"],
     "RECT": ["Width", "Height"],
+    "ROUNDED_RECT": ["Width", "Height"],
     "CENTER_RECT": ["Width", "Height"],
     "CIRCLE": ["Diameter"],
     "POLYGON": ["Side", "Sides"],
@@ -107,7 +108,7 @@ class DynInput:
             end = (u1 + length * math.cos(a), v1 + length * math.sin(a))
             return end, {"Length": length, "Angle": ang}
 
-        if self.tool == "RECT":
+        if self.tool in ("RECT", "ROUNDED_RECT"):
             w = abs(lk["Width"]) if "Width" in lk else abs(dx)
             h = abs(lk["Height"]) if "Height" in lk else abs(dy)
             return (u1 + sx * w, v1 + sy * h), {"Width": w, "Height": h}

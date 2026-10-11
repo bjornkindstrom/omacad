@@ -16,6 +16,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - **Tab-inmatning** medan du ritar (längd, vinkel, bredd/höjd, diameter) – Enter går vidare, Esc ångrar.
 - **Mått och villkor** (SolveSpace): horisontell, vertikal, parallell, vinkelrät, lika, tangent, koncentrisk, fixerad, avstånd, längd, vinkel, diameter, punkt–linje. Guidad högerklicksmeny på varje element.
 - Markera (klick, **Shift/Ctrl+klick** lägger till och tar bort), flytta (dra eller `M` med dx/dy), ta bort, ångra/gör om.
+- **Rounded Rect**: två hörn ger en rektangel med rundade hörn direkt, radien ställs in i skisspaletten.
 - **Offset (`O`)** som i Fusion (bågar behåller sina centrum och radierna följer med, fogarna räknas om): klicka en kurva så följer hela den sammanhängande kedjan med, klicka fler för att lägga till (Alt+klick = ett element), Enter anger avstånd med förhandsvisning (negativt = inåt).
 - **Trim (`T`)**: ta bort biten av en linje, cirkel eller båge fram till närmaste korsning eller fria ände (tar bort lösa stumpar).
 - **Mirror (`Shift+M`)** i skissen: välj former, sedan en linje eller origoaxel att spegla över.

@@ -7,7 +7,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, Signal, QPoint
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
-    QFrame, QToolButton, QSpinBox
+    QFrame, QToolButton, QSpinBox, QDoubleSpinBox
 )
 from omacad.ui.theme import style
 
@@ -126,6 +126,18 @@ class SketchPalette(QFrame):
         self.spn_sides.valueChanged.connect(self.settings_changed)
         sides_row.addWidget(self.spn_sides)
         content_layout.addLayout(sides_row)
+
+        radius_row = QHBoxLayout()
+        radius_row.setContentsMargins(0, 0, 0, 0)
+        radius_row.addWidget(QLabel("Corner radius"))
+        self.spn_corner_radius = QDoubleSpinBox()
+        self.spn_corner_radius.setRange(0.1, 1000.0)
+        self.spn_corner_radius.setValue(3.0)
+        self.spn_corner_radius.setSuffix(" mm")
+        self.spn_corner_radius.setToolTip("Corner radius for the Rounded Rect tool (capped at half the shorter side).")
+        self.spn_corner_radius.valueChanged.connect(self.settings_changed)
+        radius_row.addWidget(self.spn_corner_radius)
+        content_layout.addLayout(radius_row)
 
         content_layout.addSpacing(4)
 
