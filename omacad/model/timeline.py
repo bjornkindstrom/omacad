@@ -497,7 +497,7 @@ class PatternFeature(Feature):
         mat = np.column_stack([ua, va, n, o]).astype(float)
         return m3d.Manifold.extrude(cs, height=h).translate((0, 0, -h / 2.0)).transform(mat)
 
-    def _fill_funcs(self, doc, before, removed, added):
+    def _fill_funcs(self, doc, before, removed, added, now=None):
         """Fill the flat face the source sketch is on: copies on a lattice that keeps exactly `gap` mm between
         neighbours (measured edge to edge, so hexagons, circles and triangles all pack right), staying
         `margin` mm inside the face. The original stays where it is and anchors the lattice."""
@@ -526,7 +526,9 @@ class PatternFeature(Feature):
         foot = unary_union(shapes)
         # the flat face in that plane (the biggest region around the footprint)
         regions = []
-        for face in compute_planar_faces(before):
+        # the face as it is NOW: bosses, cylinders and anything else added since leave holes in it, so the
+        # copies keep clear of them (plus the frame); the original's own spot is added back below
+        for face in compute_planar_faces(now if now is not None else before):
             if abs(abs(float(face.normal @ n)) - 1.0) > 1e-3 or abs(float((face.origin - o) @ n)) > 1e-3:
                 continue
             for tri in face.tris:
@@ -535,7 +537,7 @@ class PatternFeature(Feature):
                     regions.append(pg)
         if not regions:
             return []
-        face_poly = unary_union(regions)
+        face_poly = unary_union(regions + [foot.buffer(1e-4)])
         parts = list(face_poly.geoms) if hasattr(face_poly, "geoms") else [face_poly]
         c0 = foot.representative_point()
         face_poly = next((pt for pt in parts if pt.buffer(1e-6).contains(c0)), max(parts, key=lambda q: q.area))
@@ -665,7 +667,8 @@ class PatternFeature(Feature):
         centre = (bmin + bmax) / 2.0 if self.about == "body" else np.zeros(3)
         self._round_body = self._is_round(before)
         if self.kind == "fill":
-            funcs = self._fill_funcs(doc, before, removed, added)
+            now = doc.step_states.get(idx, {}).get(body_id, before)   # the body as it is when this step runs
+            funcs = self._fill_funcs(doc, before, removed, added, now)
         else:
             funcs = self._transforms(centre, (lo + hi) / 2.0, bmax - bmin)
         if not funcs:
@@ -680,7 +683,7 @@ class PatternFeature(Feature):
             add = m3d.Manifold.batch_boolean(parts, m3d.OpType.Add) if len(parts) > 1 else parts[0]
         clip = getattr(self, "_fill_clip", None) if self.kind == "fill" else None
         if clip is not None:   # partial copies at the frame are cut off at the inset outline
-            prism = self._room_prism(clip, before)
+            prism = self._room_prism(clip, before)   # also keeps the cut out of anything standing on the face
             if prism is not None:
                 rem = (rem ^ prism) if rem is not None else None
                 add = (add ^ prism) if add is not None else None
