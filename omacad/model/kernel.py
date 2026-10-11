@@ -92,7 +92,7 @@ class CadKernel:
         return manifold
 
     @staticmethod
-    def edge_round_tool(edge, size: float, kind: str, extend: float = 0.0, arc_segments: int = 24) -> m3d.Manifold:
+    def edge_round_tool(edge, size: float, kind: str, extend=0.0, arc_segments: int = 24) -> m3d.Manifold:
         """The sliver along an edge that a chamfer/fillet removes (convex edge) or fills in (concave).
 
         Cross-section in the plane across the edge, with the corner at the origin and e1 along face 1:
@@ -100,11 +100,13 @@ class CadKernel:
         are the tangent points a distance size/tan(theta/2) along the faces."""
         t = (edge.p1 - edge.p0) / np.linalg.norm(edge.p1 - edge.p0)
         origin = edge.p0.copy()
+        ext_start, ext_end = (extend if isinstance(extend, (tuple, list)) else (extend, extend))   # at p0, at p1
         e1 = edge.d1
         e2 = edge.d2 - (edge.d2 @ e1) * e1
         e2 = e2 / np.linalg.norm(e2)
         if np.cross(e1, e2) @ t < 0:      # keep the frame right-handed so the solid isn't inside-out
             t, origin = -t, edge.p1.copy()
+            ext_start, ext_end = ext_end, ext_start
         cos_th = float(np.clip(edge.d1 @ edge.d2, -1.0, 1.0))
         theta = math.acos(cos_th)         # angle between the faces, as seen from the edge
         half = theta / 2.0
@@ -129,9 +131,9 @@ class CadKernel:
                    for i in range(len(poly)))
         if area < 0:
             poly.reverse()
-        length = float(np.linalg.norm(edge.p1 - edge.p0)) + 2 * extend
+        length = float(np.linalg.norm(edge.p1 - edge.p0)) + ext_start + ext_end
         solid = m3d.Manifold.extrude(m3d.CrossSection([[list(map(float, q)) for q in poly]]), height=length)
-        mat = np.column_stack([e1, e2, t, origin - t * extend]).astype(float)
+        mat = np.column_stack([e1, e2, t, origin - t * ext_start]).astype(float)
         return solid.transform(mat)
 
     @staticmethod
@@ -151,7 +153,7 @@ class CadKernel:
         return m3d.Manifold.compose(keep) if len(keep) > 1 else keep[0]
 
     @staticmethod
-    def round_tool(edge, size: float, kind: str, extend: float = 0.0) -> m3d.Manifold:
+    def round_tool(edge, size: float, kind: str, extend=0.0) -> m3d.Manifold:
         """Tool body for a straight or circular edge."""
         if getattr(edge, "kind", "line") == "circle":
             return CadKernel.circle_round_tool(edge, size, kind)

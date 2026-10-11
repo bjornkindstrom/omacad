@@ -342,6 +342,22 @@ class FilletFeature(Feature):
             return ("loop", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]))
         return (tuple(map(float, e[0])), tuple(map(float, e[1])))
 
+    @staticmethod
+    def _free_ends(body, edge, eps: float = 1e-3):
+        """How far the tool may reach past each end of a convex edge: a hair (so it cuts cleanly through the end
+        face) where the edge ends in open space, nothing where more material continues past the end (the foot of
+        a rounded corner standing on a lower step): reaching there would cut a notch into that material."""
+        t = (edge.p1 - edge.p0) / max(float(np.linalg.norm(edge.p1 - edge.p0)), 1e-12)
+        inward = edge.d1 + edge.d2
+        inward = inward / max(float(np.linalg.norm(inward)), 1e-12)
+        probe = m3d.Manifold.cube((eps, eps, eps), True)
+        out = []
+        for end, direction in ((edge.p0, -t), (edge.p1, t)):
+            q = end + direction * 3 * eps + inward * 3 * eps
+            solid = not (probe.translate(tuple(q)) ^ body.manifold).is_empty()
+            out.append(0.0 if solid else eps)
+        return tuple(out)
+
     def execute(self, doc: Any) -> None:
         """All edges are matched against the body as it is *before* this step and the tools are applied
         together; rounding them one after another would hide the neighbouring edges (the first
@@ -356,7 +372,8 @@ class FilletFeature(Feature):
             if any(body is b and edge.same_as(e) for b, e in seen):
                 return  # the same edge selected twice
             seen.append((body, edge))
-            tool = CadKernel.round_tool(edge, self.size, self.kind, extend=1e-3 if edge.convex else 0.0)
+            ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
+            tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
             (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
 
         missing = []

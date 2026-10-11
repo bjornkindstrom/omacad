@@ -265,6 +265,7 @@ class Viewport3D(QOpenGLWidget):
         self.fillet_first_line = None
         self.fillet_hover_corner = None
         self.fillet_preview = None
+        self.fillet_picked = []   # corners picked with Shift: (point, line_a id, line_b id)
 
         from omacad.ui.settings import get_settings
         get_settings().changed.connect(self.update)
@@ -1631,6 +1632,7 @@ class Viewport3D(QOpenGLWidget):
         self.fillet_first_line = None
         self.fillet_hover_corner = None
         self.fillet_preview = None
+        self.fillet_picked = []
         self._mirror_phase = "axis" if (tool_name == "MIRROR" and self.selected_entities) else "pick"
         if self._move:
             self._end_move(False)
@@ -1651,7 +1653,7 @@ class Viewport3D(QOpenGLWidget):
             if self.selected_entities:
                 self.fillet_selected_or_prompt()
             else:
-                self.status_message.emit("Fillet: Klicka på ett hörn mellan två linjer, eller klicka två linjer (Esc avbryter).")
+                self.status_message.emit("Fillet: click a corner (Shift+click to pick several corners, then Enter), or click two lines. Esc cancels.")
         self.update()
 
     def _mirror_status(self):
@@ -1819,6 +1821,64 @@ class Viewport3D(QOpenGLWidget):
         self.doc.timeline.recompute(self.doc)
         self.doc.notify_changed()
         self.status_message.emit(f"Fillet: hörnet avrundat med radie {radius:g} mm.")
+        self.update()
+
+    def _fillet_apply_picked(self):
+        """One radius for all corners picked with Shift (live preview, one undo step)."""
+        sk = self.doc.active_sketch
+        picks = list(self.fillet_picked)
+        if not sk or not picks:
+            return
+        from omacad.model.sketch import Sketch
+        from omacad.ui.settings import get_settings
+        default_r = float(get_settings().get("fillet_default_radius", 2.0))
+
+        def run(target, radius):
+            arcs = []
+            for pt, ida, idb in picks:
+                la, lb = target.get_entity(ida), target.get_entity(idb)
+                if la is None or lb is None:
+                    continue
+                try:
+                    arc, _ = target.fillet_corner(la, lb, radius, pt)
+                except Exception:
+                    arc = None
+                if arc:
+                    arcs.append(arc)
+            return arcs
+
+        def preview(radius):
+            segs = []
+            if radius > 0.05:
+                tmp = Sketch.from_dict(sk.to_dict())
+                for arc in run(tmp, radius):
+                    for a, b in arc.to_lines(24):
+                        segs += [*sk.plane.uv_to_world(*a), *sk.plane.uv_to_world(*b)]
+            self.fillet_preview = np.array(segs, dtype=np.float32) if segs else None
+            self.update()
+
+        try:
+            res = self.prompt_dimension_value("Fillet", f"Radius for {len(picks)} corner(s):", default_r, lo=0.1, hi=2000.0, on_change=preview)
+        finally:
+            self.fillet_preview = None
+        if res is None or res[0] <= 0.001:
+            self.update()
+            return
+        before = sk.to_dict()
+        arcs = run(sk, res[0])
+        if not arcs:
+            self.status_message.emit("Fillet: none of the corners could be rounded with that radius.")
+            self.update()
+            return
+        get_settings().set("fillet_default_radius", res[0])
+        self.doc.record_sketch_change(sk, before)
+        self.fillet_picked = []
+        self.selected_entities = {a.entity_id for a in arcs}
+        self.selection_changed.emit()
+        self.doc.timeline.recompute(self.doc)
+        self.doc.notify_changed()
+        skipped = len(picks) - len(arcs)
+        self.status_message.emit(f"Fillet: {len(arcs)} corner(s) rounded with radius {res[0]:g} mm" + (f" ({skipped} could not be rounded)." if skipped else "."))
         self.update()
 
     def fillet_selected_or_prompt(self):
@@ -2662,6 +2722,15 @@ class Viewport3D(QOpenGLWidget):
         # 1. ViewCube
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
         self._draw_measure(painter)
+
+        if self.doc.active_sketch and self.sketch_tool == "FILLET" and self.fillet_picked:
+            for pt, _a, _b in self.fillet_picked:
+                scr = self.world_to_screen(self.doc.active_sketch.plane.uv_to_world(*pt))
+                if scr:
+                    painter.setPen(QPen(QColor(255, 255, 255), 2))
+                    painter.setBrush(QColor(255, 120, 30, 230))
+                    painter.drawEllipse(QPointF(*scr), 7.0, 7.0)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
 
         # Fillet hover corner marker and arrow
         if self.doc.active_sketch and self.sketch_tool == "FILLET" and self.fillet_hover_corner:
@@ -3724,6 +3793,23 @@ class Viewport3D(QOpenGLWidget):
             if event.button() == Qt.MouseButton.LeftButton:
                 if self.fillet_hover_corner:
                     pt, la, lb = self.fillet_hover_corner
+                    item = (pt, la.entity_id, lb.entity_id)
+                    here = next((c for c in self.fillet_picked if math.hypot(c[0][0] - pt[0], c[0][1] - pt[1]) < 1e-3), None)
+                    if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                        # Shift+click collects corners; Enter (or a plain click on one more corner) rounds them all
+                        if here is not None:
+                            self.fillet_picked.remove(here)
+                        else:
+                            self.fillet_picked.append(item)
+                        n = len(self.fillet_picked)
+                        self.status_message.emit(f"Fillet: {n} corner(s) picked. Shift+click more, then press Enter (or click one more corner) to set the radius.")
+                        self.update()
+                        return
+                    if self.fillet_picked:
+                        if here is None:
+                            self.fillet_picked.append(item)
+                        self._fillet_apply_picked()
+                        return
                     self.prompt_fillet_radius(la, lb, pt)
                     return
                 ent = self._pick_entity(x, y)
@@ -4240,6 +4326,15 @@ class Viewport3D(QOpenGLWidget):
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()
             return
+        if self.doc.active_sketch and self.sketch_tool == "FILLET" and self.fillet_picked:
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self._fillet_apply_picked()
+                return
+            if event.key() == Qt.Key.Key_Escape:
+                self.fillet_picked = []
+                self.status_message.emit("Fillet: picked corners cleared.")
+                self.update()
+                return
         if self.doc.active_sketch and self.sketch_tool == "MIRROR":
             k = event.key()
             if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self._mirror_phase == "pick":
