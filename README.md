@@ -62,3 +62,7 @@ Fillet/chamfer gäller raka kanter mellan plana ytor, hela cirklar och konturer 
 ## Färdplan
 
 Revolve, Trim/Offset-fillet/Rotate/Scale i skiss, Project, STEP/IGES, sammanställningar, CAM.
+
+## English summary
+
+Omacad is a native parametric CAD program for Omarchy Linux. Sketch (lines, rects, circles, arcs, slots, regular polygons) with SolveSpace constraints and formula-driven dimensions; extrude with a draggable arrow, fillet/chamfer (including circles and whole outlines), pattern/mirror including a *fill the face* mode with fixed gaps and a frame, offset planes, section views saved in the tree, measuring, parameters and a timeline you can edit. See **`ROADMAP.md`** for the step-by-step list of what is done and what remains.
