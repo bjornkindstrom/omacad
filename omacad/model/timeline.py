@@ -44,7 +44,10 @@ def profile_cross_section(profile: Any) -> m3d.CrossSection:
     poly = orient(Polygon(profile.exterior_pts, profile.interior_holes), sign=1.0)
     cs = m3d.CrossSection([list(poly.exterior.coords)[:-1]])
     for h in poly.interiors:
-        cs = cs - m3d.CrossSection([list(h.coords)[:-1]])
+        ring = list(h.coords)[:-1]
+        if Polygon(ring).exterior.is_ccw is False:   # a hole is stored clockwise; as a solid it must run counter-clockwise
+            ring.reverse()
+        cs = cs - m3d.CrossSection([ring])
     return cs
 
 
@@ -176,10 +179,12 @@ class ExtrudeFeature(Feature):
         operation: str = "new_body",  # new_body, join, cut, intersect
         direction: str = "one_side",
         distance2: float = 0.0,
+        extra_profiles=None,
     ):
         super().__init__(feature_id, "extrude", name)
         self.sketch_id = sketch_id
         self.profile_idx = profile_idx
+        self.extra_profiles = [int(i) for i in (extra_profiles or [])]   # more profiles of the same sketch, extruded together
         self.distance = float(distance)
         self.operation = operation
         self.direction = direction
@@ -199,14 +204,17 @@ class ExtrudeFeature(Feature):
         sketch = doc.sketches.get(self.sketch_id)
         if not sketch or self.profile_idx >= len(sketch.profiles):
             return None
-        profile = sketch.profiles[self.profile_idx]
+        idxs = [self.profile_idx] + [i for i in self.extra_profiles if i != self.profile_idx and i < len(sketch.profiles)]
+        cs = profile_cross_section(sketch.profiles[idxs[0]])
+        for i in idxs[1:]:
+            cs = cs + profile_cross_section(sketch.profiles[i])
 
         z0, z1 = self._z_range()
         height = z1 - z0
         if height < 1e-6:
             return None
 
-        solid = m3d.Manifold.extrude(profile_cross_section(profile), height=float(height))
+        solid = m3d.Manifold.extrude(cs, height=float(height))
         if abs(z0) > 1e-9:
             solid = solid.translate((0.0, 0.0, float(z0)))
         solid = solid.transform(sketch.plane.get_transform_matrix_3x4())
@@ -231,8 +239,8 @@ class ExtrudeFeature(Feature):
             n0 = np.asarray(plane.normal, dtype=float)
             o0 = np.asarray(plane.origin, dtype=float)
             ua, va = np.asarray(plane.u_axis, dtype=float), np.asarray(plane.v_axis, dtype=float)
-            prof = sketch.profiles[self.profile_idx]
-            region = Polygon(prof.exterior_pts, prof.interior_holes)
+            region = unary_union([Polygon(sketch.profiles[i].exterior_pts, sketch.profiles[i].interior_holes)
+                                  for i in [self.profile_idx] + [j for j in self.extra_profiles if j < len(sketch.profiles)]])
             for body in doc.bodies.values():
                 for face in body.faces:
                     if abs(float(np.dot(face.normal, n0))) < 0.999 or abs(float(np.dot(face.origin - o0, n0))) > 1e-3:
@@ -304,6 +312,7 @@ class ExtrudeFeature(Feature):
             "suppressed": self.suppressed,
             "sketch_id": self.sketch_id,
             "profile_idx": self.profile_idx,
+            "extra_profiles": list(self.extra_profiles),
             "distance": self.distance,
             "operation": self.operation,
             "direction": self.direction,

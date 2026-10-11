@@ -47,6 +47,7 @@ class Document:
         # Selection state
         self.selected_body_ids: List[str] = []
         self.selected_profile: Optional[Tuple[str, int]] = None  # (sketch_id, profile_idx)
+        self.selected_extra: List[Tuple[str, int]] = []           # more profiles added with Shift+click
 
         # Undo / redo of sketch edits: entries are (sketch_id, snapshot_dict)
         self.parameters: List[Parameter] = []
@@ -260,10 +261,12 @@ class Document:
         name: Optional[str] = None,
         direction: str = "one_side",
         distance2: float = 0.0,
+        extra_profiles=None,
     ) -> None:
         feat_id = f"extrude_{len(self.timeline.features) + 1}"
         feat_name = name or f"Extrude {len([f for f in self.timeline.features if f.feature_type == 'extrude']) + 1}"
-        feat = ExtrudeFeature(feat_id, feat_name, sketch_id, profile_idx, distance, operation, direction, distance2)
+        feat = ExtrudeFeature(feat_id, feat_name, sketch_id, profile_idx, distance, operation, direction, distance2,
+                              extra_profiles=extra_profiles)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.hide_used_sketches()

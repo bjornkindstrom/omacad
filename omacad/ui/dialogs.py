@@ -189,15 +189,18 @@ class ExtrudeDialog(BaseFeatureDialog):
         self.cmb_op.setToolTip("Auto: cuts when the extrusion goes into a body, joins when it starts on a body's face and goes out, otherwise makes a new body.")
         form.addRow("Operation:", self.cmb_op)
 
-        hint = QLabel("Click a profile to select it. Distance accepts formulas (10-1, 2x(3+5)).")
+        hint = QLabel("Click a profile to select it; Shift+click adds or removes more (a ring and the circle inside it are separate profiles). Distance accepts formulas (10-1, 2x(3+5)).")
         hint.setWordWrap(True)
         style(hint, "color: #8A929C;")
         self.main_layout.addWidget(hint)
         self.main_layout.addLayout(form)
         self.add_buttons()
 
+        self.cmb_profile.setPlaceholderText("Click a profile in the view")
         if doc.selected_profile in self.profile_keys:
             self.cmb_profile.setCurrentIndex(self.profile_keys.index(doc.selected_profile))
+        elif len(self.profile_keys) > 1:
+            self.cmb_profile.setCurrentIndex(-1)   # nothing is picked for you when there is a choice
         QTimer.singleShot(0, self.focus_distance)
         for sig in (self.cmb_profile.currentIndexChanged, self.cmb_dir.currentIndexChanged,
                     self.cmb_op.currentIndexChanged, self.spn_dist.valueChanged, self.spn_dist2.valueChanged):

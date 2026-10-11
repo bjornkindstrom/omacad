@@ -16,7 +16,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - Markera, flytta (dra eller `M` med dx/dy), ta bort, **Offset (`O`) med förhandsvisning**, ångra/gör om.
 
 **Solider**
-- **Extrude** med dragbar pil i vyn *och* inskrivet värde, riktning (en sida, symmetriskt, två sidor), *To face…*, Auto / New Body / Join / Cut / Intersect. Förhandsvisning och profilval i vyn. Extrudera också en hel yta.
+- **Extrude** med dragbar pil i vyn *och* inskrivet värde, riktning (en sida, symmetriskt, två sidor), *To face…*, Auto / New Body / Join / Cut / Intersect. Förhandsvisning och profilval i vyn: inget väljs åt dig, klicka på en profil och **Shift+klick** lägger till eller tar bort fler (t.ex. ringen och cirkeln i den). Extrudera också en hel yta.
 - Box, Cylinder, Sphere, Combine (Join/Cut/Intersect).
 - **Fillet och Chamfer** på raka kanter, cirklar (skruvhål, försänkningar) och hela konturer med rundade hörn. Inre och yttre kanter, dubbelklick väljer hela loopen, förhandsvisning.
 - **Pattern / Mirror**: jämnt fördelade kopior, speglade hörn (kopierar t.ex. hål med chamfers) eller runt en axel, med förhandsvisning.

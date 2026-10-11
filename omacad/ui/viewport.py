@@ -1188,6 +1188,8 @@ class Viewport3D(QOpenGLWidget):
             entries.append((self.hover_profile, (*theme.palette().highlight01(0.35), 0.30)))
         if self.doc.selected_profile:
             entries.append((self.doc.selected_profile, (*theme.palette().highlight01(0.1), 0.50)))
+        for key in self.doc.selected_extra:
+            entries.append((key, (*theme.palette().highlight01(0.1), 0.50)))
         if not entries:
             return
         GL.glUseProgram(self.prog_flat)
@@ -2882,6 +2884,8 @@ class Viewport3D(QOpenGLWidget):
         # Standard Navigation
         if event.button() == Qt.MouseButton.MiddleButton or (event.button() == Qt.MouseButton.LeftButton and event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
             self.is_panning = True
+            if event.button() == Qt.MouseButton.LeftButton and not self.doc.active_sketch:
+                self._press_pos = event.position()   # Shift+click without moving selects (adds a profile); dragging still pans
         elif event.button() == Qt.MouseButton.LeftButton:
             self._press_pos = event.position()
             if self.nav_mode == "PAN":
@@ -3201,8 +3205,21 @@ class Viewport3D(QOpenGLWidget):
         self.is_panning = False
         if was_click:
             picked = self.pick_profile(event.position().x(), event.position().y())
-            if picked != self.doc.selected_profile:
-                self.doc.selected_profile = picked
+            doc = self.doc
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier and picked is not None:
+                # Shift+click adds a profile to the selection, or removes it again
+                chosen = ([doc.selected_profile] if doc.selected_profile else []) + list(doc.selected_extra)
+                if picked in chosen:
+                    chosen.remove(picked)
+                elif not chosen or chosen[0][0] == picked[0]:   # profiles must belong to the same sketch
+                    chosen.append(picked)
+                doc.selected_profile = chosen[0] if chosen else None
+                doc.selected_extra = chosen[1:]
+                self.profile_picked.emit()
+                self.update()
+            elif picked != doc.selected_profile or doc.selected_extra:
+                doc.selected_profile = picked
+                doc.selected_extra = []
                 self.profile_picked.emit()
                 self.update()
 

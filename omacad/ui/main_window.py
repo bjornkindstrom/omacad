@@ -560,12 +560,15 @@ class MainWindow(QMainWindow):
             value = abs(t) * 2.0 if direction == "symmetric" else (max(t, 0.1) if direction == "two_sides" else t)
             dlg.spn_dist.setValue(value)
 
+        def extras(s_id):
+            return [i for (sid, i) in self.doc.selected_extra if sid == s_id]
+
         def refresh_preview():
             s_id, p_idx, dist, op = dlg.get_values()
             direction, dist2 = dlg.get_direction()
             solid = None
             if s_id is not None:
-                feat = ExtrudeFeature("preview", "preview", s_id, p_idx, dist, op, direction, dist2)
+                feat = ExtrudeFeature("preview", "preview", s_id, p_idx, dist, op, direction, dist2, extra_profiles=extras(s_id))
                 try:
                     solid = feat.build_solid(self.doc)
                     if op == "auto":
@@ -579,7 +582,11 @@ class MainWindow(QMainWindow):
             # Keep the viewport highlight in sync with the combo
             if s_id is not None and self.doc.selected_profile != (s_id, p_idx):
                 self.doc.selected_profile = (s_id, p_idx)
+                self.doc.selected_extra = []
                 self.viewport.update()
+            n = 1 + len(self.doc.selected_extra) if s_id is not None else 0
+            self.status_label.setText(f"Extrude: {n} profile(s) selected. Click to choose, Shift+click to add or remove." if n
+                                      else "Extrude: click a profile in the view (Shift+click for several).")
 
         def on_pick():
             if self.doc.selected_profile:
@@ -621,10 +628,12 @@ class MainWindow(QMainWindow):
                 s_id, p_idx, dist, op = dlg.get_values()
                 if s_id is not None:
                     direction, dist2 = dlg.get_direction()
-                    self.doc.extrude_profile(s_id, p_idx, dist, op, direction=direction, distance2=dist2)
+                    self.doc.extrude_profile(s_id, p_idx, dist, op, direction=direction, distance2=dist2,
+                                             extra_profiles=extras(s_id))
                     self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                     op = self.doc.timeline.features[-1].operation  # what Auto resolved to
                     self.doc.selected_profile = None
+                    self.doc.selected_extra = []
                     self.viewport.zoom_fit()
                     self.status_label.setText(f"Extruded profile by {dist} mm ({op}).")
 
