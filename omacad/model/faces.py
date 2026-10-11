@@ -105,13 +105,17 @@ def _curved_roots(v, f, tm, find, groups, adj, angles) -> set:
         if r in sliver:
             continue
         width.setdefault(r, _group_min_width(v, f, tm, groups[r]))
+        similar = 0
         for n in neighbours:
             if n in sliver:
                 continue
             width.setdefault(n, _group_min_width(v, f, tm, groups[n]))
             if width[n] >= width[r] / 4.0:
-                curved.add(r)
-                break
+                similar += 1
+        # A strip of a curved surface has a shallow neighbour on both sides. A single mild bend between two
+        # walls (an irregular outline, 23 degrees say) is not a curve: both walls stay flat.
+        if similar >= 2:
+            curved.add(r)
     return curved
 
 
@@ -608,6 +612,47 @@ def edge_from_ref(ref, candidates):
                      and np.linalg.norm(c.centroid - c0) < tol and abs(c.perimeter - per) < tol), None)
     lines = [c for c in candidates if getattr(c, "kind", "") == "line"]
     return match_edge(ref[0], ref[1], lines)
+
+
+def fuzzy_edge_from_ref(ref, candidates, used=(), reach: float = 1e9):
+    """When an upstream change moved or resized the geometry (a longer box, a wider cylinder) the stored
+    end points no longer lie on any edge. Pick the same kind of edge that is nearest to where the old one was:
+    a parallel line, a circle round the same axis, an outline facing the same way. Edges already claimed by
+    another reference in the same step (`used`) are not taken twice."""
+    def free(c):
+        return not any(c is u or (getattr(c, "kind", "") == getattr(u, "kind", "") and c.same_as(u)) for u in used)
+
+    if ref and ref[0] == "circle":
+        c0, ax, R = np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3])
+        cand = [c for c in candidates if getattr(c, "kind", "") == "circle" and free(c) and float(c.axis @ ax) > 0.999]
+        cand = [c for c in cand if np.linalg.norm(c.center - c0) <= reach]
+        # same side of the part: the circle's centre moves least along its own axis
+        return min(cand, key=lambda c: np.linalg.norm(c.center - c0) + 0.05 * abs(c.radius - R), default=None)
+    if ref and ref[0] == "loop":
+        c0, n0, per = np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3])
+        cand = [c for c in candidates if getattr(c, "kind", "") == "loop" and free(c) and float(c.n @ n0) > 0.999
+                and 0.4 <= c.perimeter / max(per, 1e-9) <= 2.5 and np.linalg.norm(c.centroid - c0) <= reach]
+        return min(cand, key=lambda c: np.linalg.norm(c.centroid - c0), default=None)
+    a, b = np.array(ref[0], dtype=float), np.array(ref[1], dtype=float)
+    L = float(np.linalg.norm(b - a))
+    if L < 1e-9:
+        return None
+    t = (b - a) / L
+    mid = (a + b) / 2.0
+    cand = []
+    for c in candidates:
+        if getattr(c, "kind", "") != "line" or not free(c):
+            continue
+        d = c.p1 - c.p0
+        lc = float(np.linalg.norm(d))
+        if lc < 1e-9 or abs(float(d @ t)) / lc < 0.999:
+            continue
+        cmid = (c.p0 + c.p1) / 2.0
+        off = cmid - mid
+        dist = float(np.linalg.norm(off - (off @ t) * t))   # how far the line moved sideways
+        if dist <= reach:
+            cand.append((dist + 0.25 * abs(lc - L) + 0.01 * abs(float(off @ t)), c))
+    return min(cand, key=lambda z: z[0], default=(0, None))[1]
 
 
 def ray_mesh_hit(mesh, ray_origin, ray_dir):

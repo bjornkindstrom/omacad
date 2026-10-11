@@ -10,7 +10,7 @@ import manifold3d as m3d
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from omacad.model.kernel import CadKernel, RenderMesh
-from omacad.model.faces import PlanarFace, compute_planar_faces, PlanarEdge, compute_planar_edges, match_edge, edge_from_ref
+from omacad.model.faces import PlanarFace, compute_planar_faces, PlanarEdge, compute_planar_edges, match_edge, edge_from_ref, fuzzy_edge_from_ref
 from omacad.model.sketch import Sketch, SketchPlane
 
 
@@ -351,6 +351,15 @@ class FilletFeature(Feature):
             return
         cut, add = {}, {}
         seen = []
+
+        def take(body, edge):
+            if any(body is b and edge.same_as(e) for b, e in seen):
+                return  # the same edge selected twice
+            seen.append((body, edge))
+            tool = CadKernel.round_tool(edge, self.size, self.kind, extend=1e-3 if edge.convex else 0.0)
+            (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
+
+        missing = []
         for ref in self.edges:
             hit = None
             for body in doc.bodies.values():
@@ -359,14 +368,47 @@ class FilletFeature(Feature):
                     hit = (body, edge)
                     break
             if hit is None:
-                self.skipped += 1
+                missing.append(ref)
                 continue
-            body, edge = hit
-            if any(body is b and edge.same_as(e) for b, e in seen):
-                continue  # the same edge selected twice
-            seen.append((body, edge))
-            tool = CadKernel.round_tool(edge, self.size, self.kind, extend=1e-3 if edge.convex else 0.0)
-            (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
+            take(*hit)
+        # Edges that moved or changed size because something earlier in the history was edited: take the
+        # nearest edge of the same kind instead of leaving the sharp corner behind.
+        for ref in missing:
+            best = None
+            for body in doc.bodies.values():
+                bb = np.array(body.manifold.bounding_box())
+                reach = 0.75 * float(np.linalg.norm(bb[3:] - bb[:3]))
+                edge = fuzzy_edge_from_ref(ref, body.edges, used=[e for b, e in seen if b is body], reach=reach)
+                if edge is not None:
+                    best = (body, edge)
+                    break
+            if best is None:
+                self.skipped += 1
+            else:
+                take(*best)
+
+        # Inside corners of a face outline: the two bevel bands end square at the corner and leave a notch there.
+        # Material survives only where one wall still allows it, so what must go is the overlap of both bands.
+        convex = [(b, e) for b, e in seen if e.convex and getattr(e, "kind", "") == "line"]
+        for i in range(len(convex)):
+            for j in range(i + 1, len(convex)):
+                (ba, ea), (bb, eb) = convex[i], convex[j]
+                if ba is not bb:
+                    continue
+                shared = any(np.linalg.norm(p - q) < 1e-4 for p in (ea.p0, ea.p1) for q in (eb.p0, eb.p1))
+                da = (ea.p1 - ea.p0) / max(np.linalg.norm(ea.p1 - ea.p0), 1e-12)
+                db = (eb.p1 - eb.p0) / max(np.linalg.norm(eb.p1 - eb.p0), 1e-12)
+                same_face = any(float(na @ nb) > 0.999 for na in (ea.n1, ea.n2) for nb in (eb.n1, eb.n2))
+                if not shared or not same_face or abs(float(da @ db)) > 0.999:
+                    continue
+                ext = 40.0 * self.size + 10.0
+                try:
+                    corner = (CadKernel.edge_round_tool(ea, self.size, self.kind, extend=ext)
+                              ^ CadKernel.edge_round_tool(eb, self.size, self.kind, extend=ext))
+                except Exception:
+                    continue
+                if not corner.is_empty():
+                    cut.setdefault(ba.body_id, []).append(corner)
 
         for body_id in set(cut) | set(add):
             body = doc.bodies.get(body_id)

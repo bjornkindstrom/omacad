@@ -275,7 +275,7 @@ class CadKernel:
             cs = cs ^ half
         if cs.is_empty():
             return m3d.Manifold()
-        solid = m3d.Manifold.revolve(cs, circular_segments=96)
+        solid = m3d.Manifold.revolve(cs, circular_segments=max(int(getattr(edge, "nseg", 48)), 12))   # same segment count as the wall so vertices line up
         u, v = edge._basis()
         mat = np.column_stack([u, v, edge.axis, edge.center]).astype(float)
         return solid.transform(mat)
