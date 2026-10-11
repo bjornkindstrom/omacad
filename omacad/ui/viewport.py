@@ -794,15 +794,40 @@ class Viewport3D(QOpenGLWidget):
         tip = h["origin"] + h["axis"] * h["dist"]
         return self.world_to_screen(h["origin"]), self.world_to_screen(tip), tip
 
+    def _handle_geometry(self):
+        """Screen-space shape of the drawn arrow: (origin, apex, head centre, head radius in px) or None."""
+        h = self.extrude_handle
+        if not h:
+            return None
+        origin, axis, dist = h["origin"], h["axis"], h["dist"]
+        sign = 1.0 if dist >= 0 else -1.0
+        tip = origin + axis * dist
+        size = self.distance * 0.04
+        so = self.world_to_screen(origin)
+        apex = self.world_to_screen(tip + axis * sign * size * 0.4)
+        base = tip - axis * sign * size * 0.8
+        centre = self.world_to_screen(tip - axis * sign * size * 0.2)
+        if so is None or apex is None or centre is None:
+            return None
+        u = np.cross(axis, [1.0, 0.0, 0.0])
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(axis, [0.0, 1.0, 0.0])
+        u = u / np.linalg.norm(u)
+        edge = self.world_to_screen(base + u * size * 0.5)
+        bs = self.world_to_screen(base)
+        radius = math.hypot(edge[0] - bs[0], edge[1] - bs[1]) if edge is not None and bs is not None else 14.0
+        return so, apex, centre, radius
+
     def _handle_hit(self, x: float, y: float) -> bool:
-        if not self.extrude_handle:
+        """Generous: anywhere on the head (plus a margin, so it is easy to catch when it sits behind or inside
+        a body) or along the shaft."""
+        g = self._handle_geometry()
+        if g is None:
             return False
-        so, st, _ = self._handle_screen()
-        if so is None or st is None:
-            return False
-        if math.hypot(x - st[0], y - st[1]) < 18:
+        so, apex, centre, radius = g
+        if math.hypot(x - centre[0], y - centre[1]) < max(26.0, radius * 1.3 + 8.0):
             return True
-        return self._point_to_segment_dist((x, y), so, st) < 9
+        return self._point_to_segment_dist((x, y), so, apex) < 12
 
     def _handle_value(self, x: float, y: float):
         """Distance along the arrow's axis that is closest to the mouse ray."""
@@ -858,6 +883,13 @@ class Viewport3D(QOpenGLWidget):
         GL.glUniform4f(loc_col, *col)
         self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, np.array(tris, dtype=np.float32))
         GL.glUseProgram(0)
+        # a white ring round the head so the grab point stands out also when the arrow sits behind or inside a body
+        hub = tip - axis * sign * size * 0.2
+        ring_pts = [hub + size * 0.75 * (math.cos(t) * u + math.sin(t) * v_) for t in np.linspace(0, 2 * math.pi, 33)]
+        ring = []
+        for i in range(32):
+            ring += [*ring_pts[i], *ring_pts[i + 1]]
+        self.draw_thick_lines(mvp, ring, (1.0, 1.0, 1.0, 0.9 if lit else 0.55), 2.0)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
     # ---- 3D Translation Gizmo (Move Body) -------------------------------------------
