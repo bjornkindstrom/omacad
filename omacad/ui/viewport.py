@@ -212,6 +212,7 @@ class Viewport3D(QOpenGLWidget):
 
         # Sketch plane picking (origin planes + planar body faces)
         self.plane_pick_mode: bool = False
+        self.measure = None         # active Measure tool: dict(mode, picks, text, segs)
         self.offset_preview = None  # flat segments of the sketch Offset being set up
         self.section = None         # active section view: dict(origin, normal, offset, flip, meshes, cap)
         self.preview_plane = None   # SketchPlane drawn while an Offset Plane is being set up
@@ -269,6 +270,8 @@ class Viewport3D(QOpenGLWidget):
         self._profile_fill_cache.clear()
         self._ref_segments_cache = None
         self.sync_section()
+        if self.measure is not None and (self.measure["mode"] == "sketch") != bool(self.doc.active_sketch):
+            self.measure = None   # sketch mode was entered or left: the picks no longer apply
         sk = self.doc.active_sketch
         if sk is None:
             self.selected_entities.clear()
@@ -568,6 +571,92 @@ class Viewport3D(QOpenGLWidget):
             self.selection_changed.emit()
         self.update()
 
+    # ---- Measure ----------------------------------------------------------------------------
+    def begin_measure(self):
+        """Measure tool: click a line (or edge) for its length, click a second one for the distance/angle between them."""
+        self.measure = {"mode": "sketch" if self.doc.active_sketch else "model", "picks": [], "text": [], "segs": []}
+        self.selected_entities.clear()
+        self.sketch_tool = "NONE" if self.doc.active_sketch else self.sketch_tool
+        self.status_message.emit("Measure: click a line, circle or edge; click a second one to measure between them. Esc ends.")
+        self.setFocus()
+        self.update()
+
+    def end_measure(self):
+        if self.measure is not None:
+            self.measure = None
+            self.status_message.emit("Measure closed.")
+            self.update()
+
+    def _measure_click(self, x: float, y: float):
+        from omacad.model.measure import measure_2d, measure_3d
+        m = self.measure
+        pick = self._pick_entity(x, y) if m["mode"] == "sketch" else self._pick_edge(x, y)
+        if pick is None:
+            m["picks"], m["text"], m["segs"] = [], [], []
+            self.update()
+            return
+        same = lambda a, b: (a.entity_id == b.entity_id) if m["mode"] == "sketch" else self._same_edge(a, b)
+        if any(same(pick, p) for p in m["picks"]):
+            m["picks"] = [p for p in m["picks"] if not same(pick, p)]
+        else:
+            m["picks"] = (m["picks"] + [pick]) if len(m["picks"]) < 2 else [pick]
+        if m["picks"]:
+            m["text"], m["segs"] = (measure_2d if m["mode"] == "sketch" else measure_3d)(m["picks"])
+        else:
+            m["text"], m["segs"] = [], []
+        if m["text"]:
+            self.status_message.emit("Measure: " + "  |  ".join(m["text"]))
+        self.update()
+
+    def _draw_measure(self, painter: QPainter):
+        m = self.measure
+        if m is None:
+            return
+        sk = self.doc.active_sketch
+        to_scr = (lambda q: self.world_to_screen(sk.plane.uv_to_world(q[0], q[1]))) if m["mode"] == "sketch" else \
+                 (lambda q: self.world_to_screen(np.asarray(q, dtype=float)))
+        accent = theme.qcolor(255, 170, 60)
+        pen = QPen(accent, 3)
+        painter.setPen(pen)
+        for p in m["picks"]:
+            pts = []
+            if m["mode"] == "sketch":
+                for a, b in p.to_lines():
+                    pts.append((a, b))
+            else:
+                poly = p.polyline()
+                pts = [(poly[i], poly[i + 1]) for i in range(len(poly) - 1)]
+            for a, b in pts:
+                sa, sb = to_scr(a), to_scr(b)
+                if sa is not None and sb is not None:
+                    painter.drawLine(QPointF(*sa), QPointF(*sb))
+        dash = QPen(accent, 2, Qt.PenStyle.DashLine)
+        painter.setPen(dash)
+        for a, b in m["segs"]:
+            if len(m["picks"]) == 2 or m["mode"] == "model":
+                sa, sb = to_scr(a), to_scr(b)
+                if sa is not None and sb is not None:
+                    painter.drawLine(QPointF(*sa), QPointF(*sb))
+                    painter.setBrush(accent)
+                    painter.drawEllipse(QPointF(*sa), 3.5, 3.5)
+                    painter.drawEllipse(QPointF(*sb), 3.5, 3.5)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+        # result panel
+        lines = m["text"] or ["Measure: click a line, circle or edge"]
+        font = QFont(theme.font_family(), 11)
+        painter.setFont(font)
+        fm = painter.fontMetrics()
+        wbox = max(fm.horizontalAdvance(t) for t in lines) + 28
+        hbox = fm.height() * len(lines) + 18
+        rect = QRectF((self.width() - wbox) / 2.0, 14, wbox, hbox)
+        painter.setPen(QPen(accent, 1.5))
+        painter.setBrush(theme.qcolor(30, 34, 40, 235))
+        painter.drawRoundedRect(rect, 8, 8)
+        painter.setPen(theme.qcolor(240, 240, 240))
+        for i, t in enumerate(lines):
+            painter.drawText(QPointF(rect.x() + 14, rect.y() + 9 + fm.ascent() + i * fm.height()), t)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
     # ---- Section view -------------------------------------------------------------------
     def set_section(self, origin, normal, offset: float, flip: bool = False, show_plane: bool = True):
         """Cuts every body along a plane (base origin + normal * offset) and shows the cut face. View only."""
@@ -839,7 +928,7 @@ class Viewport3D(QOpenGLWidget):
         return self.doc.active_sketch.hit_test(uv[0], uv[1], self._entity_tolerance())
 
     def _update_entity_hover(self, x: float, y: float):
-        active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and self.sketch_tool == "DIMENSION")
+        active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and (self.sketch_tool == "DIMENSION" or self.measure is not None))
         ent = self._pick_entity(x, y) if active else None
         hid = ent.entity_id if ent else None
         if hid != self.hover_entity_id:
@@ -1997,6 +2086,7 @@ class Viewport3D(QOpenGLWidget):
 
         # 1. ViewCube
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
+        self._draw_measure(painter)
 
         # 2. Sketch Profiles Shading (when active or in sketch mode)
         if self.doc.active_sketch and self.sketch_palette.chk_show_profiles.isChecked():
@@ -2890,6 +2980,9 @@ class Viewport3D(QOpenGLWidget):
             self.update()
             return
 
+        if self.measure is not None and event.button() == Qt.MouseButton.LeftButton and self.measure["mode"] == "sketch":
+            self._measure_click(x, y)
+            return
         if event.button() == Qt.MouseButton.LeftButton and self.extrude_handle and self._handle_hit(x, y):
             self._handle_drag = True
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
@@ -3240,6 +3333,13 @@ class Viewport3D(QOpenGLWidget):
             self.face_extrude_requested.emit(face)
 
     def mouseReleaseEvent(self, event):
+        if (self.measure is not None and self.measure["mode"] == "model" and event.button() == Qt.MouseButton.LeftButton
+                and self._press_pos is not None and (event.position() - self._press_pos).manhattanLength() < 4):
+            self._press_pos = None
+            self.is_orbiting = False
+            self.is_panning = False
+            self._measure_click(event.position().x(), event.position().y())
+            return
         if self._handle_drag and event.button() == Qt.MouseButton.LeftButton:
             self._handle_drag = False
             self.setCursor(Qt.CursorShape.OpenHandCursor if self._handle_hover else Qt.CursorShape.ArrowCursor)
@@ -3337,6 +3437,9 @@ class Viewport3D(QOpenGLWidget):
         self.update()
 
     def keyPressEvent(self, event):
+        if self.measure is not None and event.key() == Qt.Key.Key_Escape:
+            self.end_measure()
+            return
         if self._handle_dyn_key(event):
             return
         if (event.key() == Qt.Key.Key_Escape and self.sketch_tool == "DIMENSION"
@@ -3384,6 +3487,9 @@ class Viewport3D(QOpenGLWidget):
                 return
             elif event.key() == Qt.Key.Key_O:
                 self.offset_selected()
+                return
+            elif event.key() == Qt.Key.Key_I:
+                self.begin_measure()
                 return
 
         if event.key() == Qt.Key.Key_Escape and self.edge_pick_mode:

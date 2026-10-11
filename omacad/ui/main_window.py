@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         self.ribbon.pattern_clicked.connect(self.prompt_pattern)
         self.ribbon.offset_plane_clicked.connect(self.prompt_offset_plane)
         self.ribbon.section_clicked.connect(self.prompt_section)
+        self.ribbon.measure_clicked.connect(self.viewport.begin_measure)
         self.ribbon.fillet_clicked.connect(lambda: self.prompt_round_edges("fillet"))
         self.ribbon.chamfer_clicked.connect(lambda: self.prompt_round_edges("chamfer"))
         self.ribbon.parameters_clicked.connect(self.on_change_parameters)
@@ -226,6 +227,7 @@ class MainWindow(QMainWindow):
         # View Menu
         menu_view = menubar.addMenu("View")
         menu_view.addAction("Fit View (Home)", self.viewport.zoom_fit, QKeySequence("F"))
+        menu_view.addAction("Measure", self.viewport.begin_measure, QKeySequence("I"))
         menu_view.addAction("Section View…", self.prompt_section)
         menu_view.addAction("Toggle Ground Grid", self.toggle_grid)
         menu_view.addAction("Toggle Feature Edges", self.toggle_edges)
@@ -239,7 +241,7 @@ class MainWindow(QMainWindow):
             "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
             "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️",
             "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
-            "Fit View": "🔲", "Section View": "✂️", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
+            "Fit View": "🔲", "Section View": "✂️", "Measure": "📏", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
         }
         for menu in menubar.findChildren(QMenu):
             for act in menu.actions():

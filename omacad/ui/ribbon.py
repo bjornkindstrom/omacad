@@ -66,6 +66,7 @@ class Ribbon(QWidget):
     pattern_clicked = Signal()
     offset_plane_clicked = Signal()
     section_clicked = Signal()
+    measure_clicked = Signal()
     parameters_clicked = Signal()
     box_clicked = Signal()
     cylinder_clicked = Signal()
@@ -139,6 +140,11 @@ class Ribbon(QWidget):
         btn_plane.setToolTip("A new plane at a distance from a plane or face, or touching any surface (even a cylinder)")
         btn_plane.clicked.connect(self.offset_plane_clicked)
         h_layout.addWidget(btn_plane)
+
+        btn_measure = RibbonButton("Measure\n(I)", "📏")
+        btn_measure.setToolTip("Click a line, circle or edge for its size; click a second one for the distance or angle between them")
+        btn_measure.clicked.connect(self.measure_clicked)
+        h_layout.addWidget(btn_measure)
 
         btn_section = RibbonButton("Section\nView", "✂️")
         btn_section.setToolTip("Cut through the model at a plane or face and slide the cut until you see what you want")
@@ -260,6 +266,11 @@ class Ribbon(QWidget):
         sep_dim.setFrameShape(QFrame.Shape.VLine)
         style(sep_dim, "color: #353940;")
         h_layout.addWidget(sep_dim)
+
+        btn_measure_s = RibbonButton("Measure\n(I)", "📏")
+        btn_measure_s.setToolTip("Click a line or circle for its size; click a second one for the distance or angle between them")
+        btn_measure_s.clicked.connect(self.measure_clicked)
+        h_layout.addWidget(btn_measure_s)
 
         # Construction Toggle & Dimension Tool
         self.btn_construct = RibbonButton("Construct\n(X)", "⚡")
