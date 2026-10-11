@@ -851,19 +851,19 @@ class Sketch:
                     c = SketchCircle(self._new_entity_id("circle"), ent.center, r)
                     self.entities.append(c)
                     new.append(c)
-            elif isinstance(ent, SketchArc):
-                par = ent.get_circle_params()
-                if par is None:
-                    continue
-                (cx, cy), R = par[0], par[1]
-                k = (R + distance) / R if R > 1e-9 else 0.0
-                if k > 1e-6:
-                    sc = lambda q: (cx + (q[0] - cx) * k, cy + (q[1] - cy) * k)
-                    a = SketchArc(self._new_entity_id("arc"), sc(ent.p_start), sc(ent.p_mid), sc(ent.p_end))
-                    self.entities.append(a)
-                    new.append(a)
-            elif isinstance(ent, (SketchLine, SketchRect, SketchCenterRect, SketchSlot)):
+            elif isinstance(ent, (SketchRect, SketchCenterRect, SketchSlot)):
                 segs.extend(ent.to_lines())
+        # lines and arcs: whole chains, radii follow along, joints are remade
+        from omacad.model.sketch_offset import offset_entities_chains
+        chain_in = [e for e in self.entities if e.entity_id in ids and not e.is_construction and isinstance(e, (SketchLine, SketchArc))]
+        pieces, _ = offset_entities_chains(chain_in, distance)
+        for seg in pieces:
+            if seg.kind == "line":
+                n = SketchLine(self._new_entity_id("line"), seg.p, seg.q)
+            else:
+                n = SketchArc(self._new_entity_id("arc"), seg.p, seg.mid(), seg.q)
+            self.entities.append(n)
+            new.append(n)
         if segs:
             merged = linemerge([LineString([a, b]) for a, b in segs])
             for geom in (merged.geoms if hasattr(merged, "geoms") else [merged]):
