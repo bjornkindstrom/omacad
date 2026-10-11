@@ -411,7 +411,8 @@ class Exporter:
             elif ft == "shell":
                 feat = ShellFeature(
                     fid, fname, f_data["target_body_id"], f_data.get("thickness", 2.0),
-                    open_faces=f_data.get("open_faces", [])
+                    open_faces=f_data.get("open_faces", []),
+                    direction=f_data.get("direction", "inside"), thickness2=f_data.get("thickness2", 2.0),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "move":

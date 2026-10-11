@@ -882,13 +882,26 @@ class ShellDialog(BaseFeatureDialog):
             self.cmb_target.setCurrentIndex(self.body_ids.index(doc.selected_body_ids[0]))
         form.addRow("Target Body:", self.cmb_target)
 
+        # Direction of the wall (as in Fusion): inside, outside, or both with a thickness each
+        self.cmb_dir = QComboBox()
+        self.cmb_dir.addItems(["Inside (wall grows inward)", "Outside (wall grows outward)", "Both (inside + outside)"])
+        form.addRow("Direction:", self.cmb_dir)
+
         # Wall Thickness
         self.spn_thickness = ExprDoubleSpinBox()
         self.spn_thickness.setRange(0.05, 500.0)
         self.spn_thickness.setDecimals(2)
         self.spn_thickness.setSuffix(" mm")
         self.spn_thickness.setValue(2.0)
-        form.addRow("Wall Thickness:", self.spn_thickness)
+        self.lbl_thick = QLabel("Wall Thickness:")
+        form.addRow(self.lbl_thick, self.spn_thickness)
+        self.spn_thickness2 = ExprDoubleSpinBox()
+        self.spn_thickness2.setRange(0.05, 500.0)
+        self.spn_thickness2.setDecimals(2)
+        self.spn_thickness2.setSuffix(" mm")
+        self.spn_thickness2.setValue(2.0)
+        self.lbl_thick2 = QLabel("Outside Thickness:")
+        form.addRow(self.lbl_thick2, self.spn_thickness2)
 
         # Open Faces
         self.open_faces = []
@@ -904,7 +917,21 @@ class ShellDialog(BaseFeatureDialog):
         self.add_buttons()
 
         self.spn_thickness.valueChanged.connect(lambda *_: self.changed.emit())
+        self.spn_thickness2.valueChanged.connect(lambda *_: self.changed.emit())
         self.cmb_target.currentIndexChanged.connect(lambda *_: self.changed.emit())
+        self.cmb_dir.currentIndexChanged.connect(lambda *_: (self._dir_changed(), self.changed.emit()))
+        self._dir_changed()
+
+    DIRS = ["inside", "outside", "both"]
+
+    def direction(self) -> str:
+        return self.DIRS[self.cmb_dir.currentIndex()]
+
+    def _dir_changed(self):
+        d = self.direction()
+        self.lbl_thick.setText({"inside": "Wall Thickness:", "outside": "Wall Thickness:", "both": "Inside Thickness:"}[d])
+        self.lbl_thick2.setVisible(d == "both")
+        self.spn_thickness2.setVisible(d == "both")
 
     def toggle_face(self, face):
         """Add or remove an open face by user viewport pick."""
@@ -931,8 +958,10 @@ class ShellDialog(BaseFeatureDialog):
         self.changed.emit()
 
     def get_expressions(self) -> dict:
-        e = self.spn_thickness.expression()
-        return {"thickness": e} if e else {}
+        out = {"thickness": self.spn_thickness.expression()}
+        if self.direction() == "both":
+            out["thickness2"] = self.spn_thickness2.expression()
+        return {k: v for k, v in out.items() if v}
 
     def get_values(self):
         b_idx = self.cmb_target.currentIndex()

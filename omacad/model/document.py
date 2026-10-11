@@ -425,7 +425,7 @@ class Document:
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),
-        "shell": ("thickness",),
+        "shell": ("thickness", "direction", "thickness2"),
         "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot"),
     }
 
@@ -569,13 +569,13 @@ class Document:
         self.notify_changed()
         return feat
 
-    def add_shell(self, body_id: str, thickness: float, open_faces=None, exprs=None) -> Optional[ShellFeature]:
+    def add_shell(self, body_id: str, thickness: float, open_faces=None, exprs=None, direction: str = "inside", thickness2: float = 2.0) -> Optional[ShellFeature]:
         """Hollows out the body with a given wall thickness, optionally leaving selected faces open."""
         if body_id not in self.bodies:
             return None
         n = len([f for f in self.timeline.features if f.feature_type == "shell"]) + 1
         feat_id = f"shell_{len(self.timeline.features) + 1}"
-        feat = ShellFeature(feat_id, f"Shell {n}", body_id, thickness, open_faces=open_faces)
+        feat = ShellFeature(feat_id, f"Shell {n}", body_id, thickness, open_faces=open_faces, direction=direction, thickness2=thickness2)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)

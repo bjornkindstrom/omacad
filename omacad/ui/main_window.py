@@ -921,7 +921,8 @@ class MainWindow(QMainWindow):
             b_id, thickness, open_faces = dlg.get_values()
             cleanup()
             if result and b_id and thickness > 0:
-                feat = self.doc.add_shell(b_id, thickness, open_faces, exprs=dlg.get_expressions())
+                feat = self.doc.add_shell(b_id, thickness, open_faces, exprs=dlg.get_expressions(),
+                                          direction=dlg.direction(), thickness2=dlg.spn_thickness2.value())
                 if feat:
                     body = self.doc.bodies.get(b_id)
                     b_name = body.name if body else b_id

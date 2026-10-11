@@ -22,7 +22,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - Box, Cylinder, Sphere, Combine (Join/Cut/Intersect).
 - **Split Body**: Dela en solid kropp i två separata kroppar med ett offset-plan eller origin-plan.
 - **Move / Rotate Body (`M`)**: Flytta ($dx, dy, dz$ mm) och rotera ($rx, ry, rz$ grader) solida kroppar parametriskt med realtidsförhandsvisning och formelstöd.
-- **Shell (Urholka)**: Skapa ihåliga solider med specificerad väggtjocklek. Klicka på ytor i 3D för att lämna dem öppna (t.ex. toppen på en låda).
+- **Shell (Urholka)**: Skapa ihåliga solider. Riktning: Inside, Outside eller Both (separat tjocklek inåt och utåt), som i Fusion. Klicka på ytor i 3D för att lämna dem öppna (t.ex. toppen på en låda).
 - **Fillet och Chamfer** på raka kanter, cirklar (skruvhål, försänkningar) och hela konturer med rundade hörn. Inre och yttre kanter, dubbelklick väljer hela loopen, samt **interaktiv 3D-pil** direkt på kanten för att justera storleken.
 - **Pattern / Mirror**: jämnt fördelade kopior, speglade hörn (kopierar t.ex. hål med chamfers) eller runt en axel, med förhandsvisning.
 - **Fill the face** (Pattern/Mirror → *Fill the face*): fyller en yta med kopior med exakt fast mellanrum (kant till kant, så hexagoner, cirklar och trianglar packas rätt), valfri ramkant (offset) mot kanten, rutnät eller förskjutet (bikake). Undviker automatiskt utskjutande detaljer på ytan.
