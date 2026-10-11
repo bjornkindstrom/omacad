@@ -1,6 +1,6 @@
 # Omacad ⚡
 
-**Version 0.5.0** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
+**Version 0.5.1** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 
 **Omacad** är ett native parametriskt 3D CAD-program för **Omarchy Linux** (Arch + Hyprland/Wayland), inspirerat av **Autodesk Fusion 360**.
 Byggt med **Python 3.14**, **PySide6 (Qt6) + OpenGL**, **manifold3d** (vattentäta booleans), **shapely** och **SolveSpace** (skiss-villkor).
@@ -20,7 +20,8 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - **Trim (`T`)**: ta bort biten av en linje, cirkel eller båge fram till närmaste korsning eller fria ände (tar bort lösa stumpar).
 - **Mirror (`Shift+M`)** i skissen: välj former, sedan en linje eller origoaxel att spegla över.
 - **Ytans kanter som skisslinjer**: skissar du på en yta följer dess yttre linjer, hål och bågar med som riktiga (lila) skisselement. De går att offsetta, trimma, snappa mot och rita vidare från. *Include Face Edges* i skisspaletten stänger av det, och **Project (edges)** tar in kanterna i vilken skiss som helst.
-- **Skiss-Fillet (`F`)**: klicka ett hörn, eller **Shift+klicka** flera hörn och tryck Enter för en radie till alla (förhandsvisning, ett ångra-steg).
+- **Skiss-Fillet (`F`)**: klicka ett hörn, eller **Shift+klicka** flera hörn, eller **dra en ruta** runt alla hörn du vill ha, och tryck Enter för en radie till alla (förhandsvisning, ett ångra-steg).
+- **Rutmarkering** i skissen: dra en ruta på tom yta (vänster→höger = bara det som ligger helt innanför, höger→vänster = allt rutan rör vid). Ctrl+dra lägger till. **Alt+dra** roterar vyn i skissläget.
 - **Canvas / Referensbild**: Infoga ritningar och referensbilder på valfritt plan. Bildredigering (ljusstyrka, kontrast, invertering, gråskala, rotation, beskärning) och **kalibrering med virtuellt måttband** (klicka två punkter och ange mm) för att rita av i skala 1:1.
 
 **Solider**

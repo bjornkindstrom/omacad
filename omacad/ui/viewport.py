@@ -266,6 +266,7 @@ class Viewport3D(QOpenGLWidget):
         self.fillet_hover_corner = None
         self.fillet_preview = None
         self.fillet_picked = []   # corners picked with Shift: (point, line_a id, line_b id)
+        self._rubber = None       # box selection in the sketch: dict(p0, p1, additive)
 
         from omacad.ui.settings import get_settings
         get_settings().changed.connect(self.update)
@@ -1889,6 +1890,97 @@ class Viewport3D(QOpenGLWidget):
         self.status_message.emit(f"Fillet: hörnet avrundat med radie {radius:g} mm.")
         self.update()
 
+    def _start_rubber(self, event) -> bool:
+        """Begin a box selection on empty sketch space (not while Alt is held: Alt+drag orbits)."""
+        if event.modifiers() & (Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.ShiftModifier):
+            return False
+        self._rubber = {"p0": event.position(), "p1": event.position(),
+                        "additive": bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)}
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        return True
+
+    @staticmethod
+    def _seg_hits_rect(a, b, r) -> bool:
+        """Does the 2D segment a-b touch the rectangle r = (x0, y0, x1, y1)? (Liang-Barsky)"""
+        x0, y0, x1, y1 = r
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        t0, t1 = 0.0, 1.0
+        for p_, q_ in ((-dx, a[0] - x0), (dx, x1 - a[0]), (-dy, a[1] - y0), (dy, y1 - a[1])):
+            if abs(p_) < 1e-12:
+                if q_ < 0:
+                    return False
+            else:
+                t = q_ / p_
+                if p_ < 0:
+                    t0 = max(t0, t)
+                else:
+                    t1 = min(t1, t)
+                if t0 > t1:
+                    return False
+        return True
+
+    def _finish_rubber(self, event):
+        rb = self._rubber
+        self._rubber = None
+        self.unsetCursor()
+        self.update()
+        if rb is None:
+            return
+        sk = self.doc.active_sketch
+        p0, p1 = rb["p0"], rb["p1"]
+        if sk is None:
+            return
+        if (p1 - p0).manhattanLength() < 5:   # a plain click on empty space
+            if self.sketch_tool == "NONE" and not rb["additive"]:
+                self.selected_entities.clear()
+                self.selection_changed.emit()
+            return
+        crossing = p1.x() < p0.x()               # right to left: everything the box touches; left to right: only what is inside
+        r = (min(p0.x(), p1.x()), min(p0.y(), p1.y()), max(p0.x(), p1.x()), max(p0.y(), p1.y()))
+        inside = lambda q: q is not None and r[0] <= q[0] <= r[2] and r[1] <= q[1] <= r[3]
+
+        def screen_lines(ent):
+            out = []
+            for a, b in ent.to_lines():
+                sa, sb = self.world_to_screen(sk.plane.uv_to_world(*a)), self.world_to_screen(sk.plane.uv_to_world(*b))
+                if sa is not None and sb is not None:
+                    out.append((sa, sb))
+            return out
+
+        def hit(ent):
+            segs = screen_lines(ent)
+            if not segs:
+                return False
+            if crossing:
+                return any(self._seg_hits_rect(a, b, r) for a, b in segs)
+            return all(inside(a) and inside(b) for a, b in segs)
+
+        if self.sketch_tool == "FILLET":
+            added = 0
+            for pt, la, lb, _ea, _eb in sk.find_corners():
+                if inside(self.world_to_screen(sk.plane.uv_to_world(*pt))) and not any(
+                        math.hypot(c[0][0] - pt[0], c[0][1] - pt[1]) < 1e-3 for c in self.fillet_picked):
+                    self.fillet_picked.append((pt, la.entity_id, lb.entity_id))
+                    added += 1
+            self.status_message.emit(f"Fillet: {len(self.fillet_picked)} corner(s) picked ({added} new). Press Enter to set the radius, "
+                                     "or drag/Shift+click for more.")
+            self.update()
+            return
+        found = {e.entity_id for e in sk.entities if hit(e)}
+        if self.sketch_tool == "OFFSET":
+            chain = set()
+            for eid in found:
+                chain |= sk.connected_entities(eid)
+            found = chain
+            self.selected_entities |= found
+            self._offset_status()
+        elif rb["additive"]:
+            self.selected_entities |= found
+        else:
+            self.selected_entities = found
+        self.selection_changed.emit()
+        self.update()
+
     def _fillet_apply_picked(self):
         """One radius for all corners picked with Shift (live preview, one undo step)."""
         sk = self.doc.active_sketch
@@ -3030,8 +3122,18 @@ class Viewport3D(QOpenGLWidget):
                 banner_text
             )
 
-        if self.doc.active_sketch and self.sketch_tool in ("MIRROR", "TRIM", "OFFSET"):
+        if self._rubber is not None:
+            a, b = self._rubber["p0"], self._rubber["p1"]
+            crossing = b.x() < a.x()
+            col = QColor(90, 200, 120) if crossing else QColor(80, 150, 255)
+            painter.setPen(QPen(col, 1.5, Qt.PenStyle.DashLine if crossing else Qt.PenStyle.SolidLine))
+            fill = QColor(col); fill.setAlpha(40)
+            painter.setBrush(fill)
+            painter.drawRect(QRectF(min(a.x(), b.x()), min(a.y(), b.y()), abs(b.x() - a.x()), abs(b.y() - a.y())))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+        if self.doc.active_sketch and self.sketch_tool in ("MIRROR", "TRIM", "OFFSET", "FILLET"):
             hint = {"TRIM": "TRIM: click the piece to remove",
+                    "FILLET": f"FILLET: click a corner, or Shift+click / drag a box for several ({len(self.fillet_picked)} picked), then Enter",
                     "OFFSET": f"OFFSET: click curves ({len(self.selected_entities)} picked), then Enter",
                     "MIRROR": ("MIRROR 1/2: click shapes, then Enter" if self._mirror_phase == "pick"
                                else "MIRROR 2/2: click the mirror line / an axis")}[self.sketch_tool]
@@ -3835,6 +3937,9 @@ class Viewport3D(QOpenGLWidget):
                     self.selection_changed.emit()
                     self._offset_status()
                     self.update()
+                    return
+                if self._start_rubber(event):
+                    return
                 return
 
         # Handle Mirror Tool Click
@@ -3920,6 +4025,8 @@ class Viewport3D(QOpenGLWidget):
                             self.status_message.emit("Fillet: Välj två olika linjer.")
                     self.update()
                     return
+                if self._start_rubber(event):
+                    return
                 return
 
         # Handle Sketch Drawing Click
@@ -3980,6 +4087,12 @@ class Viewport3D(QOpenGLWidget):
                 self.update()
                 return
 
+        # Box selection on empty sketch space (Alt+drag orbits instead)
+        if (event.button() == Qt.MouseButton.LeftButton and self.doc.active_sketch and self.sketch_tool == "NONE"
+                and not self.plane_pick_mode and self.measure is None and self._pick_entity(x, y) is None
+                and self._start_rubber(event)):
+            return
+
         # Standard Navigation
         if event.button() == Qt.MouseButton.MiddleButton or (event.button() == Qt.MouseButton.LeftButton and event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
             self.is_panning = True
@@ -4026,6 +4139,10 @@ class Viewport3D(QOpenGLWidget):
     def mouseMoveEvent(self, event):
         x = event.position().x()
         y = event.position().y()
+        if self._rubber is not None:
+            self._rubber["p1"] = event.position()
+            self.update()
+            return
 
         # Check ViewCube hover
         if self.viewcube.handle_mouse_move(int(x), int(y), self.width()):
@@ -4296,6 +4413,9 @@ class Viewport3D(QOpenGLWidget):
             self.face_extrude_requested.emit(face)
 
     def mouseReleaseEvent(self, event):
+        if self._rubber is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._finish_rubber(event)
+            return
         if (self.measure is not None and self.measure["mode"] == "model" and event.button() == Qt.MouseButton.LeftButton
                 and self._press_pos is not None and (event.position() - self._press_pos).manhattanLength() < 4):
             self._press_pos = None
