@@ -1,6 +1,6 @@
 # Omacad – färdplan
 
-Nuvarande version: **0.6.1** (global ångra, testsvit, offset av bågar och rapportknappen är klara; resten av planen kvarstår). Den här planen skrevs 2026-10-11. `ROADMAP.md` är historiken (vad som är gjort), den här filen är vad vi bygger härnäst och varför. Versionslogg: `CHANGELOG.md`.
+Nuvarande version: **0.6.6** (global ångra, testsvit, offset av bågar, rapportknappen, rektangelvarianter, automatisk omstart och jämnare vy ovanifrån är klara; resten av planen kvarstår). Milstolparna efter 0.6.x är omnumrerade (0.7 och uppåt) eftersom sidospåren tog 0.6.2–0.6.6. Den här planen skrevs 2026-10-11. `ROADMAP.md` är historiken (vad som är gjort), den här filen är vad vi bygger härnäst och varför. Versionslogg: `CHANGELOG.md`.
 
 ## Principer
 
@@ -17,14 +17,15 @@ Nuvarande version: **0.6.1** (global ångra, testsvit, offset av bågar och rapp
 |---|---|---|
 | **0.6** ✔ | Trygghet | **Global ångra/gör om** för allt (se Del A), `delete_body` som riktigt steg, **pytest-svit** i `tests/` (de scriptade volymtesterna blir riktiga tester: fillet/chamfer med exakta volymer, shell, revolve, offset/trim/mirror, ytkanter, ångra/gör om, spara/ladda-rundtur) och ett CI-jobb som kör testerna före EXE-bygget |
 | **0.6.1** ✔ | Rapportknappen + agentminne | **"Report problem" (F9)** skickar skärmbilder, dokument och logg till Omarchys standardagent (`omarchy agent prompt`), `omacad.md`/`AGENTS.md`/`CLAUDE.md` som minne för agenterna, offset behåller bågar och radier |
-| **0.65** | Säkerhetsnät + AI-återkoppling | **Autosave-historik**, krasch-återställning, versionshistorik med miniatyrer, säker laddning, **"Starta om med ny version"** (sparar allt och fortsätter där du slutade), **"Det blev fel"-knappen** (se Del C) |
-| **0.66** | Lean, clean, unbreakable | Kodhälsa (se Del D): dela upp `viewport.py`, `main_window.py`, `timeline.py`, `dialogs.py`, lint och död kod bort, felgränser, CI-grindar |
-| **0.67** | AI i appen | Inbyggd AI-konsol med levande utdata, layoutvakt som skärmdumpar och granskar automatiskt (se Del E) |
-| **0.7** | Modellera | Hole-dialog, Extrude: Taper + Start + All/To object, Press/Pull (Q), **Text i skiss + extrudera/emboss/deboss**. Smart: **S1 Markera liknande** |
-| **0.8** | Smart I | **S2 Stämpla**, **S3 Klicka-till-källa**, **S4 Print-verktygslåda**, **S5 Runda allt med regler** |
-| **0.9** | Smart II + vy | **S6 Kommandorad + makron/konsol** (och inbyggd AI-hjälp), **S7 Varianter + scrub**, ortografisk/perspektiv, visningslägen, Home-vy, Fusion-musmappning, Delete, kopiera/klistra, Move/Copy |
-| **0.10** | Robusthet | **S8 Associativa ytskisser**, **S9 Symmetriläge**, **S10 Checkpoints + visuell diff** |
-| **0.11+** | Efter behov | Skiss: Extend, Break, Project av valda kurvor, Scale, ellips, spline, text på bana, fler villkor, bågar/slots i lösaren. Solider: Sweep, Loft, Draft, variabel fillet, gänga, Offset Face, målkroppar för Join/Cut, STEP-export/import |
+| **0.6.2–0.6.6** ✔ | Sidospår | Rounded Rect och Center Rounded Rect, rektangelknapp med rullgardin och valbar standard, **automatisk omstart** när en ny version committats (sparar och återställer dokument, öppen skiss och kamera), skisspaletten i inspektören, ytskisser med origo i ytans mitt, vyn ovanifrån rullar inte längre 90° |
+| **0.7** | Säkerhetsnät + AI-återkoppling | **Autosave-historik**, krasch-återställning, versionshistorik med miniatyrer, säker laddning, **"Starta om med ny version"** (klart i 0.6.3: sparar allt och fortsätter där du slutade; kvar är bara en knapp för att välja själv), **"Det blev fel"-knappen** (se Del C) |
+| **0.8** | Lean, clean, unbreakable | Kodhälsa (se Del D): dela upp `viewport.py`, `main_window.py`, `timeline.py`, `dialogs.py`, lint och död kod bort, felgränser, CI-grindar |
+| **0.9** | AI i appen | Inbyggd AI-konsol med levande utdata, layoutvakt som skärmdumpar och granskar automatiskt (se Del E) |
+| **0.10** | Modellera | Hole-dialog, Extrude: Taper + Start + All/To object, Press/Pull (Q), **Text i skiss + extrudera/emboss/deboss**. Smart: **S1 Markera liknande** |
+| **0.11** | Smart I | **S2 Stämpla**, **S3 Klicka-till-källa**, **S4 Print-verktygslåda**, **S5 Runda allt med regler** |
+| **0.12** | Smart II + vy | **S6 Kommandorad + makron/konsol** (och inbyggd AI-hjälp), **S7 Varianter + scrub**, ortografisk/perspektiv, visningslägen, Home-vy, Fusion-musmappning, Delete, kopiera/klistra, Move/Copy |
+| **0.13** | Robusthet | **S8 Associativa ytskisser**, **S9 Symmetriläge**, **S10 Checkpoints + visuell diff** |
+| **0.14+** | Efter behov | Skiss: Extend, Break, Project av valda kurvor, Scale, ellips, spline, text på bana, fler villkor, bågar/slots i lösaren. Solider: Sweep, Loft, Draft, variabel fillet, gänga, Offset Face, målkroppar för Join/Cut, STEP-export/import |
 | **1.0** | Komplett och pålitlig | Allt vi valt ovan, testsvit grön på varje push, inga kända dataförluster, dokumentation och sajt i fas |
 
 ## Del A – Global ångra (0.6)
@@ -52,14 +53,14 @@ Rankat efter tidsvinst per arbetsinsats.
 - **S9 Symmetriläge**: slå på ett symmetriplan så speglas varje steg automatiskt, parametriskt.
 - **S10 Checkpoints + visuell diff**: namngivna versioner och en vy som visar vad som ändrats mellan två (tillagt grönt, bortaget rött).
 
-### Text (0.7)
+### Text (0.10)
 Fusion: *Sketch > Text* öppnar en dialog (text, font, höjd, teckenavstånd, justering, fet/kursiv); man drar en ruta i skissen; texten förblir redigerbar tills den "exploderas". Textprofiler kan extruderas (join/cut) eller **Emboss/Deboss**. Enlinjefonter fungerar inte för solider. Text på bana kommer senare.
 - Ny `SketchText`-entitet i `omacad/model/sketch.py`; konturer från Qt (`QPainterPath.addText` + `toSubpathPolygons`), hål (O, A, 8) via shapely så `solve_profiles` ger profiler som för cirklar och slots.
 - Skissverktyget **Text** (ribbon och Create-menyn) med dialog och live-förhandsvisning, dubbelklick redigerar, *Explode* ger vanliga linjer. Typsnitt via `QFontDatabase`; saknas fonten på en annan maskin används en reservfont och en varning visas (viktigt för Windows-EXE:n).
 - Egen **Emboss**-knapp: djup, upphöjd/ingraverad, väljer ytan texten ligger på.
 - Test: volym av en extruderad bokstav ("I" = rektangel, "O" = ring) mot exakt beräkning.
 
-## Del C – Säkerhetsnät och AI-återkoppling (0.65)
+## Del C – Säkerhetsnät och AI-återkoppling (0.7)
 
 **Säkerhetsnät (inget får gå sönder):**
 - **Autosave-historik**: efter varje ändring (med kort fördröjning) sparas en ögonblicksbild i `~/.local/share/omacad/history/<dokument>/`, oberoende av din fil; senaste 200 plus en per timme längre bakåt. Samma ögonblicksbild som ångra använder.
@@ -80,7 +81,7 @@ Fusion: *Sketch > Text* öppnar en dialog (text, font, höjd, teckenavstånd, ju
 - En **Claude Code-färdighet** (`/omacad-feedback`) läser det senaste paketet (bilden och JSON-filen), felsöker, rättar och lägger paketets dokument som ett nytt regressionstest. Arbetsflödet: du ser något knasigt, trycker, och jag får bilden och modellen direkt.
 - Senare (S6): en **inbyggd AI-hjälp** i programmet som kan svara på "varför blev det så här?" och föreslå en åtgärd, med samma paket som underlag. Det kräver en API-nyckel som lagras lokalt och skickar aldrig något utan att du bekräftar.
 
-## Del D – Lean, clean, unbreakable (0.66)
+## Del D – Lean, clean, unbreakable (0.8)
 
 Koden ska vara liten, tydlig och tålig. Mätbara mål, som CI kontrollerar:
 - **Dela upp de stora filerna** (idag `viewport.py` ~4700 rader, `timeline.py` ~1550, `sketch.py` ~1480, `main_window.py` ~1430, `dialogs.py` ~1260): `ui/viewport/` blir ett paket (kamera, plockning, rendering, och ett litet verktyg per fil för Line/Rect/Circle/Fillet/Trim/Offset/Mirror med ett gemensamt `Tool`-gränssnitt i stället för de långa `if self.sketch_tool == ...`-blocken), `timeline.py` en fil per funktionstyp, `main_window.py` uppdelad i kontrollers (`prompt_*`). Ingen fil över ~800 rader.
@@ -90,12 +91,12 @@ Koden ska vara liten, tydlig och tålig. Mätbara mål, som CI kontrollerar:
 - **Fler tester**: egenskapstester (`hypothesis`) för geometri (offset, trim, fillet-volymer, ångra/gör om på slumpade stegföljder), regressionstest för varje rapporterad bugg (rapportens dokument läggs i `tests/regress/`), täckningsmätning, gräns i CI.
 - **Typer** på modelllagret (`omacad/model`, `io`) med `mypy`, så ändrade datastrukturer fångas innan de når användaren.
 
-## Del E – AI i appen (0.67)
+## Del E – AI i appen (0.9)
 
 Så att vi kan fixa allt inifrån programmet, med "dig" körandes i appen och en liten konsol som visar vad som händer. Bygger på rapportknappen (finns) och Omarchys standardagent.
 - **AI-konsol** (dockbar panel längst ned): användaren skriver en uppgift ("gör hörnet runt", "varför blev offseten bruten?"). Programmet startar standardagenten på ett paket (skärmbild + dokument + logg + uppgiften) och strömmar agentens utdata till konsolen med levande rader för vad den läser, kör och ändrar (och testernas resultat). Teknik: `claude -p --output-format stream-json` när standardagenten är Claude Code, annars samma `omarchy agent prompt` i en terminal. Konsolen har *Avbryt*.
 - **Layoutvakt**: efter ändringar i gränssnittet och vid inaktivitet tar programmet **skärmdumpar automatiskt** (flera fönsterstorlekar och teman) och kör först billiga automatiska kontroller via Qt:s geometri: överlappande eller avklippta widgetar, element utanför fönstret, för små träffytor, text som inte får plats. Hittar den något (eller på begäran) skickas bilderna och mätvärdena till AI:n, som granskar layouten *innan användaren hunnit be om det*, rättar och visar före/efter. Samma metod för 3D-vyn: kända testmodeller renderas och jämförs mot referensbilder.
-- **Säkerhet för "inget får gå sönder"**: AI-ändringar görs i en git-gren/arbetsträd (`ai/<id>`), aldrig direkt på användarens fungerande version. Testerna måste vara gröna, annars återställs allt automatiskt. Knappen *Använd och starta om* slår ihop och startar om med den nya versionen (se 0.65); *Ångra* tar tillbaka den förra versionen. Autonominivå väljs i inställningarna: av, *föreslå*, *rätta med godkännande* (standard), *rätta småsaker automatiskt* (layout och stavning, aldrig geometri).
+- **Säkerhet för "inget får gå sönder"**: AI-ändringar görs i en git-gren/arbetsträd (`ai/<id>`), aldrig direkt på användarens fungerande version. Testerna måste vara gröna, annars återställs allt automatiskt. Knappen *Använd och starta om* slår ihop och startar om med den nya versionen (se 0.7); *Ångra* tar tillbaka den förra versionen. Autonominivå väljs i inställningarna: av, *föreslå*, *rätta med godkännande* (standard), *rätta småsaker automatiskt* (layout och stavning, aldrig geometri).
 - **Minnet** är `omacad.md`: agenten läser den först och lägger till en rad i lösningsloggen efter varje rättning, så att samma fel inte görs om.
 
 ## Arbetsregler

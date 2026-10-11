@@ -30,7 +30,7 @@ from omacad.model.sketch import (
     point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex, ref_id, ref_segment, EDGE_PTS
 )
 from omacad.model.sketch_snap import SketchSnapper, SnapResult
-from omacad.ui.math3d import perspective, look_at, ray_from_screen, ray_plane_intersect
+from omacad.ui.math3d import perspective, orbit_view, ray_from_screen, ray_plane_intersect
 from omacad.ui.viewcube import ViewCube
 from omacad.ui import dyn_input
 from omacad.model import expr as expr_lib
@@ -2366,20 +2366,7 @@ class Viewport3D(QOpenGLWidget):
         aspect = float(w) / float(h)
         proj = perspective(self.fovy, aspect, 1.0, 5000.0)
 
-        rad_az = math.radians(self.azimuth)
-        rad_el = math.radians(self.elevation)
-
-        eye_x = self.target[0] + self.distance * math.cos(rad_el) * math.sin(rad_az)
-        eye_y = self.target[1] - self.distance * math.cos(rad_el) * math.cos(rad_az)
-        eye_z = self.target[2] + self.distance * math.sin(rad_el)
-        eye = np.array([eye_x, eye_y, eye_z], dtype=np.float32)
-
-        up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-        # Flip up when looking straight down or up to avoid singularity
-        if abs(self.elevation) > 89.0:
-            up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
-
-        view = look_at(eye, self.target, up)
+        view = orbit_view(self.target, self.distance, self.azimuth, self.elevation)
         mvp = proj @ view
         return proj, view, mvp
 

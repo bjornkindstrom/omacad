@@ -33,6 +33,16 @@ def ortho(left: float, right: float, bottom: float, top: float, near: float, far
     return m
 
 
+def orbit_view(target, distance: float, azimuth: float, elevation: float) -> np.ndarray:
+    """View matrix of the orbit camera. Z stays up at every elevation (the orbit is clamped just short of
+    straight up/down), so the view turns smoothly when you pass over the top - no jump in roll."""
+    az, el = math.radians(azimuth), math.radians(elevation)
+    eye = np.array([target[0] + distance * math.cos(el) * math.sin(az),
+                    target[1] - distance * math.cos(el) * math.cos(az),
+                    target[2] + distance * math.sin(el)], dtype=np.float64)
+    return look_at(eye, np.asarray(target, dtype=np.float64), np.array([0.0, 0.0, 1.0]))
+
+
 def look_at(eye: np.ndarray, target: np.ndarray, up: np.ndarray) -> np.ndarray:
     """Create a 4x4 View matrix."""
     eye = np.asarray(eye, dtype=np.float32)
