@@ -334,7 +334,7 @@ class Viewport3D(QOpenGLWidget):
     # ---- Constraints -----------------------------------------------------------
     CONSTRAINT_GLYPHS = {
         "HORIZONTAL": "H", "VERTICAL": "V", "PARALLEL": "∥", "PERPENDICULAR": "⟂",
-        "EQUAL": "=", "TANGENT": "T", "CONCENTRIC": "◎", "COINCIDENT": "•", "FIX": "F",
+        "EQUAL": "=", "TANGENT": "T", "CONCENTRIC": "◎", "COINCIDENT": "•", "FIX": "F", "POINT_ON_CIRCLE": "○",
     }
     CONSTRAINT_HINTS = {
         "HORIZONTAL": "Horizontal: select one or more lines.",
@@ -439,6 +439,9 @@ class Viewport3D(QOpenGLWidget):
             ent = ents.get(c.refs[0]) if c.refs else None
             if ent is None:
                 continue
+            grp = {getattr(ents.get(r), "group", None) for r in c.refs}
+            if len(grp) == 1 and None not in grp and c.ctype in ("POINT_ON_CIRCLE", "EQUAL", "COINCIDENT"):
+                continue   # the built-in relations of a polygon stay out of sight
             if not show_all and not (set(c.refs) & focus):
                 continue
             if c.ctype == "COINCIDENT" and c.pts:
@@ -3259,6 +3262,16 @@ class Viewport3D(QOpenGLWidget):
             h = menu.addAction(text)
             h.setEnabled(False)
 
+        members = sk.group_entities(ent)
+        poly_circle = next((m for m in members if isinstance(m, SketchCircle)), None)
+        poly_line = next((m for m in members if isinstance(m, SketchLine)), None)
+        if poly_circle is not None and poly_line is not None:
+            heading("Polygon - set a dimension")
+            add("p_side", "📏 Side length…", "Type how long each side should be (all sides stay equal).")
+            add("p_dia", "Ø Circle through the corners…", "Type the diameter of the circle the corners lie on (corner to corner across the centre).")
+            add("p_centre", "◎ Distance from the centre to…", "Then click a point, a line or a face edge to measure from the middle of the polygon.")
+            add("p_fix", "🔒 Fix the polygon in place", "Locks the whole polygon so it can't move.")
+            menu.addSeparator()
         if isinstance(ent, SketchLine):
             heading("Line - set a dimension")
             add("length", "📏 Length…", "Type how long this line should be.")
@@ -3290,6 +3303,19 @@ class Viewport3D(QOpenGLWidget):
         if key is None:
             return
         pt = lambda name: [("pt", ent, name)]
+        if key == "p_side":
+            self._dim_length(poly_line)
+            return
+        if key == "p_dia":
+            self._dim_circle(poly_circle)
+            return
+        if key == "p_centre":
+            self._start_guided_dimension([("pt", poly_circle, "center")], "Distance from the polygon's centre: click a point, a line or a face edge.")
+            return
+        if key == "p_fix":
+            self.selected_entities = {m.entity_id for m in members}
+            self.apply_constraint("FIX")
+            return
         if key == "length":
             self._dim_length(ent)
         elif key == "diameter":

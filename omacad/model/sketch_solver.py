@@ -57,6 +57,8 @@ def solve_sketch(sketch: Sketch, fixed_ids: Iterable[str] = (), pinned: Iterable
             ent.p1, ent.p2 = values[eid]
         else:
             ent.center = values[eid]
+            if f"{eid}#r" in values:
+                ent.radius = values[f"{eid}#r"]
     sketch.dof = dof
     sketch.solve_profiles()
     return SolveResult(True, dof, "")
@@ -120,6 +122,7 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
     wp = sys_.create_2d_base()
     pts: Dict[Tuple[str, str], object] = {}
     geo: Dict[str, object] = {}
+    radii: Dict[str, object] = {}
     normal = None
 
     def build(ent):
@@ -136,6 +139,7 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
             r = sys_.add_distance(float(ent.radius), wp)
             geo[ent.entity_id] = sys_.add_circle(normal, c, r, wp)
             pts[(ent.entity_id, "center")] = c
+            radii[ent.entity_id] = r
 
     # Fixed entities live in an earlier group so the solver treats them as constants
     sys_.set_group(FIXED_GROUP)
@@ -180,6 +184,8 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
             sys_.coincident(pts[(a, "center")], pts[(b, "center")], wp)
         elif t == "COINCIDENT" and b and len(c.pts) == 2:
             sys_.coincident(pts[(a, c.pts[0])], pts[(b, c.pts[1])], wp)
+        elif t == "POINT_ON_CIRCLE" and circle(a) and b and line(b) and c.pts:
+            sys_.coincident(pts[(b, c.pts[0])], geo[a], wp)
         elif t == "TANGENT" and b:
             _tangent(sys_, wp, ents, pts, geo, a, b)
 
@@ -220,6 +226,8 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
             values[eid] = (_xy(sys_, pts[(eid, "p1")]), _xy(sys_, pts[(eid, "p2")]))
         else:
             values[eid] = _xy(sys_, pts[(eid, "center")])
+            if getattr(ent, "group", None):   # a polygon's circle: its radius is solved too (corners lie on it)
+                values[f"{eid}#r"] = float(sys_.params(radii[eid].params)[0])
     return (values, int(sys_.dof())), ""
 
 

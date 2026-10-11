@@ -693,6 +693,12 @@ class Document:
         if not sketch:
             return False
         before = sketch.to_dict()
+        tgt = next((e for e in sketch.entities if e.entity_id == target), None)
+        if tgt is not None and getattr(tgt, "group", None) and dim_type in ("LENGTH", "DIAMETER", "RADIUS"):
+            # a regular polygon has one size: a new side/corner-circle dimension replaces the old one
+            members = {m.entity_id for m in sketch.group_entities(tgt)}
+            sketch.dimensions = [d for d in sketch.dimensions
+                                 if not (d.target_entity_id in members and d.dim_type in ("LENGTH", "DIAMETER", "RADIUS"))]
         sketch.add_dimension(dim_type, target, value, offset_distance=offset, refs=list(refs), pts=list(pts))
         dim = sketch.dimensions[-1]
         dim.expr = expr
@@ -712,6 +718,11 @@ class Document:
         """Solve holding the dimension's anchor still; if other constraints need that anchor to move
         (e.g. a diameter change that shifts a circle held at an edge distance) retry without it."""
         anchor = self._anchor_for(dim)
+        ent = next((e for e in sketch.entities if e.entity_id == dim.target_entity_id), None)
+        if ent is not None and getattr(ent, "group", None) and dim.dim_type in ("LENGTH", "DIAMETER", "RADIUS"):
+            ctr = next((m for m in sketch.group_entities(ent) if m.entity_type == "circle"), None)
+            if ctr is not None:   # a polygon grows round its centre
+                anchor = {"pinned": [(ctr.entity_id, "center")]}
         res = solve_sketch(sketch, **anchor)
         if not res.ok and anchor:
             res = solve_sketch(sketch)

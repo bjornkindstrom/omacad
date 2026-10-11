@@ -98,6 +98,7 @@ class SketchEntity:
         self.entity_id = entity_id
         self.entity_type = entity_type
         self.is_construction = is_construction
+        self.group: Optional[str] = None   # elements built together (a polygon's sides and its centre circle)
 
     def to_lines(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """Returns line segments as ((u1, v1), (u2, v2))."""
@@ -555,7 +556,7 @@ class SketchConstraint:
     """A geometric relation between sketch entities, enforced by the constraint solver.
 
     ctype: HORIZONTAL, VERTICAL, PARALLEL, PERPENDICULAR, EQUAL, TANGENT, CONCENTRIC,
-           COINCIDENT (pts names the touching points), FIX
+           COINCIDENT (pts names the touching points), POINT_ON_CIRCLE (refs: circle, line; pts: the line's point), FIX
     """
     cid: str
     ctype: str
@@ -683,6 +684,8 @@ class Sketch:
                 if nxt not in seen:
                     seen.add(nxt)
                     stack.append(nxt)
+        for eid in list(seen):   # a polygon's centre circle belongs with its sides
+            seen |= {e.entity_id for e in self.group_entities(by_id[eid])}
         return seen
 
     def delete_entities(self, entity_ids) -> int:
@@ -877,16 +880,45 @@ class Sketch:
                 for k in range(sides)]
 
     def add_polygon(self, center, vertex, sides: int, is_construction: bool = False) -> list:
-        """A regular polygon (triangle, hexagon ...) as joined lines."""
-        pts = self.polygon_points(center, vertex, max(3, int(sides)))
+        """A regular polygon (triangle, hexagon ...). It is built so it stays regular when dimensioned: its
+        corners lie on a construction circle around the centre (so the centre can be measured from, as with a
+        circle), the sides are equal and joined end to end."""
+        n = max(3, int(sides))
+        pts = self.polygon_points(center, vertex, n)
+        gid = self._new_group_id()
+        circle = SketchCircle(self._new_entity_id("circle"), center, math.hypot(vertex[0] - center[0], vertex[1] - center[1]),
+                              is_construction=True)
+        circle.group = gid
+        self.entities.append(circle)
         lines = []
         for i, a in enumerate(pts):
-            b = pts[(i + 1) % len(pts)]
+            b = pts[(i + 1) % n]
             line = SketchLine(self._new_entity_id("line"), a, b, is_construction=is_construction)
+            line.group = gid
             self.entities.append(line)
             lines.append(line)
+        for i, ln in enumerate(lines):
+            nxt = lines[(i + 1) % n]
+            self.constraints.append(SketchConstraint(self.new_constraint_id(), "COINCIDENT", [ln.entity_id, nxt.entity_id], ["p2", "p1"]))
+            self.constraints.append(SketchConstraint(self.new_constraint_id(), "POINT_ON_CIRCLE", [circle.entity_id, ln.entity_id], ["p1"]))
+            if i:
+                self.constraints.append(SketchConstraint(self.new_constraint_id(), "EQUAL", [lines[0].entity_id, ln.entity_id]))
+        side = math.hypot(lines[0].p2[0] - lines[0].p1[0], lines[0].p2[1] - lines[0].p1[1])
+        self.add_dimension("LENGTH", lines[0].entity_id, side, offset_distance=12.0, name="Side")
         self.solve_profiles()
         return lines
+
+    def _new_group_id(self) -> str:
+        used = {getattr(e, "group", None) for e in self.entities}
+        n = 1
+        while f"poly_{n}" in used:
+            n += 1
+        return f"poly_{n}"
+
+    def group_entities(self, entity) -> list:
+        """The other elements built together with this one (a polygon's sides and its centre circle)."""
+        g = getattr(entity, "group", None)
+        return [e for e in self.entities if g and getattr(e, "group", None) == g]
 
     def add_loop(self, points, closed: bool = True) -> List[SketchLine]:
         """A polyline as plain lines (no dimensions or constraints); used to turn a face outline into a sketch."""
@@ -1065,7 +1097,7 @@ class Sketch:
                 "v_axis": self.plane.v_axis.tolist(),
                 "normal": self.plane.normal.tolist(),
             },
-            "entities": [e.to_dict() for e in self.entities],
+            "entities": [dict(e.to_dict(), **({"group": e.group} if getattr(e, "group", None) else {})) for e in self.entities],
             "dimensions": [d.to_dict() for d in self.dimensions],
             "constraints": [c.to_dict() for c in self.constraints],
             "face_key": list(self.face_key) if self.face_key else None,
@@ -1086,6 +1118,7 @@ class Sketch:
         sketch.visible = data.get("visible", True)
         sketch.face_key = tuple(data["face_key"]) if data.get("face_key") else None
 
+        groups = {ed.get("entity_id"): ed["group"] for ed in data.get("entities", []) if ed.get("group")}
         for ent_data in data.get("entities", []):
             t = ent_data.get("entity_type")
             if t == "line":
@@ -1106,6 +1139,9 @@ class Sketch:
         for c_data in data.get("constraints", []):
             sketch.constraints.append(SketchConstraint.from_dict(c_data))
 
+        for e in sketch.entities:
+            if e.entity_id in groups:
+                e.group = groups[e.entity_id]
         sketch._migrate_legacy_rects()
         sketch.solve_profiles()
         return sketch
