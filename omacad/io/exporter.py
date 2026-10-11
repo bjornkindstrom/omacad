@@ -77,6 +77,7 @@ class Exporter:
             "timeline": [dict(f.to_dict(), exprs=dict(f.exprs)) for f in doc.timeline.features],
             "sketches": [s.to_dict() for s in doc.sketches.values()],
             "construction_planes": doc.construction_planes,
+            "sections": doc.sections,
         }
         # write to a temp file first so an interrupted save never leaves a half-written project
         tmp = f"{filepath}.tmp"
@@ -96,6 +97,7 @@ class Exporter:
         doc.parameters = [Parameter(q["name"], q["expr"], q.get("comment", "")) for q in data.get("parameters", [])]
 
         doc.construction_planes = dict(data.get("construction_planes", {}))
+        doc.sections = dict(data.get("sections", {}))
 
         # Load sketches
         for s_data in data.get("sketches", []):

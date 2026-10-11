@@ -23,6 +23,7 @@ class BrowserTree(QWidget):
     sketch_selected = Signal(str)
     start_sketch_on_plane = Signal(str)
     start_sketch_on_cplane = Signal(str)
+    edit_section_requested = Signal(str)
     export_body_stl = Signal(str)
     edit_sketch_requested = Signal(str)
 
@@ -147,6 +148,16 @@ class BrowserTree(QWidget):
                 s_item.setToolTip(0, "Active sketch")
             self._style_eye(s_item, sketch.visible)
 
+        if self.doc.sections:
+            sec_group = QTreeWidgetItem(root, [f"✂️ Section Views ({len(self.doc.sections)})"])
+            sec_group.setExpanded(True)
+            for sid, sec in self.doc.sections.items():
+                it = QTreeWidgetItem(sec_group, [sec["name"], ""])
+                it.setData(0, Qt.ItemDataRole.UserRole, ("section", sid))
+                it.setFlags(it.flags() | Qt.ItemFlag.ItemIsEditable)
+                self._style_eye(it, bool(sec.get("active")))
+                it.setToolTip(1, "Click to turn the section off" if sec.get("active") else "Click to turn the section on")
+
     @staticmethod
     def _style_eye(item: QTreeWidgetItem, visible: bool):
         """Eye icon in column 1; hidden items are greyed out."""
@@ -159,7 +170,7 @@ class BrowserTree(QWidget):
 
     def on_item_renamed(self, item: QTreeWidgetItem, column: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
-        if column != 0 or not data or data[0] not in ("sketch", "body"):
+        if column != 0 or not data or data[0] not in ("sketch", "body", "section"):
             return
         kind, item_id = data
         if not self.doc.rename_item(kind, item_id, item.text(0)):
@@ -171,8 +182,10 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
-        if column == 1 and item_type in ("body", "sketch"):
-            if item_type == "body":
+        if column == 1 and item_type in ("body", "sketch", "section"):
+            if item_type == "section":
+                self.doc.set_section_active(item_id, not self.doc.sections[item_id].get("active"))
+            elif item_type == "body":
                 self.doc.toggle_body_visibility(item_id)
             else:
                 self.doc.toggle_sketch_visibility(item_id)
@@ -197,6 +210,8 @@ class BrowserTree(QWidget):
             self.doc.toggle_body_visibility(item_id)
         elif item_type == "sketch":
             self.edit_sketch_requested.emit(item_id)
+        elif item_type == "section":
+            self.doc.set_section_active(item_id, not self.doc.sections[item_id].get("active"))
 
     def show_context_menu(self, pos):
         item = self.tree.itemAt(pos)
@@ -236,6 +251,18 @@ class BrowserTree(QWidget):
             menu.addSeparator()
             act_del = theme.action_with_icon(menu, "🗑️ Delete Body")
             act_del.triggered.connect(lambda: self.doc.delete_body(item_id))
+
+        elif item_type == "section":
+            on = bool(self.doc.sections[item_id].get("active"))
+            act = theme.action_with_icon(menu, "🚫 Turn off" if on else "👁️ Turn on")
+            act.triggered.connect(lambda: self.doc.set_section_active(item_id, not on))
+            act_edit = theme.action_with_icon(menu, "✂️ Change the cut…")
+            act_edit.triggered.connect(lambda: self.edit_section_requested.emit(item_id))
+            act_rename = theme.action_with_icon(menu, "🏷️ Rename (F2)")
+            act_rename.triggered.connect(lambda: self.tree.editItem(item, 0))
+            menu.addSeparator()
+            act_del = theme.action_with_icon(menu, "🗑️ Delete Section")
+            act_del.triggered.connect(lambda: self.doc.delete_section(item_id))
 
         elif item_type == "sketch":
             act_edit = theme.action_with_icon(menu, "✏️ Edit Sketch")

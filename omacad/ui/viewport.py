@@ -268,6 +268,7 @@ class Viewport3D(QOpenGLWidget):
         """Reacts to document updates and shows/hides Sketch Palette."""
         self._profile_fill_cache.clear()
         self._ref_segments_cache = None
+        self.sync_section()
         sk = self.doc.active_sketch
         if sk is None:
             self.selected_entities.clear()
@@ -568,7 +569,7 @@ class Viewport3D(QOpenGLWidget):
         self.update()
 
     # ---- Section view -------------------------------------------------------------------
-    def set_section(self, origin, normal, offset: float, flip: bool = False):
+    def set_section(self, origin, normal, offset: float, flip: bool = False, show_plane: bool = True):
         """Cuts every body along a plane (base origin + normal * offset) and shows the cut face. View only."""
         from omacad.model.sketch import SketchPlane
         n = np.asarray(normal, dtype=float)
@@ -597,7 +598,7 @@ class Viewport3D(QOpenGLWidget):
             cap = CadKernel.extract_render_mesh(slab)
         self.section = {"origin": np.asarray(origin, dtype=float), "normal": n, "offset": float(offset), "flip": flip,
                         "meshes": meshes, "cap": cap}
-        self.set_preview_plane(plane)
+        self.set_preview_plane(plane if show_plane else None)
         self.update()
 
     def clear_section(self):
@@ -605,6 +606,19 @@ class Viewport3D(QOpenGLWidget):
         self.set_preview_plane(None)
         self.clear_extrude_handle()
         self.update()
+
+    def sync_section(self):
+        """Shows the document's active saved section (if any); not while one is being edited."""
+        if getattr(self, "section_editing", False):
+            return
+        act = self.doc.active_section()
+        if act is None:
+            if self.section is not None:
+                self.section = None
+                self.update()
+            return
+        sec = act[1]
+        self.set_section(sec["origin"], sec["normal"], sec["offset"], sec["flip"], show_plane=False)
 
     def render_section_cap(self, mvp: np.ndarray):
         """The cut face, in the highlight colour, so the inside of the model reads clearly."""

@@ -41,6 +41,9 @@ class Document:
         # Construction (offset) planes: id -> dict(name, origin, normal, visible); absolute, not associative
         self.construction_planes: Dict[str, dict] = {}
 
+        # Saved section views: id -> dict(name, origin, normal, offset, flip, active); at most one is active
+        self.sections: Dict[str, dict] = {}
+
         # Active sketch when in Sketch Mode
         self.active_sketch: Optional[Sketch] = None
 
@@ -512,6 +515,10 @@ class Document:
             for f in self.timeline.features:
                 if isinstance(f, SketchFeature) and f.sketch is sketch:
                     f.name = name
+        elif kind == "section":
+            if item_id not in self.sections:
+                return False
+            self.sections[item_id]["name"] = name
         elif kind == "body":
             body = self.bodies.get(item_id)
             if not body:
@@ -542,6 +549,37 @@ class Document:
                                          "origin": [float(x) for x in origin], "normal": [float(x) for x in n], "visible": True}
         self.notify_changed()
         return pid
+
+    def add_section(self, origin, normal, offset: float, flip: bool = False, name: str = None, activate: bool = True) -> str:
+        sid = f"section_{len(self.sections) + 1}"
+        while sid in self.sections:
+            sid += "_"
+        self.sections[sid] = {"name": name or f"Section {len(self.sections) + 1}", "origin": [float(x) for x in origin],
+                              "normal": [float(x) for x in normal], "offset": float(offset), "flip": bool(flip), "active": False}
+        if activate:
+            self.set_section_active(sid, True)
+        else:
+            self.notify_changed()
+        return sid
+
+    def update_section(self, sid: str, **kw) -> None:
+        if sid in self.sections:
+            self.sections[sid].update(kw)
+            self.notify_changed()
+
+    def set_section_active(self, sid: str, on: bool) -> None:
+        if sid not in self.sections:
+            return
+        for k, v in self.sections.items():
+            v["active"] = (k == sid) and on        # one section at a time
+        self.notify_changed()
+
+    def delete_section(self, sid: str) -> None:
+        if self.sections.pop(sid, None) is not None:
+            self.notify_changed()
+
+    def active_section(self):
+        return next(((k, v) for k, v in self.sections.items() if v.get("active")), None)
 
     def construction_plane(self, pid: str):
         from omacad.model.sketch import SketchPlane

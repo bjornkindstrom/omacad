@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):
         self.browser.start_sketch_on_cplane.connect(self.start_sketch_on_cplane)
         self.viewport.offset_base_picked.connect(self.on_offset_base_picked)
         self.viewport.section_base_picked.connect(self.on_section_base_picked)
+        self.browser.edit_section_requested.connect(self.edit_section)
         self.timeline_bar.edit_sketch_requested.connect(self.on_edit_sketch)
         self.browser.export_body_stl.connect(self.export_single_body_stl)
 
@@ -469,20 +470,23 @@ class MainWindow(QMainWindow):
         self.viewport.begin_plane_pick("section_base")
         self.status_label.setText("Section View: click an origin plane or a flat face to cut along (Esc cancels).")
 
-    def on_section_base_picked(self, base):
+    def on_section_base_picked(self, base, section_id=None):
+        """Section dialog; Done saves it as a section view in the tree (new, or the one being changed)."""
         from omacad.ui.dialogs import SectionDialog
         n = np.asarray(base.normal, dtype=float)
         o = np.asarray(base.origin, dtype=float)
-        pts = [np.asarray(b.render_mesh.bounds_min, dtype=float) for b in self.doc.bodies.values() if b.render_mesh is not None] + \
-              [np.asarray(b.render_mesh.bounds_max, dtype=float) for b in self.doc.bodies.values() if b.render_mesh is not None]
-        pts = np.array(pts)
+        meshes = [b.render_mesh for b in self.doc.bodies.values() if b.render_mesh is not None and len(b.render_mesh.vertices)]
+        pts = np.array([m.bounds_min for m in meshes] + [m.bounds_max for m in meshes], dtype=float)
         centre = (pts.min(axis=0) + pts.max(axis=0)) / 2.0
         extent = float(np.linalg.norm(pts.max(axis=0) - pts.min(axis=0))) / 2.0
         anchor = centre - n * float((centre - o) @ n)       # where the arrow stands on the base plane
-        # start in the middle of the model along the plane normal
-        start = float((centre - o) @ n)
+        start = float((centre - o) @ n)                      # first cut: the middle of the model
+        existing = self.doc.sections.get(section_id) if section_id else None
         dlg = SectionDialog("face" if base.name == "FACE" else f"{base.name} plane", extent + abs(start), self.viewport)
+        if existing:
+            dlg.setWindowTitle("Change Section View")
         dlg.place(self.viewport.size())
+        self.viewport.section_editing = True
 
         def apply():
             off = dlg.offset()
@@ -492,11 +496,22 @@ class MainWindow(QMainWindow):
         def dragged(val):
             dlg.set_offset(val)
 
-        def finished(_):
+        def finished(result):
             self.viewport.extrude_handle_dragged.disconnect(dragged)
+            self.viewport.section_editing = False
             self.viewport.clear_section()
             self._section_dlg = None
-            self.status_label.setText("Section view closed.")
+            if result:
+                if existing:
+                    self.doc.update_section(section_id, origin=[float(x) for x in o], normal=[float(x) for x in n],
+                                            offset=dlg.offset(), flip=dlg.flip())
+                    self.doc.set_section_active(section_id, True)
+                else:
+                    self.doc.add_section(o, n, dlg.offset(), dlg.flip())
+                self.status_label.setText("Section view saved in the tree: click its eye to turn it on and off.")
+            else:
+                self.viewport.sync_section()
+                self.status_label.setText("Section view cancelled.")
             dlg.deleteLater()
 
         self._section_dlg = dlg
@@ -504,9 +519,19 @@ class MainWindow(QMainWindow):
         dlg.changed.connect(apply)
         dlg.finished.connect(finished)
         dlg.show()
-        dlg.set_offset(round(start, 2))
+        dlg.set_offset(round(existing["offset"] if existing else start, 2))
+        if existing:
+            dlg.chk_flip.setChecked(bool(existing["flip"]))
         apply()
-        self.status_label.setText("Section View: slide the offset until you are happy. Done closes the view.")
+        self.status_label.setText("Section View: slide the offset until you are happy, then Done saves it in the tree.")
+
+    def edit_section(self, sid: str):
+        from omacad.model.sketch import SketchPlane
+        sec = self.doc.sections.get(sid)
+        if sec is None or getattr(self, "_section_dlg", None) is not None:
+            return
+        base = SketchPlane.from_face(np.array(sec["normal"]), np.array(sec["origin"]), name="PLANE")
+        self.on_section_base_picked(base, sid)
 
     def start_sketch_on_cplane(self, pid: str):
         if pid in self.doc.construction_planes:
