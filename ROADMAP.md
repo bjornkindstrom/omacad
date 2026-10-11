@@ -48,6 +48,8 @@ This file lists what has been built, step by step, and what is left. (Swedish fe
 
 ## Remaining
 
+**The forward plan (milestones 0.6 to 1.0, the smart-features track, safety net and AI feedback loop) lives in [`PLAN.md`](PLAN.md).** The list below is the older gap list, kept for reference.
+
 Priorities follow what Fusion 360 users reach for first.
 
 ### Next up
