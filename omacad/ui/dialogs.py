@@ -562,6 +562,11 @@ class PatternDialog(BaseFeatureDialog):
             w_.valueChanged.connect(lambda *_: self.changed.emit())
         self.chk_second.toggled.connect(lambda *_: (self._show_kind(), self.changed.emit()))
         self.lst.itemChanged.connect(lambda *_: self.changed.emit())
+        from omacad.model.timeline import PatternFeature
+        self.round_body = any(PatternFeature._is_round(b.manifold) for b in doc.bodies.values())
+        if self.round_body and feature is None:
+            self.spn_count1.setValue(2)   # a copy on the other end of the diameter, until you ask for more
+        self.cmb_mirror.currentIndexChanged.connect(self._show_kind)
         self._show_kind()
         if feature is not None:
             self.load(feature)
@@ -578,7 +583,11 @@ class PatternDialog(BaseFeatureDialog):
                 lbl.setParent(None)
                 lbl.deleteLater()
         kind = self.KINDS[self.cmb_kind.currentIndex()]
-        for text, widget in self.rows[kind]:
+        rows = list(self.rows[kind])
+        mode = self.MIRROR_MODES[self.cmb_mirror.currentIndex()]
+        if kind == "mirror" and (mode == "diameter" or (mode == "auto" and getattr(self, "round_body", False))):
+            rows.insert(1, ("Copies (even spacing):", self.spn_count1))   # round body: count them out around the circle
+        for text, widget in rows:
             if kind == "linear" and widget in (self.cmb_axis2, self.spn_count2, self.spn_space2) and not self.chk_second.isChecked():
                 continue
             self._kind_form.addRow(QLabel(text), widget)

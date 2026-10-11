@@ -440,8 +440,11 @@ class PatternFeature(Feature):
             mode = self.mirror_mode
             if mode == "auto" and getattr(self, "_round_body", False):
                 mode = "diameter"   # a round body has no corners: the copy goes to the other end of the diameter
-            if mode == "diameter":
-                out.append(lambda m: m.translate(tuple(-c)).rotate((0.0, 0.0, 180.0)).translate(tuple(c)))
+            if mode == "diameter":   # evenly spaced around the round body; 2 = the other end of the diameter
+                n = max(2, int(round(self.count1)))
+                for k in range(1, n):
+                    deg = 360.0 * k / n
+                    out.append(lambda m, deg=deg: m.translate(tuple(-c)).rotate((0.0, 0.0, deg)).translate(tuple(c)))
             elif mode == "auto":  # mirror across each mid-plane the feature is off-centre in
                 ax = abs(feature_centre[0] - c[0]) > 0.02 * size[0] + 1e-6
                 ay = abs(feature_centre[1] - c[1]) > 0.02 * size[1] + 1e-6
