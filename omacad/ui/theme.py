@@ -15,6 +15,7 @@ colour, `themeify` maps them onto the Omarchy palette:
 import colorsys
 import re
 import subprocess
+import sys
 import tomllib
 import weakref
 from pathlib import Path
@@ -155,7 +156,7 @@ _FONT = re.compile(r"font-family:[^;]*;")
 
 
 def font_family() -> str:
-    return _font or "Sans"
+    return _font or ("Segoe UI" if sys.platform == "win32" else "Sans")
 
 
 # ---- Icons --------------------------------------------------------------------

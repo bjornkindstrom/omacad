@@ -24,7 +24,7 @@ from omacad.ui.timeline_bar import TimelineBar
 from omacad.ui.side_panel import InspectorPanel
 from omacad.ui.canvas_dialog import CanvasEditorDialog
 from omacad.ui.dialogs import (
-    RoundEdgesDialog, PatternDialog,
+    RoundEdgesDialog, PatternDialog, OffsetPlaneDialog,
     SketchPlaneDialog, ExtrudeDialog, BoxDialog, CylinderDialog,
     SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog
 )
@@ -458,20 +458,35 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"Active Sketch: {sketch.name} on {where}. Select a tool (Line, Rect, Circle) to draw.")
 
     def prompt_offset_plane(self):
-        """Offset Plane in two clicks: 1) which of X/Y/Z-planes the new plane is parallel to, 2) the surface it touches."""
+        """Offset Plane: pick an origin plane, construction plane, or flat face to offset from."""
         if self.doc.active_sketch:
             self.on_finish_sketch()
         self.viewport.begin_plane_pick("offset_base")
-        self.status_label.setText("Offset Plane (1/2): click the XY, XZ or YZ plane the new plane should be parallel to (Esc cancels).")
+        self.status_label.setText("Offset Plane: Klicka på ett plan (XY, XZ, YZ, konstruktionsplan) eller en plan yta att utgå ifrån (Esc avbryter).")
 
     def on_offset_base_picked(self, base):
         from omacad.model.sketch import SketchPlane
         n = np.asarray(base.normal, dtype=float)
+        n = n / np.linalg.norm(n)
         o = np.asarray(base.origin, dtype=float)
-        self.viewport.begin_plane_pick("offset_surface")
-        self.status_label.setText(f"Offset Plane (2/2): point at any face of a body (flat or curved) and click: "
-                                  f"a plane parallel to {base.name} is created touching it (Esc cancels).")
 
+        dlg = OffsetPlaneDialog(base.name, self)
+        self.dock(dlg)
+        self.status_label.setText(f"Offset Plane: Ange avstånd i mm (eller dra i 3D-pilen). Klicka 'To surface…' för att tangera en yta.")
+
+        def update_preview():
+            dist = dlg.spn_dist.value()
+            self.viewport.set_preview_plane(SketchPlane.from_face(n, o + n * dist, name="PLANE"))
+            self.viewport.set_extrude_handle(o, n, dist if abs(dist) > 0.1 else 5.0, color=(0.75, 0.55, 0.95))
+
+        def on_handle_drag(dist: float):
+            dlg.spn_dist.setValue(round(dist, 3))
+
+        dlg.changed.connect(update_preview)
+        self.viewport.extrude_handle_dragged.connect(on_handle_drag)
+        update_preview()
+
+        # Surface pick mode if user clicks "To surface…"
         def plane_at(hit):
             rel = float((hit["point"] - o) @ n)
             proj = (hit["patch"] - o) @ n
@@ -480,31 +495,42 @@ class MainWindow(QMainWindow):
                 dist = float(proj[np.abs(proj).argmax()])
             return dist
 
-        def on_hover(hit):
-            if hit is None:
-                self.viewport.set_preview_plane(None)
-            else:
-                self.viewport.set_preview_plane(SketchPlane.from_face(n, o + n * plane_at(hit), name="PLANE"))
-
-        def done(*_):
-            for sig, fn in ((self.viewport.surface_hover, on_hover), (self.viewport.surface_picked, on_picked),
-                            (self.viewport.plane_pick_cancelled, done)):
-                try:
-                    sig.disconnect(fn)
-                except (RuntimeError, TypeError):
-                    pass
-            self.viewport.set_preview_plane(None)
-
-        def on_picked(hit):
+        def on_surface_picked(hit):
             dist = plane_at(hit)
-            done()
-            pid = self.doc.add_construction_plane(base, dist)
-            self.status_label.setText(f"{self.doc.construction_planes[pid]['name']} created at {dist:.3f} mm from {base.name}. "
-                                      "Right-click it in the browser to sketch on it.")
+            dlg.spn_dist.setValue(round(dist, 3))
+            self.viewport.end_plane_pick()
+            self.status_label.setText(f"Offset satt till {dist:.3f} mm mot ytan. Justera eller klicka OK.")
 
-        self.viewport.surface_hover.connect(on_hover)
-        self.viewport.surface_picked.connect(on_picked)
-        self.viewport.plane_pick_cancelled.connect(done)
+        def start_surface_pick():
+            self.viewport.begin_plane_pick("offset_surface")
+            try:
+                self.viewport.surface_picked.disconnect(on_surface_picked)
+            except Exception:
+                pass
+            self.viewport.surface_picked.connect(on_surface_picked)
+            self.status_label.setText("Klicka på en yta (plan eller krökt) för att sätta planet tangerande mot den.")
+
+        dlg.surface_requested.connect(start_surface_pick)
+
+        def cleanup():
+            try:
+                self.viewport.surface_picked.disconnect(on_surface_picked)
+            except Exception:
+                pass
+            try:
+                self.viewport.extrude_handle_dragged.disconnect(on_handle_drag)
+            except Exception:
+                pass
+            self.viewport.set_preview_plane(None)
+            self.viewport.clear_extrude_handle()
+            self.viewport.end_plane_pick()
+            self.inspector.undock_tool()
+
+        if dlg.exec():
+            dist = dlg.spn_dist.value()
+            pid = self.doc.add_construction_plane(base, dist)
+            self.status_label.setText(f"{self.doc.construction_planes[pid]['name']} skapad på {dist:.3f} mm från {base.name}.")
+        cleanup()
 
     def prompt_section(self):
         """Section view: pick a plane or face, then slide the cut through the model (view only)."""

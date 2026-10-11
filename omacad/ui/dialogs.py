@@ -408,6 +408,9 @@ class OffsetPlaneDialog(BaseFeatureDialog):
         self.spn_dist.setFocus()
         self.spn_dist.selectAll()
 
+    def get_distance(self) -> float:
+        return self.spn_dist.value()
+
     def get_expressions(self) -> dict:
         e = self.spn_dist.expression()
         return {"distance": e} if e else {}

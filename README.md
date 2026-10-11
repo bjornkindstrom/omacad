@@ -14,14 +14,18 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - **Tab-inmatning** medan du ritar (längd, vinkel, bredd/höjd, diameter) – Enter går vidare, Esc ångrar.
 - **Mått och villkor** (SolveSpace): horisontell, vertikal, parallell, vinkelrät, lika, tangent, koncentrisk, fixerad, avstånd, längd, vinkel, diameter, punkt–linje. Guidad högerklicksmeny på varje element.
 - Markera, flytta (dra eller `M` med dx/dy), ta bort, **Offset (`O`) med förhandsvisning**, ångra/gör om.
+- **Skiss-Fillet**: Interaktiv bisektrispil med radie-bricka pekar in i hörnet för visuell kontroll vid avrundning.
+- **Canvas / Referensbild**: Infoga ritningar och referensbilder på valfritt plan. Bildredigering (ljusstyrka, kontrast, invertering, gråskala, rotation, beskärning) och **kalibrering med virtuellt måttband** (klicka två punkter och ange mm) för att rita av i skala 1:1.
 
 **Solider**
 - **Extrude** med dragbar pil i vyn *och* inskrivet värde, riktning (en sida, symmetriskt, två sidor), *To face…*, Auto / New Body / Join / Cut / Intersect. Förhandsvisning och profilval i vyn: inget väljs åt dig, klicka på en profil och **Shift+klick** lägger till eller tar bort fler (t.ex. ringen och cirkeln i den). Extrudera också en hel yta.
 - Box, Cylinder, Sphere, Combine (Join/Cut/Intersect).
-- **Fillet och Chamfer** på raka kanter, cirklar (skruvhål, försänkningar) och hela konturer med rundade hörn. Inre och yttre kanter, dubbelklick väljer hela loopen, förhandsvisning.
+- **Split Body**: Dela en solid kropp i två separata kroppar med ett offset-plan eller origin-plan.
+- **Shell (Urholka)**: Skapa ihåliga solider med specificerad väggtjocklek. Klicka på ytor i 3D för att lämna dem öppna (t.ex. toppen på en låda).
+- **Fillet och Chamfer** på raka kanter, cirklar (skruvhål, försänkningar) och hela konturer med rundade hörn. Inre och yttre kanter, dubbelklick väljer hela loopen, samt **interaktiv 3D-pil** direkt på kanten för att justera storleken.
 - **Pattern / Mirror**: jämnt fördelade kopior, speglade hörn (kopierar t.ex. hål med chamfers) eller runt en axel, med förhandsvisning.
-- **Fill the face** (Pattern/Mirror → *Fill the face*): fyller en yta med kopior med exakt fast mellanrum (kant till kant, så hexagoner, cirklar och trianglar packas rätt), valfri ramkant (offset) mot kanten, rutnät eller förskjutet (bikake). Kopior som hamnar vid ramen klipps av mot den (halva hexagoner), med en minsta bitstorlek så att inga flisor blir kvar.
-- **Offset Plane** i två klick: välj XY/XZ/YZ, peka på valfri yta (även cylindrar) – planet läggs tangent mot ytan.
+- **Fill the face** (Pattern/Mirror → *Fill the face*): fyller en yta med kopior med exakt fast mellanrum (kant till kant, så hexagoner, cirklar och trianglar packas rätt), valfri ramkant (offset) mot kanten, rutnät eller förskjutet (bikake). Undviker automatiskt utskjutande detaljer på ytan.
+- **Offset Plane**: Välj valfritt plan (XY/XZ/YZ, konstruktionsplan eller plan yta på kropp). Ange avstånd exakt i mm, dra i den lila 3D-pilen, använd formler/parametrar, eller klicka *To surface…* för att tangera en yta.
 
 **Se in i modellen**
 - **Measure** (`I`, knappen i både SOLID och SKETCH): klicka på en linje, cirkel eller kant för längd/diameter, klicka på en andra för avstånd (parallella) eller vinkel och kortaste avstånd. Gäller skisselement i skissläge och kroppskanter i 3D.
@@ -33,7 +37,8 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - Sketcher döljs automatiskt när de använts; ögon i trädet.
 
 **Gränssnitt**
-- Ribbon, bläddrare (döp om med F2), tidslinje, ViewCube, all dialoger i en **högerpanel** som aldrig täcker modellen.
+- Ribbon, bläddrare (döp om med F2), tidslinje, ViewCube.
+- **Högerpanel (Inspector)**: Verktygsdialoger (Extrude, Fillet, Shell, Offset Plane, Split Body) dockas prydligt i högerpanelen så de aldrig skymmer 3D-modellen, och visar geometri- och mätdata i realtid.
 - Spara/öppna `.omacad` (JSON), export till **STL** och **OBJ**.
 
 ![Extrude](screenshots/11_extrude_arrow.png)
@@ -46,6 +51,18 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 ./run.sh
 ```
 eller sök efter **Omacad** i Omarchys appmeny (`omacad.desktop`).
+
+## Paketering för Windows
+
+Omacad kan paketeras som en fristående `.exe` för Windows utan att mottagaren behöver ha Python installerat.
+
+### Bygg med PyInstaller
+Kör byggskriptet [`build_windows.bat`](build_windows.bat) eller i terminalen:
+```powershell
+pip install PySide6 numpy manifold3d trimesh PyOpenGL Pillow shapely pyinstaller
+pyinstaller omacad.spec
+```
+Den färdiga appen hamnar i `dist/Omacad/` med `Omacad.exe`. Mappen kan zippas och delas direkt till andra användare (eller paketeras i en installationsguide med Inno Setup).
 
 ## Installation av skisslösaren
 

@@ -1626,7 +1626,7 @@ class Viewport3D(QOpenGLWidget):
         best, best_t = None, float("inf")
         half = self._origin_plane_half_size()
         candidates = [(("origin", n), pl) for n, pl in self.doc.origin_planes.items()]
-        only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_base"
+        only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_origin_only"
         if not only_origin:
             candidates += [(("cplane", pid), self.doc.construction_plane(pid))
                            for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
@@ -1696,7 +1696,7 @@ class Viewport3D(QOpenGLWidget):
     def render_plane_pick(self, mvp: np.ndarray):
         """Translucent origin-plane quads and hovered face while choosing a sketch plane."""
         cplanes = [(pid, self.doc.construction_plane(pid)) for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
-        if self.plane_pick_mode and self.plane_pick_purpose in ("offset_base", "offset_surface"):
+        if self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface",):
             cplanes = []
         if (not self.plane_pick_mode and self.ctx_face is None and not cplanes and self.preview_plane is None) or not self.prog_flat:
             return
