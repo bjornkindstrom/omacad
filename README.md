@@ -23,7 +23,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - **Offset Plane** i två klick: välj XY/XZ/YZ, peka på valfri yta (även cylindrar) – planet läggs tangent mot ytan.
 
 **Se in i modellen**
-- **Section View** (✂️ i bandet, View-menyn): välj XY/XZ/YZ, en yta eller ett eget plan, och skjut snittet genom modellen med reglage, inskrivet värde eller genom att dra i pilen. Snittytan färgas, med "se från andra sidan".
+- **Section View** (✂️ i bandet, View-menyn): välj XY/XZ/YZ, en yta eller ett eget plan, och skjut snittet genom modellen med reglage, inskrivet värde eller genom att dra i den blå pilen. Snittytan färgas, med "se från andra sidan".
 
 **Parametriskt**
 - **Parametrar** med namn och formler (`bredd/2`, `10-1`, `2x(3+5)`) i alla fält.

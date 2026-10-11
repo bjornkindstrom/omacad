@@ -420,7 +420,7 @@ class SectionDialog(BaseFeatureDialog):
     def __init__(self, base_name: str, extent: float, parent=None):
         super().__init__("Section View", parent)
         from PySide6.QtWidgets import QSlider
-        info = QLabel(f"Cutting along: {base_name}. Drag the slider or the orange arrow in the view, or type an offset.")
+        info = QLabel(f"Cutting along: {base_name}. Drag the slider or the blue arrow in the view, or type an offset.")
         info.setWordWrap(True)
         self.main_layout.addWidget(info)
         self.extent = max(float(extent), 1.0)

@@ -621,8 +621,10 @@ class Viewport3D(QOpenGLWidget):
         GL.glUseProgram(0)
 
     # ---- Extrude arrow ------------------------------------------------------------------
-    def set_extrude_handle(self, origin, axis, dist: float):
-        self.extrude_handle = {"origin": np.asarray(origin, dtype=float), "axis": np.asarray(axis, dtype=float), "dist": float(dist)}
+    def set_extrude_handle(self, origin, axis, dist: float, color=None):
+        """Draggable arrow. `color` (r, g, b) overrides the theme highlight, e.g. when that would blend into the scene."""
+        self.extrude_handle = {"origin": np.asarray(origin, dtype=float), "axis": np.asarray(axis, dtype=float), "dist": float(dist),
+                               "color": color}
         self.update()
 
     def clear_extrude_handle(self):
@@ -669,7 +671,11 @@ class Viewport3D(QOpenGLWidget):
         sign = 1.0 if dist >= 0 else -1.0
         tip = origin + axis * dist
         size = self.distance * 0.04
-        col = (*theme.palette().highlight01(0.15 if (self._handle_hover or self._handle_drag) else 0.0), 1.0)
+        lit = self._handle_hover or self._handle_drag
+        if h.get("color"):
+            col = (*(min(1.0, c + (0.2 if lit else 0.0)) for c in h["color"]), 1.0)
+        else:
+            col = (*theme.palette().highlight01(0.15 if lit else 0.0), 1.0)
         GL.glDisable(GL.GL_DEPTH_TEST)
         shaft_end = tip - axis * sign * size * 0.8
         self.draw_thick_lines(mvp, [*origin, *shaft_end], col, 4.0, halo=True)

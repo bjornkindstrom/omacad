@@ -487,7 +487,7 @@ class MainWindow(QMainWindow):
         def apply():
             off = dlg.offset()
             self.viewport.set_section(o, n, off, dlg.flip())
-            self.viewport.set_extrude_handle(anchor, n, off)
+            self.viewport.set_extrude_handle(anchor, n, off, color=(0.10, 0.45, 1.0))   # blue: the cut face and plane are orange
 
         def dragged(val):
             dlg.set_offset(val)
