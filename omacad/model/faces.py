@@ -1,0 +1,659 @@
+"""
+Omacad - Planar face extraction & picking
+Groups coplanar triangles of a body into planar faces so sketches can be started on them.
+"""
+
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+import math
+import numpy as np
+import manifold3d as m3d
+import trimesh
+
+
+@dataclass
+class PlanarFace:
+    body_id: str
+    index: int
+    normal: np.ndarray      # unit outward normal (3,)
+    origin: np.ndarray      # a point on the face (3,)
+    area: float
+    tris: np.ndarray        # (N, 3, 3) world-space triangles for picking/highlighting
+
+
+def _group_min_width(v, f, tm, tri_ids) -> float:
+    """Narrow dimension of a coplanar triangle group (principal-axis extent): thin strips are the
+    facets of a tessellated curved surface, a real flat face is wide."""
+    pts = v[np.unique(f[np.array(tri_ids)].ravel())]
+    c = pts - pts.mean(axis=0)
+    if len(c) < 3:
+        return 0.0
+    w, vecs = np.linalg.eigh(c.T @ c)
+    # in-plane principal axes = the two eigenvectors with the largest eigenvalues
+    axes = vecs[:, np.argsort(w)[::-1][:2]]
+    proj = c @ axes
+    ext = proj.max(axis=0) - proj.min(axis=0)
+    return float(ext.min())
+
+
+def _coplanar(a_idx, b_idx, normals, v, f, areas, tol) -> bool:
+    """Are two adjacent triangles part of one flat face? Tiny triangles left by boolean operations may
+    be a hair off the plane, so they get a looser test."""
+    d = float(np.dot(normals[a_idx], normals[b_idx]))
+    off = abs(float(np.dot(normals[a_idx], v[f[a_idx, 0]])) - float(np.dot(normals[a_idx], v[f[b_idx, 0]])))
+    if d > 1.0 - 1e-9 and off < tol:
+        return True
+    small = min(areas[a_idx], areas[b_idx]) < 0.01
+    return small and d > 1.0 - 1e-4 and off < 1e-3
+
+
+SLIVER_AREA = 1e-3  # mm^2: boolean operations leave hair-thin triangles; they are not faces
+
+
+def _sliver_roots(v, f, tm, groups) -> set:
+    """Groups that are leftovers of boolean operations: almost no area, or hair-thin (< 0.02 mm wide)."""
+    out = set()
+    for r, ids in groups.items():
+        if float(tm.area_faces[ids].sum()) < SLIVER_AREA or _group_min_width(v, f, tm, ids) < 0.02:
+            out.add(r)
+    return out
+
+
+def _curved_roots(v, f, tm, find, groups, adj, angles) -> set:
+    """Groups that are strips of a curved surface. A group is curved when it meets a neighbour at a
+    shallow angle and is not clearly wider than that neighbour; so a wide flat face next to a fillet
+    (also a shallow join) stays planar, while the thin strips of the fillet and of cylinders do not.
+    Sliver triangles between two strips are looked through (the strips are neighbours of each other)."""
+    sliver = _sliver_roots(v, f, tm, groups)
+    shallow = {}
+    touching = {}  # every neighbour regardless of angle (needed to look through slivers)
+    for (a_idx, b_idx), ang in zip(adj, angles):
+        ra, rb = find(int(a_idx)), find(int(b_idx))
+        if ra == rb:
+            continue
+        touching.setdefault(ra, set()).add(rb)
+        touching.setdefault(rb, set()).add(ra)
+        if ang < np.radians(25.0):
+            shallow.setdefault(ra, set()).add(rb)
+            shallow.setdefault(rb, set()).add(ra)
+    normal_of = {r: tm.face_normals[ids[0]] for r, ids in groups.items()}
+    # slivers often come in chains: look through whole clusters of them
+    cluster = {r: r for r in sliver}
+
+    def cfind(x):
+        while cluster[x] != x:
+            cluster[x] = cluster[cluster[x]]
+            x = cluster[x]
+        return x
+
+    for sl in sliver:
+        for n in touching.get(sl, ()):
+            if n in sliver and cfind(n) != cfind(sl):
+                cluster[cfind(n)] = cfind(sl)
+    members: dict = {}
+    for sl in sliver:
+        members.setdefault(cfind(sl), []).append(sl)
+    for cl in members.values():
+        real = {x for sl in cl for x in touching.get(sl, ()) if x not in sliver}
+        for x in real:
+            for y in real:
+                if x != y and float(normal_of[x] @ normal_of[y]) > np.cos(np.radians(25.0)):
+                    shallow.setdefault(x, set()).add(y)
+    width = {}
+    curved = set()
+    for r, neighbours in shallow.items():
+        if r in sliver:
+            continue
+        width.setdefault(r, _group_min_width(v, f, tm, groups[r]))
+        for n in neighbours:
+            if n in sliver:
+                continue
+            width.setdefault(n, _group_min_width(v, f, tm, groups[n]))
+            if width[n] >= width[r] / 4.0:
+                curved.add(r)
+                break
+    return curved
+
+
+def compute_planar_faces(manifold: m3d.Manifold, body_id: str = "") -> List[PlanarFace]:
+    """Returns every planar facet (>= 2 coplanar adjacent triangles) of the solid."""
+    mesh = manifold.to_mesh()
+    v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
+    f = np.asarray(mesh.tri_verts, dtype=np.int64)
+    if len(f) < 2:
+        return []
+    tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
+
+    # Union-find over adjacent, coplanar triangles (trimesh.facets needs scipy/networkx)
+    parent = np.arange(len(f))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    normals = tm.face_normals
+    adj = tm.face_adjacency
+    tol = 1e-6 * max(1.0, float(np.ptp(v, axis=0).max()))
+    areas = tm.area_faces
+    for a_idx, b_idx in adj:
+        if _coplanar(a_idx, b_idx, normals, v, f, areas, tol):
+            ra, rb = find(int(a_idx)), find(int(b_idx))
+            if ra != rb:
+                parent[rb] = ra
+
+    groups = {}
+    for i in range(len(f)):
+        groups.setdefault(find(i), []).append(i)
+
+    # Tessellated curved surfaces: thin strips meeting their neighbours at a shallow angle
+    curved = _curved_roots(v, f, tm, find, groups, adj, tm.face_adjacency_angles)
+
+    faces: List[PlanarFace] = []
+    slivers = _sliver_roots(v, f, tm, groups)
+    for root, tri_ids in groups.items():
+        if root in curved or root in slivers:
+            continue
+        ids = np.array(tri_ids)
+        faces.append(PlanarFace(
+            body_id=body_id,
+            index=len(faces),
+            normal=np.asarray(normals[ids[0]], dtype=np.float64),
+            origin=v[f[ids[0], 0]],
+            area=float(tm.area_faces[ids].sum()),
+            tris=v[f[ids]],
+        ))
+    return faces
+
+
+def ray_hit_face(face: PlanarFace, ray_origin: np.ndarray, ray_dir: np.ndarray) -> Optional[float]:
+    """Moller-Trumbore against all triangles of a face. Returns nearest hit distance or None."""
+    o = np.asarray(ray_origin, dtype=np.float64)
+    d = np.asarray(ray_dir, dtype=np.float64)
+    v0, v1, v2 = face.tris[:, 0], face.tris[:, 1], face.tris[:, 2]
+    e1, e2 = v1 - v0, v2 - v0
+    p = np.cross(d, e2)
+    det = np.einsum("ij,ij->i", e1, p)
+    ok = np.abs(det) > 1e-12
+    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+    s = o - v0
+    u = np.einsum("ij,ij->i", s, p) * inv
+    q = np.cross(s, e1)
+    w = (q @ d) * inv
+    t = np.einsum("ij,ij->i", e2, q) * inv
+    hit = ok & (u >= -1e-9) & (w >= -1e-9) & (u + w <= 1.0 + 1e-9) & (t > 1e-6)
+    return float(t[hit].min()) if hit.any() else None
+
+
+def in_plane_edges(bodies, plane, tol_rel: float = 1e-3):
+    """Body edges lying in a sketch plane, as 2D (u, v) segments."""
+    o = np.asarray(plane.origin, dtype=np.float64)
+    n = np.asarray(plane.normal, dtype=np.float64)
+    ua = np.asarray(plane.u_axis, dtype=np.float64)
+    va = np.asarray(plane.v_axis, dtype=np.float64)
+    out = []
+    for body in bodies:
+        mesh = body.render_mesh
+        if not body.visible or mesh is None or len(mesh.sharp_lines) == 0:
+            continue
+        pts = np.asarray(mesh.sharp_lines, dtype=np.float64).reshape(-1, 2, 3) - o
+        tol = tol_rel * max(1.0, float(np.ptp(mesh.bounds_max - mesh.bounds_min)))
+        on_plane = (np.abs(pts @ n) < tol).all(axis=1)
+        for a, b in pts[on_plane]:
+            out.append(((float(a @ ua), float(a @ va)), (float(b @ ua), float(b @ va))))
+    return out
+
+
+@dataclass
+class PlanarEdge:
+    """A straight edge between two planar faces, with what is needed to round or chamfer it."""
+    p0: np.ndarray
+    p1: np.ndarray
+    n1: np.ndarray       # outward normals of the two faces
+    n2: np.ndarray
+    d1: np.ndarray       # unit vectors lying in each face, pointing away from the edge
+    d2: np.ndarray
+    convex: bool         # True: a solid corner (material is removed); False: an inside corner (material is added)
+
+    kind = "line"
+
+    @property
+    def length(self) -> float:
+        return float(np.linalg.norm(self.p1 - self.p0))
+
+    def polyline(self, n: int = 2) -> np.ndarray:
+        return np.array([self.p0, self.p1])
+
+    def same_as(self, other) -> bool:
+        if getattr(other, "kind", "") != "line":
+            return False
+        return (np.allclose(self.p0, other.p0, atol=1e-6) and np.allclose(self.p1, other.p1, atol=1e-6)) or \
+               (np.allclose(self.p0, other.p1, atol=1e-6) and np.allclose(self.p1, other.p0, atol=1e-6))
+
+    def ref(self):
+        """What a Fillet/Chamfer step stores to find this edge again."""
+        return (tuple(map(float, self.p0)), tuple(map(float, self.p1)))
+
+
+@dataclass
+class CircularEdge:
+    """A full circle where a flat face meets a cylinder (top of a pin, rim of a hole, screw head ...)."""
+    center: np.ndarray
+    axis: np.ndarray     # unit normal of the flat face (outward)
+    radius: float
+    s1: float            # +1: the flat face lies outside the circle, -1: inside it
+    s2: float            # +1: the cylinder wall continues along +axis, -1: along -axis
+    convex: bool         # rim of solid material (cut) vs inside corner (fill)
+    nseg: int = 48       # segments of the tessellated circle (decides how far the chords sag inside the radius)
+
+    kind = "circle"
+
+    def _basis(self):
+        a = self.axis
+        u = np.cross(a, [1.0, 0.0, 0.0])
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(a, [0.0, 1.0, 0.0])
+        u = u / np.linalg.norm(u)
+        return u, np.cross(a, u)
+
+    def polyline(self, n: int = 96) -> np.ndarray:
+        u, v = self._basis()
+        ang = np.linspace(0.0, 2 * np.pi, n + 1)
+        return self.center + self.radius * (np.outer(np.cos(ang), u) + np.outer(np.sin(ang), v))
+
+    def same_as(self, other) -> bool:
+        if getattr(other, "kind", "") != "circle":
+            return False
+        return (abs(abs(float(self.axis @ other.axis)) - 1.0) < 1e-6 and abs(self.radius - other.radius) < 1e-4 * max(1.0, self.radius)
+                and np.linalg.norm(self.center - other.center) < 1e-4 * max(1.0, self.radius))
+
+    def ref(self):
+        return ("circle", tuple(map(float, self.center)), tuple(map(float, self.axis)), float(self.radius))
+
+
+@dataclass
+class LoopEdge:
+    """The whole outline of a flat face that mixes straight pieces and arcs (a plate with rounded corners,
+    a slot ...), where every wall stands square on the face. Rounded or bevelled as one piece."""
+    pts: np.ndarray      # (N, 3) points in order, the face on the left of the direction of travel (not closed)
+    n: np.ndarray        # outward unit normal of the flat face
+    convex: bool = True
+
+    kind = "loop"
+
+    @property
+    def perimeter(self) -> float:
+        d = np.roll(self.pts, -1, axis=0) - self.pts
+        return float(np.linalg.norm(d, axis=1).sum())
+
+    @property
+    def centroid(self) -> np.ndarray:
+        return self.pts.mean(axis=0)
+
+    def polyline(self, n: int = 0) -> np.ndarray:
+        return np.vstack([self.pts, self.pts[:1]])
+
+    def same_as(self, other) -> bool:
+        if getattr(other, "kind", "") != "loop":
+            return False
+        tol = 1e-4 * max(1.0, self.perimeter)
+        return (float(self.n @ other.n) > 0.999 and np.linalg.norm(self.centroid - other.centroid) < tol
+                and abs(self.perimeter - other.perimeter) < tol)
+
+    def ref(self):
+        return ("loop", tuple(map(float, self.centroid)), tuple(map(float, self.n)), float(self.perimeter))
+
+
+def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
+    """Outlines of flat faces made of straight pieces and arcs with square walls (see LoopEdge)."""
+    by_face: dict = {}
+    for (a_idx, b_idx), (e0, e1), ang in zip(adj, adj_edges, angles):
+        ra, rb = find(int(a_idx)), find(int(b_idx))
+        if ra == rb or ang < np.radians(1.0):
+            continue
+        for pl_tri, nb_tri, pr, nr in ((a_idx, b_idx, ra, rb), (b_idx, a_idx, rb, ra)):
+            if pr not in planar:
+                continue
+            n_pl = normals[pl_tri]
+            third_nb = v[[i for i in f[nb_tri] if i not in (e0, e1)][0]]
+            third_pl = v[[i for i in f[pl_tri] if i not in (e0, e1)][0]]
+            ok = abs(float(normals[nb_tri] @ n_pl)) < 0.1 and float(n_pl @ (third_nb - v[e0])) < -1e-9
+            by_face.setdefault(pr, []).append((int(e0), int(e1), ok, nr in planar, third_pl, n_pl))
+    out = []
+    for pr, segs in by_face.items():
+        comp: dict = {}
+
+        def vfind(x):
+            while comp.setdefault(x, x) != x:
+                comp[x] = comp[comp[x]]
+                x = comp[x]
+            return x
+
+        for e0, e1, *_ in segs:
+            ra, rb = vfind(e0), vfind(e1)
+            if ra != rb:
+                comp[rb] = ra
+        parts: dict = {}
+        for seg in segs:
+            parts.setdefault(vfind(seg[0]), []).append(seg)
+        for part in parts.values():
+            if not all(sg[2] for sg in part) or not any(sg[3] for sg in part) or all(sg[3] for sg in part):
+                continue   # needs both straight pieces (plane/plane) and arcs (plane/curved), all square and convex
+            nbrs: dict = {}
+            for e0, e1, *_ in part:
+                nbrs.setdefault(e0, []).append(e1)
+                nbrs.setdefault(e1, []).append(e0)
+            if any(len(x) != 2 for x in nbrs.values()):
+                continue
+            start = part[0][0]
+            order, prev, cur = [start], None, start
+            while len(order) <= len(part):
+                nxt = [x for x in nbrs[cur] if x != prev][0]
+                if nxt == start:
+                    break
+                order.append(nxt)
+                prev, cur = cur, nxt
+            if len(order) != len(part):
+                continue
+            pts = v[order]
+            n_pl = part[0][5]
+            t = pts[1] - pts[0]
+            left = np.cross(n_pl, t)
+            seg_pts = {order[0], order[1]}
+            ref_seg = next((sg for sg in part if {sg[0], sg[1]} == seg_pts), part[0])
+            if float((ref_seg[4] - pts[0]) @ left) < 0:
+                pts = pts[::-1].copy()
+            out.append(LoopEdge(pts.copy(), n_pl.copy(), True))
+    return out
+
+
+def compute_planar_edges(manifold: m3d.Manifold) -> list:
+    """Straight edges between two flat faces and full circles between a flat face and a cylinder."""
+    mesh = manifold.to_mesh()
+    return _planar_edges_from(mesh, manifold)
+
+
+def _planar_edges_from(mesh, manifold) -> list:
+    v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
+    f = np.asarray(mesh.tri_verts, dtype=np.int64)
+    if len(f) < 4:
+        return []
+    tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
+    normals = tm.face_normals
+    adj, adj_edges, angles = tm.face_adjacency, tm.face_adjacency_edges, tm.face_adjacency_angles
+
+    parent = np.arange(len(f))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    tol = 1e-6 * max(1.0, float(np.ptp(v, axis=0).max()))
+    areas = tm.area_faces
+    for a_idx, b_idx in adj:
+        if _coplanar(a_idx, b_idx, normals, v, f, areas, tol):
+            ra, rb = find(int(a_idx)), find(int(b_idx))
+            if ra != rb:
+                parent[rb] = ra
+    groups: dict = {}
+    for i in range(len(f)):
+        groups.setdefault(find(i), []).append(i)
+    curved = _curved_roots(v, f, tm, find, groups, adj, angles)
+    slivers = _sliver_roots(v, f, tm, groups)
+    planar = {r for r in groups if r not in curved and r not in slivers}
+
+    # collect boundary segments between two different planar faces
+    buckets: dict = {}
+    for (a_idx, b_idx), (e0, e1), ang in zip(adj, adj_edges, angles):
+        ra, rb = find(int(a_idx)), find(int(b_idx))
+        if ra == rb or ra not in planar or rb not in planar or ang < np.radians(1.0):
+            continue
+        key = (min(ra, rb), max(ra, rb))
+        third_a = v[[i for i in f[a_idx] if i not in (e0, e1)][0]]
+        third_b = v[[i for i in f[b_idx] if i not in (e0, e1)][0]]
+        if ra > rb:
+            a_idx, b_idx, third_a, third_b = b_idx, a_idx, third_b, third_a
+        buckets.setdefault(key, []).append((v[e0], v[e1], normals[a_idx], normals[b_idx], third_a, third_b))
+
+    edges: List[PlanarEdge] = []
+    for segs in buckets.values():
+        p0, p1 = segs[0][0], segs[0][1]
+        t = (p1 - p0) / np.linalg.norm(p1 - p0)
+        # order the pieces along the edge and merge those that touch
+        pieces = sorted(((float((a - p0) @ t), float((b - p0) @ t), a, b, n1, n2, ta, tb)
+                         for a, b, n1, n2, ta, tb in segs), key=lambda z: min(z[0], z[1]))
+        cur = None
+        for s0, s1, a, b, n1, n2, ta, tb in pieces:
+            lo, hi = (a, b) if s0 <= s1 else (b, a)
+            lo_s, hi_s = min(s0, s1), max(s0, s1)
+            if cur is not None and lo_s <= cur["hi_s"] + tol * 10:
+                if hi_s > cur["hi_s"]:
+                    cur["hi"], cur["hi_s"] = hi, hi_s
+                continue
+            if cur is not None:
+                edges.append(_edge_from(cur, t))
+            cur = {"lo": lo, "hi": hi, "hi_s": hi_s, "n1": n1, "n2": n2, "ta": ta, "tb": tb}
+        if cur is not None:
+            edges.append(_edge_from(cur, t))
+    lines = [e for e in edges if e is not None and e.length > 1e-6]
+    loops = _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar)
+    if loops:   # a straight piece that is part of such an outline is rounded together with it
+        def on_loop(e):
+            for lp in loops:
+                poly = lp.polyline()
+                if abs(float(lp.n @ (e.p0 - poly[0]))) > 1e-4 or abs(float(lp.n @ (e.p1 - poly[0]))) > 1e-4:
+                    continue
+                seg = poly[1:] - poly[:-1]
+                for q in (e.p0, (e.p0 + e.p1) / 2.0, e.p1):
+                    w = q - poly[:-1]
+                    tt = np.clip(np.einsum("ij,ij->i", w, seg) / np.maximum(np.einsum("ij,ij->i", seg, seg), 1e-18), 0, 1)
+                    if np.linalg.norm(w - tt[:, None] * seg, axis=1).min() > 1e-4:
+                        break
+                else:
+                    return True
+            return False
+        lines = [e for e in lines if not on_loop(e)]
+    return lines + loops + _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals)
+
+
+def _edge_from(c, t):
+    p0, p1 = c["lo"], c["hi"]
+    m = (p0 + p1) / 2.0
+
+    def inward(third):  # direction in that face's plane, perpendicular to the edge, away from it
+        w = third - m
+        w = w - (w @ t) * t
+        n = np.linalg.norm(w)
+        return w / n if n > 1e-12 else None
+
+    d1, d2 = inward(c["ta"]), inward(c["tb"])
+    if d1 is None or d2 is None:
+        return None
+    convex = float(c["n1"] @ (c["tb"] - m)) < 0
+    return PlanarEdge(p0, p1, c["n1"], c["n2"], d1, d2, convex)
+
+
+def match_edge(stored_p0, stored_p1, candidates: List[PlanarEdge], tol: float = 1e-3):
+    """The candidate lying on the same line as a stored edge (it may have been shortened by
+    earlier rounding at its ends). Returns the one overlapping most, or None."""
+    a = np.asarray(stored_p0, dtype=float)
+    b = np.asarray(stored_p1, dtype=float)
+    L = np.linalg.norm(b - a)
+    if L < 1e-9:
+        return None
+    t = (b - a) / L
+    best, best_overlap = None, 1e-6
+    for c in candidates:
+        for q in (c.p0, c.p1):
+            if np.linalg.norm((q - a) - ((q - a) @ t) * t) > tol * max(1.0, L):
+                break
+        else:
+            lo, hi = sorted((float((c.p0 - a) @ t), float((c.p1 - a) @ t)))
+            overlap = min(hi, L) - max(lo, 0.0)
+            if overlap > best_overlap:
+                best, best_overlap = c, overlap
+    return best
+
+
+def _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals) -> list:
+    """Closed loops where a flat face meets the strips of a cylinder whose axis is the face normal."""
+    # cluster the strips of one curved surface (shallow-angle neighbours belong together)
+    cl = {r: r for r in curved}
+
+    def cfind(x):
+        while cl[x] != x:
+            cl[x] = cl[cl[x]]
+            x = cl[x]
+        return x
+
+    for (a_idx, b_idx), ang in zip(adj, angles):
+        ra, rb = find(int(a_idx)), find(int(b_idx))
+        if ra != rb and ra in curved and rb in curved and ang < np.radians(25.0):
+            ca, cb = cfind(ra), cfind(rb)
+            if ca != cb:
+                cl[cb] = ca
+
+    buckets: dict = {}
+    for (a_idx, b_idx), (e0, e1), ang in zip(adj, adj_edges, angles):
+        ra, rb = find(int(a_idx)), find(int(b_idx))
+        if ra == rb or ang < np.radians(25.0):
+            continue
+        if ra in planar and rb in curved:
+            pl_tri, cu_tri, pr, cr = a_idx, b_idx, ra, rb
+        elif rb in planar and ra in curved:
+            pl_tri, cu_tri, pr, cr = b_idx, a_idx, rb, ra
+        else:
+            continue
+        third_pl = v[[i for i in f[pl_tri] if i not in (e0, e1)][0]]
+        third_cu = v[[i for i in f[cu_tri] if i not in (e0, e1)][0]]
+        buckets.setdefault((pr, cfind(cr)), []).append((int(e0), int(e1), pl_tri, cu_tri, third_pl, third_cu))
+
+    # group by flat face only, then split into connected loops (strips can hang together through slivers)
+    by_face: dict = {}
+    for (pr, _), segs in buckets.items():
+        by_face.setdefault(pr, []).extend(segs)
+    loops = []
+    for pr, segs in by_face.items():
+        comp = {}
+
+        def vfind(x):
+            while comp.setdefault(x, x) != x:
+                comp[x] = comp[comp[x]]
+                x = comp[x]
+            return x
+
+        for e0, e1, *_ in segs:
+            ra, rb = vfind(e0), vfind(e1)
+            if ra != rb:
+                comp[rb] = ra
+        parts: dict = {}
+        for seg in segs:
+            parts.setdefault(vfind(seg[0]), []).append(seg)
+        loops.extend((pr, part) for part in parts.values())
+
+    out = []
+    for pr, segs in loops:
+        n_plane = normals[segs[0][2]]
+        # every vertex of a closed loop has exactly two segments
+        deg: dict = {}
+        for e0, e1, *_ in segs:
+            deg[e0] = deg.get(e0, 0) + 1
+            deg[e1] = deg.get(e1, 0) + 1
+        if len(segs) < 8 or any(d != 2 for d in deg.values()):
+            continue  # open arcs and partial rounds are not supported
+        pts = v[list(deg.keys())]
+        # circle fit in the plane of the face
+        u = np.cross(n_plane, [1.0, 0.0, 0.0])
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(n_plane, [0.0, 1.0, 0.0])
+        u = u / np.linalg.norm(u)
+        w = np.cross(n_plane, u)
+        xy = np.stack([(pts - pts[0]) @ u, (pts - pts[0]) @ w], axis=1)
+        A = np.c_[2 * xy, np.ones(len(xy))]
+        sol, *_ = np.linalg.lstsq(A, (xy ** 2).sum(axis=1), rcond=None)
+        cx, cy = sol[0], sol[1]
+        R = float(np.sqrt(max(sol[2] + cx * cx + cy * cy, 0.0)))
+        resid = np.abs(np.hypot(xy[:, 0] - cx, xy[:, 1] - cy) - R)
+        if R < 1e-6 or resid.max() > 2e-3 * max(1.0, R):
+            continue
+        center = pts[0] + cx * u + cy * w
+        # the wall must be a cylinder around the face normal (wall strips perpendicular to it)
+        if any(abs(float(normals[cu] @ n_plane)) > 0.1 for _, _, _, cu, _, _ in segs):
+            continue
+        e0, e1, pl_tri, cu_tri, third_pl, third_cu = segs[0]
+        m = v[e0]
+        # which side of the circle the flat face lies on: use the centre of its triangle (a corner can sit
+        # exactly on the circle)
+        centroid = v[f[pl_tri]].mean(axis=0)
+        rho_pl = float(np.linalg.norm((centroid - center) - ((centroid - center) @ n_plane) * n_plane))
+        s1 = 1.0 if rho_pl > R else -1.0
+        s2 = 1.0 if float((third_cu - center) @ n_plane) > 0 else -1.0
+        convex = float(n_plane @ (third_cu - m)) < 0
+        out.append(CircularEdge(center, n_plane.copy(), R, s1, s2, convex, len(segs)))
+    return out
+
+
+def edge_from_ref(ref, candidates):
+    """The current edge a stored Fillet/Chamfer reference points at (lines may have been shortened)."""
+    if ref and ref[0] == "circle":
+        probe = CircularEdge(np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3]), 1.0, 1.0, True)
+        return next((c for c in candidates if getattr(c, "kind", "") == "circle" and probe.same_as(c)), None)
+    if ref and ref[0] == "loop":
+        c0, n0, per = np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3])
+        tol = 1e-3 * max(1.0, per)
+        return next((c for c in candidates if getattr(c, "kind", "") == "loop" and float(c.n @ n0) > 0.999
+                     and np.linalg.norm(c.centroid - c0) < tol and abs(c.perimeter - per) < tol), None)
+    lines = [c for c in candidates if getattr(c, "kind", "") == "line"]
+    return match_edge(ref[0], ref[1], lines)
+
+
+def ray_mesh_hit(mesh, ray_origin, ray_dir):
+    """Nearest hit of a ray with a RenderMesh (unrolled triangles). Returns (t, triangle index) or None."""
+    tri = np.asarray(mesh.vertices, dtype=np.float64).reshape(-1, 3, 3)
+    o, d = np.asarray(ray_origin, dtype=np.float64), np.asarray(ray_dir, dtype=np.float64)
+    v0, e1, e2 = tri[:, 0], tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]
+    p = np.cross(d, e2)
+    det = np.einsum("ij,ij->i", e1, p)
+    ok = np.abs(det) > 1e-12
+    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+    sv = o - v0
+    u = np.einsum("ij,ij->i", sv, p) * inv
+    q = np.cross(sv, e1)
+    w = (q @ d) * inv
+    t = np.einsum("ij,ij->i", e2, q) * inv
+    hit = ok & (u >= -1e-9) & (w >= -1e-9) & (u + w <= 1 + 1e-9) & (t > 1e-6)
+    if not hit.any():
+        return None
+    ts = np.where(hit, t, np.inf)
+    i = int(ts.argmin())
+    return float(ts[i]), i
+
+
+def smooth_patch_vertices(mesh, tri_idx: int, max_angle_deg: float = 35.0):
+    """Vertices of the smoothly connected surface around a triangle (a cylinder wall, a flat face, a sphere...).
+    Neighbouring triangles join while their normals differ by less than max_angle_deg."""
+    tri = np.asarray(mesh.vertices, dtype=np.float64).reshape(-1, 3, 3)
+    nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    ln = np.linalg.norm(nrm, axis=1)
+    nrm = nrm / np.where(ln > 0, ln, 1.0)[:, None]
+    scale = max(float(np.ptp(tri.reshape(-1, 3), axis=0).max()), 1.0)
+    keys = np.round(tri.reshape(-1, 3) / (scale * 1e-6)).astype(np.int64)
+    ids = {}
+    vid = np.array([ids.setdefault(tuple(k), len(ids)) for k in keys]).reshape(-1, 3)
+    by_vertex = {}
+    for t, row in enumerate(vid):
+        for x in row:
+            by_vertex.setdefault(int(x), []).append(t)
+    cos_min = math.cos(math.radians(max_angle_deg))
+    seen, stack = {tri_idx}, [tri_idx]
+    while stack:
+        t = stack.pop()
+        for x in vid[t]:
+            for nb in by_vertex[int(x)]:
+                if nb not in seen and float(nrm[t] @ nrm[nb]) >= cos_min:
+                    seen.add(nb)
+                    stack.append(nb)
+    return tri[sorted(seen)].reshape(-1, 3)

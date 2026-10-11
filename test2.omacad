@@ -1,0 +1,317 @@
+{
+  "name": "test2",
+  "units": "mm",
+  "parameters": [],
+  "timeline": [
+    {
+      "feature_id": "box_1",
+      "feature_type": "box",
+      "name": "Base Box",
+      "suppressed": false,
+      "length": 40.0,
+      "width": 40.0,
+      "height": 20.0,
+      "center": true,
+      "exprs": {}
+    },
+    {
+      "feature_id": "fillet_2",
+      "feature_type": "fillet",
+      "name": "Fillet 1",
+      "suppressed": false,
+      "edges": [
+        [
+          [
+            -20.0,
+            -20.0,
+            10.0
+          ],
+          [
+            20.0,
+            -20.0,
+            10.0
+          ]
+        ],
+        [
+          [
+            -20.0,
+            -20.0,
+            10.0
+          ],
+          [
+            -20.0,
+            20.0,
+            10.0
+          ]
+        ],
+        [
+          [
+            20.0,
+            -20.0,
+            10.0
+          ],
+          [
+            20.0,
+            20.0,
+            10.0
+          ]
+        ],
+        [
+          [
+            -20.0,
+            20.0,
+            10.0
+          ],
+          [
+            20.0,
+            20.0,
+            10.0
+          ]
+        ]
+      ],
+      "size": 15.0,
+      "kind": "fillet",
+      "exprs": {}
+    },
+    {
+      "feature_id": "feat_sketch_1",
+      "feature_type": "sketch",
+      "name": "Sketch 1",
+      "suppressed": false,
+      "sketch": {
+        "sketch_id": "sketch_1",
+        "name": "Sketch 1",
+        "plane": {
+          "name": "FACE",
+          "origin": [
+            0.0,
+            0.0,
+            -10.0
+          ],
+          "u_axis": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "v_axis": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "normal": [
+            0.0,
+            0.0,
+            -1.0
+          ]
+        },
+        "entities": [
+          {
+            "entity_id": "circle_1",
+            "entity_type": "circle",
+            "center": [
+              10.0,
+              -10.0
+            ],
+            "radius": 3.5000000000000004,
+            "is_construction": false
+          }
+        ],
+        "dimensions": [
+          {
+            "dim_id": "d1",
+            "name": "Diameter",
+            "dim_type": "DIAMETER",
+            "target_entity_id": "circle_1",
+            "value": 7.000000000000001,
+            "offset_distance": 12.0,
+            "refs": [],
+            "pts": [],
+            "expr": null
+          },
+          {
+            "dim_id": "d2",
+            "name": "Dim 2",
+            "dim_type": "PT_LINE_DIST",
+            "target_entity_id": "circle_1",
+            "value": 10.0,
+            "offset_distance": 12.0,
+            "refs": [
+              "ref:-20.000000,-20.000000,20.000000,-20.000000"
+            ],
+            "pts": [
+              "center"
+            ],
+            "expr": null
+          },
+          {
+            "dim_id": "d3",
+            "name": "Dim 3",
+            "dim_type": "PT_LINE_DIST",
+            "target_entity_id": "circle_1",
+            "value": 10.0,
+            "offset_distance": 12.0,
+            "refs": [
+              "ref:20.000000,20.000000,20.000000,-20.000000"
+            ],
+            "pts": [
+              "center"
+            ],
+            "expr": null
+          }
+        ],
+        "constraints": [],
+        "face_key": null,
+        "visible": false
+      },
+      "exprs": {}
+    },
+    {
+      "feature_id": "extrude_4",
+      "feature_type": "extrude",
+      "name": "Extrude 1",
+      "suppressed": false,
+      "sketch_id": "sketch_1",
+      "profile_idx": 0,
+      "distance": -50.0,
+      "operation": "cut",
+      "direction": "one_side",
+      "distance2": 10.0,
+      "exprs": {}
+    },
+    {
+      "feature_id": "fillet_5",
+      "feature_type": "fillet",
+      "name": "Chamfer 2",
+      "suppressed": false,
+      "edges": [
+        [
+          "circle",
+          [
+            10.000000047966132,
+            10.000000047966132,
+            -10.0
+          ],
+          [
+            0.0,
+            0.0,
+            -1.0
+          ],
+          3.4999999110537745
+        ]
+      ],
+      "size": 2.0,
+      "kind": "chamfer",
+      "exprs": {}
+    },
+    {
+      "feature_id": "pattern_6",
+      "feature_type": "pattern",
+      "name": "Mirror 1",
+      "suppressed": false,
+      "source_ids": [
+        "feat_sketch_1",
+        "extrude_4",
+        "fillet_5"
+      ],
+      "kind": "mirror",
+      "axis1": "x",
+      "count1": 3.0,
+      "spacing1": 20.0,
+      "axis2": "y",
+      "count2": 1.0,
+      "spacing2": 20.0,
+      "mirror_mode": "auto",
+      "about": "body",
+      "angle": 360.0,
+      "exprs": {}
+    }
+  ],
+  "sketches": [
+    {
+      "sketch_id": "sketch_1",
+      "name": "Sketch 1",
+      "plane": {
+        "name": "FACE",
+        "origin": [
+          0.0,
+          0.0,
+          -10.0
+        ],
+        "u_axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "v_axis": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          -1.0
+        ]
+      },
+      "entities": [
+        {
+          "entity_id": "circle_1",
+          "entity_type": "circle",
+          "center": [
+            10.0,
+            -10.0
+          ],
+          "radius": 3.5000000000000004,
+          "is_construction": false
+        }
+      ],
+      "dimensions": [
+        {
+          "dim_id": "d1",
+          "name": "Diameter",
+          "dim_type": "DIAMETER",
+          "target_entity_id": "circle_1",
+          "value": 7.000000000000001,
+          "offset_distance": 12.0,
+          "refs": [],
+          "pts": [],
+          "expr": null
+        },
+        {
+          "dim_id": "d2",
+          "name": "Dim 2",
+          "dim_type": "PT_LINE_DIST",
+          "target_entity_id": "circle_1",
+          "value": 10.0,
+          "offset_distance": 12.0,
+          "refs": [
+            "ref:-20.000000,-20.000000,20.000000,-20.000000"
+          ],
+          "pts": [
+            "center"
+          ],
+          "expr": null
+        },
+        {
+          "dim_id": "d3",
+          "name": "Dim 3",
+          "dim_type": "PT_LINE_DIST",
+          "target_entity_id": "circle_1",
+          "value": 10.0,
+          "offset_distance": 12.0,
+          "refs": [
+            "ref:20.000000,20.000000,20.000000,-20.000000"
+          ],
+          "pts": [
+            "center"
+          ],
+          "expr": null
+        }
+      ],
+      "constraints": [],
+      "face_key": null,
+      "visible": false
+    }
+  ],
+  "construction_planes": {}
+}

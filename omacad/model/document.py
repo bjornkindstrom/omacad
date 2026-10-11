@@ -1,0 +1,710 @@
+"""
+Omacad - Document Model
+Holds active bodies, sketches, origin reference geometry, and timeline.
+"""
+
+from dataclasses import dataclass
+from typing import Dict, Optional, List, Callable, Tuple
+import numpy as np
+from omacad.model.timeline import PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature, SphereFeature, ExtrudeFeature, SketchFeature
+from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
+from omacad.model.sketch_solver import solve_sketch, SolveResult
+from omacad.model import expr as exprlib
+from omacad.model.faces import in_plane_edges
+
+
+@dataclass
+class Parameter:
+    """A named value usable in any numeric field: 'width', or a formula such as 'width/2 + 3'."""
+    name: str
+    expr: str
+    comment: str = ""
+
+
+class Document:
+    """The root CAD model document."""
+
+    def __init__(self, name: str = "Omacad - Untitled"):
+        self.name: str = name
+        self.units: str = "mm"
+        self.bodies: Dict[str, Body] = {}
+        self.sketches: Dict[str, Sketch] = {}
+        self.timeline: Timeline = Timeline()
+
+        # Origin reference planes
+        self.origin_planes = {
+            "XY": SketchPlane.create_named("XY"),
+            "XZ": SketchPlane.create_named("XZ"),
+            "YZ": SketchPlane.create_named("YZ"),
+        }
+
+        # Construction (offset) planes: id -> dict(name, origin, normal, visible); absolute, not associative
+        self.construction_planes: Dict[str, dict] = {}
+
+        # Active sketch when in Sketch Mode
+        self.active_sketch: Optional[Sketch] = None
+
+        # Selection state
+        self.selected_body_ids: List[str] = []
+        self.selected_profile: Optional[Tuple[str, int]] = None  # (sketch_id, profile_idx)
+
+        # Undo / redo of sketch edits: entries are (sketch_id, snapshot_dict)
+        self.parameters: List[Parameter] = []
+        self.step_states: dict = {}
+        self.last_message: str = ""  # feedback from the last constraint/dimension operation
+        self.undo_stack: List[Tuple[str, dict]] = []
+        self.redo_stack: List[Tuple[str, dict]] = []
+
+        # Callbacks
+        self.change_listeners: List[Callable[[], None]] = []
+
+    def add_change_listener(self, listener: Callable[[], None]) -> None:
+        if listener not in self.change_listeners:
+            self.change_listeners.append(listener)
+
+    def notify_changed(self) -> None:
+        for listener in self.change_listeners:
+            try:
+                listener()
+            except Exception as e:
+                print(f"Error in document change listener: {e}")
+
+    # ---- Undo / redo (sketch edits) -------------------------------------------
+    UNDO_LIMIT = 200
+
+    def record_sketch_change(self, sketch: Sketch, before: dict) -> bool:
+        """Call after mutating a sketch with `before = sketch.to_dict()` taken first.
+        Pushes an undo step only if something actually changed."""
+        if before == sketch.to_dict():
+            return False
+        self.undo_stack.append((sketch.sketch_id, before))
+        del self.undo_stack[:-self.UNDO_LIMIT]
+        self.redo_stack.clear()
+        return True
+
+    def _swap_sketch_state(self, source: List, target: List) -> Optional[str]:
+        if not source:
+            return None
+        sketch_id, snapshot = source.pop()
+        sketch = self.sketches.get(sketch_id)
+        if sketch is None:
+            return self._swap_sketch_state(source, target)
+        target.append((sketch_id, sketch.to_dict()))
+        sketch.restore_from_dict(snapshot)
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return sketch.name
+
+    def undo(self) -> Optional[str]:
+        return self._swap_sketch_state(self.undo_stack, self.redo_stack)
+
+    def redo(self) -> Optional[str]:
+        return self._swap_sketch_state(self.redo_stack, self.undo_stack)
+
+    def add_box(self, length: float, width: float, height: float, center: bool = False, name: Optional[str] = None) -> Body:
+        feat_id = f"box_{len(self.timeline.features) + 1}"
+        feat_name = name or f"Box {len([f for f in self.timeline.features if f.feature_type == 'box']) + 1}"
+        feat = BoxFeature(feat_id, feat_name, length, width, height, center)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return self.bodies[f"body_{feat_id}"]
+
+    def add_cylinder(self, radius: float, height: float, center: bool = False, name: Optional[str] = None) -> Body:
+        feat_id = f"cylinder_{len(self.timeline.features) + 1}"
+        feat_name = name or f"Cylinder {len([f for f in self.timeline.features if f.feature_type == 'cylinder']) + 1}"
+        feat = CylinderFeature(feat_id, feat_name, radius, height, center)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return self.bodies[f"body_{feat_id}"]
+
+    def add_sphere(self, radius: float, name: Optional[str] = None) -> Body:
+        feat_id = f"sphere_{len(self.timeline.features) + 1}"
+        feat_name = name or f"Sphere {len([f for f in self.timeline.features if f.feature_type == 'sphere']) + 1}"
+        feat = SphereFeature(feat_id, feat_name, radius)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return self.bodies[f"body_{feat_id}"]
+
+    def refresh_sketch_references(self, sketch: Sketch) -> None:
+        """Face outlines of the bodies that exist now, so regions bounded by them can be profiles."""
+        sketch.reference_segments = in_plane_edges(self.bodies.values(), sketch.plane)
+        sketch.solve_profiles()
+
+    def start_sketch(self, plane_name: str = "XY") -> Sketch:
+        plane = self.origin_planes.get(plane_name.upper(), self.origin_planes["XY"])
+        sketch_id = f"sketch_{len(self.sketches) + 1}"
+        sketch_name = f"Sketch {len(self.sketches) + 1}"
+        sketch = Sketch(sketch_id, sketch_name, plane)
+        self.refresh_sketch_references(sketch)
+        self.active_sketch = sketch
+        self.sketches[sketch_id] = sketch
+        self.notify_changed()
+        return sketch
+
+    def start_sketch_on_plane(self, plane: SketchPlane) -> Sketch:
+        """Starts a sketch on an arbitrary plane (origin plane or body face)."""
+        sketch_id = f"sketch_{len(self.sketches) + 1}"
+        sketch = Sketch(sketch_id, f"Sketch {len(self.sketches) + 1}", plane)
+        self.refresh_sketch_references(sketch)
+        self.active_sketch = sketch
+        self.sketches[sketch_id] = sketch
+        self.notify_changed()
+        return sketch
+
+    def face_to_sketch(self, face):
+        """A flat body face as a sketch (its outline, holes included) so it can be extruded like any
+        profile: pull it into the body to cut a pocket, or out to build up. Returns (sketch, profile
+        index). The same face reuses its sketch."""
+        from shapely.geometry import Polygon
+        from shapely.ops import unary_union
+        plane = SketchPlane.from_face(face.normal, face.origin)
+        o = np.asarray(plane.origin, dtype=float)
+        ua, va = np.asarray(plane.u_axis, dtype=float), np.asarray(plane.v_axis, dtype=float)
+        tris = [Polygon([(float((p - o) @ ua), float((p - o) @ va)) for p in tri]) for tri in face.tris]
+        shape = unary_union([t for t in tris if t.is_valid and t.area > 0]).buffer(0)
+        if shape.geom_type == "MultiPolygon":
+            shape = max(shape.geoms, key=lambda g: g.area)
+        shape = shape.simplify(1e-6)
+        c = shape.representative_point()
+        key = (round(float(face.normal[0]), 4), round(float(face.normal[1]), 4), round(float(face.normal[2]), 4),
+               round(float(np.dot(face.normal, face.origin)), 3), round(shape.area, 2), round(c.x, 2), round(c.y, 2))
+
+        def best_profile(sk):
+            return min(range(len(sk.profiles)), key=lambda i: abs(sk.profiles[i].area - shape.area)) if sk.profiles else None
+
+        for sk in self.sketches.values():
+            if sk.face_key == key and sk.profiles:
+                return sk, best_profile(sk)
+        n = len([k for k in self.sketches.values() if k.face_key]) + 1
+        sketch_id = f"sketch_{len(self.sketches) + 1}"
+        sk = Sketch(sketch_id, f"Face {n}", plane)
+        sk.face_key = key
+        sk.visible = False  # a helper: it only supplies the outline for extruding
+        self.refresh_sketch_references(sk)
+        sk.add_loop(list(shape.exterior.coords)[:-1])
+        for ring in shape.interiors:
+            sk.add_loop(list(ring.coords)[:-1])
+        self.sketches[sketch_id] = sk
+        self.timeline.add_feature(SketchFeature(f"feat_{sketch_id}", sk.name, sk))
+        self.notify_changed()
+        return sk, best_profile(sk)
+
+    def hide_used_sketches(self) -> None:
+        """Sketches that already made a solid (extrude/revolve) are hidden so they stop cluttering the
+        view; the eye in the browser shows them again."""
+        used = {getattr(f, "sketch_id", None) for f in self.timeline.features if f.feature_type in ("extrude", "revolve")}
+        for sk in self.sketches.values():
+            if sk.sketch_id in used and sk is not self.active_sketch:
+                sk.visible = False
+
+    def finish_sketch(self) -> Optional[Sketch]:
+        if not self.active_sketch:
+            return None
+        sketch = self.active_sketch
+        self.active_sketch = None
+        # Add to timeline if not already there
+        feat_id = f"feat_{sketch.sketch_id}"
+        if not any(f.feature_id == feat_id for f in self.timeline.features):
+            feat = SketchFeature(feat_id, sketch.name, sketch)
+            self.timeline.add_feature(feat)
+        else:
+            # an existing sketch was edited: everything built on it must follow
+            self.timeline.recompute(self)
+        self.hide_used_sketches()
+        self.notify_changed()
+        return sketch
+
+    def edit_sketch(self, sketch_id: str) -> Optional[Sketch]:
+        sketch = self.sketches.get(sketch_id)
+        if sketch:
+            sketch.visible = True
+            self.active_sketch = sketch
+            self.notify_changed()
+            return sketch
+        return None
+
+    def add_fillet(self, edges, size: float, kind: str = "fillet", exprs=None) -> FilletFeature:
+        """Fillet or chamfer the given edges ((p0, p1) world coordinates each)."""
+        n = len([f for f in self.timeline.features if f.feature_type == "fillet"]) + 1
+        feat_id = f"fillet_{len(self.timeline.features) + 1}"
+        feat = FilletFeature(feat_id, f"{'Chamfer' if kind == 'chamfer' else 'Fillet'} {n}", edges, size, kind)
+        feat.exprs = dict(exprs or {})
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.hide_used_sketches()
+        self.notify_changed()
+        return feat
+
+    def add_pattern(self, source_ids, kind: str = "linear", exprs=None, **params) -> PatternFeature:
+        """Copy what the given steps did (evenly spaced, mirrored or around an axis)."""
+        self.timeline.recompute(self)  # makes sure the before/after states of the steps are current
+        n = len([f for f in self.timeline.features if f.feature_type == "pattern"]) + 1
+        names = {"linear": "Pattern", "mirror": "Mirror", "circular": "Circular pattern"}
+        feat = PatternFeature(f"pattern_{len(self.timeline.features) + 1}", f"{names.get(kind, 'Pattern')} {n}",
+                              source_ids, kind, **params)
+        feat.exprs = dict(exprs or {})
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
+    def extrude_profile(
+        self,
+        sketch_id: str,
+        profile_idx: int,
+        distance: float,
+        operation: str = "new_body",
+        name: Optional[str] = None,
+        direction: str = "one_side",
+        distance2: float = 0.0,
+    ) -> None:
+        feat_id = f"extrude_{len(self.timeline.features) + 1}"
+        feat_name = name or f"Extrude {len([f for f in self.timeline.features if f.feature_type == 'extrude']) + 1}"
+        feat = ExtrudeFeature(feat_id, feat_name, sketch_id, profile_idx, distance, operation, direction, distance2)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.hide_used_sketches()
+        self.notify_changed()
+
+    def select_body(self, body_id: Optional[str], multi: bool = False) -> None:
+        if not multi:
+            for b in self.bodies.values():
+                b.selected = False
+            self.selected_body_ids = []
+
+        if body_id and body_id in self.bodies:
+            self.bodies[body_id].selected = True
+            if body_id not in self.selected_body_ids:
+                self.selected_body_ids.append(body_id)
+
+        self.notify_changed()
+
+    # ---- Parameters ---------------------------------------------------------------------
+    def evaluate_parameters(self, params=None):
+        """(values, errors). Parameters may refer to ones defined later; cycles and unknown names
+        are reported per parameter."""
+        pending = list(self.parameters if params is None else params)
+        values: Dict[str, float] = {}
+        progress = True
+        while pending and progress:
+            progress = False
+            for q in list(pending):
+                try:
+                    values[q.name] = exprlib.evaluate(q.expr, values)
+                except ValueError:
+                    continue
+                pending.remove(q)
+                progress = True
+        errors: Dict[str, str] = {}
+        for q in pending:
+            try:
+                exprlib.evaluate(q.expr, values)
+            except ValueError as e:
+                msg = str(e)
+                errors[q.name] = "circular or unresolved reference" if msg.startswith("unknown name") else msg
+        return values, errors
+
+    def parameter_values(self) -> Dict[str, float]:
+        return self.evaluate_parameters()[0]
+
+    def validate_parameters(self, params) -> List[str]:
+        """Problems that make a parameter list unusable (empty/duplicate/reserved names, errors)."""
+        problems, seen = [], set()
+        for q in params:
+            if not exprlib.is_valid_name(q.name):
+                problems.append(f"'{q.name}' is not a valid parameter name (letters, digits and _, not starting with a digit; "
+                                f"x, e, pi and function names are reserved).")
+            elif q.name in seen:
+                problems.append(f"The name '{q.name}' is used twice.")
+            seen.add(q.name)
+        _, errors = self.evaluate_parameters(params)
+        problems += [f"{n}: {m}" for n, m in errors.items()]
+        return problems
+
+    def set_parameters(self, params) -> List[str]:
+        """Replaces the parameter list and rebuilds the model. Returns problems (nothing is changed then)."""
+        problems = self.validate_parameters(params)
+        if problems:
+            return problems
+        old = self.parameters
+        self.parameters = [Parameter(q.name.strip(), q.expr.strip(), q.comment) for q in params]
+        # a renamed/removed parameter that is still used would leave formulas dangling: report it
+        dangling = self.unresolved_formulas()
+        if dangling:
+            self.parameters = old
+            return dangling
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return []
+
+    def unresolved_formulas(self) -> List[str]:
+        values = self.parameter_values()
+        bad = []
+        for sk in self.sketches.values():
+            for d in sk.dimensions:
+                if d.expr:
+                    try:
+                        exprlib.evaluate(d.expr, values)
+                    except ValueError as e:
+                        bad.append(f"{sk.name} {d.dim_id} uses '{d.expr}': {e}")
+        for f in self.timeline.features:
+            for key, e in f.exprs.items():
+                try:
+                    exprlib.evaluate(e, values)
+                except ValueError as err:
+                    bad.append(f"{f.name} {key} uses '{e}': {err}")
+        return bad
+
+    def refresh_parameters(self) -> List[str]:
+        """Re-evaluates every formula against the current parameters and updates dimensions and steps."""
+        values, errors = self.evaluate_parameters()
+        exprlib.set_variables(values)
+        messages = [f"{n}: {m}" for n, m in errors.items()]
+        for sk in list(self.sketches.values()):
+            for dim in sk.dimensions:
+                if not dim.expr:
+                    continue
+                try:
+                    v = exprlib.evaluate(dim.expr, values)
+                except ValueError as e:
+                    messages.append(f"{sk.name} {dim.dim_id}: {e}")
+                    continue
+                if abs(v - dim.value) > 1e-9:
+                    if not self._apply_dimension_value(sk, dim, v):
+                        messages.append(f"{sk.name} {dim.dim_id}: {self.last_message}")
+        for f in self.timeline.features:
+            for key, e in f.exprs.items():
+                try:
+                    setattr(f, key, float(exprlib.evaluate(e, values)))
+                except (ValueError, AttributeError) as err:
+                    messages.append(f"{f.name} {key}: {err}")
+        if messages:
+            self.last_message = "; ".join(messages)
+        return messages
+
+    def _apply_dimension_value(self, sketch, dim, value: float) -> bool:
+        """Sets a dimension and lets the solver move the geometry; restores it if that is impossible."""
+        before = sketch.to_dict()
+        if value <= 0.001 and dim.dim_type != "PT_LINE_DIST":
+            self.last_message = "value must be positive"
+            return False
+        if not sketch.set_dimension_value(dim.dim_id, value):
+            return False
+        res = self._solve_anchored(sketch, dim)
+        if not res.ok:
+            sketch.restore_from_dict(before)
+            self.last_message = res.message
+            return False
+        return True
+
+    # ---- Editing the history (timeline) ----------------------------------------------
+    EDITABLE = {
+        "box": ("length", "width", "height", "center"),
+        "cylinder": ("radius", "height", "center"),
+        "sphere": ("radius",),
+        "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "operation"),
+        "revolve": ("sketch_id", "profile_idx", "segments", "operation"),
+        "combine": ("operation",),
+        "fillet": ("size", "kind"),
+        "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
+                    "mirror_mode", "about", "angle"),
+    }
+
+    def edit_feature(self, index: int, **params) -> bool:
+        """Changes the parameters of a step and rebuilds everything after it."""
+        if not (0 <= index < len(self.timeline.features)):
+            return False
+        feat = self.timeline.features[index]
+        allowed = self.EDITABLE.get(feat.feature_type, ())
+        changed = False
+        if "exprs" in params:  # formulas for fields; fields without one go back to plain numbers
+            new = {k: v for k, v in (params.pop("exprs") or {}).items() if k in allowed and v}
+            if new != feat.exprs:
+                feat.exprs = new
+                changed = True
+        for key, value in params.items():
+            if key in allowed and getattr(feat, key) != value:
+                setattr(feat, key, float(value) if isinstance(getattr(feat, key), float) else value)
+                changed = True
+        if changed:
+            self.timeline.recompute(self)
+            self.notify_changed()
+        return changed
+
+    def rename_feature(self, index: int, name: str) -> bool:
+        name = name.strip()
+        if not name or not (0 <= index < len(self.timeline.features)):
+            return False
+        feat = self.timeline.features[index]
+        feat.name = name
+        if isinstance(feat, SketchFeature):
+            feat.sketch.name = name
+        self.timeline.recompute(self)  # bodies take their name from the feature that made them
+        self.notify_changed()
+        return True
+
+    def toggle_suppress(self, index: int) -> bool:
+        """Switches a step off/on without deleting it."""
+        if not (0 <= index < len(self.timeline.features)):
+            return False
+        feat = self.timeline.features[index]
+        feat.suppressed = not feat.suppressed
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return feat.suppressed
+
+    def dependents_of(self, index: int) -> list:
+        """Indices of later steps that need step `index` (extrudes of a sketch, combines of its bodies)."""
+        feats = self.timeline.features
+        feat = feats[index]
+        out = []
+        for j in range(index + 1, len(feats)):
+            other = feats[j]
+            uses_sketch = (isinstance(feat, SketchFeature)
+                           and getattr(other, "sketch_id", None) == feat.sketch.sketch_id)
+            body_ids = {f"body_{feat.feature_id}"}
+            uses_body = (other.feature_type == "combine"
+                         and (other.target_body_id in body_ids or other.tool_body_id in body_ids))
+            if uses_sketch or uses_body:
+                out.append(j)
+        return out
+
+    def delete_feature(self, index: int, with_dependents: bool = True) -> list:
+        """Removes a step (and, by default, the steps built on it). Returns the removed names."""
+        if not (0 <= index < len(self.timeline.features)):
+            return []
+        doomed = {index} | (set(self.dependents_of(index)) if with_dependents else set())
+        # dependents of dependents (e.g. a combine of a body made by a deleted extrude)
+        grew = True
+        while grew and with_dependents:
+            grew = False
+            for i in sorted(doomed):
+                for j in self.dependents_of(i):
+                    if j not in doomed:
+                        doomed.add(j)
+                        grew = True
+        removed = [self.timeline.features[i].name for i in sorted(doomed)]
+        t = self.timeline
+        t.marker_index -= sum(1 for i in doomed if i < t.marker_index)
+        t.features = [f for i, f in enumerate(t.features) if i not in doomed]
+        t.marker_index = max(0, min(t.marker_index, len(t.features)))
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return removed
+
+    def rename_item(self, kind: str, item_id: str, name: str) -> bool:
+        """Renames a sketch or body. The creating feature is renamed too, so the name survives
+        recompute, save and load."""
+        name = name.strip()
+        if not name:
+            return False
+        if kind == "sketch":
+            sketch = self.sketches.get(item_id)
+            if not sketch:
+                return False
+            sketch.name = name
+            for f in self.timeline.features:
+                if isinstance(f, SketchFeature) and f.sketch is sketch:
+                    f.name = name
+        elif kind == "body":
+            body = self.bodies.get(item_id)
+            if not body:
+                return False
+            body.name = name
+            for f in self.timeline.features:
+                if f"body_{f.feature_id}" == item_id:
+                    f.name = name
+        else:
+            return False
+        self.notify_changed()
+        return True
+
+    def toggle_body_visibility(self, body_id: str) -> None:
+        if body_id in self.bodies:
+            self.bodies[body_id].visible = not self.bodies[body_id].visible
+            self.notify_changed()
+
+    def add_construction_plane(self, base_plane, distance: float, name: str = None) -> str:
+        """A plane parallel to `base_plane`, `distance` mm along its normal."""
+        n = np.asarray(base_plane.normal, dtype=float)
+        n = n / np.linalg.norm(n)
+        pid = f"plane_{len(self.construction_planes) + 1}"
+        while pid in self.construction_planes:
+            pid += "_"
+        origin = np.asarray(base_plane.origin, dtype=float) + n * float(distance)
+        self.construction_planes[pid] = {"name": name or f"Plane {len(self.construction_planes) + 1}",
+                                         "origin": [float(x) for x in origin], "normal": [float(x) for x in n], "visible": True}
+        self.notify_changed()
+        return pid
+
+    def construction_plane(self, pid: str):
+        from omacad.model.sketch import SketchPlane
+        c = self.construction_planes[pid]
+        return SketchPlane.from_face(np.array(c["normal"]), np.array(c["origin"]), name="PLANE")
+
+    def delete_construction_plane(self, pid: str) -> None:
+        if self.construction_planes.pop(pid, None) is not None:
+            self.notify_changed()
+
+    def toggle_construction_plane(self, pid: str) -> None:
+        if pid in self.construction_planes:
+            self.construction_planes[pid]["visible"] = not self.construction_planes[pid]["visible"]
+            self.notify_changed()
+
+    def toggle_sketch_visibility(self, sketch_id: str) -> None:
+        if sketch_id in self.sketches:
+            self.sketches[sketch_id].visible = not self.sketches[sketch_id].visible
+            self.notify_changed()
+
+    def delete_body(self, body_id: str) -> None:
+        if body_id in self.bodies:
+            del self.bodies[body_id]
+            self.notify_changed()
+
+    def delete_sketch_entities(self, sketch_id: str, entity_ids) -> int:
+        """Deletes sketch entities and recomputes features that depend on the sketch."""
+        sketch = self.sketches.get(sketch_id)
+        if not sketch:
+            return 0
+        before = sketch.to_dict()
+        n = sketch.delete_entities(entity_ids)
+        self.record_sketch_change(sketch, before)
+        if n:
+            self.timeline.recompute(self)
+            self.notify_changed()
+        return n
+
+    # ---- Constraints ---------------------------------------------------------
+    DRIVING_DIMS = ("LENGTH", "DIAMETER", "RADIUS")
+
+    def add_constraints(self, sketch_id: str, specs) -> bool:
+        """specs: [(ctype, [entity ids], [point names])]. Solves immediately; on a conflict the
+        dimensions of the involved entities are released once, and if it still fails the sketch is
+        restored. The outcome message is left in self.last_message."""
+        sketch = self.sketches.get(sketch_id)
+        if not sketch or not specs:
+            return False
+        before = sketch.to_dict()
+        for ctype, refs, pts in specs:
+            sketch.constraints.append(SketchConstraint(sketch.new_constraint_id(), ctype, list(refs), list(pts)))
+        res = solve_sketch(sketch)
+        released = 0
+        if not res.ok:
+            involved = {r for _, refs, _ in specs for r in refs}
+            keep = [d for d in sketch.dimensions
+                    if not (d.target_entity_id in involved and d.dim_type in self.DRIVING_DIMS)]
+            released = len(sketch.dimensions) - len(keep)
+            if released:
+                sketch.dimensions = keep
+                res = solve_sketch(sketch)
+        if not res.ok:
+            sketch.restore_from_dict(before)
+            self.last_message = res.message + " - constraint not added."
+            return False
+        self.record_sketch_change(sketch, before)
+        self.last_message = self.sketch_status(sketch) + (f" ({released} conflicting dimension(s) released)" if released else "")
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return True
+
+    def auto_constrain(self, sketch: Sketch, specs) -> int:
+        """Adds constraints without notifying or recording undo (used inside a drawing step that
+        records its own undo). Constraints that would not solve are dropped. Returns how many stuck."""
+        added = 0
+        for ctype, refs, pts in specs:
+            c = SketchConstraint(sketch.new_constraint_id(), ctype, list(refs), list(pts))
+            sketch.constraints.append(c)
+            snapshot = sketch.to_dict()
+            if solve_sketch(sketch).ok:
+                added += 1
+            else:
+                sketch.constraints.remove(c)
+                sketch.restore_from_dict(snapshot)
+        return added
+
+    def remove_constraint(self, sketch_id: str, cid: str) -> bool:
+        sketch = self.sketches.get(sketch_id)
+        if not sketch or not any(c.cid == cid for c in sketch.constraints):
+            return False
+        before = sketch.to_dict()
+        sketch.constraints = [c for c in sketch.constraints if c.cid != cid]
+        solve_sketch(sketch)
+        self.record_sketch_change(sketch, before)
+        self.last_message = "Constraint removed. " + self.sketch_status(sketch)
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return True
+
+    @staticmethod
+    def sketch_status(sketch: Sketch) -> str:
+        if sketch.dof is None:
+            return ""
+        return "Fully defined" if sketch.dof == 0 else f"Under defined ({sketch.dof} DOF)"
+
+    def add_dimension_constraint(self, sketch_id: str, dim_type: str, target: str, value: float,
+                                 refs=(), pts=(), offset: float = 12.0, expr: Optional[str] = None) -> bool:
+        """Adds a driving dimension (angle, distance ...) and solves. Restores the sketch and returns
+        False with a message if it conflicts with existing constraints."""
+        sketch = self.sketches.get(sketch_id)
+        if not sketch:
+            return False
+        before = sketch.to_dict()
+        sketch.add_dimension(dim_type, target, value, offset_distance=offset, refs=list(refs), pts=list(pts))
+        dim = sketch.dimensions[-1]
+        dim.expr = expr
+        res = self._solve_anchored(sketch, dim)
+        if not res.ok:
+            sketch.restore_from_dict(before)
+            self.last_message = res.message + " - dimension not added."
+            self.notify_changed()
+            return False
+        self.record_sketch_change(sketch, before)
+        self.last_message = f"Added {dim.dim_id}. " + self.sketch_status(sketch)
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return True
+
+    def _solve_anchored(self, sketch, dim) -> "SolveResult":
+        """Solve holding the dimension's anchor still; if other constraints need that anchor to move
+        (e.g. a diameter change that shifts a circle held at an edge distance) retry without it."""
+        anchor = self._anchor_for(dim)
+        res = solve_sketch(sketch, **anchor)
+        if not res.ok and anchor:
+            res = solve_sketch(sketch)
+        return res
+
+    @staticmethod
+    def _anchor_for(dim) -> dict:
+        """What stays put while a dimension is solved/edited: the dimension grows from its first object."""
+        if any(r.startswith("ref:") for r in dim.refs):
+            return {}  # measured to a fixed face edge: the dimensioned point is the only thing that can move
+        if dim.dim_type == "ANGLE":
+            return {"fixed_ids": [dim.target_entity_id]}
+        if dim.dim_type in ("DISTANCE", "HORIZ_DIST", "VERT_DIST", "PT_LINE_DIST") and dim.pts:
+            return {"pinned": [(dim.target_entity_id, "center" if dim.pts[0] in ("edge_near", "edge_far") else dim.pts[0])]}
+        if dim.dim_type == "LENGTH":
+            return {"pinned": [(dim.target_entity_id, "p1")]}
+        return {"pinned": [(dim.target_entity_id, "center")]}
+
+    def update_dimension(self, sketch_id: str, dim_id: str, new_value: float, expr: Optional[str] = None) -> bool:
+        """Parametrically updates a sketch dimension and recomputes all downstream timeline features."""
+        sketch = self.sketches.get(sketch_id)
+        before = sketch.to_dict() if sketch else None
+        if sketch and sketch.set_dimension_value(dim_id, new_value):
+            dim = next((d for d in sketch.dimensions if d.dim_id == dim_id), None)
+            if dim is not None:
+                dim.expr = expr
+            res = self._solve_anchored(sketch, dim) if dim is not None else solve_sketch(sketch)
+            if not res.ok:
+                sketch.restore_from_dict(before)
+                self.last_message = res.message + " - dimension unchanged."
+                self.notify_changed()
+                return False
+            self.record_sketch_change(sketch, before)
+            self.timeline.recompute(self)
+            self.notify_changed()
+            return True
+        return False

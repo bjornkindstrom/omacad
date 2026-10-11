@@ -1,0 +1,107 @@
+"""
+Omacad - Editing steps of the parametric history (timeline).
+
+Each step type reuses the dialog it was created with, filled with its current values.
+Accepting rebuilds everything after the step.
+"""
+
+from PySide6.QtWidgets import QMessageBox
+
+from omacad.ui.dialogs import BoxDialog, CylinderDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog
+
+DIRECTIONS = ["one_side", "symmetric", "two_sides"]
+OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as the Extrude dialog
+
+
+def can_edit(feature) -> bool:
+    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern")
+
+
+def edit_feature(win, doc, index: int) -> bool:
+    """Opens the right editor for step `index`. Sketches are edited in sketch mode (returns False)."""
+    feat = doc.timeline.features[index]
+    t = feat.feature_type
+    if t == "extrude":
+        dlg = ExtrudeDialog(doc, win)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        dlg.select_profile((feat.sketch_id, feat.profile_idx))
+        dlg.cmb_dir.setCurrentIndex(DIRECTIONS.index(feat.direction) if feat.direction in DIRECTIONS else 0)
+        dlg.spn_dist.setValue(feat.distance)
+        dlg.spn_dist2.setValue(abs(feat.distance2))
+        if feat.exprs.get("distance"):
+            dlg.spn_dist.set_expression(feat.exprs["distance"])
+        if feat.exprs.get("distance2"):
+            dlg.spn_dist2.set_expression(feat.exprs["distance2"])
+        dlg.cmb_op.setCurrentIndex(OPERATIONS.index(feat.operation) if feat.operation in OPERATIONS else 0)
+        if not dlg.exec():
+            return False
+        s_id, p_idx, dist, op = dlg.get_values()
+        direction, dist2 = dlg.get_direction()
+        if s_id is None:
+            return False
+        if op == "auto":  # decide with the step's own parameters, as when it was made
+            from omacad.model.timeline import ExtrudeFeature
+            op = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, "auto", direction, dist2).resolve_operation(doc)
+        return doc.edit_feature(index, sketch_id=s_id, profile_idx=p_idx, distance=dist,
+                                direction=direction, distance2=dist2, operation=op, exprs=dlg.get_expressions())
+    if t == "box":
+        dlg = BoxDialog(win)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        dlg.spn_length.setValue(feat.length)
+        dlg.spn_width.setValue(feat.width)
+        dlg.spn_height.setValue(feat.height)
+        dlg.chk_center.setChecked(feat.center)
+        for key, spin in (("length", dlg.spn_length), ("width", dlg.spn_width), ("height", dlg.spn_height)):
+            if feat.exprs.get(key):
+                spin.set_expression(feat.exprs[key])
+        if not dlg.exec():
+            return False
+        l, w, h, center = dlg.get_values()
+        return doc.edit_feature(index, length=l, width=w, height=h, center=center, exprs=dlg.get_expressions())
+    if t == "cylinder":
+        dlg = CylinderDialog(win)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        dlg.spn_radius.setValue(feat.radius)
+        dlg.spn_height.setValue(feat.height)
+        dlg.chk_center.setChecked(feat.center)
+        for key, spin in (("radius", dlg.spn_radius), ("height", dlg.spn_height)):
+            if feat.exprs.get(key):
+                spin.set_expression(feat.exprs[key])
+        if not dlg.exec():
+            return False
+        r, h, center = dlg.get_values()
+        return doc.edit_feature(index, radius=r, height=h, center=center, exprs=dlg.get_expressions())
+    if t == "sphere":
+        dlg = SphereDialog(win)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        dlg.spn_radius.setValue(feat.radius)
+        if feat.exprs.get("radius"):
+            dlg.spn_radius.set_expression(feat.exprs["radius"])
+        if not dlg.exec():
+            return False
+        return doc.edit_feature(index, radius=dlg.get_values(), exprs=dlg.get_expressions())
+    if t == "fillet":
+        dlg = RoundEdgesDialog(win, feat.kind, feat.size, editing=True)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        if feat.exprs.get("size"):
+            dlg.spn_size.set_expression(feat.exprs["size"])
+        if not dlg.exec():
+            return False
+        return doc.edit_feature(index, size=dlg.spn_size.value(), kind=dlg.kind(), exprs=dlg.get_expressions())
+    if t == "pattern":
+        dlg = PatternDialog(doc, win, feat)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        if not dlg.exec():
+            return False
+        return doc.edit_feature(index, source_ids=dlg.source_ids(), kind=dlg.kind(), exprs=dlg.get_expressions(), **dlg.get_params())
+    QMessageBox.information(win, "Edit", f"{feat.name} can't be edited here yet.")
+    return False
+
+
+def confirm_delete(win, doc, index: int) -> bool:
+    deps = doc.dependents_of(index)
+    names = ", ".join(doc.timeline.features[i].name for i in deps)
+    text = f"Delete {doc.timeline.features[index].name}?"
+    if deps:
+        text += f"\n\nThese steps are built on it and will be deleted too:\n{names}"
+    return QMessageBox.question(win, "Delete step", text) == QMessageBox.StandardButton.Yes
