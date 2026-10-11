@@ -19,6 +19,7 @@ RECT_TOOLS = {
     "RECT": ("2-Point\nRect (R)", "🔲"),
     "CENTER_RECT": ("Center\nRect", "⛶"),
     "ROUNDED_RECT": ("Rounded\nRect", "▢"),
+    "CENTER_ROUNDED_RECT": ("Center\nRounded", "▣"),
 }
 
 

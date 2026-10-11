@@ -42,3 +42,14 @@ def test_outline_preview_stays_inside_the_box():
     pts = Sketch.rounded_rect_outline((10, 5), (50, 25), 4.0)
     assert min(p[0] for p in pts) == pytest.approx(10) and max(p[0] for p in pts) == pytest.approx(50)
     assert min(p[1] for p in pts) == pytest.approx(5) and max(p[1] for p in pts) == pytest.approx(25)
+
+
+def test_center_rounded_rect_is_centred_and_matches_formula():
+    sk = Document().start_sketch("XY")
+    sk.add_center_rounded_rect((5.0, -3.0), (25.0, 9.0), 3.0)  # 40 x 24 around (5, -3)
+    assert len([e for e in sk.entities if e.entity_type == "arc"]) == 4
+    from shapely.geometry import Polygon
+    poly = Polygon(sk.profiles[0].exterior_pts)
+    cx, cy = poly.centroid.x, poly.centroid.y
+    assert (cx, cy) == pytest.approx((5.0, -3.0), abs=1e-6)
+    assert poly.area == pytest.approx(40 * 24 - (4 - math.pi) * 9.0, rel=2e-3)

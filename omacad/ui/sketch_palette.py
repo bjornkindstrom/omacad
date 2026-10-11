@@ -57,7 +57,7 @@ class SketchPalette(QFrame):
         # Header
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
-        lbl_title = QLabel("SKETCH PALETTE  ⠿")
+        self.lbl_title = lbl_title = QLabel("SKETCH PALETTE  ⠿")
         lbl_title.setToolTip("Drag to move")
         lbl_title.setCursor(Qt.CursorShape.SizeAllCursor)
         style(lbl_title, "font-weight: bold; font-size: 10px; color: #9AA0A6; letter-spacing: 0.5px;")
@@ -186,9 +186,20 @@ class SketchPalette(QFrame):
 
         layout.addWidget(self.content_widget)
 
+    def embed(self):
+        """Live inside the inspector panel instead of floating over the canvas: no dragging, full width."""
+        self._embedded = True
+        self.setMinimumWidth(0)
+        self.setMaximumWidth(16777215)
+        self.lbl_title.setText("SKETCH PALETTE")
+        self.lbl_title.setToolTip("")
+        self.lbl_title.unsetCursor()
+
     # ---- Dragging: grab the palette anywhere that is not a control ----------
     def place_default(self, parent_size):
         """Places the palette according to user settings unless dragged by the user."""
+        if getattr(self, "_embedded", False):
+            return
         if not getattr(self, "user_moved", False):
             from omacad.ui.settings import get_settings
             pos_mode = get_settings().get("palette_position", "bottom_right")
@@ -213,6 +224,8 @@ class SketchPalette(QFrame):
         self.move(x, y)
 
     def mousePressEvent(self, event):
+        if getattr(self, "_embedded", False):
+            return super().mousePressEvent(event)
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_offset = event.position().toPoint()
             self.setCursor(Qt.CursorShape.SizeAllCursor)

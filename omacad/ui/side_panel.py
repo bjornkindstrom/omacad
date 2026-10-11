@@ -62,6 +62,11 @@ class InspectorPanel(QWidget):
         self.tool_container.hide()
         self.content_layout.addWidget(self.tool_container)
 
+        # Sketch palette slot (filled by set_palette; shown only while a sketch is open)
+        self.palette_layout = QVBoxLayout()
+        self.palette_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.addLayout(self.palette_layout)
+
         # 2. Properties & Info Container (when no tool is active or context info)
         self.info_container = QWidget()
         self.info_layout = QVBoxLayout(self.info_container)
@@ -75,6 +80,11 @@ class InspectorPanel(QWidget):
 
         self.current_tool_dlg = None
         self.refresh_info()
+
+    def set_palette(self, palette):
+        """Host the sketch palette at the top of the panel (it hides itself outside sketch mode)."""
+        palette.embed()
+        self.palette_layout.addWidget(palette)
 
     def dock_tool(self, dlg):
         """Docks a tool dialog into the side panel."""

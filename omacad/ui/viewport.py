@@ -1287,6 +1287,10 @@ class Viewport3D(QOpenGLWidget):
             if p1 != p2:
                 created = sketch.add_center_rect(p1, p2, is_construction=is_const)
             self.sketch_start_uv = None
+        elif self.sketch_tool == "CENTER_ROUNDED_RECT":
+            if p1 != p2:
+                created = sketch.add_center_rounded_rect(p1, p2, self.sketch_palette.spn_corner_radius.value(), is_construction=is_const)
+            self.sketch_start_uv = None
         elif self.sketch_tool == "POLYGON":
             if math.hypot(p2[0] - p1[0], p2[1] - p1[1]) > 0.5:
                 sketch.add_polygon(p1, p2, self._polygon_sides(), is_construction=is_const)
@@ -1498,8 +1502,8 @@ class Viewport3D(QOpenGLWidget):
             n = math.hypot(d.x(), d.y()) or 1.0
             anchors["Length"] = QPointF(mid.x() - d.y() / n * 26, mid.y() + d.x() / n * 26)
             anchors["Angle"] = QPointF(sa.x() + 30, sa.y() - 22)
-        elif tool in ("RECT", "ROUNDED_RECT", "CENTER_RECT"):
-            if tool != "CENTER_RECT":
+        elif tool in ("RECT", "ROUNDED_RECT", "CENTER_RECT", "CENTER_ROUNDED_RECT"):
+            if tool not in ("CENTER_RECT", "CENTER_ROUNDED_RECT"):
                 c1, c2 = a, b
             else:
                 c1, c2 = (2 * a[0] - b[0], 2 * a[1] - b[1]), b
@@ -2815,8 +2819,9 @@ class Viewport3D(QOpenGLWidget):
                 w1 = plane.uv_to_world(u1, v1)
                 w2 = plane.uv_to_world(u2, v2)
                 preview_lines.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
-            elif self.sketch_tool == "ROUNDED_RECT":
-                outline = Sketch.rounded_rect_outline((u1, v1), (u2, v2), self.sketch_palette.spn_corner_radius.value())
+            elif self.sketch_tool in ("ROUNDED_RECT", "CENTER_ROUNDED_RECT"):
+                c1 = (u1, v1) if self.sketch_tool == "ROUNDED_RECT" else (2 * u1 - u2, 2 * v1 - v2)
+                outline = Sketch.rounded_rect_outline(c1, (u2, v2), self.sketch_palette.spn_corner_radius.value())
                 for i in range(len(outline)):
                     w1 = plane.uv_to_world(*outline[i])
                     w2 = plane.uv_to_world(*outline[(i + 1) % len(outline)])
@@ -3053,7 +3058,7 @@ class Viewport3D(QOpenGLWidget):
                 w_rect = abs(u2 - u1)
                 h_rect = abs(v2 - v1)
                 dim_text = f"W: {w_rect:.1f} mm  ×  H: {h_rect:.1f} mm"
-            elif self.sketch_tool == "CENTER_RECT":
+            elif self.sketch_tool in ("CENTER_RECT", "CENTER_ROUNDED_RECT"):
                 w_rect = 2.0 * abs(u2 - u1)
                 h_rect = 2.0 * abs(v2 - v1)
                 dim_text = f"W: {w_rect:.1f} mm  ×  H: {h_rect:.1f} mm"
@@ -4223,7 +4228,7 @@ class Viewport3D(QOpenGLWidget):
         self.hovered_dim_id = hovered
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self.sketch_tool in ("LINE", "RECT", "ROUNDED_RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE"):
+        elif self.sketch_tool in ("LINE", "RECT", "ROUNDED_RECT", "CENTER_RECT", "CENTER_ROUNDED_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE"):
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)

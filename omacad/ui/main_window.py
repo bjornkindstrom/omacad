@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
         view_row.addWidget(self.viewport, stretch=1)
         self.inspector = InspectorPanel(self.doc, self)
         view_row.addWidget(self.inspector)
+        self.inspector.set_palette(self.viewport.sketch_palette)
         central_layout.addLayout(view_row, stretch=1)
         _dialogs.SIDE_HOST = self
         self.doc.add_change_listener(self.inspector.refresh_info)

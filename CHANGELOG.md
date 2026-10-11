@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.4 - 2026-10-11
+
+### Added
+- **Center Rounded Rect**: a rounded rectangle drawn from its centre (fourth kind in the rectangle dropdown, uses the palette's corner radius).
+
+### Changed
+- The sketch palette now sits at the top of the right-hand inspector instead of floating over the canvas.
+
 ## 0.6.3 - 2026-10-11
 
 ### Added

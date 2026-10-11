@@ -17,6 +17,7 @@ FIELDS: Dict[str, List[str]] = {
     "RECT": ["Width", "Height"],
     "ROUNDED_RECT": ["Width", "Height"],
     "CENTER_RECT": ["Width", "Height"],
+    "CENTER_ROUNDED_RECT": ["Width", "Height"],
     "CIRCLE": ["Diameter"],
     "POLYGON": ["Side", "Sides"],
     "MOVE": ["X", "Y"],
@@ -113,7 +114,7 @@ class DynInput:
             h = abs(lk["Height"]) if "Height" in lk else abs(dy)
             return (u1 + sx * w, v1 + sy * h), {"Width": w, "Height": h}
 
-        if self.tool == "CENTER_RECT":
+        if self.tool in ("CENTER_RECT", "CENTER_ROUNDED_RECT"):
             w = abs(lk["Width"]) if "Width" in lk else 2.0 * abs(dx)
             h = abs(lk["Height"]) if "Height" in lk else 2.0 * abs(dy)
             return (u1 + sx * w / 2.0, v1 + sy * h / 2.0), {"Width": w, "Height": h}

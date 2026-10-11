@@ -1137,6 +1137,13 @@ class Sketch:
         dx, dy = abs(corner[0] - cx), abs(corner[1] - cy)
         return self.add_rect((cx - dx, cy - dy), (cx + dx, cy + dy), is_construction)
 
+    def add_center_rounded_rect(self, center: Tuple[float, float], corner: Tuple[float, float], radius: float,
+                                is_construction: bool = False) -> List[SketchLine]:
+        """A rounded rectangle drawn from its centre out to one corner."""
+        cx, cy = center
+        dx, dy = abs(corner[0] - cx), abs(corner[1] - cy)
+        return self.add_rounded_rect((cx - dx, cy - dy), (cx + dx, cy + dy), radius, is_construction)
+
     def _migrate_legacy_rects(self) -> None:
         """Old files stored rectangles as one entity; turn them into lines + constraints."""
         legacy = [e for e in self.entities if isinstance(e, (SketchRect, SketchCenterRect))]
