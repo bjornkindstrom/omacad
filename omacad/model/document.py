@@ -34,6 +34,7 @@ class Document:
         self.bodies: Dict[str, Body] = {}
         self.sketches: Dict[str, Sketch] = {}
         self.timeline: Timeline = Timeline()
+        self.auto_include_edges: bool = True   # sketching on a face includes its outline as sketch lines
 
         # Origin reference planes
         self.origin_planes = {
@@ -160,6 +161,8 @@ class Document:
         sketch_id = f"sketch_{len(self.sketches) + 1}"
         sketch = Sketch(sketch_id, f"Sketch {len(self.sketches) + 1}", plane)
         self.refresh_sketch_references(sketch)
+        if getattr(plane, "name", "") == "FACE" and self.auto_include_edges:
+            sketch.include_reference_edges()   # the face outline can be used like drawn lines (offset, snap, draw on)
         self.active_sketch = sketch
         self.sketches[sketch_id] = sketch
         self.notify_changed()

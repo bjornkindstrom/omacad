@@ -920,6 +920,95 @@ class Sketch:
         self.solve_profiles()
         return new
 
+    def include_reference_edges(self, segments=None) -> list:
+        """Fusion's Project / Include: the body edges lying in this sketch plane (the outline of the face the sketch is
+        on) become real sketch elements - lines, full circles and arcs - that can be offset, trimmed, snapped to and
+        drawn on like anything drawn here. They are marked `projected` (drawn in another colour, not draggable).
+        Returns the new elements."""
+        segs = [(tuple(a), tuple(b)) for a, b in (self.reference_segments if segments is None else segments)
+                if abs(a[0] - b[0]) > 1e-9 or abs(a[1] - b[1]) > 1e-9]
+        # ignore what is already here (included before, or drawn by hand on top of the edge)
+        have = set()
+        for e in self.entities:
+            for a, b in e.to_lines():
+                have.add((round(a[0], 3), round(a[1], 3), round(b[0], 3), round(b[1], 3)))
+                have.add((round(b[0], 3), round(b[1], 3), round(a[0], 3), round(a[1], 3)))
+
+        def key(p):
+            return (round(p[0], 3), round(p[1], 3))
+
+        adj: Dict[tuple, list] = {}
+        for a, b in segs:
+            adj.setdefault(key(a), []).append((b, a))
+            adj.setdefault(key(b), []).append((a, b))
+        pos = {key(p): p for ab in segs for p in ab}
+        used = set()
+        chains = []
+
+        def walk(start, first):
+            chain = [start]
+            prev, cur = start, first
+            while True:
+                chain.append(cur)
+                ks = (key(prev), key(cur))
+                used.add(ks); used.add(ks[::-1])
+                nxt = [q for q, _ in adj[key(cur)] if key(q) != key(prev) and (key(cur), key(q)) not in used]
+                if len(adj[key(cur)]) != 2 or not nxt or key(cur) == key(start):
+                    break
+                prev, cur = cur, nxt[0]
+            return chain
+
+        for k0, nbrs in adj.items():          # chains start at junctions and free ends first, then closed loops
+            if len(nbrs) != 2:
+                for q, _ in nbrs:
+                    if (k0, key(q)) not in used:
+                        chains.append(walk(pos[k0], q))
+        for k0, nbrs in adj.items():
+            for q, _ in nbrs:
+                if (k0, key(q)) not in used:
+                    chains.append(walk(pos[k0], q))
+
+        new = []
+
+        def add(ent):
+            ent.projected = True
+            self.entities.append(ent)
+            new.append(ent)
+
+        for chain in chains:
+            pts = np.array(chain, dtype=float)
+            closed = key(chain[0]) == key(chain[-1])
+            if len(pts) >= 6:                   # a curve? (many short pieces round one centre)
+                body = pts[:-1] if closed else pts
+                A = np.c_[2 * body[:, 0], 2 * body[:, 1], np.ones(len(body))]
+                sol, *_ = np.linalg.lstsq(A, (body ** 2).sum(axis=1), rcond=None)
+                c = sol[:2]
+                r = float(np.sqrt(max(sol[2] + c @ c, 0.0)))
+                res = np.abs(np.linalg.norm(body - c, axis=1) - r)
+                if r > 1e-6 and float(res.max()) < max(2e-3 * r, 2e-3):
+                    if closed:
+                        if (round(c[0], 3), round(c[1], 3), round(r, 3)) not in {(round(e.center[0], 3), round(e.center[1], 3), round(e.radius, 3)) for e in self.entities if e.entity_type == "circle"}:
+                            add(SketchCircle(self._new_entity_id("circle"), (float(c[0]), float(c[1])), r))
+                    else:
+                        mid = pts[len(pts) // 2]
+                        add(SketchArc(self._new_entity_id("arc"), tuple(pts[0]), tuple(mid), tuple(pts[-1])))
+                    continue
+            # straight pieces: merge consecutive collinear segments
+            run_start = pts[0]
+            for i in range(1, len(pts)):
+                last = i == len(pts) - 1
+                if not last:
+                    d1, d2 = pts[i] - pts[i - 1], pts[i + 1] - pts[i]
+                    n1, n2 = np.linalg.norm(d1), np.linalg.norm(d2)
+                    if n1 > 1e-12 and n2 > 1e-12 and abs(float(d1 @ d2) / (n1 * n2) - 1.0) < 1e-6:
+                        continue
+                a, b = tuple(run_start), tuple(pts[i])
+                if (round(a[0], 3), round(a[1], 3), round(b[0], 3), round(b[1], 3)) not in have and math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-6:
+                    add(SketchLine(self._new_entity_id("line"), a, b))
+                run_start = pts[i]
+        self.solve_profiles()
+        return new
+
     @staticmethod
     def polygon_points(center, vertex, sides: int):
         """Corners of a regular polygon: one corner at `vertex`, the others evenly round `center`."""
@@ -1333,7 +1422,8 @@ class Sketch:
                 "v_axis": self.plane.v_axis.tolist(),
                 "normal": self.plane.normal.tolist(),
             },
-            "entities": [dict(e.to_dict(), **({"group": e.group} if getattr(e, "group", None) else {})) for e in self.entities],
+            "entities": [dict(e.to_dict(), **({"group": e.group} if getattr(e, "group", None) else {}),
+                          **({"projected": True} if getattr(e, "projected", False) else {})) for e in self.entities],
             "dimensions": [d.to_dict() for d in self.dimensions],
             "constraints": [c.to_dict() for c in self.constraints],
             "face_key": list(self.face_key) if self.face_key else None,
@@ -1375,9 +1465,12 @@ class Sketch:
         for c_data in data.get("constraints", []):
             sketch.constraints.append(SketchConstraint.from_dict(c_data))
 
+        projected = {ed.get("entity_id") for ed in data.get("entities", []) if ed.get("projected")}
         for e in sketch.entities:
             if e.entity_id in groups:
                 e.group = groups[e.entity_id]
+            if e.entity_id in projected:
+                e.projected = True
         sketch._migrate_legacy_rects()
         sketch.solve_profiles()
         return sketch

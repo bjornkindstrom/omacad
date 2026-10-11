@@ -62,6 +62,7 @@ class Ribbon(QWidget):
     extrude_clicked = Signal()
     revolve_clicked = Signal()
     fillet_clicked = Signal()
+    project_clicked = Signal()
     chamfer_clicked = Signal()
     pattern_clicked = Signal()
     offset_plane_clicked = Signal()
@@ -315,6 +316,11 @@ class Ribbon(QWidget):
         self.btn_offset_sk.setToolTip("Offset (O): click curves (a click takes the whole connected chain, click more to add), then Enter and type the distance")
         self.btn_offset_sk.clicked.connect(lambda: self.select_sketch_tool("OFFSET"))
         h_layout.addWidget(self.btn_offset_sk)
+
+        self.btn_project_sk = RibbonButton("Project\n(edges)", "🟣")
+        self.btn_project_sk.setToolTip("Include / Project: turn the body edges lying in this sketch plane into sketch lines")
+        self.btn_project_sk.clicked.connect(self.project_clicked)
+        h_layout.addWidget(self.btn_project_sk)
 
         # Separator
         sep_dim = QFrame()

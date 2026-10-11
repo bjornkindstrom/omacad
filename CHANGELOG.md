@@ -3,6 +3,17 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.5.0 - 2026-10-11 (Fusion 360 parity step 1)
+Not yet released as a build. Includes everything from 0.4.1 below.
+
+### Added
+- **Revolve** is a real feature now: profile, axis (a construction line / any line of the sketch, or the sketch X/Y axis), angle (360 = full, negative flips), One Side / Symmetric / Two Sides, Auto/New/Join/Cut/Intersect, live preview.
+- **Include / Project face edges**: sketching on a face includes its outline (lines, full circles, arcs) as real, purple sketch elements - offset them, trim them, snap to them, draw on them. Toggle "Include Face Edges" in the sketch palette; the **Project (edges)** button includes in-plane body edges in any sketch.
+- Hole feature in the model (simple / counterbore / countersink, flat or 118 deg tip, through); dialog and placement come next.
+
+### Changed
+- Arrow handles (extrude etc.): the grab area follows the drawn head with a margin and a ring marks the grab point.
+
 ## 0.4.1 - 2026-10-11
 
 ### Added

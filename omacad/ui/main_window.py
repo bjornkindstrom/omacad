@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
         self.ribbon.shell_clicked.connect(self.prompt_shell)
+        self.ribbon.project_clicked.connect(lambda: self.viewport.project_edges())
         self.ribbon.move_clicked.connect(self.prompt_move_body)
         self.ribbon.canvas_clicked.connect(self.prompt_insert_canvas)
         self.ribbon.delete_clicked.connect(self.on_delete_selected)
@@ -469,6 +470,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Create Sketch: click an origin plane or a flat face (Esc to cancel).")
 
     def on_plane_picked(self, plane):
+        self.doc.auto_include_edges = self.viewport.sketch_palette.chk_project.isChecked()
         sketch = self.doc.start_sketch_on_plane(plane)
         self.viewport.align_to_plane(plane)
         where = f"{plane.name} plane" if plane.name != "FACE" else "face"

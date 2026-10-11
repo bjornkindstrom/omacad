@@ -89,6 +89,11 @@ class SketchPalette(QFrame):
         self.chk_snap_points.stateChanged.connect(self.settings_changed)
         content_layout.addWidget(self.chk_snap_points)
 
+        self.chk_project = QCheckBox("Include Face Edges")
+        self.chk_project.setChecked(True)
+        self.chk_project.setToolTip("Sketching on a face includes its outline as sketch lines (purple): offset them, snap to them, draw on them")
+        content_layout.addWidget(self.chk_project)
+
         self.chk_auto_constraints = QCheckBox("Auto Constraints")
         self.chk_auto_constraints.setToolTip("Add Horizontal/Vertical/Coincident constraints automatically when drawing lines")
         self.chk_auto_constraints.setChecked(True)

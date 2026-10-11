@@ -511,6 +511,7 @@ class Viewport3D(QOpenGLWidget):
     # ---- Moving sketch elements --------------------------------------------
     def _begin_move(self, ids):
         sk = self.doc.active_sketch
+        ids = {i for i in ids if not getattr(sk.get_entity(i), "projected", False)}
         self._move = {
             "ids": set(ids),
             "orig": {e.entity_id: copy.deepcopy(e) for e in sk.entities if e.entity_id in ids},
@@ -1702,6 +1703,25 @@ class Viewport3D(QOpenGLWidget):
                 self.status_message.emit("Fillet: click a corner (Shift+click to pick several corners, then Enter), or click two lines. Esc cancels.")
         self.update()
 
+    def project_edges(self):
+        """Include / Project: the body edges in this sketch plane become sketch elements."""
+        sk = self.doc.active_sketch
+        if sk is None:
+            return
+        self.doc.refresh_sketch_references(sk)
+        before = sk.to_dict()
+        new = sk.include_reference_edges()
+        if not new:
+            self.status_message.emit("Project: no body edges in this sketch plane (or they are already included).")
+            return
+        self.doc.record_sketch_change(sk, before)
+        self.selected_entities = {e.entity_id for e in new}
+        self.selection_changed.emit()
+        self.doc.timeline.recompute(self.doc)
+        self.doc.notify_changed()
+        self.status_message.emit(f"Project: {len(new)} element(s) included from the body. They can be offset, trimmed and drawn on.")
+        self.update()
+
     def _mirror_status(self):
         if self._mirror_phase == "pick":
             n = len(self.selected_entities)
@@ -2640,6 +2660,7 @@ class Viewport3D(QOpenGLWidget):
             # Render Sketch Entities
             normal_lines = []
             construction_lines = []
+            projected_lines = []
             selected_lines = []
             hover_lines = []
             for ent in sketch.entities:
@@ -2648,7 +2669,7 @@ class Viewport3D(QOpenGLWidget):
                 elif is_active and ent.entity_id == self.hover_entity_id:
                     dest = hover_lines
                 else:
-                    dest = construction_lines if ent.is_construction else normal_lines
+                    dest = projected_lines if getattr(ent, "projected", False) else (construction_lines if ent.is_construction else normal_lines)
                 for p1, p2 in ent.to_lines():
                     w1 = plane.uv_to_world(p1[0], p1[1])
                     w2 = plane.uv_to_world(p2[0], p2[1])
@@ -2662,6 +2683,8 @@ class Viewport3D(QOpenGLWidget):
                 else:
                     self.draw_thick_lines(mvp, normal_lines, (1.0, 0.65, 0.20, 1.0), 2.0)  # Orange sketch
 
+            if projected_lines:   # edges included from the body: a distinct colour, like Fusion's projected curves
+                self.draw_thick_lines(mvp, projected_lines, (0.80, 0.45, 1.0, 1.0), 2.2)
             if hover_lines:
                 self.draw_thick_lines(mvp, hover_lines, (1.0, 1.0, 1.0, 1.0), 3.0)
             if selected_lines:
@@ -3952,7 +3975,7 @@ class Viewport3D(QOpenGLWidget):
                     self.selected_entities = {ent.entity_id}
                     self.selection_changed.emit()
                 uv = self.get_sketch_plane_uv(x, y)
-                if uv is not None:
+                if uv is not None and not getattr(ent, "projected", False):   # edges of the body can't be dragged away
                     self._drag = {"press_uv": uv, "press_pos": event.position(), "moved": False, "ent_id": ent.entity_id}
                 self.update()
                 return
