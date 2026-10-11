@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QWidget, QMenu, QInputDialog, QDialog, QVBoxLayou
                                QPushButton)
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QFontMetrics
+from PySide6.QtGui import QGuiApplication, QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QFontMetrics
 from OpenGL import GL
 from OpenGL.GL import shaders
 
@@ -233,6 +233,7 @@ class Viewport3D(QOpenGLWidget):
 
         # Edge selection for fillet / chamfer
         self.edge_pick_mode: bool = False
+        self.edge_xray: bool = False   # pick edges through the model too (stairs, inside corners)
         self.hover_edge = None            # PlanarEdge under the cursor
         self.selected_edges: list = []    # PlanarEdge objects chosen so far
 
@@ -997,6 +998,7 @@ class Viewport3D(QOpenGLWidget):
     # ---- Edge selection (fillet / chamfer) ------------------------------------------
     def begin_edge_pick(self):
         self.edge_pick_mode = True
+        self.edge_xray = False
         self.hover_edge = None
         self.selected_edges = []
         self.setFocus()
@@ -1018,7 +1020,8 @@ class Viewport3D(QOpenGLWidget):
         """The straight edge between two flat faces nearest the cursor (within 8 px, and not hidden)."""
         proj, view, _ = self.get_matrices()
         origin, _ = ray_from_screen(x, y, self.width(), self.height(), view, proj)
-        best, best_d = None, 8.0
+        xray = self.edge_xray or bool(QGuiApplication.keyboardModifiers() & Qt.KeyboardModifier.AltModifier)
+        best, best_d, best_eye = None, 8.0, 1e18
         for body in self.doc.bodies.values():
             if not body.visible:
                 continue
@@ -1039,13 +1042,13 @@ class Viewport3D(QOpenGLWidget):
                 direction = mid - origin
                 dist = float(np.linalg.norm(direction))
                 direction = direction / dist if dist > 1e-9 else direction
-                blocked = any((t := ray_hit_face(f, origin, direction)) is not None and t < dist - 1e-3
-                              for bd in self.doc.bodies.values() if bd.visible for f in bd.faces)
-                if not blocked:
-                    best, best_d = e, d
+                blocked = (not xray) and any((t := ray_hit_face(f, origin, direction)) is not None and t < dist - 1e-3
+                                             for bd in self.doc.bodies.values() if bd.visible for f in bd.faces)
+                if not blocked and (d < best_d - 1.0 or (d <= best_d + 1.0 and dist < best_eye)):
+                    best, best_d, best_eye = e, min(d, best_d), dist   # near-ties (edges on top of each other): the closer one
         return best
 
-    def _edge_loop(self, e):
+    def _edge_loop(self, e, other_face: bool = False):
         """Double-click: the edges joined end to end around one flat face (e.g. the whole top of a box).
         Of the two faces an edge borders, the one facing the camera is used."""
         if e.kind in ("circle", "loop"):
@@ -1055,6 +1058,8 @@ class Viewport3D(QOpenGLWidget):
         mid = (e.p0 + e.p1) / 2.0
         to_eye = eye - mid
         n = e.n1 if float(e.n1 @ to_eye) >= float(e.n2 @ to_eye) else e.n2
+        if other_face:   # Shift: the face on the other side of the edge (e.g. the riser instead of the tread)
+            n = e.n2 if n is e.n1 else e.n1
         d = float(n @ e.p0)
         candidates = [c for b in self.doc.bodies.values() if b.visible for c in b.edges if c.kind == "line"
                       and abs(float(n @ c.p0) - d) < 1e-4 and abs(float(n @ c.p1) - d) < 1e-4]
@@ -1097,6 +1102,8 @@ class Viewport3D(QOpenGLWidget):
                     out += [*pts[i], *pts[i + 1]]
             return out
 
+        if self.edge_xray:   # every pickable edge, also the hidden ones
+            self.draw_thick_lines(mvp, flat([e for b in self.doc.bodies.values() if b.visible for e in b.edges]), (0.75, 0.8, 0.9, 0.55), 1.6)
         if self.hover_edge is not None and not any(self._same_edge(self.hover_edge, s) for s in self.selected_edges):
             self.draw_thick_lines(mvp, flat([self.hover_edge]), (1.0, 1.0, 1.0, 1.0), 3.5)
         if self.selected_edges:
@@ -3820,7 +3827,7 @@ class Viewport3D(QOpenGLWidget):
         if event.button() == Qt.MouseButton.LeftButton and self.edge_pick_mode:
             e = self._pick_edge(x, y)
             if e is not None:
-                for c in self._edge_loop(e):
+                for c in self._edge_loop(e, bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)):
                     if not any(self._same_edge(c, k) for k in self.selected_edges):
                         self.selected_edges.append(c)
                 self.edges_selection_changed.emit()
@@ -4165,7 +4172,12 @@ class Viewport3D(QOpenGLWidget):
             self.is_panning = False
             e = self._pick_edge(event.position().x(), event.position().y())
             if e is not None:
-                self._toggle_edge(e)
+                if event.modifiers() & Qt.KeyboardModifier.ControlModifier:   # Ctrl+click only removes
+                    self.selected_edges = [k for k in self.selected_edges if not self._same_edge(k, e)]
+                    self.edges_selection_changed.emit()
+                    self.update()
+                else:
+                    self._toggle_edge(e)
             return
         if was_click and self.plane_pick_mode:
             self._press_pos = None
@@ -4298,6 +4310,19 @@ class Viewport3D(QOpenGLWidget):
                 self.begin_measure()
                 return
 
+        if self.edge_pick_mode and event.key() == Qt.Key.Key_X:
+            self.edge_xray = not self.edge_xray
+            self.status_message.emit("Edges: see-through " + ("ON - hidden edges can be picked too (X again to turn off, or hold Alt)." if self.edge_xray else "off."))
+            self.update()
+            return
+        if self.edge_pick_mode and event.key() == Qt.Key.Key_Backspace and self.selected_edges:
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                self.selected_edges = []   # Ctrl+Backspace: clear everything
+            else:
+                self.selected_edges.pop()   # undo the last picked edge
+            self.edges_selection_changed.emit()
+            self.update()
+            return
         if event.key() == Qt.Key.Key_Escape and self.edge_pick_mode:
             self.end_edge_pick(cancelled=True)
             return

@@ -542,7 +542,7 @@ class RoundEdgesDialog(BaseFeatureDialog):
         self.spn_size.setValue(size)
         self.spn_size.setToolTip("Radius (fillet) or distance (chamfer). Formulas and parameter names work.")
         form.addRow("Size:", self.spn_size)
-        self.lbl_count = QLabel("" if editing else "Click edges in the viewport to select them (click again to deselect).")
+        self.lbl_count = QLabel("" if editing else "Click edges in the viewport to select them (click again to deselect). X = see-through for hidden edges, double-click = whole loop, Shift+double-click = loop on the other face, Backspace = undo last, Ctrl+Backspace = clear.")
         self.lbl_count.setWordWrap(True)
         self.main_layout.addWidget(self.lbl_count)
         self.main_layout.addLayout(form)
@@ -556,7 +556,7 @@ class RoundEdgesDialog(BaseFeatureDialog):
 
     def set_count(self, n: int):
         self.lbl_count.setText(f"{n} edge{'s' if n != 1 else ''} selected. Click edges in the viewport to add or remove them."
-                               if n else "Click edges in the viewport to select them (click again to deselect).")
+                               if n else "Click edges in the viewport to select them (click again to deselect). X = see-through for hidden edges, double-click = whole loop, Shift+double-click = loop on the other face, Backspace = undo last, Ctrl+Backspace = clear.")
 
     def get_expressions(self) -> dict:
         e = self.spn_size.expression()
@@ -929,6 +929,10 @@ class ShellDialog(BaseFeatureDialog):
         self.open_faces = []
         self.lbl_faces.setText("0 open face(s) selected.\n(Click faces in viewport to leave them open)")
         self.changed.emit()
+
+    def get_expressions(self) -> dict:
+        e = self.spn_thickness.expression()
+        return {"thickness": e} if e else {}
 
     def get_values(self):
         b_idx = self.cmb_target.currentIndex()

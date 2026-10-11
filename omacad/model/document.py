@@ -569,13 +569,14 @@ class Document:
         self.notify_changed()
         return feat
 
-    def add_shell(self, body_id: str, thickness: float, open_faces=None) -> Optional[ShellFeature]:
+    def add_shell(self, body_id: str, thickness: float, open_faces=None, exprs=None) -> Optional[ShellFeature]:
         """Hollows out the body with a given wall thickness, optionally leaving selected faces open."""
         if body_id not in self.bodies:
             return None
         n = len([f for f in self.timeline.features if f.feature_type == "shell"]) + 1
         feat_id = f"shell_{len(self.timeline.features) + 1}"
         feat = ShellFeature(feat_id, f"Shell {n}", body_id, thickness, open_faces=open_faces)
+        feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()

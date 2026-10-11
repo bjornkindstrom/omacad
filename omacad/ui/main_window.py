@@ -325,7 +325,7 @@ class MainWindow(QMainWindow):
         self.dock(dlg)
         self._round_dlg = dlg
         self.viewport.begin_edge_pick()
-        self.status_label.setText("Fillet/Chamfer: click edges (double-click selects loop). Drag arrow to resize. Esc cancels.")
+        self.status_label.setText("Fillet/Chamfer: click edges (double-click = loop, Shift+double-click = loop on the other face, X or Alt = see-through, Ctrl+click = remove, Backspace = undo last, Ctrl+Backspace = clear). Esc cancels.")
 
         def update_arrow():
             edges = self.viewport.selected_edges
