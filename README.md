@@ -1,6 +1,6 @@
 # Omacad ⚡
 
-**Version 0.6.0** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
+**Version 0.6.1** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 
 **Omacad** är ett native parametriskt 3D CAD-program för **Omarchy Linux** (Arch + Hyprland/Wayland), inspirerat av **Autodesk Fusion 360**.
 Byggt med **Python 3.14**, **PySide6 (Qt6) + OpenGL**, **manifold3d** (vattentäta booleans), **shapely** och **SolveSpace** (skiss-villkor).
@@ -16,7 +16,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - **Tab-inmatning** medan du ritar (längd, vinkel, bredd/höjd, diameter) – Enter går vidare, Esc ångrar.
 - **Mått och villkor** (SolveSpace): horisontell, vertikal, parallell, vinkelrät, lika, tangent, koncentrisk, fixerad, avstånd, längd, vinkel, diameter, punkt–linje. Guidad högerklicksmeny på varje element.
 - Markera (klick, **Shift/Ctrl+klick** lägger till och tar bort), flytta (dra eller `M` med dx/dy), ta bort, ångra/gör om.
-- **Offset (`O`)** som i Fusion: klicka en kurva så följer hela den sammanhängande kedjan med, klicka fler för att lägga till (Alt+klick = ett element), Enter anger avstånd med förhandsvisning (negativt = inåt).
+- **Offset (`O`)** som i Fusion (bågar behåller sina centrum och radierna följer med, fogarna räknas om): klicka en kurva så följer hela den sammanhängande kedjan med, klicka fler för att lägga till (Alt+klick = ett element), Enter anger avstånd med förhandsvisning (negativt = inåt).
 - **Trim (`T`)**: ta bort biten av en linje, cirkel eller båge fram till närmaste korsning eller fria ände (tar bort lösa stumpar).
 - **Mirror (`Shift+M`)** i skissen: välj former, sedan en linje eller origoaxel att spegla över.
 - **Ytans kanter som skisslinjer**: skissar du på en yta följer dess yttre linjer, hål och bågar med som riktiga (lila) skisselement. De går att offsetta, trimma, snappa mot och rita vidare från. *Include Face Edges* i skisspaletten stänger av det, och **Project (edges)** tar in kanterna i vilken skiss som helst.
@@ -49,6 +49,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 **Parametriskt**
 - **Parametrar** med namn och formler (`bredd/2`, `10-1`, `2x(3+5)`) i alla fält.
 - **Ångra/gör om för allt** (`Ctrl+Z`, `Ctrl+Shift+Z`): varje steg som ändrar dokumentet kan ångras, också Finish Sketch, parametrar, tidslinjeredigering och radering av kroppar. Menyn visar vad som ångras.
+- **Report problem (`F9`)**: skriv vad som är fel; programmet skickar en skärmbild, modellen och loggen till Omarchys standard-AI (`omarchy agent prompt`) som rättar felet i koden. `omacad.md` är agenternas minne.
 - **Tidslinje**: klicka på ett steg för att ändra det, dubbelklick redigerar, rulla tillbaka/framåt, undertrycka steg.
 - Sketcher döljs automatiskt när de använts; ögon i trädet.
 
