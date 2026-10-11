@@ -429,7 +429,11 @@ class PatternFeature(Feature):
                     out.append(lambda m, off=off: m.translate(off))
         elif self.kind == "mirror":
             mode = self.mirror_mode
-            if mode == "auto":  # mirror across each mid-plane the feature is off-centre in
+            if mode == "auto" and getattr(self, "_round_body", False):
+                mode = "diameter"   # a round body has no corners: the copy goes to the other end of the diameter
+            if mode == "diameter":
+                out.append(lambda m: m.translate(tuple(-c)).rotate((0.0, 0.0, 180.0)).translate(tuple(c)))
+            elif mode == "auto":  # mirror across each mid-plane the feature is off-centre in
                 ax = abs(feature_centre[0] - c[0]) > 0.02 * size[0] + 1e-6
                 ay = abs(feature_centre[1] - c[1]) > 0.02 * size[1] + 1e-6
                 mode = "xy" if ax and ay else "x" if ax else "y" if ay else ""
@@ -447,6 +451,22 @@ class PatternFeature(Feature):
                 deg = k * step
                 out.append(lambda m, deg=deg: m.translate(tuple(-c)).rotate((0.0, 0.0, deg)).translate(tuple(c)))
         return out
+
+    @staticmethod
+    def _is_round(body) -> bool:
+        """True when the body's outline (seen from above) is a circle."""
+        try:
+            bb = body.bounding_box()
+            z = (bb[2] + bb[5]) / 2.0
+            polys = body.slice(z).to_polygons()
+            if not polys:
+                return False
+            pts = max(polys, key=len)
+            c = (np.array(bb[:2]) + np.array(bb[3:5])) / 2.0
+            r = np.linalg.norm(pts - c, axis=1)
+            return len(pts) >= 16 and float(r.std()) < 0.01 * float(r.mean()) and abs((bb[3] - bb[0]) - (bb[4] - bb[1])) < 0.02 * (bb[3] - bb[0])
+        except Exception:
+            return False
 
     @staticmethod
     def _reach_out(removed, before):
@@ -493,6 +513,7 @@ class PatternFeature(Feature):
         bb = before.bounding_box()
         bmin, bmax = np.array(bb[:3]), np.array(bb[3:])
         centre = (bmin + bmax) / 2.0 if self.about == "body" else np.zeros(3)
+        self._round_body = self._is_round(before)
         funcs = self._transforms(centre, (lo + hi) / 2.0, bmax - bmin)
         if not funcs:
             return None

@@ -498,7 +498,7 @@ class PatternDialog(BaseFeatureDialog):
 
     KINDS = ["linear", "mirror", "circular"]
     AXES = ["x", "y", "z"]
-    MIRROR_MODES = ["auto", "x", "y", "xy"]
+    MIRROR_MODES = ["auto", "x", "y", "xy", "diameter"]
 
     def __init__(self, doc: Document, parent=None, feature=None):
         super().__init__("Pattern / Mirror", parent)
@@ -534,7 +534,7 @@ class PatternDialog(BaseFeatureDialog):
         self.spn_space2 = ExprDoubleSpinBox(); self.spn_space2.setRange(0.01, 100000); self.spn_space2.setSuffix(" mm"); self.spn_space2.setValue(20.0)
         # mirror
         self.cmb_mirror = QComboBox()
-        self.cmb_mirror.addItems(["Auto (mirror where the feature is off-centre)", "Mirror left-right (X)", "Mirror front-back (Y)", "All four corners (X and Y)"])
+        self.cmb_mirror.addItems(["Auto (round body: along the diameter)", "Mirror left-right (X)", "Mirror front-back (Y)", "All four corners (X and Y)", "Along the diameter (opposite side)"])
         # circular
         self.spn_angle = ExprDoubleSpinBox(); self.spn_angle.setRange(1, 360); self.spn_angle.setSuffix(" °"); self.spn_angle.setValue(360)
         self.cmb_about = QComboBox(); self.cmb_about.addItems(["Centre of the body", "Origin"])
