@@ -7,14 +7,14 @@ Accepting rebuilds everything after the step.
 
 from PySide6.QtWidgets import QMessageBox
 
-from omacad.ui.dialogs import BoxDialog, CylinderDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog
+from omacad.ui.dialogs import BoxDialog, CylinderDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog, MoveBodyDialog
 
 DIRECTIONS = ["one_side", "symmetric", "two_sides"]
 OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as the Extrude dialog
 
 
 def can_edit(feature) -> bool:
-    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern")
+    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern", "move")
 
 
 def edit_feature(win, doc, index: int) -> bool:
@@ -94,6 +94,26 @@ def edit_feature(win, doc, index: int) -> bool:
         if not dlg.exec():
             return False
         return doc.edit_feature(index, source_ids=dlg.source_ids(), kind=dlg.kind(), exprs=dlg.get_expressions(), **dlg.get_params())
+    if t == "move":
+        dlg = MoveBodyDialog(doc, win, preselected_body_id=feat.target_body_id)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        dlg.spn_dx.setValue(feat.dx)
+        dlg.spn_dy.setValue(feat.dy)
+        dlg.spn_dz.setValue(feat.dz)
+        dlg.spn_rx.setValue(feat.rx)
+        dlg.spn_ry.setValue(feat.ry)
+        dlg.spn_rz.setValue(feat.rz)
+        if hasattr(dlg, "cmb_pivot") and hasattr(feat, "pivot"):
+            idx = 0 if feat.pivot == "center" else 1
+            dlg.cmb_pivot.setCurrentIndex(idx)
+        for key, spin in (("dx", dlg.spn_dx), ("dy", dlg.spn_dy), ("dz", dlg.spn_dz),
+                          ("rx", dlg.spn_rx), ("ry", dlg.spn_ry), ("rz", dlg.spn_rz)):
+            if feat.exprs.get(key):
+                spin.set_expression(feat.exprs[key])
+        if not dlg.exec():
+            return False
+        bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
+        return doc.edit_feature(index, target_body_id=bid, dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz, pivot=pivot, exprs=exprs)
     QMessageBox.information(win, "Edit", f"{feat.name} can't be edited here yet.")
     return False
 

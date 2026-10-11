@@ -1067,6 +1067,7 @@ class MoveFeature(Feature):
         rx: float = 0.0,
         ry: float = 0.0,
         rz: float = 0.0,
+        pivot: str = "center",
     ):
         super().__init__(feature_id, "move", name)
         self.target_body_id = target_body_id
@@ -1076,6 +1077,7 @@ class MoveFeature(Feature):
         self.rx = float(rx)
         self.ry = float(ry)
         self.rz = float(rz)
+        self.pivot = pivot if pivot in ("origin", "center") else "center"
 
     def execute(self, doc: Any) -> None:
         target = doc.bodies.get(self.target_body_id)
@@ -1083,9 +1085,23 @@ class MoveFeature(Feature):
             return
 
         m = target.manifold
-        # Rotation around body/world origin
+        center = np.array([0.0, 0.0, 0.0])
+        if self.pivot == "center":
+            if target.render_mesh is not None:
+                center = (np.asarray(target.render_mesh.bounds_min, dtype=float) + np.asarray(target.render_mesh.bounds_max, dtype=float)) * 0.5
+            else:
+                mesh = m.to_mesh()
+                pts = mesh.vert_properties[:, :3]
+                if len(pts):
+                    center = (pts.min(axis=0) + pts.max(axis=0)) * 0.5
+
+        # Rotation around pivot point
         if abs(self.rx) > 1e-4 or abs(self.ry) > 1e-4 or abs(self.rz) > 1e-4:
-            m = m.rotate([self.rx, self.ry, self.rz])
+            if self.pivot == "center":
+                m = m.translate(-center).rotate([self.rx, self.ry, self.rz]).translate(center)
+            else:
+                m = m.rotate([self.rx, self.ry, self.rz])
+
         # Translation
         if abs(self.dx) > 1e-4 or abs(self.dy) > 1e-4 or abs(self.dz) > 1e-4:
             m = m.translate([self.dx, self.dy, self.dz])
@@ -1106,6 +1122,7 @@ class MoveFeature(Feature):
             "rx": self.rx,
             "ry": self.ry,
             "rz": self.rz,
+            "pivot": self.pivot,
         }
 
 

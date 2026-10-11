@@ -419,6 +419,7 @@ class Exporter:
                     fid, fname, f_data["target_body_id"],
                     dx=f_data.get("dx", 0.0), dy=f_data.get("dy", 0.0), dz=f_data.get("dz", 0.0),
                     rx=f_data.get("rx", 0.0), ry=f_data.get("ry", 0.0), rz=f_data.get("rz", 0.0),
+                    pivot=f_data.get("pivot", "center"),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "import_mesh":

@@ -426,7 +426,7 @@ class Document:
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),
         "shell": ("thickness",),
-        "move": ("dx", "dy", "dz", "rx", "ry", "rz"),
+        "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot"),
     }
 
     def edit_feature(self, index: int, **params) -> bool:
@@ -590,6 +590,7 @@ class Document:
         rx: float = 0.0,
         ry: float = 0.0,
         rz: float = 0.0,
+        pivot: str = "center",
         exprs: Optional[dict] = None,
     ) -> Optional[MoveFeature]:
         """Translates and rotates a 3D solid body parametrically."""
@@ -598,7 +599,7 @@ class Document:
         n = len([f for f in self.timeline.features if f.feature_type == "move"]) + 1
         feat_id = f"move_{len(self.timeline.features) + 1}"
         target_name = self.bodies[body_id].name
-        feat = MoveFeature(feat_id, f"Move {target_name} ({n})", body_id, dx, dy, dz, rx, ry, rz)
+        feat = MoveFeature(feat_id, f"Move {target_name} ({n})", body_id, dx, dy, dz, rx, ry, rz, pivot=pivot)
         if exprs:
             feat.exprs = exprs
         self.timeline.add_feature(feat)

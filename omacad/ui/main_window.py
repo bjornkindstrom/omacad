@@ -927,42 +927,119 @@ class MainWindow(QMainWindow):
         cleanup()
 
     def prompt_move_body(self, target_body_id: str = ""):
-        """Move / Rotate: Translates and rotates a 3D solid body parametrically."""
+        """Move / Rotate: Translates and rotates a 3D solid body parametrically with interactive 3D gizmo."""
         if not self.doc.bodies:
-            QMessageBox.information(self, "Move Body", "No bodies found to move. Create a 3D body first!")
+            QMessageBox.information(self, "Move Body", "Inga kroppar hittades att flytta. Skapa en 3D-kropp först!")
             return
 
-        dlg = MoveBodyDialog(self.doc, self, preselected_body_id=target_body_id or None)
+        selected_id = target_body_id or (next(iter(self.doc.selected_body_ids)) if self.doc.selected_body_ids else "")
+        if not selected_id or selected_id not in self.doc.bodies:
+            selected_id = next(iter(self.doc.bodies.keys()))
+
+        dlg = MoveBodyDialog(self.doc, self, preselected_body_id=selected_id)
         self.dock(dlg)
 
+        current_hidden_id = [None]
+
+        def update_handle(center, axis_name, dist):
+            axis_map = {
+                "X": ([1.0, 0.0, 0.0], (1.0, 0.25, 0.25)),
+                "Y": ([0.0, 1.0, 0.0], (0.25, 0.9, 0.25)),
+                "Z": ([0.0, 0.0, 1.0], (0.25, 0.6, 1.0)),
+            }
+            ax, col = axis_map.get(axis_name, ([1.0, 0.0, 0.0], (1.0, 0.25, 0.25)))
+            d = dist if abs(dist) > 0.1 else 10.0
+            self.viewport.set_extrude_handle(center, ax, d, color=col)
+
         def refresh_preview():
-            bid, dx, dy, dz, rx, ry, rz, _ = dlg.get_values()
+            bid, dx, dy, dz, rx, ry, rz, pivot, _ = dlg.get_values()
             if not bid or bid not in self.doc.bodies:
+                if current_hidden_id[0] and current_hidden_id[0] in self.doc.bodies:
+                    self.doc.bodies[current_hidden_id[0]].visible = True
+                    current_hidden_id[0] = None
                 self.viewport.set_preview(None)
+                self.viewport.clear_extrude_handle()
                 return
+
+            if current_hidden_id[0] and current_hidden_id[0] != bid and current_hidden_id[0] in self.doc.bodies:
+                self.doc.bodies[current_hidden_id[0]].visible = True
+
             body = self.doc.bodies[bid]
+            body.visible = False
+            current_hidden_id[0] = bid
+
             m = body.manifold
+            center = np.array([0.0, 0.0, 0.0])
+            if body.render_mesh is not None:
+                center = (np.asarray(body.render_mesh.bounds_min, dtype=float) + np.asarray(body.render_mesh.bounds_max, dtype=float)) * 0.5
+            else:
+                pts = m.to_mesh().vert_properties[:, :3]
+                if len(pts):
+                    center = (pts.min(axis=0) + pts.max(axis=0)) * 0.5
+
             if abs(rx) > 1e-4 or abs(ry) > 1e-4 or abs(rz) > 1e-4:
-                m = m.rotate([rx, ry, rz])
+                if pivot == "center":
+                    m = m.translate(-center).rotate([rx, ry, rz]).translate(center)
+                else:
+                    m = m.rotate([rx, ry, rz])
+
             if abs(dx) > 1e-4 or abs(dy) > 1e-4 or abs(dz) > 1e-4:
                 m = m.translate([dx, dy, dz])
+
             self.viewport.set_preview(m, "new_body")
 
+            moved_center = center + np.array([dx, dy, dz])
+            active_ax = dlg.active_axis
+            dist_val = dx if active_ax == "X" else (dy if active_ax == "Y" else dz)
+            update_handle(moved_center, active_ax, dist_val)
+
+        def on_handle_drag(val: float):
+            dlg.set_active_axis_value(round(val, 2))
+
+        def on_axis_changed(_axis: str):
+            refresh_preview()
+
+        def on_face_picked(plane):
+            if getattr(plane, "face", None) and hasattr(plane.face, "body_id"):
+                dlg.select_body(plane.face.body_id)
+
         dlg.changed.connect(refresh_preview)
+        dlg.axis_changed.connect(on_axis_changed)
+        self.viewport.extrude_handle_dragged.connect(on_handle_drag)
+        self.viewport.plane_picked.connect(on_face_picked)
+        self.viewport.begin_plane_pick("move_body")
+        self.status_label.setText("Move: Dra i 3D-pilen eller ange mm/grader. Klicka på en annan kropp i 3D för att välja den.")
+
         refresh_preview()
 
-        if dlg.exec():
-            bid, dx, dy, dz, rx, ry, rz, exprs = dlg.get_values()
+        def cleanup():
+            try:
+                self.viewport.plane_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            try:
+                self.viewport.extrude_handle_dragged.disconnect(on_handle_drag)
+            except Exception:
+                pass
+            self.viewport.end_plane_pick()
+            self.viewport.clear_extrude_handle()
             self.viewport.set_preview(None)
+            if current_hidden_id[0] and current_hidden_id[0] in self.doc.bodies:
+                self.doc.bodies[current_hidden_id[0]].visible = True
+                current_hidden_id[0] = None
+            self.inspector.undock_tool()
+
+        if dlg.exec():
+            bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
+            cleanup()
             if bid:
-                feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, exprs=exprs)
+                feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs)
                 if feat:
                     b_name = self.doc.bodies[bid].name if bid in self.doc.bodies else bid
-                    self.status_label.setText(f"Moved {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
+                    self.status_label.setText(f"Flyttade {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
                     self.viewport.update()
         else:
-            self.viewport.set_preview(None)
-        self.inspector.undock_tool()
+            cleanup()
 
     def prompt_insert_canvas(self, preselected_plane_id: str = ""):
         """Insert reference image onto a plane, edit/crop/calibrate with tape measure."""
