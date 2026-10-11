@@ -298,6 +298,18 @@ class Ribbon(QWidget):
         self.btn_fillet_sk.clicked.connect(lambda: self.select_sketch_tool("FILLET"))
         h_layout.addWidget(self.btn_fillet_sk)
 
+        self.btn_trim_sk = RibbonButton("Trim\n(T)", "✂️")
+        self.btn_trim_sk.setCheckable(True)
+        self.btn_trim_sk.setToolTip("Trim (T): remove the piece of a line, circle or arc up to the nearest crossings, or dangling stubs")
+        self.btn_trim_sk.clicked.connect(lambda: self.select_sketch_tool("TRIM"))
+        h_layout.addWidget(self.btn_trim_sk)
+
+        self.btn_mirror_sk = RibbonButton("Mirror\n(Shift+M)", "🪞")
+        self.btn_mirror_sk.setCheckable(True)
+        self.btn_mirror_sk.setToolTip("Mirror (Shift+M): select elements first, then click a line or an origin axis to mirror across")
+        self.btn_mirror_sk.clicked.connect(lambda: self.select_sketch_tool("MIRROR"))
+        h_layout.addWidget(self.btn_mirror_sk)
+
         # Separator
         sep_dim = QFrame()
         sep_dim.setFrameShape(QFrame.Shape.VLine)
@@ -385,6 +397,10 @@ class Ribbon(QWidget):
         self.btn_slot.setChecked(tool_name == "SLOT")
         if hasattr(self, "btn_fillet_sk"):
             self.btn_fillet_sk.setChecked(tool_name == "FILLET")
+        if hasattr(self, "btn_mirror_sk"):
+            self.btn_mirror_sk.setChecked(tool_name == "MIRROR")
+        if hasattr(self, "btn_trim_sk"):
+            self.btn_trim_sk.setChecked(tool_name == "TRIM")
         self.btn_dim.setChecked(tool_name == "DIMENSION")
         self.btn_move.setChecked(tool_name == "MOVE")
         self.sketch_tool_selected.emit(tool_name)

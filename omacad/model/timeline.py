@@ -436,6 +436,11 @@ class PatternFeature(Feature):
                         continue
                     off = tuple(i * self.spacing1 * np.array(d1) + j * self.spacing2 * np.array(d2))
                     out.append(lambda m, off=off: m.translate(off))
+        elif self.kind == "mirror" and self.mirror_mode.startswith("plane:"):
+            pl = getattr(self, "_mirror_plane", None)   # (point, unit normal), resolved in compute()
+            if pl is not None:
+                p0, nrm = np.array(pl[0], dtype=float), tuple(pl[1])
+                out.append(lambda m: m.translate(tuple(-p0)).mirror(nrm).translate(tuple(p0)))
         elif self.kind == "mirror":
             mode = self.mirror_mode
             if mode == "auto" and getattr(self, "_round_body", False):
@@ -737,6 +742,20 @@ class PatternFeature(Feature):
                 out = out + shifted
         return out
 
+    def _resolve_plane(self, doc):
+        """(point, unit normal) of the plane named in mirror_mode "plane:<id>" (origin or offset plane)."""
+        pid = self.mirror_mode.split(":", 1)[1]
+        if pid in doc.construction_planes:
+            c = doc.construction_planes[pid]
+            o, n = c["origin"], c["normal"]
+        elif pid in doc.origin_planes:
+            o, n = doc.origin_planes[pid].origin, doc.origin_planes[pid].normal
+        else:
+            return None
+        n = np.asarray(n, dtype=float)
+        ln = float(np.linalg.norm(n))
+        return (np.asarray(o, dtype=float), n / ln) if ln > 1e-9 else None
+
     def compute(self, doc, body_id: str):
         """(removed copies, added copies) for one body, or None if there is nothing to copy."""
         idx = doc.timeline.features.index(self) if self in doc.timeline.features else len(doc.timeline.features)
@@ -759,6 +778,7 @@ class PatternFeature(Feature):
         bmin, bmax = np.array(bb[:3]), np.array(bb[3:])
         centre = (bmin + bmax) / 2.0 if self.about == "body" else np.zeros(3)
         self._round_body = self._is_round(before)
+        self._mirror_plane = self._resolve_plane(doc) if self.mirror_mode.startswith("plane:") else None
         if self.kind == "fill":
             step_bodies = doc.step_states.get(idx, {})
             now = step_bodies.get(body_id, before)   # the body as it is when this step runs

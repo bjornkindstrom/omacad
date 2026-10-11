@@ -156,6 +156,10 @@ class Viewport3D(QOpenGLWidget):
     edges_selection_changed = Signal()
     extrude_handle_dragged = Signal(float)  # signed distance along the extrude arrow while it is dragged
     extrude_handle_drag_finished = Signal()  # emitted when dragging the handle finishes
+    move_gizmo_dragged = Signal(str, float)  # (axis: "X"|"Y"|"Z", delta_mm)
+    move_gizmo_finished = Signal()
+    move_gizmo_axis_selected = Signal(str)
+    body_clicked = Signal(str)  # body_id of clicked 3D body
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
 
@@ -225,6 +229,7 @@ class Viewport3D(QOpenGLWidget):
         self.extrude_handle = None   # dict(origin, axis, dist)
         self._handle_drag = False
         self._handle_hover = False
+        self.move_gizmo = None  # dict(origin, length, active_axis, hover_axis, dragging, start_proj)
 
         # Edge selection for fillet / chamfer
         self.edge_pick_mode: bool = False
@@ -255,6 +260,7 @@ class Viewport3D(QOpenGLWidget):
         self.sketch_palette.hide()
 
         # Fillet tool state
+        self._mirror_phase = "pick"
         self.fillet_first_line = None
         self.fillet_hover_corner = None
         self.fillet_preview = None
@@ -851,6 +857,142 @@ class Viewport3D(QOpenGLWidget):
         self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, np.array(tris, dtype=np.float32))
         GL.glUseProgram(0)
         GL.glEnable(GL.GL_DEPTH_TEST)
+
+    # ---- 3D Translation Gizmo (Move Body) -------------------------------------------
+    def set_move_gizmo(self, origin, length=None):
+        """Sets the 3D translation triad gizmo at the given body/pivot origin."""
+        if length is None:
+            length = max(25.0, min(75.0, self.distance * 0.18))
+        self.move_gizmo = {
+            "origin": np.asarray(origin, dtype=float),
+            "length": float(length),
+            "hover_axis": None,
+            "active_axis": "X",
+            "dragging": False,
+            "start_proj": 0.0,
+        }
+        self.update()
+
+    def clear_move_gizmo(self):
+        self.move_gizmo = None
+        self.update()
+
+    def _gizmo_axis_screen(self, axis_name: str):
+        if not self.move_gizmo:
+            return None, None
+        g = self.move_gizmo
+        orig = g["origin"]
+        dirs = {
+            "X": np.array([1.0, 0.0, 0.0]),
+            "Y": np.array([0.0, 1.0, 0.0]),
+            "Z": np.array([0.0, 0.0, 1.0])
+        }
+        tip = orig + dirs[axis_name] * g["length"]
+        so = self.world_to_screen(orig)
+        st = self.world_to_screen(tip)
+        return so, st
+
+    def _gizmo_hit(self, x: float, y: float) -> Optional[str]:
+        if not self.move_gizmo:
+            return None
+        best_ax, best_dist = None, 20.0
+        for ax in ("X", "Y", "Z"):
+            so, st = self._gizmo_axis_screen(ax)
+            if so is None or st is None:
+                continue
+            d_tip = math.hypot(x - st[0], y - st[1])
+            if d_tip < best_dist:
+                best_dist = d_tip
+                best_ax = ax
+            d_shaft = self._point_to_segment_dist((x, y), so, st)
+            if d_shaft < 10.0 and d_shaft < best_dist:
+                best_dist = d_shaft
+                best_ax = ax
+        return best_ax
+
+    def _gizmo_project_mouse(self, x: float, y: float, axis_name: str) -> float:
+        if not self.move_gizmo:
+            return 0.0
+        g = self.move_gizmo
+        proj, view, _ = self.get_matrices()
+        r0, rd = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        r0, rd = np.asarray(r0, dtype=float), np.asarray(rd, dtype=float)
+        dirs = {
+            "X": np.array([1.0, 0.0, 0.0]),
+            "Y": np.array([0.0, 1.0, 0.0]),
+            "Z": np.array([0.0, 0.0, 1.0])
+        }
+        a = dirs[axis_name]
+        w = g["origin"] - r0
+        b, d1, e = float(a @ rd), float(a @ w), float(rd @ w)
+        denom = 1.0 - b * b
+        if abs(denom) < 1e-6:
+            return 0.0
+        t = (b * e - d1) / denom
+        step = 0.1 if abs(t) < 10 else 0.5 if abs(t) < 50 else 1.0
+        return round(t / step) * step
+
+    def render_move_gizmo(self, mvp: np.ndarray):
+        g = self.move_gizmo
+        if not g or self.prog_flat is None or self.prog_thick is None:
+            return
+        origin = g["origin"]
+        length = g["length"]
+        size = self.distance * 0.038
+        dirs = {
+            "X": (np.array([1.0, 0.0, 0.0]), (0.95, 0.25, 0.25)),
+            "Y": (np.array([0.0, 1.0, 0.0]), (0.25, 0.85, 0.35)),
+            "Z": (np.array([0.0, 0.0, 1.0]), (0.25, 0.55, 0.95)),
+        }
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        for ax, (axis_vec, base_col) in dirs.items():
+            is_hover = (g.get("hover_axis") == ax)
+            is_active = (g.get("active_axis") == ax and g.get("dragging"))
+            lit = is_hover or is_active
+            col = (*(min(1.0, c + (0.3 if lit else 0.0)) for c in base_col), 1.0)
+            tip = origin + axis_vec * length
+            shaft_end = tip - axis_vec * size * 0.8
+            self.draw_thick_lines(mvp, [*origin, *shaft_end], col, 5.0 if lit else 3.5, halo=True)
+
+            # 3D Arrowhead cone
+            u = np.cross(axis_vec, [1.0, 0.0, 0.0])
+            if np.linalg.norm(u) < 1e-6:
+                u = np.cross(axis_vec, [0.0, 1.0, 0.0])
+            u = u / np.linalg.norm(u)
+            v_ = np.cross(axis_vec, u)
+            apex = tip + axis_vec * size * 0.4
+            base = tip - axis_vec * size * 0.8
+            ring = [base + size * 0.5 * (math.cos(t) * u + math.sin(t) * v_) for t in np.linspace(0, 2 * math.pi, 17)]
+            tris = []
+            for i in range(16):
+                tris += [*apex, *ring[i], *ring[i + 1], *base, *ring[i + 1], *ring[i]]
+            GL.glUseProgram(self.prog_flat)
+            GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
+            GL.glUniform4f(GL.glGetUniformLocation(self.prog_flat, "u_color"), *col)
+            self.draw_buffer_arrays(GL.GL_TRIANGLES, GL.glGetAttribLocation(self.prog_flat, "in_pos"), np.array(tris, dtype=np.float32))
+
+        GL.glUseProgram(0)
+        GL.glEnable(GL.GL_DEPTH_TEST)
+
+    def pick_body(self, x: float, y: float) -> Optional[str]:
+        """Returns the body_id of the nearest 3D solid body under the cursor."""
+        from omacad.model.faces import ray_mesh_hit
+        proj, view, _ = self.get_matrices()
+        origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        best_t, best_id = float("inf"), None
+        for bid, body in self.doc.bodies.items():
+            mesh = body.render_mesh
+            if mesh is not None and len(mesh.vertices) > 0:
+                hit = ray_mesh_hit(mesh, origin, ray_dir)
+                if hit is not None and hit[0] < best_t:
+                    best_t = hit[0]
+                    best_id = bid
+            for face in getattr(body, "faces", []):
+                t = ray_hit_face(face, origin, ray_dir)
+                if t is not None and t < best_t:
+                    best_t = t
+                    best_id = bid
+        return best_id
 
     # ---- Edge selection (fillet / chamfer) ------------------------------------------
     def begin_edge_pick(self):
@@ -1482,6 +1624,7 @@ class Viewport3D(QOpenGLWidget):
         self.fillet_first_line = None
         self.fillet_hover_corner = None
         self.fillet_preview = None
+        self._mirror_phase = "axis" if (tool_name == "MIRROR" and self.selected_entities) else "pick"
         if self._move:
             self._end_move(False)
         if tool_name == "MOVE" and not self.selected_entities:
@@ -1493,11 +1636,127 @@ class Viewport3D(QOpenGLWidget):
         self.sketch_second_uv = None
         self.sketch_current_uv = None
         self.sketch_tool_changed.emit(tool_name)
+        if tool_name == "MIRROR":
+            self._mirror_status()
+        if tool_name == "TRIM":
+            self.status_message.emit("Trim: click the piece of a line, circle or arc to remove (up to the nearest crossings or the free end).")
         if tool_name == "FILLET":
             if self.selected_entities:
                 self.fillet_selected_or_prompt()
             else:
                 self.status_message.emit("Fillet: Klicka på ett hörn mellan två linjer, eller klicka två linjer (Esc avbryter).")
+        self.update()
+
+    def _mirror_status(self):
+        if self._mirror_phase == "pick":
+            n = len(self.selected_entities)
+            self.status_message.emit(f"Mirror 1/2: click the shapes to mirror ({n} selected; Ctrl+click = single element), then press Enter or right-click.")
+        else:
+            self.status_message.emit("Mirror 2/2: click the line (or an origin axis) to mirror across. Right-click = back.")
+
+    def _mirror_next(self):
+        if not self.selected_entities:
+            self.status_message.emit("Mirror: click something to mirror first.")
+            return
+        self._mirror_phase = "axis"
+        self._mirror_status()
+        self.update()
+
+    def _mirror_axis_at(self, x, y):
+        """The mirror line under the cursor: a sketch line that is not itself selected, else an origin axis."""
+        uv = self.get_sketch_plane_uv(x, y)
+        if uv is None:
+            return None
+        from omacad.model.sketch import SketchLine
+        sk = self.doc.active_sketch
+        tol = self._entity_tolerance()
+        ent = sk.hit_test(uv[0], uv[1], tol)
+        if isinstance(ent, SketchLine) and ent.entity_id not in self.selected_entities:
+            return ent.p1, ent.p2
+        if abs(uv[1]) <= tol:
+            return (0.0, 0.0), (1.0, 0.0)
+        if abs(uv[0]) <= tol:
+            return (0.0, 0.0), (0.0, 1.0)
+        return None
+
+    def _mirror_hover(self, x, y):
+        axis = self._mirror_axis_at(x, y) if self._mirror_phase == "axis" else None
+        segs = []
+        if axis:
+            sk = self.doc.active_sketch
+            from omacad.model.sketch import Sketch
+            tmp = Sketch.from_dict(sk.to_dict())
+            n0 = len(tmp.entities)
+            try:
+                tmp.mirror_entities(self.selected_entities, *axis)
+            except Exception:
+                tmp.entities = tmp.entities[:n0]
+            for ent in tmp.entities[n0:]:
+                for a, b in ent.to_lines():
+                    segs += [*sk.plane.uv_to_world(*a), *sk.plane.uv_to_world(*b)]
+        arr = np.array(segs, dtype=np.float32) if segs else None
+        if arr is not None or self.fillet_preview is not None:
+            self.fillet_preview = arr
+            self.update()
+
+    def _mirror_at(self, x, y):
+        axis = self._mirror_axis_at(x, y)
+        if not axis:
+            self.status_message.emit("Mirror: click a line (not one of the selected) or an origin axis.")
+            return
+        sk = self.doc.active_sketch
+        before = sk.to_dict()
+        new = sk.mirror_entities(self.selected_entities, *axis)
+        self.fillet_preview = None
+        if not new:
+            self.status_message.emit("Mirror: nothing to mirror (lines, circles, arcs and slots are supported).")
+            return
+        self.doc.record_sketch_change(sk, before)
+        self.selected_entities = {e.entity_id for e in new}
+        self.selection_changed.emit()
+        self.doc.timeline.recompute(self.doc)
+        self.doc.notify_changed()
+        self.set_sketch_tool("NONE")
+        self.status_message.emit(f"Mirror: {len(new)} element(s) mirrored.")
+        self.update()
+
+    def _trim_plan_at(self, x, y):
+        uv = self.get_sketch_plane_uv(x, y)
+        if uv is None:
+            return None
+        from omacad.model.sketch_trim import trim_plan
+        return trim_plan(self.doc.active_sketch, uv[0], uv[1], self._entity_tolerance())
+
+    def _trim_hover(self, x, y):
+        """Shows the piece a click would remove."""
+        plan = self._trim_plan_at(x, y)
+        segs = []
+        if plan:
+            sk = self.doc.active_sketch
+            pts = [sk.plane.uv_to_world(*p) for p in plan[1]]
+            for a, b in zip(pts, pts[1:]):
+                segs += [*a, *b]
+        arr = np.array(segs, dtype=np.float32) if segs else None
+        if (arr is None) != (self.fillet_preview is None) or arr is not None:
+            self.fillet_preview = arr
+            self.update()
+
+    def _trim_at(self, x, y):
+        plan = self._trim_plan_at(x, y)
+        if not plan:
+            self.status_message.emit("Trim: click a line, circle or arc segment to remove (it ends at the nearest crossings).")
+            return
+        from omacad.model.sketch_trim import apply_trim
+        sk = self.doc.active_sketch
+        before = sk.to_dict()
+        apply_trim(sk, plan)
+        self.doc.record_sketch_change(sk, before)
+        self.selected_entities = set()
+        self.fillet_preview = None
+        self.selection_changed.emit()
+        self.doc.timeline.recompute(self.doc)
+        self.doc.notify_changed()
+        self.status_message.emit("Trim: removed. Click more pieces, or press Esc / right-click to finish.")
         self.update()
 
     def prompt_fillet_radius(self, line_a, line_b, corner_pt=None):
@@ -1918,6 +2177,7 @@ class Viewport3D(QOpenGLWidget):
         self.render_edge_pick(mvp)
         self.render_section_cap(mvp)
         self.render_extrude_handle(mvp)
+        self.render_move_gizmo(mvp)
         if (self.offset_preview is not None or self.fillet_preview is not None) and self.prog_thick is not None:
             prev_lines = self.fillet_preview if self.fillet_preview is not None else self.offset_preview
             GL.glDisable(GL.GL_DEPTH_TEST)
@@ -1932,8 +2192,13 @@ class Viewport3D(QOpenGLWidget):
             painter.end()
 
     def _get_canvas_texture(self, cid: str, b64_data: str) -> Optional[int]:
-        if cid in self._canvas_textures:
-            return self._canvas_textures[cid]
+        key = hash(b64_data)
+        cached = self._canvas_textures.get(cid)
+        if cached is not None:
+            if cached[0] == key:
+                return cached[1]
+            GL.glDeleteTextures([cached[1]])  # same id, new image (deleted + re-added, or other document)
+            del self._canvas_textures[cid]
         try:
             import base64
             from PySide6.QtGui import QImage
@@ -1953,7 +2218,7 @@ class Viewport3D(QOpenGLWidget):
             bits = img.constBits()
             GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, w, h, 0, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, bytes(bits))
             GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-            self._canvas_textures[cid] = tex_id
+            self._canvas_textures[cid] = (key, tex_id)
             return tex_id
         except Exception as e:
             print(f"Error creating canvas texture for {cid}: {e}")
@@ -2619,6 +2884,20 @@ class Viewport3D(QOpenGLWidget):
                 Qt.AlignmentFlag.AlignCenter,
                 banner_text
             )
+
+        if self.doc.active_sketch and self.sketch_tool in ("MIRROR", "TRIM"):
+            hint = {"TRIM": "TRIM: click the piece to remove",
+                    "MIRROR": ("MIRROR 1/2: click shapes, then Enter" if self._mirror_phase == "pick"
+                               else "MIRROR 2/2: click the mirror line / an axis")}[self.sketch_tool]
+            hf = QFont(); hf.setBold(True); hf.setPointSize(11)
+            painter.setFont(hf)
+            hw = QFontMetrics(hf).horizontalAdvance(hint) + 30
+            hr = QRectF(w / 2.0 - hw / 2.0, 58, hw, 30)
+            painter.setPen(QPen(qcolor(226, 109, 40), 1))
+            painter.setBrush(QBrush(qcolor(30, 34, 40, 230)))
+            painter.drawRoundedRect(hr, 6, 6)
+            painter.setPen(QPen(qcolor(255, 255, 255)))
+            painter.drawText(hr, Qt.AlignmentFlag.AlignCenter, hint)
 
         # 6. Bottom HUD Navigation Bar
         hud_w = 260
@@ -3340,6 +3619,17 @@ class Viewport3D(QOpenGLWidget):
         if self.measure is not None and event.button() == Qt.MouseButton.LeftButton and self.measure["mode"] == "sketch":
             self._measure_click(x, y)
             return
+        if event.button() == Qt.MouseButton.LeftButton and self.move_gizmo:
+            hit_ax = self._gizmo_hit(x, y)
+            if hit_ax:
+                g = self.move_gizmo
+                g["dragging"] = True
+                g["active_axis"] = hit_ax
+                g["start_proj"] = self._gizmo_project_mouse(x, y, hit_ax)
+                self.move_gizmo_axis_selected.emit(hit_ax)
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                self.update()
+                return
         if event.button() == Qt.MouseButton.LeftButton and self.extrude_handle and self._handle_hit(x, y):
             self._handle_drag = True
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
@@ -3377,6 +3667,42 @@ class Viewport3D(QOpenGLWidget):
                 return
 
         self.last_mouse_pos = event.position().toPoint()
+
+        # Handle Mirror Tool Click
+        if self.doc.active_sketch and self.sketch_tool == "MIRROR":
+            if event.button() == Qt.MouseButton.RightButton:   # right-click: next step / back / cancel
+                self.fillet_preview = None
+                if self._mirror_phase == "pick" and self.selected_entities:
+                    self._mirror_next()
+                elif self._mirror_phase == "axis":
+                    self._mirror_phase = "pick"
+                    self._mirror_status()
+                    self.update()
+                else:
+                    self.set_sketch_tool("NONE")
+                return
+            if event.button() == Qt.MouseButton.LeftButton:
+                if self._mirror_phase == "pick":
+                    ent = self._pick_entity(x, y)
+                    if ent is not None:   # click = whole connected shape, Ctrl+click = just this element
+                        ids = {ent.entity_id} if event.modifiers() & Qt.KeyboardModifier.ControlModifier \
+                            else self.doc.active_sketch.connected_entities(ent.entity_id)
+                        self.selected_entities = (self.selected_entities - ids) if ids <= self.selected_entities else (self.selected_entities | ids)
+                        self.selection_changed.emit()
+                        self._mirror_status()
+                        self.update()
+                else:
+                    self._mirror_at(x, y)
+                return
+
+        # Handle Trim Tool Click
+        if self.doc.active_sketch and self.sketch_tool == "TRIM":
+            if event.button() == Qt.MouseButton.RightButton:
+                self.set_sketch_tool("NONE")
+                return
+            if event.button() == Qt.MouseButton.LeftButton:
+                self._trim_at(x, y)
+                return
 
         # Handle Fillet Tool Click
         if self.doc.active_sketch and self.sketch_tool == "FILLET":
@@ -3519,6 +3845,21 @@ class Viewport3D(QOpenGLWidget):
         if self.viewcube.handle_mouse_move(int(x), int(y), self.width()):
             self.update()
 
+        if self.move_gizmo:
+            g = self.move_gizmo
+            if g.get("dragging"):
+                cur_proj = self._gizmo_project_mouse(x, y, g["active_axis"])
+                delta = cur_proj - g["start_proj"]
+                self.move_gizmo_dragged.emit(g["active_axis"], delta)
+                self.update()
+                return
+            else:
+                hover_ax = self._gizmo_hit(x, y)
+                if hover_ax != g.get("hover_axis"):
+                    g["hover_axis"] = hover_ax
+                    self.setCursor(Qt.CursorShape.OpenHandCursor if hover_ax else Qt.CursorShape.ArrowCursor)
+                    self.update()
+
         if self._handle_drag:
             val = self._handle_value(x, y)
             if val is not None:
@@ -3561,13 +3902,18 @@ class Viewport3D(QOpenGLWidget):
         self.hovered_dim_id = hovered
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "DIMENSION", "MOVE"):
+        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "DIMENSION", "MOVE"):
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
 
         if hovered != prev_hovered:
             self.update()
+
+        if self.doc.active_sketch and self.sketch_tool == "TRIM":
+            self._trim_hover(x, y)
+        if self.doc.active_sketch and self.sketch_tool == "MIRROR":
+            self._mirror_hover(x, y)
 
         if self.doc.active_sketch and self.sketch_tool == "FILLET":
             sk = self.doc.active_sketch
@@ -3771,6 +4117,12 @@ class Viewport3D(QOpenGLWidget):
             self.is_panning = False
             self._measure_click(event.position().x(), event.position().y())
             return
+        if self.move_gizmo and self.move_gizmo.get("dragging") and event.button() == Qt.MouseButton.LeftButton:
+            self.move_gizmo["dragging"] = False
+            self.setCursor(Qt.CursorShape.OpenHandCursor if self.move_gizmo.get("hover_axis") else Qt.CursorShape.ArrowCursor)
+            self.move_gizmo_finished.emit()
+            self.update()
+            return
         if self._handle_drag and event.button() == Qt.MouseButton.LeftButton:
             self._handle_drag = False
             self.setCursor(Qt.CursorShape.OpenHandCursor if self._handle_hover else Qt.CursorShape.ArrowCursor)
@@ -3876,6 +4228,15 @@ class Viewport3D(QOpenGLWidget):
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()
             return
+        if self.doc.active_sketch and self.sketch_tool == "MIRROR":
+            k = event.key()
+            if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self._mirror_phase == "pick":
+                self._mirror_next()
+                return
+            if k == Qt.Key.Key_Escape:
+                self.fillet_preview = None
+                self.set_sketch_tool("NONE")
+                return
         if self._handle_dyn_key(event):
             return
         if (event.key() == Qt.Key.Key_Escape and self.sketch_tool == "DIMENSION"
@@ -3918,6 +4279,9 @@ class Viewport3D(QOpenGLWidget):
             elif event.key() == Qt.Key.Key_D:
                 self.set_sketch_tool("DIMENSION")
                 return
+            elif event.key() == Qt.Key.Key_M and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self.set_sketch_tool("MIRROR")
+                return
             elif event.key() == Qt.Key.Key_M:
                 self.set_sketch_tool("MOVE")
                 return
@@ -3926,6 +4290,9 @@ class Viewport3D(QOpenGLWidget):
                 return
             elif event.key() == Qt.Key.Key_F:
                 self.set_sketch_tool("FILLET")
+                return
+            elif event.key() == Qt.Key.Key_T:
+                self.set_sketch_tool("TRIM")
                 return
             elif event.key() == Qt.Key.Key_I:
                 self.begin_measure()

@@ -38,10 +38,6 @@ def main():
     # Create & Show Main Window
     window = MainWindow()
     
-    # Add an initial demo cube so the user immediately sees 3D solid & timeline in action!
-    window.doc.add_box(40.0, 40.0, 20.0, center=True, name="Base Box")
-    window.viewport.zoom_fit()
-    
     window.show()
 
     sys.exit(app.exec())

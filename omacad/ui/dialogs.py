@@ -570,7 +570,7 @@ class PatternDialog(BaseFeatureDialog):
 
     KINDS = ["linear", "mirror", "circular", "fill"]
     AXES = ["x", "y", "z"]
-    MIRROR_MODES = ["auto", "x", "y", "xy", "diameter"]
+    MIRROR_MODES = ["auto", "x", "y", "xy", "diameter", "plane"]
 
     def __init__(self, doc: Document, parent=None, feature=None):
         super().__init__("Pattern / Mirror", parent)
@@ -606,7 +606,14 @@ class PatternDialog(BaseFeatureDialog):
         self.spn_space2 = ExprDoubleSpinBox(); self.spn_space2.setRange(0.01, 100000); self.spn_space2.setSuffix(" mm"); self.spn_space2.setValue(20.0)
         # mirror
         self.cmb_mirror = QComboBox()
-        self.cmb_mirror.addItems(["Auto (round body: along the diameter)", "Mirror left-right (X)", "Mirror front-back (Y)", "All four corners (X and Y)", "Along the diameter (opposite side)"])
+        self.cmb_mirror.addItems(["Auto (round body: along the diameter)", "Mirror left-right (X)", "Mirror front-back (Y)", "All four corners (X and Y)", "Along the diameter (opposite side)", "Across a plane…"])
+        self.plane_keys, plane_labels = [], []
+        for pid, cp in doc.construction_planes.items():
+            self.plane_keys.append(pid); plane_labels.append(f"📐 {cp['name']}")
+        for op in ("XY", "XZ", "YZ"):
+            self.plane_keys.append(op); plane_labels.append(f"🌐 {op} Plane")
+        self.cmb_mplane = QComboBox(); self.cmb_mplane.addItems(plane_labels)
+        self.cmb_mplane.setCurrentIndex(self.plane_keys.index("YZ"))
         # circular
         self.spn_angle = ExprDoubleSpinBox(); self.spn_angle.setRange(1, 360); self.spn_angle.setSuffix(" °"); self.spn_angle.setValue(360)
         self.cmb_about = QComboBox(); self.cmb_about.addItems(["Centre of the body", "Origin"])
@@ -636,7 +643,7 @@ class PatternDialog(BaseFeatureDialog):
         self.main_layout.addWidget(self.lbl_info)
         self.add_buttons()
         self.cmb_kind.currentIndexChanged.connect(self._show_kind)
-        for w_ in (self.cmb_kind, self.cmb_axis1, self.cmb_axis2, self.cmb_mirror, self.cmb_about, self.cmb_layout):
+        for w_ in (self.cmb_kind, self.cmb_axis1, self.cmb_axis2, self.cmb_mirror, self.cmb_mplane, self.cmb_about, self.cmb_layout):
             w_.currentIndexChanged.connect(lambda *_: self.changed.emit())
         for w_ in (self.spn_count1, self.spn_count2, self.spn_space1, self.spn_space2, self.spn_angle, self.spn_gap, self.spn_margin, self.spn_partial):
             w_.valueChanged.connect(lambda *_: self.changed.emit())
@@ -667,6 +674,8 @@ class PatternDialog(BaseFeatureDialog):
         mode = self.MIRROR_MODES[self.cmb_mirror.currentIndex()]
         if kind == "mirror" and (mode == "diameter" or (mode == "auto" and getattr(self, "round_body", False))):
             rows.insert(1, ("Copies (even spacing):", self.spn_count1))   # round body: count them out around the circle
+        if kind == "mirror" and mode == "plane":
+            rows = [("Mirror:", self.cmb_mirror), ("Plane:", self.cmb_mplane)]
         for text, widget in rows:
             if kind == "linear" and widget in (self.cmb_axis2, self.spn_count2, self.spn_space2) and not self.chk_second.isChecked():
                 continue
@@ -684,7 +693,12 @@ class PatternDialog(BaseFeatureDialog):
         self.chk_second.setChecked(int(round(f.count2)) > 1)
         self.cmb_axis2.setCurrentIndex(self.AXES.index(f.axis2)); self.spn_count2.setValue(max(1, int(round(f.count2))))
         self.spn_space2.setValue(f.spacing2)
-        if f.mirror_mode in self.MIRROR_MODES:
+        if f.mirror_mode.startswith("plane:"):
+            self.cmb_mirror.setCurrentIndex(self.MIRROR_MODES.index("plane"))
+            pid = f.mirror_mode.split(":", 1)[1]
+            if pid in self.plane_keys:
+                self.cmb_mplane.setCurrentIndex(self.plane_keys.index(pid))
+        elif f.mirror_mode in self.MIRROR_MODES:
             self.cmb_mirror.setCurrentIndex(self.MIRROR_MODES.index(f.mirror_mode))
         self.cmb_about.setCurrentIndex(0 if f.about == "body" else 1)
         self.spn_angle.setValue(f.angle)
@@ -718,10 +732,13 @@ class PatternDialog(BaseFeatureDialog):
             return {"axis1": "x", "count1": self.spn_partial.value(), "spacing1": self.spn_gap.value(), "axis2": "y", "count2": 1,
                     "spacing2": self.spn_margin.value(), "mirror_mode": mode,
                     "about": "body", "angle": 360.0}
+        mmode = self.MIRROR_MODES[self.cmb_mirror.currentIndex()]
+        if mmode == "plane":
+            mmode = "plane:" + self.plane_keys[max(0, self.cmb_mplane.currentIndex())]
         return {
             "axis1": self.AXES[self.cmb_axis1.currentIndex()], "count1": self.spn_count1.value(), "spacing1": self.spn_space1.value(),
             "axis2": self.AXES[self.cmb_axis2.currentIndex()], "count2": self.spn_count2.value() if second else 1,
-            "spacing2": self.spn_space2.value(), "mirror_mode": self.MIRROR_MODES[self.cmb_mirror.currentIndex()],
+            "spacing2": self.spn_space2.value(), "mirror_mode": mmode,
             "about": "body" if self.cmb_about.currentIndex() == 0 else "origin", "angle": self.spn_angle.value(),
         }
 

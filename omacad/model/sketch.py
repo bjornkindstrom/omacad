@@ -883,6 +883,43 @@ class Sketch:
         self.solve_profiles()
         return new
 
+    def mirror_entities(self, ids, a, b) -> list:
+        """Mirror copies of the given elements across the line through points a and b (the originals stay).
+        Lines, circles, arcs and slots; the copies carry no dimensions or constraints."""
+        ax, ay = a
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        L = math.hypot(dx, dy)
+        if L < 1e-9:
+            return []
+        dx, dy = dx / L, dy / L
+
+        def mp(q):
+            wx, wy = q[0] - ax, q[1] - ay
+            t = wx * dx + wy * dy
+            fx, fy = ax + dx * t, ay + dy * t   # foot of the perpendicular
+            return (2 * fx - q[0], 2 * fy - q[1])
+
+        ids = set(ids)
+        new = []
+        for ent in list(self.entities):
+            if ent.entity_id not in ids:
+                continue
+            c = ent.is_construction
+            if isinstance(ent, SketchLine):
+                n = SketchLine(self._new_entity_id("line"), mp(ent.p1), mp(ent.p2), is_construction=c)
+            elif isinstance(ent, SketchCircle):
+                n = SketchCircle(self._new_entity_id("circle"), mp(ent.center), ent.radius, is_construction=c)
+            elif isinstance(ent, SketchArc):
+                n = SketchArc(self._new_entity_id("arc"), mp(ent.p_start), mp(ent.p_mid), mp(ent.p_end), is_construction=c)
+            elif isinstance(ent, SketchSlot):
+                n = SketchSlot(self._new_entity_id("slot"), mp(ent.center1), mp(ent.center2), ent.radius, is_construction=c)
+            else:
+                continue
+            self.entities.append(n)
+            new.append(n)
+        self.solve_profiles()
+        return new
+
     @staticmethod
     def polygon_points(center, vertex, sides: int):
         """Corners of a regular polygon: one corner at `vertex`, the others evenly round `center`."""

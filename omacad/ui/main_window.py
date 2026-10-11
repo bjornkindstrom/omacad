@@ -665,6 +665,9 @@ class MainWindow(QMainWindow):
         self.ribbon.btn_polygon.setChecked(tool_name == "POLYGON")
         self.ribbon.btn_arc.setChecked(tool_name == "ARC")
         self.ribbon.btn_slot.setChecked(tool_name == "SLOT")
+        self.ribbon.btn_trim_sk.setChecked(tool_name == "TRIM")
+        self.ribbon.btn_mirror_sk.setChecked(tool_name == "MIRROR")
+        self.ribbon.btn_fillet_sk.setChecked(tool_name == "FILLET")
         self.ribbon.btn_dim.setChecked(tool_name == "DIMENSION")
         self.ribbon.btn_move.setChecked(tool_name == "MOVE")
         if tool_name != "NONE":
