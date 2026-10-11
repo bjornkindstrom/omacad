@@ -1031,6 +1031,92 @@ class RevolveFeature(Feature):
         }
 
 
+def hole_tool(kind: str, diameter: float, depth: float, cb_diameter: float = 0.0, cb_depth: float = 0.0,
+              cs_diameter: float = 0.0, cs_angle: float = 90.0, tip: str = "flat", tip_angle: float = 118.0,
+              margin: float = 0.5, segments: int = 64) -> m3d.Manifold:
+    """The drill: top face at z = 0, going down to z = -depth. kind: simple, counterbore, countersink."""
+    r = diameter / 2.0
+    top = margin
+    pts = [(0.0, top)]
+    if kind == "counterbore" and cb_diameter > diameter and cb_depth > 0:
+        rc = cb_diameter / 2.0
+        cbd = min(cb_depth, depth)
+        pts += [(rc, top), (rc, -cbd), (r, -cbd)]
+    elif kind == "countersink" and cs_diameter > diameter:
+        rs = cs_diameter / 2.0
+        t = math.tan(math.radians(max(10.0, min(cs_angle, 170.0))) / 2.0)
+        h = (rs - r) / t
+        pts += [(rs + top * t, top), (r, -min(h, depth))]
+    else:
+        pts += [(r, top)]
+    pts.append((r, -depth))
+    if tip == "angle":
+        pts.append((0.0, -depth - r / math.tan(math.radians(tip_angle) / 2.0)))
+    else:
+        pts.append((0.0, -depth))
+    area = sum(pts[i][0] * pts[(i + 1) % len(pts)][1] - pts[(i + 1) % len(pts)][0] * pts[i][1] for i in range(len(pts)))
+    if area < 0:   # a cross-section must run counter-clockwise
+        pts.reverse()
+    return m3d.Manifold.revolve(m3d.CrossSection([[list(map(float, q)) for q in pts]]), segments)
+
+
+class HoleFeature(Feature):
+    """Drilled holes (Fusion 360 Hole): simple, counterbore or countersink, placed at points on faces.
+    points: [{"origin": [x, y, z], "normal": [nx, ny, nz]}], the normal points out of the material."""
+
+    def __init__(self, feature_id: str, name: str, points, hole_type: str = "simple", diameter: float = 6.0,
+                 depth: float = 10.0, through: bool = False, cb_diameter: float = 12.0, cb_depth: float = 4.0,
+                 cs_diameter: float = 12.0, cs_angle: float = 90.0, tip: str = "flat", tip_angle: float = 118.0):
+        super().__init__(feature_id, "hole", name)
+        self.points = [{"origin": [float(x) for x in p["origin"]], "normal": [float(x) for x in p["normal"]]} for p in points]
+        self.hole_type = hole_type
+        self.diameter, self.depth, self.through = float(diameter), float(depth), bool(through)
+        self.cb_diameter, self.cb_depth = float(cb_diameter), float(cb_depth)
+        self.cs_diameter, self.cs_angle = float(cs_diameter), float(cs_angle)
+        self.tip, self.tip_angle = tip, float(tip_angle)
+
+    def tools(self, doc: Any):
+        """One drill per placed point, in world space."""
+        out = []
+        reach = 1.0
+        for b in doc.bodies.values():
+            bb = np.array(b.manifold.bounding_box())
+            reach = max(reach, float(np.linalg.norm(bb[3:] - bb[:3])))
+        depth = reach + 1.0 if self.through else max(self.depth, 0.01)
+        tool = hole_tool(self.hole_type, self.diameter, depth, self.cb_diameter, self.cb_depth, self.cs_diameter,
+                         self.cs_angle, "flat" if self.through else self.tip, self.tip_angle)
+        for pt in self.points:
+            n = np.array(pt["normal"], dtype=float)
+            n = n / max(float(np.linalg.norm(n)), 1e-12)
+            u = np.cross(n, [1.0, 0.0, 0.0])
+            if np.linalg.norm(u) < 1e-6:
+                u = np.cross(n, [0.0, 1.0, 0.0])
+            u = u / np.linalg.norm(u)
+            v = np.cross(n, u)
+            out.append(tool.transform(np.column_stack([u, v, n, np.array(pt["origin"], dtype=float)]).astype(float)))
+        return out
+
+    def execute(self, doc: Any) -> None:
+        tools = self.tools(doc)
+        if not tools:
+            return
+        cutter = m3d.Manifold.batch_boolean(tools, m3d.OpType.Add) if len(tools) > 1 else tools[0]
+        for body in list(doc.bodies.values()):
+            if not _bbox_overlap(body.manifold, cutter):
+                continue
+            result = body.manifold - cutter
+            if result.is_empty():
+                continue
+            body.manifold = CadKernel.drop_slivers(result)
+            body.update_render_mesh()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"feature_id": self.feature_id, "feature_type": self.feature_type, "name": self.name, "suppressed": self.suppressed,
+                "points": self.points, "hole_type": self.hole_type, "diameter": self.diameter, "depth": self.depth,
+                "through": self.through, "cb_diameter": self.cb_diameter, "cb_depth": self.cb_depth,
+                "cs_diameter": self.cs_diameter, "cs_angle": self.cs_angle, "tip": self.tip, "tip_angle": self.tip_angle}
+
+
 class CombineFeature(Feature):
     def __init__(self, feature_id: str, name: str, target_body_id: str, tool_body_id: str, operation: str = "join"):
         super().__init__(feature_id, "combine", name)

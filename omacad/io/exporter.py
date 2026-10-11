@@ -13,7 +13,7 @@ import trimesh
 from omacad.model.document import Document, Parameter
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
                                     ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature,
-                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature)
+                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature)
 from omacad.model.sketch import Sketch
 
 
@@ -389,6 +389,11 @@ class Exporter:
                                       axis=f_data.get("axis", ["v"]), angle=f_data.get("angle", 360.0),
                                       direction=f_data.get("direction", "one_side"), angle2=f_data.get("angle2", 0.0),
                                       extra_profiles=f_data.get("extra_profiles", []))
+                doc.timeline.add_feature(feat)
+            elif ft == "hole":
+                feat = HoleFeature(fid, fname, f_data.get("points", []),
+                                   **{k: f_data[k] for k in ("hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth",
+                                                             "cs_diameter", "cs_angle", "tip", "tip_angle") if k in f_data})
                 doc.timeline.add_feature(feat)
             elif ft == "fillet":
                 feat = FilletFeature(fid, fname, [tuple(e) if e and isinstance(e[0], str) else (e[0], e[1]) for e in f_data["edges"]],

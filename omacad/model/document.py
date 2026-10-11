@@ -8,7 +8,7 @@ from typing import Dict, Optional, List, Callable, Tuple
 import numpy as np
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
-    SphereFeature, ExtrudeFeature, RevolveFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
+    SphereFeature, ExtrudeFeature, RevolveFeature, HoleFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
     ImportMeshFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
@@ -295,6 +295,15 @@ class Document:
         self.notify_changed()
         return feat
 
+    def add_hole(self, points, exprs=None, **params) -> HoleFeature:
+        feat_id = f"hole_{len(self.timeline.features) + 1}"
+        feat = HoleFeature(feat_id, f"Hole {len([f for f in self.timeline.features if f.feature_type == 'hole']) + 1}", points, **params)
+        feat.exprs = dict(exprs or {})
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
     def select_body(self, body_id: Optional[str], multi: bool = False) -> None:
         if not multi:
             for b in self.bodies.values():
@@ -439,6 +448,7 @@ class Document:
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),
         "shell": ("thickness", "direction", "thickness2"),
+        "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle"),
         "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot"),
     }
 
