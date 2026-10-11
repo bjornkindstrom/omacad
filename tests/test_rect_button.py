@@ -5,9 +5,11 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from omacad.model.document import Document
-from omacad.ui import settings as settings_mod
-from omacad.ui.ribbon import RECT_TOOLS
+pytest.importorskip("PySide6")        # CI installs only the modelling dependencies
+
+from omacad.model.document import Document  # noqa: E402
+from omacad.ui import settings as settings_mod  # noqa: E402
+from omacad.ui.ribbon import RECT_TOOLS  # noqa: E402
 
 
 @pytest.fixture
