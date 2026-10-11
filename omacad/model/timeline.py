@@ -411,7 +411,7 @@ class PatternFeature(Feature):
     def __init__(self, feature_id: str, name: str, source_ids, kind: str = "linear", **params):
         super().__init__(feature_id, "pattern", name)
         self.source_ids = list(source_ids)
-        self.kind = kind                    # "linear", "mirror", "circular"
+        self.kind = kind                    # "linear", "mirror", "circular", "fill" (gap = spacing1, margin = spacing2, layout in mirror_mode)
         self.axis1, self.count1, self.spacing1 = params.get("axis1", "x"), float(params.get("count1", 2)), float(params.get("spacing1", 20.0))
         self.axis2, self.count2, self.spacing2 = params.get("axis2", "y"), float(params.get("count2", 1)), float(params.get("spacing2", 20.0))
         self.mirror_mode = params.get("mirror_mode", "auto")   # auto, x, y, xy
@@ -463,6 +463,111 @@ class PatternFeature(Feature):
                 deg = k * step
                 out.append(lambda m, deg=deg: m.translate(tuple(-c)).rotate((0.0, 0.0, deg)).translate(tuple(c)))
         return out
+
+    def _source_plane(self, doc):
+        for f in doc.timeline.features:
+            if f.feature_id in self.source_ids:
+                sk = getattr(f, "sketch", None) or doc.sketches.get(getattr(f, "sketch_id", None))
+                if sk is not None:
+                    return sk.plane
+        return None
+
+    def _fill_funcs(self, doc, before, removed, added):
+        """Fill the flat face the source sketch is on: copies on a lattice that keeps exactly `gap` mm between
+        neighbours (measured edge to edge, so hexagons, circles and triangles all pack right), staying
+        `margin` mm inside the face. The original stays where it is and anchors the lattice."""
+        from shapely.geometry import Polygon
+        from shapely.ops import unary_union
+        from shapely import affinity
+        from omacad.model.faces import compute_planar_faces
+        plane = self._source_plane(doc)
+        if plane is None:
+            return []
+        gap, margin = max(self.spacing1, 0.0), max(self.spacing2, 0.0)
+        o = np.asarray(plane.origin, dtype=float)
+        n = np.asarray(plane.normal, dtype=float)
+        ua, va = np.asarray(plane.u_axis, dtype=float), np.asarray(plane.v_axis, dtype=float)
+        inv = np.linalg.inv(np.vstack([plane.get_transform_matrix_3x4(), [0, 0, 0, 1]]))[:3]
+        # the footprint of what the steps changed, seen along the plane's normal
+        shapes = []
+        for m in (removed, added):
+            if not m.is_empty():
+                for ring in m.transform(inv).project().to_polygons():
+                    if len(ring) >= 3:
+                        shapes.append(Polygon(ring).buffer(0))
+        shapes = [sh for sh in shapes if not sh.is_empty]
+        if not shapes:
+            return []
+        foot = unary_union(shapes)
+        # the flat face in that plane (the biggest region around the footprint)
+        regions = []
+        for face in compute_planar_faces(before):
+            if abs(abs(float(face.normal @ n)) - 1.0) > 1e-3 or abs(float((face.origin - o) @ n)) > 1e-3:
+                continue
+            for tri in face.tris:
+                pg = Polygon([(float(v @ ua), float(v @ va)) for v in tri])
+                if pg.is_valid and pg.area > 1e-9:
+                    regions.append(pg)
+        if not regions:
+            return []
+        face_poly = unary_union(regions)
+        parts = list(face_poly.geoms) if hasattr(face_poly, "geoms") else [face_poly]
+        c0 = foot.representative_point()
+        face_poly = next((pt for pt in parts if pt.buffer(1e-6).contains(c0)), max(parts, key=lambda q: q.area))
+        room = face_poly.buffer(-margin) if margin > 0 else face_poly
+        if room.is_empty:
+            return []
+        minx, miny, maxx, maxy = foot.bounds
+        bw, bh = maxx - minx, maxy - miny
+
+        def clear_dx(ax, ay, hi):   # smallest shift along (ax, ay) that leaves `gap` between two footprints
+            lo_, hi_ = 0.0, hi
+            for _ in range(40):
+                mid = (lo_ + hi_) / 2.0
+                if foot.distance(affinity.translate(foot, ax * mid, ay * mid)) >= gap - 1e-9:
+                    hi_ = mid
+                else:
+                    lo_ = mid
+            return hi_
+
+        stagger = self.mirror_mode == "stagger"
+        dx = clear_dx(1.0, 0.0, bw + gap + 1e-6)
+        dy_grid = clear_dx(0.0, 1.0, bh + gap + 1e-6)
+        if stagger:
+            sx = dx / 2.0
+            lo_, hi_ = 0.0, bh + gap + 1e-6
+            for _ in range(40):
+                mid = (lo_ + hi_) / 2.0
+                if foot.distance(affinity.translate(foot, sx, mid)) >= gap - 1e-9:
+                    hi_ = mid
+                else:
+                    lo_ = mid
+            dy = max(hi_, dy_grid / 2.0)
+        else:
+            sx, dy = 0.0, dy_grid
+        if dx < 1e-6 or dy < 1e-6:
+            return []
+        rx0, ry0, rx1, ry1 = room.bounds
+        reach_x = max(abs(rx1 - c0.x), abs(rx0 - c0.x)) + bw
+        reach_y = max(abs(ry1 - c0.y), abs(ry0 - c0.y)) + bh
+        imax, jmax = int(reach_x / dx) + 2, int(reach_y / dy) + 2
+        funcs = []
+        # footprint test works on a prepared polygon for speed
+        from shapely.prepared import prep
+        prepared = prep(room)
+        for j in range(-jmax, jmax + 1):
+            off = sx if (j % 2) else 0.0
+            for i in range(-imax, imax + 1):
+                a, b = i * dx + off, j * dy
+                if i == 0 and j == 0:
+                    continue
+                if not prepared.contains(affinity.translate(foot, a, b)):
+                    continue
+                vec = tuple(ua * a + va * b)
+                funcs.append(lambda m, vec=vec: m.translate(vec))
+                if len(funcs) >= 1500:
+                    return funcs
+        return funcs
 
     @staticmethod
     def _is_round(body) -> bool:
@@ -526,18 +631,20 @@ class PatternFeature(Feature):
         bmin, bmax = np.array(bb[:3]), np.array(bb[3:])
         centre = (bmin + bmax) / 2.0 if self.about == "body" else np.zeros(3)
         self._round_body = self._is_round(before)
-        funcs = self._transforms(centre, (lo + hi) / 2.0, bmax - bmin)
+        if self.kind == "fill":
+            funcs = self._fill_funcs(doc, before, removed, added)
+        else:
+            funcs = self._transforms(centre, (lo + hi) / 2.0, bmax - bmin)
         if not funcs:
+            self.copies = 0
             return None
-        rem = None
-        add = None
-        for f in funcs:
-            if not removed.is_empty():
-                t = f(removed)
-                rem = t if rem is None else rem + t
-            if not added.is_empty():
-                t = f(added)
-                add = t if add is None else add + t
+        rem = add = None
+        if not removed.is_empty():
+            parts = [f(removed) for f in funcs]
+            rem = m3d.Manifold.batch_boolean(parts, m3d.OpType.Add) if len(parts) > 1 else parts[0]
+        if not added.is_empty():
+            parts = [f(added) for f in funcs]
+            add = m3d.Manifold.batch_boolean(parts, m3d.OpType.Add) if len(parts) > 1 else parts[0]
         self.copies = len(funcs)
         return rem, add
 

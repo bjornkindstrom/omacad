@@ -10,7 +10,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 
 **Skissa**
 - Skissa på origin-plan, på valfri plan yta (högerklick → *Create Sketch on this Face*) och på egna plan (Offset Plane).
-- Linje, rektangel, centrumrektangel, cirkel, 3-punktsbåge, slot. Snäpper mot hörn, kanter, mittpunkter, rutnät och kroppens kanter.
+- Linje, rektangel, centrumrektangel, cirkel, 3-punktsbåge, slot och **regelbunden polygon** (`P`: trianglar, hexagoner ... klicka mitten, Tab ger sidlängd och antal sidor). Snäpper mot hörn, kanter, mittpunkter, rutnät och kroppens kanter.
 - **Tab-inmatning** medan du ritar (längd, vinkel, bredd/höjd, diameter) – Enter går vidare, Esc ångrar.
 - **Mått och villkor** (SolveSpace): horisontell, vertikal, parallell, vinkelrät, lika, tangent, koncentrisk, fixerad, avstånd, längd, vinkel, diameter, punkt–linje. Guidad högerklicksmeny på varje element.
 - Markera, flytta (dra eller `M` med dx/dy), ta bort, **Offset (`O`) med förhandsvisning**, ångra/gör om.
@@ -20,6 +20,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt.
 - Box, Cylinder, Sphere, Combine (Join/Cut/Intersect).
 - **Fillet och Chamfer** på raka kanter, cirklar (skruvhål, försänkningar) och hela konturer med rundade hörn. Inre och yttre kanter, dubbelklick väljer hela loopen, förhandsvisning.
 - **Pattern / Mirror**: jämnt fördelade kopior, speglade hörn (kopierar t.ex. hål med chamfers) eller runt en axel, med förhandsvisning.
+- **Fill the face** (Pattern/Mirror → *Fill the face*): fyller en yta med kopior med exakt fast mellanrum (kant till kant, så hexagoner, cirklar och trianglar packas rätt), valfri marginal mot kanten, rutnät eller förskjutet (bikake).
 - **Offset Plane** i två klick: välj XY/XZ/YZ, peka på valfri yta (även cylindrar) – planet läggs tangent mot ytan.
 
 **Se in i modellen**

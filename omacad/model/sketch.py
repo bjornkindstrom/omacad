@@ -867,6 +867,27 @@ class Sketch:
         self.solve_profiles()
         return new
 
+    @staticmethod
+    def polygon_points(center, vertex, sides: int):
+        """Corners of a regular polygon: one corner at `vertex`, the others evenly round `center`."""
+        cx, cy = center
+        r = math.hypot(vertex[0] - cx, vertex[1] - cy)
+        a0 = math.atan2(vertex[1] - cy, vertex[0] - cx)
+        return [(cx + r * math.cos(a0 + 2 * math.pi * k / sides), cy + r * math.sin(a0 + 2 * math.pi * k / sides))
+                for k in range(sides)]
+
+    def add_polygon(self, center, vertex, sides: int, is_construction: bool = False) -> list:
+        """A regular polygon (triangle, hexagon ...) as joined lines."""
+        pts = self.polygon_points(center, vertex, max(3, int(sides)))
+        lines = []
+        for i, a in enumerate(pts):
+            b = pts[(i + 1) % len(pts)]
+            line = SketchLine(self._new_entity_id("line"), a, b, is_construction=is_construction)
+            self.entities.append(line)
+            lines.append(line)
+        self.solve_profiles()
+        return lines
+
     def add_loop(self, points, closed: bool = True) -> List[SketchLine]:
         """A polyline as plain lines (no dimensions or constraints); used to turn a face outline into a sketch."""
         pts = [tuple(map(float, p)) for p in points]

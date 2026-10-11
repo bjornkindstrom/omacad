@@ -239,6 +239,12 @@ class Ribbon(QWidget):
         self.btn_circle.clicked.connect(lambda: self.select_sketch_tool("CIRCLE"))
         h_layout.addWidget(self.btn_circle)
 
+        self.btn_polygon = RibbonButton("Polygon\n(P)", "⬡")
+        self.btn_polygon.setCheckable(True)
+        self.btn_polygon.setToolTip("Regular polygon: click the centre, move out, Tab to type the side length and the number of sides")
+        self.btn_polygon.clicked.connect(lambda: self.select_sketch_tool("POLYGON"))
+        h_layout.addWidget(self.btn_polygon)
+
         self.btn_arc = RibbonButton("3-Point\nArc (A)", "⌒")
         self.btn_arc.setCheckable(True)
         self.btn_arc.clicked.connect(lambda: self.select_sketch_tool("ARC"))
@@ -326,6 +332,7 @@ class Ribbon(QWidget):
         self.btn_rect.setChecked(tool_name == "RECT")
         self.btn_crect.setChecked(tool_name == "CENTER_RECT")
         self.btn_circle.setChecked(tool_name == "CIRCLE")
+        self.btn_polygon.setChecked(tool_name == "POLYGON")
         self.btn_arc.setChecked(tool_name == "ARC")
         self.btn_slot.setChecked(tool_name == "SLOT")
         self.btn_dim.setChecked(tool_name == "DIMENSION")

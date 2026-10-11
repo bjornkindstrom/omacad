@@ -949,6 +949,10 @@ class Viewport3D(QOpenGLWidget):
             if p1 != p2:
                 created = sketch.add_center_rect(p1, p2, is_construction=is_const)
             self.sketch_start_uv = None
+        elif self.sketch_tool == "POLYGON":
+            if math.hypot(p2[0] - p1[0], p2[1] - p1[1]) > 0.5:
+                sketch.add_polygon(p1, p2, self._polygon_sides(), is_construction=is_const)
+            self.sketch_start_uv = None
         elif self.sketch_tool == "CIRCLE":
             r = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
             if r > 0.5:
@@ -1025,11 +1029,21 @@ class Viewport3D(QOpenGLWidget):
             and dyn_input.supports(self.sketch_tool)
         )
 
+    def _polygon_sides(self) -> int:
+        """Sides for the Polygon tool: a typed value wins over the palette spinner."""
+        n = self.sketch_palette.spn_sides.value()
+        if self.dyn.active and self.dyn.tool == "POLYGON":
+            v = self.dyn.locked_values().get("Sides")
+            if v is not None:
+                n = max(3, min(200, int(round(v))))
+        return n
+
     def _refresh_dyn(self):
         """Re-resolves the pending end point from mouse + typed values."""
         if not (self.dyn.active and self._dyn_can_start()):
             return
         mouse = self._raw_mouse_uv or self.sketch_start_uv
+        self.dyn.default_sides = self.sketch_palette.spn_sides.value()
         end, live = self.dyn.resolve(self.sketch_start_uv, mouse)
         self.sketch_current_uv = end
         self.dyn_live = live
@@ -1161,6 +1175,9 @@ class Viewport3D(QOpenGLWidget):
             anchors["Y"] = QPointF(sb.x() + 52, sb.y())
         elif tool == "CIRCLE":
             anchors["Diameter"] = QPointF(sb.x() + 46, sb.y() - 16)
+        elif tool == "POLYGON":
+            anchors["Side"] = QPointF(sb.x() + 46, sb.y() - 16)
+            anchors["Sides"] = QPointF(sa.x() + 38, sa.y() - 24)
 
         font = QFont(theme.font_family(), 9)
         painter.setFont(font)
@@ -1921,6 +1938,12 @@ class Viewport3D(QOpenGLWidget):
                     w1 = plane.uv_to_world(cx, cy)
                     w2 = plane.uv_to_world(corners[i][0], corners[i][1])
                     preview_lines.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
+            elif self.sketch_tool == "POLYGON":
+                pts = Sketch.polygon_points((u1, v1), (u2, v2), self._polygon_sides())
+                for i in range(len(pts)):
+                    w1 = plane.uv_to_world(*pts[i])
+                    w2 = plane.uv_to_world(*pts[(i + 1) % len(pts)])
+                    preview_lines.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
             elif self.sketch_tool == "CIRCLE":
                 r = math.hypot(u2 - u1, v2 - v1)
                 segs = 36
@@ -2067,6 +2090,10 @@ class Viewport3D(QOpenGLWidget):
                 w_rect = 2.0 * abs(u2 - u1)
                 h_rect = 2.0 * abs(v2 - v1)
                 dim_text = f"W: {w_rect:.1f} mm  ×  H: {h_rect:.1f} mm"
+            elif self.sketch_tool == "POLYGON":
+                n_p = self._polygon_sides()
+                r_p = math.hypot(u2 - u1, v2 - v1)
+                dim_text = f"{n_p} sides  ·  side: {2 * r_p * math.sin(math.pi / n_p):.2f} mm  (R: {r_p:.1f} mm)"
             elif self.sketch_tool == "CIRCLE":
                 r_circ = math.hypot(u2 - u1, v2 - v1)
                 dim_text = f"Ø: {2*r_circ:.1f} mm  (R: {r_circ:.1f} mm)"
@@ -3052,7 +3079,7 @@ class Viewport3D(QOpenGLWidget):
         self.hovered_dim_id = hovered
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "ARC", "SLOT", "DIMENSION", "MOVE"):
+        elif self.sketch_tool in ("LINE", "RECT", "CENTER_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "DIMENSION", "MOVE"):
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -3339,6 +3366,9 @@ class Viewport3D(QOpenGLWidget):
                 return
             elif event.key() == Qt.Key.Key_C:
                 self.set_sketch_tool("CIRCLE")
+                return
+            elif event.key() == Qt.Key.Key_P:
+                self.set_sketch_tool("POLYGON")
                 return
             elif event.key() == Qt.Key.Key_A:
                 self.set_sketch_tool("ARC")

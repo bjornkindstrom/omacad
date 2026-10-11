@@ -246,7 +246,7 @@ class Document:
         """Copy what the given steps did (evenly spaced, mirrored or around an axis)."""
         self.timeline.recompute(self)  # makes sure the before/after states of the steps are current
         n = len([f for f in self.timeline.features if f.feature_type == "pattern"]) + 1
-        names = {"linear": "Pattern", "mirror": "Mirror", "circular": "Circular pattern"}
+        names = {"linear": "Pattern", "mirror": "Mirror", "circular": "Circular pattern", "fill": "Fill pattern"}
         feat = PatternFeature(f"pattern_{len(self.timeline.features) + 1}", f"{names.get(kind, 'Pattern')} {n}",
                               source_ids, kind, **params)
         feat.exprs = dict(exprs or {})

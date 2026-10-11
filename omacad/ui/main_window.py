@@ -571,6 +571,7 @@ class MainWindow(QMainWindow):
         self.ribbon.btn_rect.setChecked(tool_name == "RECT")
         self.ribbon.btn_crect.setChecked(tool_name == "CENTER_RECT")
         self.ribbon.btn_circle.setChecked(tool_name == "CIRCLE")
+        self.ribbon.btn_polygon.setChecked(tool_name == "POLYGON")
         self.ribbon.btn_arc.setChecked(tool_name == "ARC")
         self.ribbon.btn_slot.setChecked(tool_name == "SLOT")
         self.ribbon.btn_dim.setChecked(tool_name == "DIMENSION")

@@ -565,7 +565,7 @@ class PatternDialog(BaseFeatureDialog):
 
     changed = Signal()
 
-    KINDS = ["linear", "mirror", "circular"]
+    KINDS = ["linear", "mirror", "circular", "fill"]
     AXES = ["x", "y", "z"]
     MIRROR_MODES = ["auto", "x", "y", "xy", "diameter"]
 
@@ -576,7 +576,7 @@ class PatternDialog(BaseFeatureDialog):
         form = QFormLayout()
 
         self.cmb_kind = QComboBox()
-        self.cmb_kind.addItems(["Evenly spaced copies (linear)", "Mirror around the body", "Around an axis (circular)"])
+        self.cmb_kind.addItems(["Evenly spaced copies (linear)", "Mirror around the body", "Around an axis (circular)", "Fill the face (even gaps)"])
         form.addRow("Type:", self.cmb_kind)
 
         self.lst = QListWidget()
@@ -608,11 +608,19 @@ class PatternDialog(BaseFeatureDialog):
         self.spn_angle = ExprDoubleSpinBox(); self.spn_angle.setRange(1, 360); self.spn_angle.setSuffix(" °"); self.spn_angle.setValue(360)
         self.cmb_about = QComboBox(); self.cmb_about.addItems(["Centre of the body", "Origin"])
 
+        # fill
+        self.spn_gap = ExprDoubleSpinBox(); self.spn_gap.setRange(0.0, 100000); self.spn_gap.setSuffix(" mm"); self.spn_gap.setValue(3.0)
+        self.spn_gap.setToolTip("Clear space between neighbouring copies, edge to edge")
+        self.spn_margin = ExprDoubleSpinBox(); self.spn_margin.setRange(0.0, 100000); self.spn_margin.setSuffix(" mm"); self.spn_margin.setValue(3.0)
+        self.spn_margin.setToolTip("How far the copies stay from the edge of the face")
+        self.cmb_layout = QComboBox(); self.cmb_layout.addItems(["Grid", "Staggered (honeycomb)"])
+
         self.rows = {
             "linear": [("Direction:", self.cmb_axis1), ("Copies:", self.spn_count1), ("Spacing:", self.spn_space1),
                        ("", self.chk_second), ("Direction 2:", self.cmb_axis2), ("Copies 2:", self.spn_count2), ("Spacing 2:", self.spn_space2)],
             "mirror": [("Mirror:", self.cmb_mirror), ("About:", self.cmb_about)],
             "circular": [("Copies:", self.spn_count1), ("Angle:", self.spn_angle), ("About:", self.cmb_about)],
+            "fill": [("Gap between copies:", self.spn_gap), ("Margin to the edge:", self.spn_margin), ("Layout:", self.cmb_layout)],
         }
         self._kind_form = QFormLayout()
         self.lbl_info = QLabel("")
@@ -622,9 +630,9 @@ class PatternDialog(BaseFeatureDialog):
         self.main_layout.addWidget(self.lbl_info)
         self.add_buttons()
         self.cmb_kind.currentIndexChanged.connect(self._show_kind)
-        for w_ in (self.cmb_kind, self.cmb_axis1, self.cmb_axis2, self.cmb_mirror, self.cmb_about):
+        for w_ in (self.cmb_kind, self.cmb_axis1, self.cmb_axis2, self.cmb_mirror, self.cmb_about, self.cmb_layout):
             w_.currentIndexChanged.connect(lambda *_: self.changed.emit())
-        for w_ in (self.spn_count1, self.spn_count2, self.spn_space1, self.spn_space2, self.spn_angle):
+        for w_ in (self.spn_count1, self.spn_count2, self.spn_space1, self.spn_space2, self.spn_angle, self.spn_gap, self.spn_margin):
             w_.valueChanged.connect(lambda *_: self.changed.emit())
         self.chk_second.toggled.connect(lambda *_: (self._show_kind(), self.changed.emit()))
         self.lst.itemChanged.connect(lambda *_: self.changed.emit())
@@ -670,9 +678,16 @@ class PatternDialog(BaseFeatureDialog):
         self.chk_second.setChecked(int(round(f.count2)) > 1)
         self.cmb_axis2.setCurrentIndex(self.AXES.index(f.axis2)); self.spn_count2.setValue(max(1, int(round(f.count2))))
         self.spn_space2.setValue(f.spacing2)
-        self.cmb_mirror.setCurrentIndex(self.MIRROR_MODES.index(f.mirror_mode))
+        if f.mirror_mode in self.MIRROR_MODES:
+            self.cmb_mirror.setCurrentIndex(self.MIRROR_MODES.index(f.mirror_mode))
         self.cmb_about.setCurrentIndex(0 if f.about == "body" else 1)
         self.spn_angle.setValue(f.angle)
+        if f.kind == "fill":
+            self.spn_gap.setValue(f.spacing1); self.spn_margin.setValue(f.spacing2)
+            self.cmb_layout.setCurrentIndex(1 if f.mirror_mode == "stagger" else 0)
+            for key, spin in (("spacing1", self.spn_gap), ("spacing2", self.spn_margin)):
+                if f.exprs.get(key):
+                    spin.set_expression(f.exprs[key])
         for key, spin in (("spacing1", self.spn_space1), ("spacing2", self.spn_space2), ("angle", self.spn_angle)):
             if f.exprs.get(key):
                 spin.set_expression(f.exprs[key])
@@ -687,6 +702,10 @@ class PatternDialog(BaseFeatureDialog):
 
     def get_params(self) -> dict:
         second = self.chk_second.isChecked()
+        if self.kind() == "fill":   # gap and margin travel in the spacing fields, the layout in mirror_mode
+            return {"axis1": "x", "count1": 2, "spacing1": self.spn_gap.value(), "axis2": "y", "count2": 1,
+                    "spacing2": self.spn_margin.value(), "mirror_mode": "stagger" if self.cmb_layout.currentIndex() else "grid",
+                    "about": "body", "angle": 360.0}
         return {
             "axis1": self.AXES[self.cmb_axis1.currentIndex()], "count1": self.spn_count1.value(), "spacing1": self.spn_space1.value(),
             "axis2": self.AXES[self.cmb_axis2.currentIndex()], "count2": self.spn_count2.value() if second else 1,
@@ -695,6 +714,9 @@ class PatternDialog(BaseFeatureDialog):
         }
 
     def get_expressions(self) -> dict:
+        if self.kind() == "fill":
+            out = {"spacing1": self.spn_gap.expression(), "spacing2": self.spn_margin.expression()}
+            return {k: v for k, v in out.items() if v}
         out = {"spacing1": self.spn_space1.expression(), "spacing2": self.spn_space2.expression() if self.chk_second.isChecked() else None,
                "angle": self.spn_angle.expression()}
         return {k: v for k, v in out.items() if v}

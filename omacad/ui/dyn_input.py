@@ -17,6 +17,7 @@ FIELDS: Dict[str, List[str]] = {
     "RECT": ["Width", "Height"],
     "CENTER_RECT": ["Width", "Height"],
     "CIRCLE": ["Diameter"],
+    "POLYGON": ["Side", "Sides"],
     "MOVE": ["X", "Y"],
 }
 
@@ -34,6 +35,7 @@ class DynInput:
         self.names: List[str] = []
         self.texts: List[str] = []
         self.focus: int = -1
+        self.default_sides: int = getattr(self, "default_sides", 6)   # set by the view from its Sides spinner
 
     @property
     def active(self) -> bool:
@@ -119,6 +121,13 @@ class DynInput:
             mx = lk.get("X", dx)
             my = lk.get("Y", dy)
             return (u1 + mx, v1 + my), {"X": mx, "Y": my}
+
+        if self.tool == "POLYGON":
+            n = max(3, min(200, int(round(lk["Sides"])))) if "Sides" in lk else int(self.default_sides)
+            dist = math.hypot(dx, dy)
+            r = abs(lk["Side"]) / (2.0 * math.sin(math.pi / n)) if "Side" in lk else dist
+            ux, uy = (dx / dist, dy / dist) if dist > 1e-9 else (1.0, 0.0)
+            return (u1 + ux * r, v1 + uy * r), {"Side": 2.0 * r * math.sin(math.pi / n), "Sides": float(n)}
 
         if self.tool == "CIRCLE":
             dist = math.hypot(dx, dy)

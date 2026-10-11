@@ -7,7 +7,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, Signal, QPoint
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
-    QFrame, QToolButton
+    QFrame, QToolButton, QSpinBox
 )
 from omacad.ui.theme import style
 
@@ -110,6 +110,17 @@ class SketchPalette(QFrame):
         self.chk_show_profiles.setChecked(True)
         self.chk_show_profiles.stateChanged.connect(self.settings_changed)
         content_layout.addWidget(self.chk_show_profiles)
+
+        sides_row = QHBoxLayout()
+        sides_row.setContentsMargins(0, 0, 0, 0)
+        sides_row.addWidget(QLabel("Polygon sides"))
+        self.spn_sides = QSpinBox()
+        self.spn_sides.setRange(3, 60)
+        self.spn_sides.setValue(6)
+        self.spn_sides.setToolTip("Number of sides for the Polygon tool (3 = triangle, 6 = hexagon). Tab while drawing also sets it.")
+        self.spn_sides.valueChanged.connect(self.settings_changed)
+        sides_row.addWidget(self.spn_sides)
+        content_layout.addLayout(sides_row)
 
         content_layout.addSpacing(4)
 
