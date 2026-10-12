@@ -886,15 +886,17 @@ class MainWindow(QMainWindow):
             value = abs(t) * 2.0 if direction == "symmetric" else (max(t, 0.1) if direction == "two_sides" else t)
             dlg.spn_dist.setValue(value)
 
-        def extras(s_id):
-            return [i for (sid, i) in self.doc.selected_extra if sid == s_id]
+        def parts(s_id, p_idx):
+            return ExtrudeFeature.selection_parts(self.doc, s_id, p_idx, self.doc.selected_extra)
 
         def refresh_preview():
             s_id, p_idx, dist, op = dlg.get_values()
             direction, dist2 = dlg.get_direction()
             solid = None
             if s_id is not None:
-                feat = ExtrudeFeature("preview", "preview", s_id, p_idx, dist, op, direction, dist2, extra_profiles=extras(s_id))
+                extra, refs, holes = parts(s_id, p_idx)
+                feat = ExtrudeFeature("preview", "preview", s_id, p_idx, dist, op, direction, dist2, extra_profiles=extra,
+                                      extra_refs=refs, holes=holes)
                 try:
                     solid = feat.build_solid(self.doc)
                     if op == "auto":
@@ -954,8 +956,9 @@ class MainWindow(QMainWindow):
                 s_id, p_idx, dist, op = dlg.get_values()
                 if s_id is not None:
                     direction, dist2 = dlg.get_direction()
+                    extra, refs, holes = parts(s_id, p_idx)
                     self.doc.extrude_profile(s_id, p_idx, dist, op, direction=direction, distance2=dist2,
-                                             extra_profiles=extras(s_id))
+                                             extra_profiles=extra, extra_refs=refs, holes=holes)
                     self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                     op = self.doc.timeline.features[-1].operation  # what Auto resolved to
                     self.doc.selected_profile = None

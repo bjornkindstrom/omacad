@@ -432,7 +432,8 @@ class Exporter:
                 feat = ExtrudeFeature(
                     fid, fname, f_data["sketch_id"], f_data["profile_idx"], f_data["distance"], f_data["operation"],
                     f_data.get("direction", "one_side"), f_data.get("distance2", 0.0),
-                    extra_profiles=f_data.get("extra_profiles", [])
+                    extra_profiles=f_data.get("extra_profiles", []),
+                    extra_refs=f_data.get("extra_refs", []), holes=f_data.get("holes", [])
                 )
                 feat.load_profile_refs(f_data)
                 doc.timeline.add_feature(feat)

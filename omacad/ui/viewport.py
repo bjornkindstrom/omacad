@@ -206,7 +206,7 @@ class Viewport3D(QOpenGLWidget):
         # Profile picking / extrude preview state
         self.hover_profile: Optional[Tuple[str, int]] = None
         self._press_pos: Optional[QPointF] = None
-        self._profile_fill_cache: Dict[Tuple[str, int], np.ndarray] = {}
+        self._profile_fill_cache: Dict[tuple, np.ndarray] = {}
         self.preview_mesh = None
         self.preview_op: str = "new_body"
 
@@ -1642,6 +1642,34 @@ class Viewport3D(QOpenGLWidget):
                     best, best_area, best_t = (s_id, idx), prof.area, t
         return best
 
+    def _sketches_share_plane(self, a: str, b: str) -> bool:
+        from omacad.model.timeline import _planes_coincide
+        sa, sb = self.doc.sketches.get(a), self.doc.sketches.get(b)
+        return sa is not None and sb is not None and _planes_coincide(sa.plane, sb.plane)
+
+    def _selection_fill(self) -> Optional[np.ndarray]:
+        """Triangles of what an extrude of the current selection would take: the chosen profiles minus the shapes
+        of other sketches inside them (those stay unshaded; Shift+click them to include them)."""
+        doc = self.doc
+        sid, idx = doc.selected_profile
+        key = ("selection", sid, idx, tuple(doc.selected_extra))
+        cached = self._profile_fill_cache.get(key)
+        if cached is not None:
+            return cached
+        sketch = doc.sketches.get(sid)
+        if not sketch or idx >= len(sketch.profiles):
+            return None
+        from omacad.model.timeline import ExtrudeFeature, region_cross_section
+        extra, refs, holes = ExtrudeFeature.selection_parts(doc, sid, idx, doc.selected_extra)
+        feat = ExtrudeFeature("sel", "sel", sid, idx, 1.0, extra_profiles=extra, extra_refs=refs, holes=holes)
+        idxs = [idx] + [i for i in extra if i != idx and i < len(sketch.profiles)]
+        solid = m3d.Manifold.extrude(region_cross_section(feat.region(doc, sketch, idxs)), height=0.02)
+        solid = solid.transform(sketch.plane.get_transform_matrix_3x4())
+        mesh = solid.to_mesh()
+        tris = mesh.vert_properties[:, :3][mesh.tri_verts].reshape(-1, 3).astype(np.float32)
+        self._profile_fill_cache[key] = tris
+        return tris
+
     def _profile_fill(self, key: Tuple[str, int]) -> Optional[np.ndarray]:
         """World-space triangles for a profile's filled face (cached)."""
         cached = self._profile_fill_cache.get(key)
@@ -1672,11 +1700,14 @@ class Viewport3D(QOpenGLWidget):
         entries = []
         if self.hover_profile and self.hover_profile != self.doc.selected_profile:
             entries.append((self.hover_profile, (*theme.palette().highlight01(0.35), 0.30)))
-        if self.doc.selected_profile:
-            entries.append((self.doc.selected_profile, (*theme.palette().highlight01(0.1), 0.50)))
-        for key in self.doc.selected_extra:
-            entries.append((key, (*theme.palette().highlight01(0.1), 0.50)))
-        if not entries:
+        selected_col = (*theme.palette().highlight01(0.1), 0.50)
+        selection_tris = self._selection_fill() if self.doc.selected_profile else None
+        if self.doc.selected_profile and selection_tris is None:
+            entries.append((self.doc.selected_profile, selected_col))
+        if selection_tris is None:
+            for key in self.doc.selected_extra:
+                entries.append((key, selected_col))
+        if not entries and selection_tris is None:
             return
         GL.glUseProgram(self.prog_flat)
         loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
@@ -1686,6 +1717,9 @@ class Viewport3D(QOpenGLWidget):
         GL.glDepthMask(GL.GL_FALSE)
         GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
         GL.glPolygonOffset(-1.0, -1.0)
+        if selection_tris is not None:
+            GL.glUniform4f(loc_col, *selected_col)
+            self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, selection_tris)
         for key, col in entries:
             tris = self._profile_fill(key)
             if tris is not None:
@@ -4785,8 +4819,8 @@ class Viewport3D(QOpenGLWidget):
                 chosen = ([doc.selected_profile] if doc.selected_profile else []) + list(doc.selected_extra)
                 if picked in chosen:
                     chosen.remove(picked)
-                elif not chosen or chosen[0][0] == picked[0]:   # profiles must belong to the same sketch
-                    chosen.append(picked)
+                elif not chosen or chosen[0][0] == picked[0] or self._sketches_share_plane(chosen[0][0], picked[0]):
+                    chosen.append(picked)   # profiles of one sketch, or of sketches drawn in the same plane
                 doc.selected_profile = chosen[0] if chosen else None
                 doc.selected_extra = chosen[1:]
                 self.profile_picked.emit()

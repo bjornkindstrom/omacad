@@ -227,6 +227,48 @@ def _profile_matches(profile: Any, sig, area_tol: float = 0.03) -> bool:
     return math.hypot(u - sig[0], v - sig[1]) <= max(0.25, 0.02 * math.sqrt(abs(sig[2])))
 
 
+def _planes_coincide(a, b) -> bool:
+    n1, n2 = np.asarray(a.normal, dtype=float), np.asarray(b.normal, dtype=float)
+    return abs(abs(float(n1 @ n2)) - 1.0) < 1e-6 and abs(float((np.asarray(b.origin, dtype=float) - np.asarray(a.origin, dtype=float)) @ n1)) < 1e-4
+
+
+def profile_polygon_in(profile: Any, src_plane: Any, dst_plane: Any) -> Polygon:
+    """The profile as a shapely polygon in the (u, v) frame of `dst_plane` (both sketches lie in one plane)."""
+    def conv(pts):
+        if src_plane is dst_plane:
+            return [tuple(p) for p in pts]
+        return [tuple(dst_plane.world_to_uv(src_plane.uv_to_world(float(u), float(v)))) for u, v in pts]
+    return Polygon(conv(profile.exterior_pts), [conv(h) for h in profile.interior_holes])
+
+
+def find_profile(sketch: Any, idx: int, sig) -> Optional[int]:
+    """Index of the profile of `sketch` that looks like `sig` (centre and area), preferring `idx`."""
+    if 0 <= idx < len(sketch.profiles) and _profile_matches(sketch.profiles[idx], sig):
+        return idx
+    best, best_d = None, float("inf")
+    for j, pr in enumerate(sketch.profiles):
+        if _profile_matches(pr, sig):
+            u, v, _a = profile_signature(pr)
+            d = math.hypot(u - sig[0], v - sig[1])
+            if d < best_d:
+                best, best_d = j, d
+    return best
+
+
+def region_cross_section(geom) -> m3d.CrossSection:
+    """CrossSection of a shapely polygon or multipolygon (holes included)."""
+    from types import SimpleNamespace
+    polys = list(geom.geoms) if hasattr(geom, "geoms") else [geom]
+    cs = None
+    for poly in polys:
+        if poly.is_empty or poly.area < 1e-9:
+            continue
+        part = profile_cross_section(SimpleNamespace(exterior_pts=list(poly.exterior.coords)[:-1],
+                                                     interior_holes=[list(r.coords)[:-1] for r in poly.interiors]))
+        cs = part if cs is None else cs + part
+    return cs if cs is not None else m3d.CrossSection([])
+
+
 class ProfileRefs:
     """Mixin for steps that point at sketch profiles by number (Extrude, Revolve). Besides the numbers they
     remember each profile's signature, and when the numbers no longer fit (the sketch was solved again with a
@@ -295,15 +337,82 @@ class ExtrudeFeature(ProfileRefs, Feature):
         direction: str = "one_side",
         distance2: float = 0.0,
         extra_profiles=None,
+        extra_refs=None,
+        holes=None,
     ):
         super().__init__(feature_id, "extrude", name)
         self.sketch_id = sketch_id
         self.profile_idx = profile_idx
         self.extra_profiles = [int(i) for i in (extra_profiles or [])]   # more profiles of the same sketch, extruded together
+        # profiles of other sketches in the same plane that were Shift+clicked in: (sketch_id, index, signature)
+        self.extra_refs = [(str(r[0]), int(r[1]), tuple(float(x) for x in r[2])) for r in (extra_refs or [])]
+        # shapes of other sketches in the same plane lying inside the chosen profile: left open, as Fusion does
+        # (sketch_id, index, signature)
+        self.holes = [(str(r[0]), int(r[1]), tuple(float(x) for x in r[2])) for r in (holes or [])]
         self.distance = float(distance)
         self.operation = operation
         self.direction = direction
         self.distance2 = float(distance2)
+
+    def region(self, doc: Any, sketch: Any, idxs) -> Any:
+        """What is extruded, as a shapely geometry in the sketch's plane: the chosen profiles (also those of
+        other sketches in the plane), minus the shapes that were left out."""
+        from shapely.ops import unary_union
+        parts = [Polygon(sketch.profiles[i].exterior_pts, sketch.profiles[i].interior_holes) for i in idxs]
+        for sid, idx, sig in self.extra_refs:
+            other = doc.sketches.get(sid)
+            j = find_profile(other, idx, sig) if other is not None else None
+            if j is not None and _planes_coincide(sketch.plane, other.plane):
+                parts.append(profile_polygon_in(other.profiles[j], other.plane, sketch.plane))
+        region = unary_union([p.buffer(0) for p in parts])
+        cut = []
+        for sid, idx, sig in self.holes:
+            other = doc.sketches.get(sid)
+            j = find_profile(other, idx, sig) if other is not None else None
+            if j is not None and _planes_coincide(sketch.plane, other.plane):
+                cut.append(profile_polygon_in(other.profiles[j], other.plane, sketch.plane).buffer(0))
+        return region.difference(unary_union(cut)) if cut else region
+
+    @staticmethod
+    def selection_parts(doc: Any, sketch_id: str, profile_idx: int, selected_extra) -> tuple:
+        """(extra_profiles, extra_refs, holes) for a click selection: the Shift+clicked profiles of the same sketch,
+        those of other sketches in its plane, and the shapes inside that are left open."""
+        extra = [i for (sid, i) in selected_extra if sid == sketch_id]
+        refs = []
+        for sid, i in selected_extra:
+            other = doc.sketches.get(sid)
+            if sid != sketch_id and other is not None and i < len(other.profiles):
+                refs.append((sid, i, profile_signature(other.profiles[i])))
+        return extra, refs, ExtrudeFeature.detect_holes(doc, sketch_id, profile_idx, extra, refs)
+
+    @staticmethod
+    def detect_holes(doc: Any, sketch_id: str, profile_idx: int, extra_profiles=(), extra_refs=()) -> list:
+        """Profiles of other visible sketches in the same plane that lie inside the chosen ones and were not chosen
+        themselves: they are left open when extruding (select them too, with Shift+click, to fill them)."""
+        from shapely.ops import unary_union
+        sketch = doc.sketches.get(sketch_id)
+        if sketch is None or profile_idx >= len(sketch.profiles):
+            return []
+        idxs = [profile_idx] + [i for i in extra_profiles if i != profile_idx and i < len(sketch.profiles)]
+        chosen = [Polygon(sketch.profiles[i].exterior_pts, sketch.profiles[i].interior_holes).buffer(0) for i in idxs]
+        picked = set()
+        for sid, idx in [(r[0], r[1]) for r in extra_refs]:
+            other = doc.sketches.get(sid)
+            if other is not None and idx < len(other.profiles) and _planes_coincide(sketch.plane, other.plane):
+                chosen.append(profile_polygon_in(other.profiles[idx], other.plane, sketch.plane).buffer(0))
+                picked.add((sid, idx))
+        region = unary_union(chosen)
+        out = []
+        for sid, other in doc.sketches.items():
+            if sid == sketch_id or not other.visible or not _planes_coincide(sketch.plane, other.plane):
+                continue
+            for j, pr in enumerate(other.profiles):
+                if (sid, j) in picked or pr.area < 1e-6:
+                    continue
+                poly = profile_polygon_in(pr, other.plane, sketch.plane).buffer(0)
+                if poly.area > 1e-6 and region.buffer(1e-6).contains(poly):
+                    out.append((sid, j, profile_signature(pr)))
+        return out
 
     def _z_range(self):
         """Returns (z_min, z_max) of the extrusion in sketch-local coordinates."""
@@ -322,9 +431,12 @@ class ExtrudeFeature(ProfileRefs, Feature):
         if not sketch or self.profile_idx >= len(sketch.profiles):
             return None
         idxs = [self.profile_idx] + [i for i in self.extra_profiles if i != self.profile_idx and i < len(sketch.profiles)]
-        cs = profile_cross_section(sketch.profiles[idxs[0]])
-        for i in idxs[1:]:
-            cs = cs + profile_cross_section(sketch.profiles[i])
+        if self.extra_refs or self.holes:
+            cs = region_cross_section(self.region(doc, sketch, idxs))
+        else:
+            cs = profile_cross_section(sketch.profiles[idxs[0]])
+            for i in idxs[1:]:
+                cs = cs + profile_cross_section(sketch.profiles[i])
 
         z0, z1 = self._z_range()
         height = z1 - z0
@@ -395,6 +507,8 @@ class ExtrudeFeature(ProfileRefs, Feature):
             "operation": self.operation,
             "direction": self.direction,
             "distance2": self.distance2,
+            "extra_refs": [[sid, i, list(sig)] for sid, i, sig in self.extra_refs],
+            "holes": [[sid, i, list(sig)] for sid, i, sig in self.holes],
             **self.profile_refs_dict(),
         }
 
@@ -437,10 +551,10 @@ class FilletFeature(Feature):
             out.append(0.0 if solid else eps)
         return tuple(out)
 
-    def _mitred_foot_tool(self, body, edge, edges):
-        """Fill for a straight edge at the foot of a wall. Where the next selected foot edge meets it on the
-        same floor, both bands run past the corner and are cut off along the bisector, so the roundings flow
-        into each other instead of ending square with a notch between them."""
+    def _mitred_tool(self, body, edge, edges):
+        """Fill tool for a straight edge at the foot of a wall. Where the next selected foot edge meets it on the
+        same floor, both bands run past the corner and are cut off along the bisector (mitred), so the roundings
+        flow into each other with no notch."""
         ext = [0.0, 0.0]
         trims = []
         reach = 20.0 * self.size + 10.0
@@ -448,7 +562,7 @@ class FilletFeature(Feature):
             far = edge.p1 if k == 0 else edge.p0
             ta = (far - v) / max(float(np.linalg.norm(far - v)), 1e-12)
             for other in edges:
-                if other is edge or other.convex or getattr(other, "kind", "") != "line":
+                if other is edge or other.convex != edge.convex or getattr(other, "kind", "") != "line":
                     continue
                 q = None
                 if np.linalg.norm(other.p0 - v) < 1e-4:
@@ -458,8 +572,8 @@ class FilletFeature(Feature):
                 if q is None:
                     continue
                 tb = (q - v) / max(float(np.linalg.norm(q - v)), 1e-12)
-                same_floor = any(float(na @ nb) > 0.999 for na in (edge.n1, edge.n2) for nb in (other.n1, other.n2))
-                if not same_floor or abs(float(ta @ tb)) > 0.999:
+                same_face = any(float(na @ nb) > 0.999 for na in (edge.n1, edge.n2) for nb in (other.n1, other.n2))
+                if not same_face or abs(float(ta @ tb)) > 0.999:
                     continue
                 m = ta - tb
                 m = m / np.linalg.norm(m)
@@ -519,7 +633,7 @@ class FilletFeature(Feature):
             if getattr(edge, "kind", "") == "loop" and not edge.convex:
                 tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
             elif not edge.convex and getattr(edge, "kind", "") == "line":
-                tool = self._mitred_foot_tool(body, edge, [e for b, e in seen if b is body])
+                tool = self._mitred_tool(body, edge, [e for b, e in seen if b is body])
             else:
                 tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
             (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)

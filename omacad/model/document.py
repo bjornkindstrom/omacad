@@ -411,11 +411,13 @@ class Document:
         direction: str = "one_side",
         distance2: float = 0.0,
         extra_profiles=None,
+        extra_refs=None,
+        holes=None,
     ) -> None:
         feat_id = f"extrude_{len(self.timeline.features) + 1}"
         feat_name = name or f"Extrude {len([f for f in self.timeline.features if f.feature_type == 'extrude']) + 1}"
         feat = ExtrudeFeature(feat_id, feat_name, sketch_id, profile_idx, distance, operation, direction, distance2,
-                              extra_profiles=extra_profiles)
+                              extra_profiles=extra_profiles, extra_refs=extra_refs, holes=holes)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.hide_used_sketches()
