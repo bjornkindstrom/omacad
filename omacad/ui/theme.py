@@ -196,14 +196,22 @@ def split_emoji(text: str):
 class BigIconStyle(QProxyStyle):
     """Larger icons everywhere in menus, tree views and tool buttons."""
 
+    _SIZES = {
+        QStyle.PixelMetric.PM_SmallIconSize: 24,
+        QStyle.PixelMetric.PM_ToolBarIconSize: 30,
+        QStyle.PixelMetric.PM_LargeIconSize: 36,
+    }
+
     def pixelMetric(self, metric, option=None, widget=None):
-        if metric == QStyle.PixelMetric.PM_SmallIconSize:
-            return 24
-        if metric == QStyle.PixelMetric.PM_ToolBarIconSize:
-            return 30
-        if metric == QStyle.PixelMetric.PM_LargeIconSize:
-            return 36
-        return super().pixelMetric(metric, option, widget)
+        # Called for every widget while painting: it must never raise (an error here re-enters the style
+        # while the error box is drawn and floods the screen on some PySide versions / Windows).
+        try:
+            size = self._SIZES.get(metric)
+            if size is not None:
+                return size
+            return self.baseStyle().pixelMetric(metric, option, widget)
+        except Exception:
+            return 16
 
 
 def action_with_icon(menu, text: str, px: int = 22):

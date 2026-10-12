@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.31 - 2026-10-12
+
+### Fixed
+- **Start-up error on a Windows PC** ("Error calling Python override of QProxyStyle::pixelMetric", repeated down the screen): the big-icon style could raise an error while Qt was drawing, which then repeated forever. It now falls back to the base style and never raises.
+
 ## 0.6.30 - 2026-10-12
 
 ### Fixed
