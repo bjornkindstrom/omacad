@@ -799,6 +799,17 @@ class Viewport3D(QOpenGLWidget):
         self._handle_hover = False
         self.update()
 
+    def _arrow_size(self) -> float:
+        """Size of the extrude arrow's head in mm (the Arrow size setting scales it)."""
+        from omacad.ui.settings import get_settings
+        return self.distance * 0.04 * float(get_settings().get("arrow_size", 1.0))
+
+    def _arrow_lift(self, dist: float) -> float:
+        """The arrow is drawn a couple of mm off the surface, in the direction it points, so it never
+        starts inside the material (the Arrow distance setting)."""
+        from omacad.ui.settings import get_settings
+        return (1.0 if dist >= 0 else -1.0) * float(get_settings().get("arrow_gap", 2.0))
+
     def _handle_screen(self):
         h = self.extrude_handle
         tip = h["origin"] + h["axis"] * h["dist"]
@@ -811,8 +822,10 @@ class Viewport3D(QOpenGLWidget):
             return None
         origin, axis, dist = h["origin"], h["axis"], h["dist"]
         sign = 1.0 if dist >= 0 else -1.0
+        lift = self._arrow_lift(dist)
+        origin = origin + axis * lift
         tip = origin + axis * dist
-        size = self.distance * 0.04
+        size = self._arrow_size()
         so = self.world_to_screen(origin)
         apex = self.world_to_screen(tip + axis * sign * size * 0.4)
         base = tip - axis * sign * size * 0.8
@@ -878,6 +891,7 @@ class Viewport3D(QOpenGLWidget):
         if abs(denom) < 1e-6:
             return None
         t = (b * e - d1) / denom
+        t -= self._arrow_lift(h["dist"])   # the arrow is drawn lifted off the surface
         step = 0.1 if abs(t) < 10 else 0.5 if abs(t) < 50 else 1.0
         return round(t / step) * step
 
@@ -887,8 +901,9 @@ class Viewport3D(QOpenGLWidget):
             return
         origin, axis, dist = h["origin"], h["axis"], h["dist"]
         sign = 1.0 if dist >= 0 else -1.0
+        origin = origin + axis * self._arrow_lift(dist)
         tip = origin + axis * dist
-        size = self.distance * 0.04
+        size = self._arrow_size()
         lit = self._handle_hover or self._handle_drag
         from omacad.ui.settings import get_settings
         custom_arrow = get_settings().arrow_color_rgb01()

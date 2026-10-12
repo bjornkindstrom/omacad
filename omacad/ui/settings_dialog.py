@@ -190,6 +190,36 @@ class SettingsDialog(QDialog):
         fillet_row.addStretch()
         lay_sketch.addLayout(fillet_row)
 
+        # The extrude arrow
+        arrow_row = QHBoxLayout()
+        lbl_arrow = QLabel("Pilens storlek (Arrow size):")
+        lbl_arrow.setMinimumWidth(200)
+        self.spn_arrow_size = QDoubleSpinBox()
+        self.spn_arrow_size.setRange(0.3, 4.0)
+        self.spn_arrow_size.setSingleStep(0.1)
+        self.spn_arrow_size.setDecimals(1)
+        self.spn_arrow_size.setSuffix(" ×")
+        self.spn_arrow_size.setValue(float(self.settings.get("arrow_size", 1.0)))
+        arrow_row.addWidget(lbl_arrow)
+        arrow_row.addWidget(self.spn_arrow_size)
+        arrow_row.addStretch()
+        lay_sketch.addLayout(arrow_row)
+
+        gap_row = QHBoxLayout()
+        lbl_gap = QLabel("Pilens avstånd från ytan:")
+        lbl_gap.setMinimumWidth(200)
+        self.spn_arrow_gap = QDoubleSpinBox()
+        self.spn_arrow_gap.setRange(0.0, 20.0)
+        self.spn_arrow_gap.setSingleStep(0.5)
+        self.spn_arrow_gap.setDecimals(1)
+        self.spn_arrow_gap.setSuffix(" mm")
+        self.spn_arrow_gap.setValue(float(self.settings.get("arrow_gap", 2.0)))
+        self.spn_arrow_gap.setToolTip("Pilen ritas så här långt från ytan, åt det håll den pekar, så den aldrig börjar inne i materialet.")
+        gap_row.addWidget(lbl_gap)
+        gap_row.addWidget(self.spn_arrow_gap)
+        gap_row.addStretch()
+        lay_sketch.addLayout(gap_row)
+
         # Smoothness of round shapes
         q_row = QHBoxLayout()
         lbl_q = QLabel("Rundhet (Curve smoothness):")
@@ -279,6 +309,8 @@ class SettingsDialog(QDialog):
         self.spn_fillet.setValue(2.0)
         self.chk_auto_restart.setChecked(True)
         self.cmb_curves.setCurrentIndex(max(0, self.cmb_curves.findData(96)))
+        self.spn_arrow_size.setValue(1.0)
+        self.spn_arrow_gap.setValue(2.0)
 
     def accept(self):
         self.save_and_close()
@@ -295,6 +327,8 @@ class SettingsDialog(QDialog):
             "invert_zoom": self.chk_invert_zoom.isChecked(),
             "grid_step": self.spn_grid.value(),
             "fillet_default_radius": self.spn_fillet.value(),
+            "arrow_size": self.spn_arrow_size.value(),
+            "arrow_gap": self.spn_arrow_gap.value(),
             "curve_segments": self.cmb_curves.currentData(),
             "view_projection": self.cmb_projection.currentData(),
             "view_fov": self.spn_fov.value(),

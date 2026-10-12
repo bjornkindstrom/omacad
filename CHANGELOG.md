@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.13 - 2026-10-12
+
+### Added
+- **Arrow settings** (Settings > Sketch & Visning): *Arrow size* (0.3-4x) and *Arrow distance from the surface* (default 2 mm). The extrude arrow is now always drawn that far off the surface, in the direction it points, so it never starts inside the material; the distance you drag is unchanged.
+
+### Fixed
+- Tests no longer read or write the user's real settings file (a changed Curve smoothness could make a test fail).
+
 ## 0.6.12 - 2026-10-12
 
 ### Added

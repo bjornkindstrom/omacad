@@ -28,6 +28,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "fillet_default_radius": 2.0,
     "rect_default_tool": "RECT",        # what the rectangle button draws: RECT, CENTER_RECT, ROUNDED_RECT
     "curve_segments": 96,               # flat pieces around a full circle: lower = lighter and faster, higher = smoother
+    "arrow_size": 1.0,                  # scale of the extrude/move arrow in the 3D view
+    "arrow_gap": 2.0,                   # mm the arrow is drawn off the surface, in its direction
     "view_projection": "perspective",    # perspective or orthographic
     "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
     "auto_restart": True,               # restart the app (work saved and restored) when a new version is committed
