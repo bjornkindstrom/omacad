@@ -1554,6 +1554,20 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"Restarted on Omacad {__import__('omacad').__version__}; your work is back.")
         return True
 
+    def grab_with_overlay(self, view_shot):
+        """Window screenshot where the 3D view includes its painter overlay (dimensions, banner, ViewCube):
+        `QWidget.grab` renders only the GL scene of a QOpenGLWidget, so the framebuffer grab is painted on top."""
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QPainter
+        shot = self.grab()
+        painter = QPainter(shot)
+        try:
+            top_left = self.viewport.mapTo(self, self.viewport.rect().topLeft())
+            painter.drawImage(QRectF(top_left.x(), top_left.y(), self.viewport.width(), self.viewport.height()), view_shot)
+        finally:
+            painter.end()
+        return shot
+
     def on_report_problem(self):
         """Screenshot first (before any dialog covers the problem), then the note, then the report goes to the AI agent."""
         from PySide6.QtCore import QBuffer, QByteArray, QIODevice
@@ -1568,8 +1582,8 @@ class MainWindow(QMainWindow):
             image.save(buf, "PNG")
             return bytes(data)
 
-        window_shot = self.grab()
         view_shot = self.viewport.grabFramebuffer()
+        window_shot = self.grab_with_overlay(view_shot)
         dlg = FeedbackDialog(self, window_shot)
         if not dlg.exec():
             return

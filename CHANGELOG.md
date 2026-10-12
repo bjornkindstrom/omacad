@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.24 - 2026-10-12
+
+### Fixed
+- Problem report screenshot now includes the 3D view's overlay (sketch dimensions, banner, ViewCube).
+
 ## 0.6.23 - 2026-10-12
 
 ### Changed
