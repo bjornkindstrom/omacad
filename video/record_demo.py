@@ -118,13 +118,34 @@ class Demo:
             self.doc.redo()
         self.vp.set_view("HOME")
 
+    def s7_theme(self):
+        """Switch the Omarchy theme live; the app follows through ThemeWatcher. Restores the original after."""
+        from omacad.ui import theme
+        self.say("Change the Omarchy theme: Omacad follows, live.")
+        self.vp.set_view("HOME")
+        try:
+            self.orig_theme = theme.NAME_FILE.read_text().strip()
+        except OSError:
+            self.orig_theme = None
+        out = subprocess.run(["omarchy-theme-list"], capture_output=True, text=True)
+        names = [n.strip() for n in out.stdout.splitlines() if n.strip()]
+        names = [n for n in names if n.lower().replace(" ", "-") != (self.orig_theme or "").lower()]
+        picks = [n.lower().replace(" ", "-") for n in names[:3]]
+        for i, name in enumerate(picks):
+            QTimer.singleShot(int(i * 3000 / self.speed), lambda n=name: subprocess.Popen(["omarchy-theme-set", n]))
+        self.picks = picks
+
+    def s7b_theme_back(self):
+        if self.orig_theme:
+            subprocess.Popen(["omarchy-theme-set", self.orig_theme.lower().replace(" ", "-")])
+
     def s8_end(self):
         self.say("Omacad: open source and free. Link in the description.")
         self.vp.set_view("HOME")
 
     SCENES = [
         (8, "s1_title"), (12, "s2_sketch"), (12, "s3_extrude"), (6, "s4_hole"), (8, "s4b_mirror"), (12, "s4c_fill"), (10, "s4d_edit"),
-        (12, "s5_section"), (5, "s6_undo"), (5, "s6b_redo"), (8, "s8_end"),
+        (12, "s5_section"), (5, "s6_undo"), (5, "s6b_redo"), (11, "s7_theme"), (4, "s7b_theme_back"), (8, "s8_end"),
     ]
 
     def run(self, i: int = 0):

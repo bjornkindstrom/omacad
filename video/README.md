@@ -13,7 +13,8 @@ Everything here was written in a cloud session **without a screen or PySide6**, 
 3. `s3_extrude` finish sketch, extrude 10 mm, orbit
 4. `s4_hole` one hole (r 2.5) near a corner, `s4b_mirror` Mirror (`mirror_mode="xy"`) to all four corners, `s4c_fill` hexagon cut + Fill pattern (gap 1.5, margin 4, `stagger`)
 5. `s4d_edit` edit the first sketch (80 x 40, r 10), Finish Sketch, everything rebuilds
-6. `s5_section` Section View, `s6_undo`/`s6b_redo`, `s8_end`
+6. `s7_theme` switches 3 Omarchy themes live (`omarchy-theme-list`/`omarchy-theme-set`), `s7b_theme_back` restores yours
+7. `s5_section` Section View, `s6_undo`/`s6b_redo`, `s8_end`
 
 ## Known issues / to check on the machine
 - Never run. Expect API mistakes in `record_demo.py`; run with `--speed 3` first.
@@ -25,6 +26,8 @@ Everything here was written in a cloud session **without a screen or PySide6**, 
 - Turn off `auto_restart` before recording, or a commit restarts the app mid-take.
 - Window must be 1920x1080 (`hyprctl dispatch resizeactive exact 1920 1080`).
 - Caption bar is a plain QLabel; restyle to the theme if wanted.
+
+- Theme scene: not run; it changes your real desktop theme for ~11 s and restores it afterwards (if it crashes mid-way, run `omarchy-theme-set <yours>`). Check that the viewport background, ribbon and tree all update (`ThemeWatcher` in `omacad/ui/theme.py`); anything that does not is a bug worth fixing before filming.
 
 ## Next steps
 1. Run, fix, tune the hold times in `SCENES`.

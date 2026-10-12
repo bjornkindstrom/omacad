@@ -12,6 +12,7 @@ Target: YouTube, 1920x1080, 30 fps. Record with `video/record_demo.py` (drives t
 | 4c | 1:20-1:30 | Edit the first sketch (plate 60 -> 80 mm wide, rounder corners), Finish Sketch: the holes and the hexagon fill rebuild to match | "Everything is parametric. Go back to the first sketch, change it, and the holes and the pattern follow." |
 | 5 | 1:05-1:25 | Fillet on the block edges, then a Section View slides through the part | "Round the edges with fillet or chamfer, and slide a section plane through the model to check the inside." |
 | 6 | 1:25-1:40 | Ctrl+Z three times, then Ctrl+Shift+Z: the model steps back and forward | "Undo covers everything, not only sketches. Your work can never be lost." |
+| 6b | 1:40-1:50 | Three Omarchy themes switched live with `omarchy-theme-set`; the ribbon, tree and viewport change colour without a restart, then the original theme returns | "Switch your Omarchy theme and Omacad follows instantly: colours, fonts, everything." |
 | 7 | 1:40-1:55 | F9 dialog "Report problem", typed text, the agent window | "Found a bug or want a feature? Press F9. Omacad sends a screenshot, your model and the log to your AI agent, which fixes the code, and the app restarts on the new version with your work intact." |
 | 8 | 1:55-2:05 | Home view, end card with the GitHub URL | "Omacad is open source and free. Link in the description. Thanks for watching." |
 
