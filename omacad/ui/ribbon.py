@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont, QFontMetrics
 from omacad.ui.sketch_tools import RECT_TOOLS
+
+CIRCLE_TOOLS = ('CIRCLE', 'SMART_CIRCLE')
 from omacad.ui import theme
 from omacad.ui.theme import style
 from omacad.model.document import Document
@@ -270,6 +272,12 @@ class Ribbon(QWidget):
         self.btn_circle = RibbonButton("Center\nCircle (C)", "⭕")
         self.btn_circle.setCheckable(True)
         self.btn_circle.clicked.connect(lambda: self.select_sketch_tool("CIRCLE"))
+        from PySide6.QtWidgets import QMenu, QToolButton
+        self.btn_circle.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        circle_menu = QMenu(self.btn_circle)
+        for tool, label in (("CIRCLE", "Center Circle  (C)"), ("SMART_CIRCLE", "Smart Circle  (Shift+C)")):
+            circle_menu.addAction(label).triggered.connect(lambda _=False, t=tool: self.select_sketch_tool(t))
+        self.btn_circle.setMenu(circle_menu)
         h_layout.addWidget(self.btn_circle)
 
         self.btn_polygon = RibbonButton("Polygon\n(P)", "⬡")
@@ -437,7 +445,7 @@ class Ribbon(QWidget):
     def select_sketch_tool(self, tool_name: str):
         self.btn_line.setChecked(tool_name == "LINE")
         self.btn_rect.setChecked(tool_name in RECT_TOOLS)
-        self.btn_circle.setChecked(tool_name == "CIRCLE")
+        self.btn_circle.setChecked(tool_name in CIRCLE_TOOLS)
         self.btn_polygon.setChecked(tool_name == "POLYGON")
         self.btn_arc.setChecked(tool_name == "ARC")
         self.btn_slot.setChecked(tool_name == "SLOT")

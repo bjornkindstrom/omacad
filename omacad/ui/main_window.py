@@ -811,7 +811,7 @@ class MainWindow(QMainWindow):
     def sync_sketch_tool_from_viewport(self, tool_name: str):
         self.ribbon.btn_line.setChecked(tool_name == "LINE")
         self.ribbon.btn_rect.setChecked(tool_name in RECT_TOOLS)
-        self.ribbon.btn_circle.setChecked(tool_name == "CIRCLE")
+        self.ribbon.btn_circle.setChecked(tool_name in ("CIRCLE", "SMART_CIRCLE"))
         self.ribbon.btn_polygon.setChecked(tool_name == "POLYGON")
         self.ribbon.btn_arc.setChecked(tool_name == "ARC")
         self.ribbon.btn_slot.setChecked(tool_name == "SLOT")

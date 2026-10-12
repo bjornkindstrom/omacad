@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.21 - 2026-10-12
+
+### Changed
+- The ribbon's Circle button has a dropdown with Center Circle and Smart Circle.
+
 ## 0.6.20 - 2026-10-12
 
 ### Changed
