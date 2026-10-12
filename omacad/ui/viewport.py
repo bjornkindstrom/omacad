@@ -30,6 +30,7 @@ from omacad.model.sketch import (
     point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex, ref_id, ref_segment, EDGE_PTS
 )
 from omacad.model.sketch_snap import SketchSnapper, SnapResult
+from omacad.ui.sketch_tools import SKETCH_TOOLS
 from omacad.ui.math3d import REF_FOVY, camera_matrices, ray_from_screen, ray_plane_intersect
 from omacad.ui.viewcube import ViewCube
 from omacad.ui import dyn_input
@@ -134,6 +135,8 @@ void main() {
     gl_Position = c0 + vec4(off / (u_viewport * 0.5) * c0.w, 0.0, 0.0);
 }
 """
+
+SKETCH_GROUP_ICONS = {"Draw": "✏️", "Modify": "🛠️", "Dimension": "📏"}
 
 
 class Viewport3D(QOpenGLWidget):
@@ -4522,14 +4525,20 @@ class Viewport3D(QOpenGLWidget):
         if sketch:
             acts[theme.action_with_icon(menu, "✔️ Finish Sketch")] = ("finish", None)
             menu.addSeparator()
-            draw = menu.addMenu("✏️ Draw")
-            for label, tool in (("Line  (L)", "LINE"), ("Rectangle  (R)", "RECT"), ("Circle  (C)", "CIRCLE"),
-                                ("Arc", "ARC"), ("Slot", "SLOT"), ("Polygon", "POLYGON")):
-                acts[draw.addAction(label)] = ("tool", tool)
-            edit = menu.addMenu("🛠️ Modify")
-            for label, tool in (("Trim", "TRIM"), ("Offset  (O)", "OFFSET"), ("Mirror", "MIRROR"), ("Fillet  (F)", "FILLET")):
-                acts[edit.addAction(label)] = ("tool", tool)
-            acts[theme.action_with_icon(menu, "📏 Dimension")] = ("tool", "DIMENSION")
+            groups: dict = {}
+            for tool, label, group, sub in SKETCH_TOOLS:
+                if group not in groups:
+                    if sum(1 for t in SKETCH_TOOLS if t[2] == group) == 1:   # a lone tool needs no submenu
+                        groups[group] = (menu, {})
+                        label = f"{SKETCH_GROUP_ICONS.get(group, '')} {label}".strip()
+                    else:
+                        groups[group] = (menu.addMenu(f"{SKETCH_GROUP_ICONS.get(group, '')} {group}".strip()), {})
+                parent, subs = groups[group]
+                if sub:
+                    if sub not in subs:
+                        subs[sub] = parent.addMenu(sub)
+                    parent = subs[sub]
+                acts[parent.addAction(label)] = ("tool", tool)
             c = menu.addAction("Construction mode  (X)")
             c.setCheckable(True)
             c.setChecked(self.construction_mode)

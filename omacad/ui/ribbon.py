@@ -9,18 +9,11 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QToolButton, QLabel, QFrame, QSizePolicy, QScrollArea
 )
 from PySide6.QtGui import QFont, QFontMetrics
+from omacad.ui.sketch_tools import RECT_TOOLS
 from omacad.ui import theme
 from omacad.ui.theme import style
 from omacad.model.document import Document
 
-
-# the rectangle kinds behind the one ribbon button: tool -> (label, icon)
-RECT_TOOLS = {
-    "RECT": ("2-Point\nRect (R)", "🔲"),
-    "CENTER_RECT": ("Center\nRect", "⛶"),
-    "ROUNDED_RECT": ("Rounded\nRect", "▢"),
-    "CENTER_ROUNDED_RECT": ("Center\nRounded", "▣"),
-}
 
 
 class RibbonButton(QToolButton):
