@@ -1143,7 +1143,21 @@ class Sketch:
         if r > 0.001:
             for pt, la, lb, _ea, _eb in self.find_corners(lines):
                 self.fillet_corner(la, lb, r, pt)
+            self._outer_size_dimensions(lines)
         return lines
+
+    def _outer_size_dimensions(self, lines) -> None:
+        """After the corners are rounded the width/height dimensions of the straight pieces would measure the flats,
+        not the part. Replace them by the overall width (left wall to right wall) and height (bottom to top wall),
+        so the size can be changed with the corner radii and anything measured from the walls following along."""
+        bottom, right, top, left = lines
+        old = [d for d in self.dimensions if d.target_entity_id in (bottom.entity_id, right.entity_id) and d.dim_type == "LENGTH"]
+        offsets = {d.target_entity_id: d.offset_distance for d in old}
+        self.dimensions = [d for d in self.dimensions if not any(d is o for o in old)]
+        self.add_dimension("HORIZ_DIST", left.entity_id, abs(right.p1[0] - left.p1[0]), offset_distance=offsets.get(bottom.entity_id, 10.0),
+                           name="Width", refs=[right.entity_id], pts=["p1", "p1"])
+        self.add_dimension("VERT_DIST", bottom.entity_id, abs(top.p1[1] - bottom.p1[1]), offset_distance=offsets.get(right.entity_id, 10.0),
+                           name="Height", refs=[top.entity_id], pts=["p1", "p1"])
 
     def add_center_rect(self, center: Tuple[float, float], corner: Tuple[float, float], is_construction: bool = False) -> List[SketchLine]:
         cx, cy = center

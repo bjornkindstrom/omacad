@@ -32,3 +32,14 @@ def euler_xyz_degrees(R) -> tuple:
         rx = math.atan2(float(R[2, 1]), float(R[2, 2]))
         rz = math.atan2(float(R[1, 0]), float(R[0, 0]))
     return math.degrees(rx), math.degrees(ry), math.degrees(rz)
+
+
+def lay_on_ground_values(face_normal, face_origin, centre, about_centre: bool = True) -> tuple:
+    """(dx, dy, dz, rx, ry, rz) for a Move step that turns a body so the face lies flat on the ground (z = 0, the body
+    above it). Rotation is about `centre` (the body's middle) or the world origin; the shift is straight up or down."""
+    n = np.asarray(face_normal, dtype=float)
+    R = rotation_aligning(n / np.linalg.norm(n), [0.0, 0.0, -1.0])
+    rx, ry, rz = euler_xyz_degrees(R)
+    pivot = np.asarray(centre, dtype=float) if about_centre else np.zeros(3)
+    moved = pivot + R @ (np.asarray(face_origin, dtype=float) - pivot)
+    return 0.0, 0.0, -float(moved[2]), rx, ry, rz

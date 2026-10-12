@@ -1264,8 +1264,17 @@ class MainWindow(QMainWindow):
             update_handle()
 
         def on_face_picked(plane):
-            if getattr(plane, "face", None) and hasattr(plane.face, "body_id"):
-                dlg.select_body(plane.face.body_id)
+            face = getattr(plane, "face", None)
+            if face is not None and hasattr(face, "body_id"):
+                dlg.select_body(face.body_id)
+                if dlg.btn_lay.isChecked() and face.body_id in self.doc.bodies:
+                    from omacad.model.geometry import lay_on_ground_values
+                    about_centre = dlg.cmb_pivot.currentIndex() == 0
+                    vals = lay_on_ground_values(face.normal, face.origin, get_body_center(self.doc.bodies[face.body_id]), about_centre)
+                    for spn, v in zip((dlg.spn_dx, dlg.spn_dy, dlg.spn_dz, dlg.spn_rx, dlg.spn_ry, dlg.spn_rz), vals):
+                        spn.setValue(round(v, 4))
+                    dlg.btn_lay.setChecked(False)
+                    self.status_label.setText("Face laid on the ground. Adjust the numbers or press OK.")
 
         def cleanup():
             try:

@@ -1194,6 +1194,13 @@ class MoveBodyDialog(BaseFeatureDialog):
         self.spn_rz.setValue(0.0)
         form.addRow("Rotera Z (rz):", self.spn_rz)
 
+        # Lay a face flat: click a face of the body and the rotation and height below are filled in for you
+        self.btn_lay = QPushButton("Lay a face on the ground…")
+        self.btn_lay.setCheckable(True)
+        self.btn_lay.setToolTip("Then click the face in the 3D view that should rest on the ground (XY plane). "
+                                "The rotation and height are filled in below; adjust them or press OK.")
+        form.addRow("Lay on plane:", self.btn_lay)
+
         self.main_layout.addLayout(form)
         self.add_buttons()
 
