@@ -1567,8 +1567,8 @@ class Viewport3D(QOpenGLWidget):
                     txt += f" = {result:g}"  # a formula: show what it evaluates to
             else:
                 val = self.dyn_live.get(name, 0.0)
-                txt = f"{val:.2f}"
-            txt += "°" if name == "Angle" else " mm"
+                txt = f"{val:.0f}" if name == "Sides" else f"{val:.2f}"
+            txt += {"Angle": "°", "Sides": ""}.get(name, " mm")
             if name == "Diameter" and not self.dyn.texts[i] and name in self.dyn_live:
                 txt += f"  (R {self.dyn_live[name] / 2.0:.2f})"
             if tool == "MOVE":
