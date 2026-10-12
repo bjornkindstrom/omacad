@@ -1336,7 +1336,7 @@ class Viewport3D(QOpenGLWidget):
             self.sketch_start_uv = None
         elif self.sketch_tool == "ROUNDED_RECT":
             if p1 != p2:
-                created = sketch.add_rounded_rect(p1, p2, self.sketch_palette.spn_corner_radius.value(), is_construction=is_const)
+                created = sketch.add_rounded_rect(p1, p2, self._corner_radius(), is_construction=is_const)
             self.sketch_start_uv = None
         elif self.sketch_tool == "CENTER_RECT":
             if p1 != p2:
@@ -1344,7 +1344,7 @@ class Viewport3D(QOpenGLWidget):
             self.sketch_start_uv = None
         elif self.sketch_tool == "CENTER_ROUNDED_RECT":
             if p1 != p2:
-                created = sketch.add_center_rounded_rect(p1, p2, self.sketch_palette.spn_corner_radius.value(), is_construction=is_const)
+                created = sketch.add_center_rounded_rect(p1, p2, self._corner_radius(), is_construction=is_const)
             self.sketch_start_uv = None
         elif self.sketch_tool == "POLYGON":
             if math.hypot(p2[0] - p1[0], p2[1] - p1[1]) > 0.5:
@@ -1426,6 +1426,14 @@ class Viewport3D(QOpenGLWidget):
             and dyn_input.supports(self.sketch_tool)
         )
 
+    def _corner_radius(self) -> float:
+        """Corner radius of the rounded rectangles: a typed Radius wins over the palette spinner."""
+        if self.dyn.active and "Radius" in self.dyn.names:
+            v = self.dyn.locked_values().get("Radius")
+            if v is not None:
+                return max(0.1, abs(v))
+        return self.sketch_palette.spn_corner_radius.value()
+
     def _polygon_sides(self) -> int:
         """Sides for the Polygon tool: a typed value wins over the palette spinner."""
         n = self.sketch_palette.spn_sides.value()
@@ -1441,6 +1449,7 @@ class Viewport3D(QOpenGLWidget):
             return
         mouse = self._raw_mouse_uv or self.sketch_start_uv
         self.dyn.default_sides = self.sketch_palette.spn_sides.value()
+        self.dyn.default_radius = self.sketch_palette.spn_corner_radius.value()
         end, live = self.dyn.resolve(self.sketch_start_uv, mouse)
         self.sketch_current_uv = end
         self.dyn_live = live
@@ -1638,6 +1647,11 @@ class Viewport3D(QOpenGLWidget):
         anchor = scr(c) if c is not None else None
         if anchor is None:
             return
+        if not d:   # no size yet: a small shadow circle on the cursor shows that Smart Circle is the active tool
+            painter.setPen(QPen(orange, 1.5, Qt.PenStyle.DashLine))
+            painter.setBrush(QBrush(qcolor(226, 109, 40, 55)))
+            painter.drawEllipse(anchor, 14.0, 14.0)
+            painter.drawPoint(anchor)
         painter.setFont(QFont(theme.font_family(), 9))
         label = smart_circle.LABELS[sc.stage]
         if sc.text:
@@ -1697,6 +1711,7 @@ class Viewport3D(QOpenGLWidget):
             if p_bl and p_br and p_tr:
                 anchors["Width"] = QPointF((p_bl.x() + p_br.x()) / 2, (p_bl.y() + p_br.y()) / 2 + 22)
                 anchors["Height"] = QPointF((p_br.x() + p_tr.x()) / 2 + 48, (p_br.y() + p_tr.y()) / 2)
+                anchors["Radius"] = QPointF(p_bl.x() + 62, p_bl.y() - 26)   # inside, by the corner it rounds
         elif tool == "MOVE":
             anchors["X"] = QPointF((sa.x() + sb.x()) / 2, (sa.y() + sb.y()) / 2 + 24)
             anchors["Y"] = QPointF(sb.x() + 52, sb.y())
@@ -3060,7 +3075,7 @@ class Viewport3D(QOpenGLWidget):
                 preview_lines.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
             elif self.sketch_tool in ("ROUNDED_RECT", "CENTER_ROUNDED_RECT"):
                 c1 = (u1, v1) if self.sketch_tool == "ROUNDED_RECT" else (2 * u1 - u2, 2 * v1 - v2)
-                outline = Sketch.rounded_rect_outline(c1, (u2, v2), self.sketch_palette.spn_corner_radius.value())
+                outline = Sketch.rounded_rect_outline(c1, (u2, v2), self._corner_radius())
                 for i in range(len(outline)):
                     w1 = plane.uv_to_world(*outline[i])
                     w2 = plane.uv_to_world(*outline[(i + 1) % len(outline)])

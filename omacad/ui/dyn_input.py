@@ -15,9 +15,9 @@ UV = Tuple[float, float]
 FIELDS: Dict[str, List[str]] = {
     "LINE": ["Length", "Angle"],
     "RECT": ["Width", "Height"],
-    "ROUNDED_RECT": ["Width", "Height"],
+    "ROUNDED_RECT": ["Width", "Height", "Radius"],
     "CENTER_RECT": ["Width", "Height"],
-    "CENTER_ROUNDED_RECT": ["Width", "Height"],
+    "CENTER_ROUNDED_RECT": ["Width", "Height", "Radius"],
     "CIRCLE": ["Diameter"],
     "POLYGON": ["Side", "Sides"],
     "MOVE": ["X", "Y"],
@@ -38,6 +38,7 @@ class DynInput:
         self.texts: List[str] = []
         self.focus: int = -1
         self.default_sides: int = getattr(self, "default_sides", 6)   # set by the view from its Sides spinner
+        self.default_radius: float = getattr(self, "default_radius", 3.0)   # corner radius of the rounded rectangles
 
     @property
     def active(self) -> bool:
@@ -109,15 +110,17 @@ class DynInput:
             end = (u1 + length * math.cos(a), v1 + length * math.sin(a))
             return end, {"Length": length, "Angle": ang}
 
+        radius = {"Radius": abs(lk["Radius"]) if "Radius" in lk else self.default_radius} if "Radius" in self.names else {}
+
         if self.tool in ("RECT", "ROUNDED_RECT"):
             w = abs(lk["Width"]) if "Width" in lk else abs(dx)
             h = abs(lk["Height"]) if "Height" in lk else abs(dy)
-            return (u1 + sx * w, v1 + sy * h), {"Width": w, "Height": h}
+            return (u1 + sx * w, v1 + sy * h), {"Width": w, "Height": h, **radius}
 
         if self.tool in ("CENTER_RECT", "CENTER_ROUNDED_RECT"):
             w = abs(lk["Width"]) if "Width" in lk else 2.0 * abs(dx)
             h = abs(lk["Height"]) if "Height" in lk else 2.0 * abs(dy)
-            return (u1 + sx * w / 2.0, v1 + sy * h / 2.0), {"Width": w, "Height": h}
+            return (u1 + sx * w / 2.0, v1 + sy * h / 2.0), {"Width": w, "Height": h, **radius}
 
         if self.tool == "MOVE":
             mx = lk.get("X", dx)

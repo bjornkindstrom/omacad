@@ -50,3 +50,22 @@ def test_numbers_and_enter_place_a_circle_and_dimension_it(view):
     kinds = sorted(d.dim_type for d in sk.dimensions if d.target_entity_id == c.entity_id)
     assert kinds == ["DIAMETER", "PT_LINE_DIST", "PT_LINE_DIST"]
     assert view.smart.stage == 0   # ready for the next circle
+
+
+def test_rounded_rect_asks_for_the_radius_after_width_and_height(view):
+    from omacad.model.sketch import SketchLine
+    sk = view.doc.start_sketch("XY")
+    view.set_sketch_tool("ROUNDED_RECT")
+    view.sketch_start_uv = (0.0, 0.0)
+    view.sketch_current_uv = view._raw_mouse_uv = (30.0, 20.0)
+    view._arm_dyn()
+    typ(view, "40")
+    typ(view, "25")
+    assert view.dyn.names[view.dyn.focus] == "Radius"    # Enter after height moves on to the radius
+    assert not [e for e in sk.entities if isinstance(e, SketchLine)]
+    typ(view, "5")
+    xs = [e.p1[0] for e in sk.entities if isinstance(e, SketchLine)] + [e.p2[0] for e in sk.entities if isinstance(e, SketchLine)]
+    assert min(xs) == pytest.approx(0.0) and max(xs) == pytest.approx(40.0)
+    arcs = [e for e in sk.entities if getattr(e, "entity_type", "") == "arc"]
+    assert len(arcs) == 4
+    assert abs(40.0 - 2 * 5.0 - max(abs(e.p1[0] - e.p2[0]) for e in sk.entities if isinstance(e, SketchLine))) < 1e-6
