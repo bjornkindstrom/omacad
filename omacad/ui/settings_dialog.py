@@ -190,6 +190,26 @@ class SettingsDialog(QDialog):
         fillet_row.addStretch()
         lay_sketch.addLayout(fillet_row)
 
+        # Smoothness of round shapes
+        q_row = QHBoxLayout()
+        lbl_q = QLabel("Rundhet (Curve smoothness):")
+        lbl_q.setMinimumWidth(200)
+        self.cmb_curves = QComboBox()
+        for label, n in (("Lätt (32), snabbast", 32), ("Normal (64)", 64), ("Mjuk (96), standard", 96),
+                         ("Extra mjuk (192)", 192), ("Sömlös (360), tung", 360)):
+            self.cmb_curves.addItem(label, n)
+        cur = int(self.settings.get("curve_segments", 96))
+        idx = self.cmb_curves.findData(cur)
+        if idx < 0:
+            self.cmb_curves.addItem(f"Egen ({cur})", cur)
+            idx = self.cmb_curves.count() - 1
+        self.cmb_curves.setCurrentIndex(idx)
+        self.cmb_curves.setToolTip("Hur många plana bitar en cirkel delas i. Fler = mjukare runda ytor men tyngre för datorn. Gäller hela modellen, som räknas om.")
+        q_row.addWidget(lbl_q)
+        q_row.addWidget(self.cmb_curves)
+        q_row.addStretch()
+        lay_sketch.addLayout(q_row)
+
         # Camera: projection type and perspective field of view
         proj_row = QHBoxLayout()
         lbl_proj = QLabel("Kameratyp (3D-vy):")
@@ -258,6 +278,7 @@ class SettingsDialog(QDialog):
         self.spn_grid.setValue(5.0)
         self.spn_fillet.setValue(2.0)
         self.chk_auto_restart.setChecked(True)
+        self.cmb_curves.setCurrentIndex(max(0, self.cmb_curves.findData(96)))
 
     def accept(self):
         self.save_and_close()
@@ -274,6 +295,7 @@ class SettingsDialog(QDialog):
             "invert_zoom": self.chk_invert_zoom.isChecked(),
             "grid_step": self.spn_grid.value(),
             "fillet_default_radius": self.spn_fillet.value(),
+            "curve_segments": self.cmb_curves.currentData(),
             "view_projection": self.cmb_projection.currentData(),
             "view_fov": self.spn_fov.value(),
             "auto_restart": self.chk_auto_restart.isChecked(),

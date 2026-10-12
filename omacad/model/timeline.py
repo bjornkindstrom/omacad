@@ -370,6 +370,40 @@ class FilletFeature(Feature):
             out.append(0.0 if solid else eps)
         return tuple(out)
 
+    def _mitred_foot_tool(self, body, edge, edges):
+        """Fill for a straight edge at the foot of a wall. Where the next selected foot edge meets it on the
+        same floor, both bands run past the corner and are cut off along the bisector, so the roundings flow
+        into each other instead of ending square with a notch between them."""
+        ext = [0.0, 0.0]
+        trims = []
+        reach = 20.0 * self.size + 10.0
+        for k, v in enumerate((edge.p0, edge.p1)):
+            far = edge.p1 if k == 0 else edge.p0
+            ta = (far - v) / max(float(np.linalg.norm(far - v)), 1e-12)
+            for other in edges:
+                if other is edge or other.convex or getattr(other, "kind", "") != "line":
+                    continue
+                q = None
+                if np.linalg.norm(other.p0 - v) < 1e-4:
+                    q = other.p1
+                elif np.linalg.norm(other.p1 - v) < 1e-4:
+                    q = other.p0
+                if q is None:
+                    continue
+                tb = (q - v) / max(float(np.linalg.norm(q - v)), 1e-12)
+                same_floor = any(float(na @ nb) > 0.999 for na in (edge.n1, edge.n2) for nb in (other.n1, other.n2))
+                if not same_floor or abs(float(ta @ tb)) > 0.999:
+                    continue
+                m = ta - tb
+                m = m / np.linalg.norm(m)
+                ext[k] = reach
+                trims.append((m, float(m @ v)))
+                break
+        tool = CadKernel.round_tool(edge, self.size, self.kind, extend=tuple(ext))
+        for m, off in trims:
+            tool = tool.trim_by_plane([float(x) for x in m], off)
+        return tool
+
     def execute(self, doc: Any) -> None:
         """All edges are matched against the body as it is *before* this step and the tools are applied
         together; rounding them one after another would hide the neighbouring edges (the first
@@ -384,12 +418,6 @@ class FilletFeature(Feature):
             if any(body is b and edge.same_as(e) for b, e in seen):
                 return  # the same edge selected twice
             seen.append((body, edge))
-            ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
-            if getattr(edge, "kind", "") == "loop" and not edge.convex:
-                tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
-            else:
-                tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
-            (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
 
         missing = []
         for ref in self.edges:
@@ -418,6 +446,16 @@ class FilletFeature(Feature):
                 self.skipped += 1
             else:
                 take(*best)
+
+        for body, edge in seen:
+            ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
+            if getattr(edge, "kind", "") == "loop" and not edge.convex:
+                tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
+            elif not edge.convex and getattr(edge, "kind", "") == "line":
+                tool = self._mitred_foot_tool(body, edge, [e for b, e in seen if b is body])
+            else:
+                tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
+            (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
 
         # Inside corners of a face outline: the two bevel bands end square at the corner and leave a notch there.
         # Material survives only where one wall still allows it, so what must go is the overlap of both bands.
@@ -667,6 +705,14 @@ class PatternFeature(Feature):
         foot_area = max(foot.area, 1e-9)
         from shapely.prepared import prep
         prepared = prep(room)
+        # Copies may be cut off only by the outer edge of the face. Where they would touch a hole or
+        # something standing on the face they are left out whole, so no broken pieces appear mid-face.
+        room_parts = list(room.geoms) if hasattr(room, "geoms") else [room]
+        holes = unary_union([Polygon(g.exterior) for g in room_parts]).difference(room)
+        prepared_holes = prep(holes) if not holes.is_empty else None
+
+        def clear_of_holes(m):
+            return prepared_holes is None or not prepared_holes.intersects(m) or m.intersection(holes).area < 1e-6
 
         if tri_info is not None:
             s_tri, c_tri, a0 = tri_info
@@ -697,7 +743,7 @@ class PatternFeature(Feature):
                     if not (i == 0 and j == 0):
                         m_up = affinity.translate(foot, *p_up)
                         if min_frac > 0:
-                            if prepared.intersects(m_up) and m_up.intersection(room).area >= min_frac * foot_area:
+                            if prepared.intersects(m_up) and clear_of_holes(m_up) and m_up.intersection(room).area >= min_frac * foot_area:
                                 vec = tuple(ua * p_up[0] + va * p_up[1])
                                 funcs.append(lambda m, vec=vec: m.translate(vec))
                         elif prepared.contains(m_up):
@@ -708,7 +754,7 @@ class PatternFeature(Feature):
                     p_inv = i * v1 + j * v2 + v_inv
                     m_inv = affinity.translate(foot_inv, *p_inv)
                     if min_frac > 0:
-                        if prepared.intersects(m_inv) and m_inv.intersection(room).area >= min_frac * foot_area:
+                        if prepared.intersects(m_inv) and clear_of_holes(m_inv) and m_inv.intersection(room).area >= min_frac * foot_area:
                             T_plane = np.eye(4)
                             T_plane[0, 0] = -1.0; T_plane[1, 1] = -1.0
                             T_plane[0, 3] = 2.0 * c_tri[0] + p_inv[0]
@@ -766,7 +812,7 @@ class PatternFeature(Feature):
                     continue
                 moved = affinity.translate(foot, a, b)
                 if min_frac > 0:
-                    if not prepared.intersects(moved) or moved.intersection(room).area < min_frac * foot_area:
+                    if not prepared.intersects(moved) or not clear_of_holes(moved) or moved.intersection(room).area < min_frac * foot_area:
                         continue
                 elif not prepared.contains(moved):
                     continue

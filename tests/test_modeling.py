@@ -87,7 +87,8 @@ def test_chamfer_of_circle_edges_has_no_slivers_and_exact_profile():
             t = np.clip(np.dot((ri, zi) - p, q - p) / np.dot(q - p, q - p), 0, 1)
             dmin = min(dmin, np.linalg.norm(p + t * (q - p) - (ri, zi)))
         assert dmin < 1e-6
-    assert len(v) < 400                                       # the tool uses the wall's own segment count
+    from omacad.model import quality
+    assert len(v) < 8 * quality.circle_segments()             # the tool uses the wall's own segment count
 
 
 def test_fillet_follows_an_edited_history():
@@ -108,7 +109,8 @@ def test_fillet_of_a_circle_after_the_radius_changed():
     d.add_fillet([e.ref() for e in body(d).edges if e.kind == "circle" and abs(e.center[2] - 20) < 1e-6], 2.0, "fillet")
     d.edit_feature(0, radius=25)
     assert d.timeline.features[-1].skipped == 0
-    n = 48
+    from omacad.model import quality
+    n = quality.circle_segments()
     polygon = 0.5 * n * 25 ** 2 * math.sin(2 * math.pi / n) * 20
     removed = 2 * math.pi * (25 - 0.2232 * 2) * 4 * (1 - math.pi / 4)
     assert vol(d) == pytest.approx(polygon - removed, rel=2e-3)

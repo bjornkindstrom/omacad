@@ -27,6 +27,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "grid_step": 5.0,
     "fillet_default_radius": 2.0,
     "rect_default_tool": "RECT",        # what the rectangle button draws: RECT, CENTER_RECT, ROUNDED_RECT
+    "curve_segments": 96,               # flat pieces around a full circle: lower = lighter and faster, higher = smoother
     "view_projection": "perspective",    # perspective or orthographic
     "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
     "auto_restart": True,               # restart the app (work saved and restored) when a new version is committed
@@ -63,6 +64,15 @@ class SettingsManager(QObject):
         self.config_file = config_file or SETTINGS_FILE
         self._data: Dict[str, Any] = dict(DEFAULT_SETTINGS)
         self.load()
+        self._push_quality()
+
+    @staticmethod
+    def _push_quality_value(n):
+        from omacad.model import quality
+        quality.set_circle_segments(n)
+
+    def _push_quality(self):
+        self._push_quality_value(self._data.get("curve_segments", DEFAULT_SETTINGS["curve_segments"]))
 
     def load(self):
         if self.config_file.exists():
@@ -87,16 +97,19 @@ class SettingsManager(QObject):
 
     def set(self, key: str, value: Any):
         self._data[key] = value
+        self._push_quality()
         self.save()
         self.changed.emit()
 
     def update(self, new_values: Dict[str, Any]):
         self._data.update(new_values)
+        self._push_quality()
         self.save()
         self.changed.emit()
 
     def reset_defaults(self):
         self._data = dict(DEFAULT_SETTINGS)
+        self._push_quality()
         self.save()
         self.changed.emit()
 

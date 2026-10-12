@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Any
 import math
 import numpy as np
+from omacad.model import quality
 import shapely
 from shapely.geometry import LineString, Polygon, Point, MultiPoint
 from shapely.geometry.polygon import orient
@@ -233,14 +234,15 @@ class SketchCircle(SketchEntity):
         self.center = (float(center[0]), float(center[1]))
         self.radius = float(radius)
 
-    def to_lines(self, segments: int = 48) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    def to_lines(self, segments: Optional[int] = None) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         pts = self.get_polygon_points(segments)
         lines = []
         for i in range(len(pts)):
             lines.append((pts[i], pts[(i + 1) % len(pts)]))
         return lines
 
-    def get_polygon_points(self, segments: int = 48) -> List[Tuple[float, float]]:
+    def get_polygon_points(self, segments: Optional[int] = None) -> List[Tuple[float, float]]:
+        segments = segments or quality.circle_segments()
         cx, cy = self.center
         r = self.radius
         pts = []
@@ -313,13 +315,15 @@ class SketchArc(SketchEntity):
         ccw = (sweep_12 < sweep_13)
         return center, r, a1, a3, ccw
 
-    def get_points(self, segments: int = 32) -> List[Tuple[float, float]]:
+    def get_points(self, segments: Optional[int] = None) -> List[Tuple[float, float]]:
         params = self.get_circle_params()
         if not params:
             return [self.p_start, self.p_mid, self.p_end]
 
         center, r, a1, a3, ccw = params
         cx, cy = center
+        if segments is None:
+            segments = quality.arc_segments((a3 - a1) % (2 * math.pi) if ccw else (a1 - a3) % (2 * math.pi))
 
         if ccw:
             total_sweep = (a3 - a1) % (2 * math.pi)
@@ -337,7 +341,7 @@ class SketchArc(SketchEntity):
             pts[-1] = self.p_end
         return pts
 
-    def to_lines(self, segments: int = 32) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    def to_lines(self, segments: Optional[int] = None) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         pts = self.get_points(segments)
         lines = []
         for i in range(len(pts) - 1):
@@ -1428,7 +1432,7 @@ class Sketch:
                 if ent.is_construction:
                     continue
                 if isinstance(ent, SketchCircle) and ent.radius > 1e-4:
-                    circle_pts = ent.get_polygon_points(48)
+                    circle_pts = ent.get_polygon_points()
                     circle_poly = Polygon(circle_pts)
                     if not any(p.contains(Point(ent.center)) for p in polys):
                         polys.append(circle_poly)

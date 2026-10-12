@@ -323,8 +323,24 @@ class MainWindow(QMainWindow):
 
     def on_open_settings(self):
         from omacad.ui.settings_dialog import SettingsDialog
+        from omacad.ui.settings import get_settings
+        before = get_settings().get("curve_segments")
         dlg = SettingsDialog(self)
         dlg.exec()
+        if get_settings().get("curve_segments") != before:
+            self.rebuild_for_curve_quality()
+
+    def rebuild_for_curve_quality(self):
+        """Round shapes are cut into pieces when sketches and steps are built, so a new smoothness needs a rebuild."""
+        from PySide6.QtWidgets import QApplication
+        self.status_label.setText("Rebuilding with the new curve smoothness…")
+        QApplication.processEvents()
+        for sk in self.doc.sketches.values():
+            sk.solve_profiles()
+        self.doc.timeline.recompute(self.doc)
+        self.doc.notify_changed()
+        self.viewport.update()
+        self.status_label.setText("Rebuilt with the new curve smoothness.")
 
     # ------------------ Action Handlers ------------------
 

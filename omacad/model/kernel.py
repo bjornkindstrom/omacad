@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import manifold3d as m3d
 import trimesh
+from omacad.model import quality
 
 
 @dataclass
@@ -31,9 +32,9 @@ class CadKernel:
         return m3d.Manifold.cube([float(length), float(width), float(height)], center=center)
 
     @staticmethod
-    def create_cylinder(radius: float, height: float, segments: int = 48, center: bool = False) -> m3d.Manifold:
+    def create_cylinder(radius: float, height: float, segments: Optional[int] = None, center: bool = False) -> m3d.Manifold:
         """Create a cylinder with specified radius and height."""
-        cyl = m3d.Manifold.cylinder(float(height), float(radius), float(radius), circular_segments=segments)
+        cyl = m3d.Manifold.cylinder(float(height), float(radius), float(radius), circular_segments=segments or quality.circle_segments())
         if center:
             mat = np.array([
                 [1.0, 0.0, 0.0, 0.0],
@@ -44,9 +45,9 @@ class CadKernel:
         return cyl
 
     @staticmethod
-    def create_sphere(radius: float, segments: int = 36) -> m3d.Manifold:
+    def create_sphere(radius: float, segments: Optional[int] = None) -> m3d.Manifold:
         """Create a UV sphere."""
-        return m3d.Manifold.sphere(float(radius), circular_segments=segments)
+        return m3d.Manifold.sphere(float(radius), circular_segments=segments or quality.sphere_segments())
 
     @staticmethod
     def extrude_cross_section(
