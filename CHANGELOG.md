@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.29 - 2026-10-12
+
+### Fixed
+- Pattern / Mirror finds nothing to copy when the hole is part of the extrude that creates the body (the default ticks start at the sketch, so there was no "before" body). It now copies the holes enclosed in the body's outline.
+
 ## 0.6.28 - 2026-10-12
 
 ### Changed

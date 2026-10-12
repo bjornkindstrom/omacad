@@ -1230,6 +1230,19 @@ class PatternFeature(Feature):
         ln = float(np.linalg.norm(n))
         return (np.asarray(o, dtype=float), n / ln) if ln > 1e-9 else None
 
+    @staticmethod
+    def _enclosed_voids(body):
+        """What is missing from the body's bounding box and does not reach its sides: holes and pockets
+        made by the very step that created the body (a profile with a hole in it)."""
+        lo, hi = np.array(body.bounding_box()[:3]), np.array(body.bounding_box()[3:])
+        voids = m3d.Manifold.cube(tuple(hi - lo)).translate(tuple(lo)) - body
+        keep = []
+        for part in voids.decompose():
+            b = part.bounding_box()
+            if (b[0] > lo[0] + 1e-6 and b[1] > lo[1] + 1e-6 and b[3] < hi[0] - 1e-6 and b[4] < hi[1] - 1e-6):
+                keep.append(part)
+        return m3d.Manifold.batch_boolean(keep, m3d.OpType.Add) if keep else m3d.Manifold()
+
     def compute(self, doc, body_id: str):
         """(removed copies, added copies) for one body, or None if there is nothing to copy."""
         idx = doc.timeline.features.index(self) if self in doc.timeline.features else len(doc.timeline.features)
@@ -1238,9 +1251,13 @@ class PatternFeature(Feature):
             return None
         before = doc.step_states.get(min(pos), {}).get(body_id)
         after = doc.step_states.get(max(pos) + 1, {}).get(body_id)
-        if before is None or after is None:
+        if after is None:
             return None
-        removed, added = before - after, after - before
+        if before is None or before.is_empty():   # the steps make the body itself: copy the holes inside its outline
+            removed, added = self._enclosed_voids(after), m3d.Manifold()
+            before = after + removed
+        else:
+            removed, added = before - after, after - before
         removed, added = CadKernel.drop_slivers(removed), CadKernel.drop_slivers(added)
         removed = self._reach_out(removed, before)
         regions = [m for m in (removed, added) if not m.is_empty()]
