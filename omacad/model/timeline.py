@@ -869,12 +869,15 @@ class PatternFeature(Feature):
             if abs(abs(float(face.normal @ n)) - 1.0) > 1e-3 or abs(float((face.origin - o) @ n)) > 1e-3:
                 continue
             for tri in face.tris:
-                pg = Polygon([(float(v @ ua), float(v @ va)) for v in tri])
+                pg = Polygon([(float((v - o) @ ua), float((v - o) @ va)) for v in tri])   # relative to the plane origin, like `foot`
                 if pg.is_valid and pg.area > 1e-9:
                     regions.append(pg)
         if not regions:
             return []
         raw_face = unary_union(regions + [foot.buffer(1e-4)])
+        # Hairline cracks between the face's triangles (and along the spot the source feature left) would be widened
+        # to margin-wide channels by the inset below, so no copies would be placed along them: close them first.
+        raw_face = raw_face.buffer(0.02, join_style=2).buffer(-0.02, join_style=2)
         if all_obs and not all_obs.is_empty:
             raw_face = raw_face.difference(all_obs)
         parts = [p for p in (raw_face.geoms if hasattr(raw_face, "geoms") else [raw_face]) if p.area > 1e-6]

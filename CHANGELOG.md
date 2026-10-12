@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.19 - 2026-10-12
+
+### Fixed
+- **Fill pattern left channels and strips unfilled** (via F9): hairline cracks between the triangles of the face were widened to margin-wide stripes by the inset, so whole rows of copies were missing; and on a sketch plane whose origin is not the world origin the face was shifted against the copies, so copies landed off the plate. Both fixed.
+
 ## 0.6.18 - 2026-10-12
 
 ### Added
