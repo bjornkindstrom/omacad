@@ -4,7 +4,7 @@ Tracks the sequential history of modeling operations and enables parametric reco
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import math
 import numpy as np
 import manifold3d as m3d
@@ -212,7 +212,71 @@ class SketchFeature(Feature):
         }
 
 
-class ExtrudeFeature(Feature):
+def profile_signature(profile: Any) -> Tuple[float, float, float]:
+    """(centroid u, centroid v, area) of a sketch profile: what identifies it when the numbering of a sketch's
+    profiles changes (a different curve smoothness, a re-drawn neighbour...)."""
+    poly = Polygon(profile.exterior_pts, profile.interior_holes)
+    c = poly.centroid
+    return (float(c.x), float(c.y), float(poly.area))
+
+
+def _profile_matches(profile: Any, sig, area_tol: float = 0.03) -> bool:
+    u, v, a = profile_signature(profile)
+    if abs(a - sig[2]) > max(area_tol * abs(sig[2]), 1e-3):
+        return False
+    return math.hypot(u - sig[0], v - sig[1]) <= max(0.25, 0.02 * math.sqrt(abs(sig[2])))
+
+
+class ProfileRefs:
+    """Mixin for steps that point at sketch profiles by number (Extrude, Revolve). Besides the numbers they
+    remember each profile's signature, and when the numbers no longer fit (the sketch was solved again with a
+    different curve smoothness, say) the profile is found again by its centre and area."""
+
+    profile_sigs = None
+    _sigs_for = None
+
+    def resolve_profile_refs(self, sketch) -> None:
+        profiles = sketch.profiles
+        idxs = [self.profile_idx] + list(self.extra_profiles)
+        current = (self.profile_idx, tuple(self.extra_profiles))
+        if self.profile_sigs is None or self._sigs_for != current or len(self.profile_sigs) != len(idxs):
+            if all(0 <= i < len(profiles) for i in idxs):   # first sight (or edited): remember what they look like
+                self.profile_sigs = [profile_signature(profiles[i]) for i in idxs]
+                self._sigs_for = current
+            return
+        new, taken = [], set()
+        for i, sig in zip(idxs, self.profile_sigs):
+            if 0 <= i < len(profiles) and i not in taken and _profile_matches(profiles[i], sig):
+                new.append(i)
+            else:
+                best, best_d = None, float("inf")
+                for j, pr in enumerate(profiles):
+                    if j in taken or not _profile_matches(pr, sig):
+                        continue
+                    u, v, _a = profile_signature(pr)
+                    d = math.hypot(u - sig[0], v - sig[1])
+                    if d < best_d:
+                        best, best_d = j, d
+                new.append(best if best is not None else i)
+            taken.add(new[-1])
+        if new != idxs:
+            self.profile_idx, self.extra_profiles = new[0], new[1:]
+            self._sigs_for = (self.profile_idx, tuple(self.extra_profiles))
+
+    def profile_refs_dict(self) -> dict:
+        if self.profile_sigs is None:
+            return {}
+        return {"profile_sigs": [list(s) for s in self.profile_sigs],
+                "profile_sigs_for": [self.profile_idx, list(self.extra_profiles)]}
+
+    def load_profile_refs(self, data: dict) -> None:
+        sigs, for_ = data.get("profile_sigs"), data.get("profile_sigs_for")
+        if sigs and for_:
+            self.profile_sigs = [tuple(float(x) for x in s) for s in sigs]
+            self._sigs_for = (int(for_[0]), tuple(int(i) for i in for_[1]))
+
+
+class ExtrudeFeature(ProfileRefs, Feature):
     """Linear extrusion of a sketch profile.
 
     direction: "one_side" (distance may be negative to flip), "symmetric"
@@ -253,6 +317,8 @@ class ExtrudeFeature(Feature):
 
     def build_solid(self, doc: Any) -> Optional[m3d.Manifold]:
         sketch = doc.sketches.get(self.sketch_id)
+        if sketch:
+            self.resolve_profile_refs(sketch)
         if not sketch or self.profile_idx >= len(sketch.profiles):
             return None
         idxs = [self.profile_idx] + [i for i in self.extra_profiles if i != self.profile_idx and i < len(sketch.profiles)]
@@ -329,6 +395,7 @@ class ExtrudeFeature(Feature):
             "operation": self.operation,
             "direction": self.direction,
             "distance2": self.distance2,
+            **self.profile_refs_dict(),
         }
 
 
@@ -951,7 +1018,7 @@ class PatternFeature(Feature):
         }
 
 
-class RevolveFeature(Feature):
+class RevolveFeature(ProfileRefs, Feature):
     """Revolves sketch profiles around an axis, like Fusion 360's Revolve.
 
     axis: ("line", entity_id) a line of the same sketch (construction lines too), ("u",) / ("v",) the sketch's
@@ -989,6 +1056,8 @@ class RevolveFeature(Feature):
         from shapely import affinity
         self.problem = ""
         sketch = doc.sketches.get(self.sketch_id)
+        if sketch:
+            self.resolve_profile_refs(sketch)
         if not sketch or self.profile_idx >= len(sketch.profiles):
             return None
         ax = self.axis_uv(sketch)
@@ -1077,6 +1146,7 @@ class RevolveFeature(Feature):
             "sketch_id": self.sketch_id, "profile_idx": self.profile_idx, "extra_profiles": list(self.extra_profiles),
             "segments": self.segments, "operation": self.operation, "axis": list(self.axis),
             "angle": self.angle, "direction": self.direction, "angle2": self.angle2,
+            **self.profile_refs_dict(),
         }
 
 

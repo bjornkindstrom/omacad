@@ -15,6 +15,8 @@ from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeat
                                     ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature,
                                     PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature)
 from omacad.model.sketch import Sketch
+from omacad.model.timeline import ProfileRefs
+from omacad.model import quality
 
 
 class Exporter:
@@ -329,6 +331,7 @@ class Exporter:
             "construction_planes": doc.construction_planes,
             "sections": doc.sections,
             "canvases": getattr(doc, "canvases", {}),
+            "curve_segments": quality.circle_segments(),   # how finely circles were cut when profiles were numbered
         }
 
     @staticmethod
@@ -343,6 +346,30 @@ class Exporter:
             json.dump(data, f, indent=2)
         os.replace(tmp, filepath)
         return True
+
+    @staticmethod
+    def _seed_profile_refs(doc: Document, baseline: int) -> None:
+        """Steps from older files point at profiles by number only. The numbers belong to the curve smoothness
+        the file was made with, so remember what those profiles look like at that smoothness; they are then found
+        again whatever smoothness is set now."""
+        needs = [f for f in doc.timeline.features if isinstance(f, ProfileRefs) and f.profile_sigs is None]
+        if not needs:
+            return
+        current = quality.circle_segments()
+        if baseline != current:
+            quality.set_circle_segments(baseline)
+            for sk in doc.sketches.values():
+                sk.solve_profiles()
+        try:
+            for f in needs:
+                sketch = doc.sketches.get(f.sketch_id)
+                if sketch is not None:
+                    f.resolve_profile_refs(sketch)
+        finally:
+            if baseline != current:
+                quality.set_circle_segments(current)
+                for sk in doc.sketches.values():
+                    sk.solve_profiles()
 
     @staticmethod
     def load_project(filepath: str) -> Document:
@@ -407,6 +434,7 @@ class Exporter:
                     f_data.get("direction", "one_side"), f_data.get("distance2", 0.0),
                     extra_profiles=f_data.get("extra_profiles", [])
                 )
+                feat.load_profile_refs(f_data)
                 doc.timeline.add_feature(feat)
             elif ft == "revolve":
                 feat = RevolveFeature(fid, fname, f_data["sketch_id"], f_data["profile_idx"],
@@ -414,6 +442,7 @@ class Exporter:
                                       axis=f_data.get("axis", ["v"]), angle=f_data.get("angle", 360.0),
                                       direction=f_data.get("direction", "one_side"), angle2=f_data.get("angle2", 0.0),
                                       extra_profiles=f_data.get("extra_profiles", []))
+                feat.load_profile_refs(f_data)
                 doc.timeline.add_feature(feat)
             elif ft == "delete_body":
                 feat = DeleteBodyFeature(fid, fname, f_data["target_body_id"])
@@ -471,6 +500,7 @@ class Exporter:
             feat.suppressed = f_data.get("suppressed", False)
             feat.exprs = dict(f_data.get("exprs", {}))
 
+        Exporter._seed_profile_refs(doc, int(data.get("curve_segments", 48)))   # files from before this was saved used 48
         if "marker_index" in data:
             doc.timeline.marker_index = max(0, min(int(data["marker_index"]), len(doc.timeline.features)))
         active = data.get("active_sketch")
