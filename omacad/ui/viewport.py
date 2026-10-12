@@ -36,6 +36,8 @@ from omacad.ui.viewcube import ViewCube
 from omacad.ui import dyn_input
 from omacad.model import expr as expr_lib
 from omacad.ui.dyn_input import DynInput
+from omacad.ui import smart_circle
+from omacad.ui.smart_circle import SmartCircle
 from omacad.ui.sketch_palette import SketchPalette
 from omacad.ui import theme
 from omacad.ui.theme import qcolor
@@ -229,6 +231,7 @@ class Viewport3D(QOpenGLWidget):
 
         # Tab dimension entry while drawing
         self.dyn = DynInput()
+        self.smart = SmartCircle()   # the Smart Circle tool: numbers + Enter
         self.dyn_live: Dict[str, float] = {}
         self._raw_mouse_uv: Optional[Tuple[float, float]] = None
 
@@ -1523,6 +1526,136 @@ class Viewport3D(QOpenGLWidget):
             return False  # nothing typed: Esc cancels the shape as usual
         return False
 
+    # ---- Smart Circle ------------------------------------------------------------
+    def _smart_segments(self):
+        """Straight lines a circle can be measured from: the sketch's own lines and the edges of the faces."""
+        sk = self.doc.active_sketch
+        segs = []
+        for e in sk.entities:
+            if isinstance(e, SketchLine):
+                segs.append((tuple(e.p1), tuple(e.p2), e.entity_id))
+        for a, b in self._reference_segments():
+            a, b = (float(a[0]), float(a[1])), (float(b[0]), float(b[1]))
+            segs.append((a, b, ref_id((a, b))))
+        return segs
+
+    def _smart_key(self, event) -> bool:
+        sc, key, text = self.smart, event.key(), event.text()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._smart_accept()
+            return True
+        if key == Qt.Key.Key_Backspace:
+            if sc.text:
+                sc.text = sc.text[:-1]
+            else:
+                sc.back()
+            self.update()
+            return True
+        if key == Qt.Key.Key_Escape:
+            if sc.text or sc.stage != smart_circle.SIZE:
+                sc.reset()
+                sc.mouse = self._raw_mouse_uv
+                self.update()
+                return True
+            return False
+        if text and len(text) == 1 and (text in "0123456789.,-+*/()^×" or (text.isalpha() and (sc.text or text == "="))):
+            if text != "=":
+                sc.text += text
+            self.update()
+            return True
+        return False
+
+    def _smart_accept(self):
+        sc = self.smart
+        if sc.mouse is None and self._raw_mouse_uv is not None:
+            sc.mouse = self._raw_mouse_uv
+        res = sc.accept()
+        if res == "invalid":
+            self.status_message.emit(f"'{sc.text}' is not a valid number or formula.")
+        elif res == "need_size":
+            self.status_message.emit("Smart Circle: type the diameter first.")
+        elif res == "no_line":
+            self.status_message.emit("Smart Circle: no straight line in that direction to measure from. Clear the field to use the cursor.")
+        elif res == "next":
+            self.status_message.emit("Smart Circle: distance from the circle's centre to the nearest "
+                                     + ("vertical" if sc.stage == smart_circle.ACROSS else "horizontal")
+                                     + " line, Enter (empty = cursor).")
+        elif res == "done":
+            self._smart_create()
+        self.update()
+
+    def _smart_create(self):
+        sc, sk = self.smart, self.doc.active_sketch
+        centre, d = sc.centre(), sc.diameter
+        dims = dict(sc.dimension)
+        before = sk.to_dict()
+        circle = sk.add_circle(centre, d / 2.0, is_construction=self.construction_mode)
+        solve_sketch(sk)
+        self.doc.record_sketch_change(sk, before)
+        for stage in (smart_circle.ACROSS, smart_circle.DOWN):
+            if stage in dims:
+                seg, dist = dims[stage]
+                self.doc.add_dimension_constraint(sk.sketch_id, "PT_LINE_DIST", circle.entity_id, dist, refs=[seg[2]], pts=["center"])
+        sc.reset()
+        sc.mouse = self._raw_mouse_uv
+        self.status_message.emit("Smart Circle: placed. Type the next diameter for another one, or Esc.")
+        self.doc.notify_changed()
+
+    def draw_smart_circle(self, painter: QPainter):
+        sc = self.smart
+        if self.sketch_tool != "SMART_CIRCLE" or not self.doc.active_sketch or sc.mouse is None:
+            return
+        plane = self.doc.active_sketch.plane
+
+        def scr(uv):
+            p = self.world_to_screen(plane.uv_to_world(uv[0], uv[1]))
+            return None if p is None else QPointF(p[0], p[1])
+
+        orange, cyan = qcolor(226, 109, 40), qcolor(60, 190, 255)
+        g = sc.guide()
+        if g is not None:
+            a, b = scr(g[0]), scr(g[1])
+            if a is not None and b is not None:
+                painter.setPen(QPen(cyan, 3))
+                painter.drawLine(a, b)
+        c = sc.centre()
+        d = sc.diameter if sc.diameter is not None else (sc.typed() if sc.stage == smart_circle.SIZE else None)
+        if c is not None and d:
+            r = abs(d) / 2.0
+            pts = [scr((c[0] + r * math.cos(2 * math.pi * i / 48), c[1] + r * math.sin(2 * math.pi * i / 48))) for i in range(49)]
+            if all(p is not None for p in pts):
+                painter.setPen(QPen(orange, 2))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawPolyline(QPolygonF(pts))
+            sc_c = scr(c)
+            if sc_c is not None and g is not None:   # dotted measure line from the guide to the centre
+                k = 0 if sc.stage == smart_circle.ACROSS else 1
+                foot = (g[0][0], c[1]) if k == 0 else (c[0], g[0][1])
+                sf = scr(foot)
+                if sf is not None:
+                    painter.setPen(QPen(cyan, 1, Qt.PenStyle.DashLine))
+                    painter.drawLine(sf, sc_c)
+        anchor = scr(c) if c is not None else None
+        if anchor is None:
+            return
+        painter.setFont(QFont(theme.font_family(), 9))
+        label = smart_circle.LABELS[sc.stage]
+        if sc.text:
+            txt = sc.text + "|"
+            v = sc.typed()
+            if v is not None and not sc.text.replace(".", "", 1).lstrip("-").isdigit():
+                txt += f" = {v:g}"
+        else:
+            txt = "type a value" if sc.stage == smart_circle.SIZE else "cursor"
+        txt = f"{label}  {txt} mm"
+        fm = painter.fontMetrics()
+        rect = QRectF(anchor.x() + 18, anchor.y() - 36, fm.horizontalAdvance(txt) + 20, 24)
+        painter.setBrush(QBrush(qcolor(37, 40, 44, 235)))
+        painter.setPen(QPen(orange, 2))
+        painter.drawRoundedRect(rect, 4, 4)
+        painter.setPen(qcolor(255, 255, 255))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, txt)
+
     def event(self, e):
         # Tab would otherwise move Qt focus; route it to dimension entry while drawing
         if e.type() == QEvent.Type.KeyPress and e.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
@@ -1781,6 +1914,11 @@ class Viewport3D(QOpenGLWidget):
             tool_name = "NONE"
         self.sketch_tool = tool_name
         self.dyn.reset()
+        self.smart.reset()
+        if tool_name == "SMART_CIRCLE":
+            self.status_message.emit("Smart Circle: type the diameter, Enter. Then the distance to the nearest vertical line, Enter, "
+                                     "then to the nearest horizontal line, Enter. Empty + Enter or a click takes the cursor position. "
+                                     "Minus flips the side. Backspace on an empty field goes back.")
         self.sketch_start_uv = None
         self.sketch_second_uv = None
         self.sketch_current_uv = None
@@ -3221,6 +3359,7 @@ class Viewport3D(QOpenGLWidget):
         self.draw_dimensions(painter)
 
         self.draw_dyn_fields(painter)  # on top of everything else
+        self.draw_smart_circle(painter)
 
         # 5. Sketch Mode Active Banner
         if self.doc.active_sketch:
@@ -4168,7 +4307,12 @@ class Viewport3D(QOpenGLWidget):
                 self.sketch_start_uv = None
                 self.sketch_second_uv = None
                 self.dyn.reset()
+                self.smart.reset()
                 self.update()
+                return
+
+            if event.button() == Qt.MouseButton.LeftButton and self.sketch_tool == "SMART_CIRCLE":
+                self._smart_accept()
                 return
 
             if event.button() == Qt.MouseButton.LeftButton and self.sketch_current_uv is not None:
@@ -4330,7 +4474,7 @@ class Viewport3D(QOpenGLWidget):
         self.hovered_dim_id = hovered
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self.sketch_tool in ("LINE", "RECT", "ROUNDED_RECT", "CENTER_RECT", "CENTER_ROUNDED_RECT", "CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE"):
+        elif self.sketch_tool in ("LINE", "RECT", "ROUNDED_RECT", "CENTER_RECT", "CENTER_ROUNDED_RECT", "CIRCLE", "SMART_CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE"):
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -4378,6 +4522,9 @@ class Viewport3D(QOpenGLWidget):
                     enable_geom_snap=enable_pts
                 )
                 self.active_snap = snap_res
+                if self.sketch_tool == "SMART_CIRCLE":
+                    self.smart.mouse = uv
+                    self.smart.segments = self._smart_segments()
                 self.sketch_current_uv = snap_res.uv
                 self._raw_mouse_uv = snap_res.uv
                 self._refresh_dyn()
@@ -4869,6 +5016,8 @@ class Viewport3D(QOpenGLWidget):
                 self.fillet_preview = None
                 self.set_sketch_tool("NONE")
                 return
+        if self.doc.active_sketch and self.sketch_tool == "SMART_CIRCLE" and self._smart_key(event):
+            return
         if self._handle_dyn_key(event):
             return
         if (event.key() == Qt.Key.Key_Escape and self.sketch_tool == "DIMENSION"
@@ -4895,6 +5044,9 @@ class Viewport3D(QOpenGLWidget):
                 return
             elif event.key() == Qt.Key.Key_R:
                 self.set_sketch_tool("RECT")
+                return
+            elif event.key() == Qt.Key.Key_C and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self.set_sketch_tool("SMART_CIRCLE")
                 return
             elif event.key() == Qt.Key.Key_C:
                 self.set_sketch_tool("CIRCLE")

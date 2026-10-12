@@ -14,6 +14,7 @@ SKETCH_TOOLS = [
     ("LINE", "Line  (L)", "Draw", None),
     *[(t, label.replace("\n", " "), "Draw", "Rectangle") for t, (label, _i) in RECT_TOOLS.items()],
     ("CIRCLE", "Circle  (C)", "Draw", None),
+    ("SMART_CIRCLE", "Smart Circle  (Shift+C)", "Draw", None),
     ("ARC", "Arc", "Draw", None),
     ("SLOT", "Slot", "Draw", None),
     ("POLYGON", "Polygon", "Draw", None),
