@@ -14,6 +14,7 @@ hiddenimports = [
     'OpenGL.GL.shaders',
     'OpenGL.arrays.ctypesarrays',
     'shapely',
+    'python_solvespace',
     'tomllib',
 ]
 

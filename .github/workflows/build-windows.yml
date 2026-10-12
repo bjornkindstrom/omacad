@@ -20,8 +20,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy manifold3d trimesh shapely python-solvespace pytest
+          pip install PySide6 numpy manifold3d trimesh PyOpenGL Pillow shapely python-solvespace pytest
       - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests -q
 
   build:
@@ -41,7 +43,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PySide6 numpy manifold3d trimesh PyOpenGL Pillow shapely pyinstaller
+          pip install PySide6 numpy manifold3d trimesh PyOpenGL Pillow shapely python-solvespace pyinstaller
 
       - name: Build Standalone EXE with PyInstaller
         run: |
