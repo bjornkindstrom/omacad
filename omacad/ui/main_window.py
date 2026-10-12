@@ -1603,4 +1603,5 @@ class MainWindow(QMainWindow):
             "<li>Native Wayland Integration on Omarchy</li>"
             "<li>Direct STL & OBJ Export for 3D Printing</li>"
             "</ul>"
+            "<p><i>Vibecoded by Kindstrom</i></p>"
         )
