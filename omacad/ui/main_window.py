@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QDockWidget,
     QFileDialog, QMessageBox, QLabel, QMenu, QPushButton
 )
-from PySide6.QtGui import QAction, QKeySequence, QIcon
+from PySide6.QtGui import QAction, QKeySequence, QIcon, QShortcut
 
 from omacad.model.document import Document
 from omacad.model.timeline import ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature, MoveFeature
@@ -152,6 +152,13 @@ class MainWindow(QMainWindow):
         self.ribbon.finish_sketch_clicked.connect(self.on_finish_sketch)
         self.viewport.finish_sketch_requested.connect(self.on_finish_sketch)
         self.viewport.menu_command.connect(self.on_menu_command)
+        self.viewport.active_tool_title = self._active_tool_title
+        self.viewport.lay_face_requested.connect(self.on_lay_face_requested)
+        self.viewport.lay_target_picked.connect(self.on_lay_target_picked)
+        self._lay_face = None
+        # Esc leaves the current function wherever the keyboard focus is (a tool panel field, the tree ...);
+        # the viewport decides what that means, in the same order as when it has the focus itself
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, activated=self._escape_pressed)
 
         # Connect Browser Signals
         self.browser.start_sketch_on_plane.connect(self.start_sketch_on_plane)
@@ -510,9 +517,40 @@ class MainWindow(QMainWindow):
         self._after_history_change()
         self.status_label.setText(f"Undo: {name}." if name else "Nothing to undo.")
 
+    def _escape_pressed(self):
+        from PySide6.QtGui import QKeyEvent
+        from PySide6.QtCore import QEvent
+        self.viewport.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier))
+
+    def _active_tool_title(self):
+        dlg = self.inspector.current_tool_dlg
+        return dlg.windowTitle() if dlg is not None else None
+
+    def on_lay_face_requested(self, face, mode: str):
+        if mode == "ground":
+            self.doc.lay_face_on(face.body_id, face.normal, face.origin, (0, 0, 0), (0, 0, 1))
+            self.viewport.update()
+            self.status_label.setText("Laid the face on the ground. Undo (Ctrl+Z) turns it back.")
+        else:
+            self._lay_face = face
+            self.viewport.begin_plane_pick("lay_target")
+            self.status_label.setText("Lay flat: click the face or plane this face should rest on (Esc cancels).")
+
+    def on_lay_target_picked(self, plane):
+        face, self._lay_face = self._lay_face, None
+        if face is None or face.body_id not in self.doc.bodies:
+            return
+        self.doc.lay_face_on(face.body_id, face.normal, face.origin, plane.origin, plane.normal)
+        self.viewport.update()
+        self.status_label.setText("Laid the face on the chosen plane.")
+
     def on_menu_command(self, cmd: str):
         """Entries of the viewport's right-click menus that need the main window."""
-        if cmd == "undo":
+        if cmd in ("tool_ok", "tool_cancel"):
+            dlg = self.inspector.current_tool_dlg
+            if dlg is not None:
+                dlg.accept() if cmd == "tool_ok" else dlg.reject()
+        elif cmd == "undo":
             self.on_undo()
         elif cmd == "redo":
             self.on_redo()
@@ -795,7 +833,8 @@ class MainWindow(QMainWindow):
             c = Polygon(prof.exterior_pts, prof.interior_holes).representative_point()
             origin = sk.plane.uv_to_world(c.x, c.y)
             tip = dist / 2.0 if direction == "symmetric" else dist
-            self.viewport.set_extrude_handle(origin, sk.plane.normal, tip)
+            self.viewport.set_extrude_handle(origin, sk.plane.normal, tip, show_value=True,
+                                             value_scale=2.0 if direction == "symmetric" else 1.0)
 
         def on_handle_dragged(t):
             direction = dlg.get_direction()[0]

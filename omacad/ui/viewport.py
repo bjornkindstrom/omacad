@@ -165,6 +165,8 @@ class Viewport3D(QOpenGLWidget):
     body_clicked = Signal(str)  # body_id of clicked 3D body
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
+    lay_face_requested = Signal(object, str)   # (face, "ground" | "pick"): turn the body so this face rests on a plane
+    lay_target_picked = Signal(object)         # the plane a face is to be laid on
     menu_command = Signal(str)  # right-click menu entries the main window carries out: "undo", "redo", "sketch:XY"...
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
@@ -230,6 +232,7 @@ class Viewport3D(QOpenGLWidget):
         self._raw_mouse_uv: Optional[Tuple[float, float]] = None
 
         # Extrude arrow (drag to set the distance)
+        self.active_tool_title = lambda: None   # set by the main window: title of the open tool panel, if any
         self.extrude_handle = None   # dict(origin, axis, dist)
         self._handle_drag = False
         self._handle_hover = False
@@ -783,10 +786,11 @@ class Viewport3D(QOpenGLWidget):
         GL.glUseProgram(0)
 
     # ---- Extrude arrow ------------------------------------------------------------------
-    def set_extrude_handle(self, origin, axis, dist: float, color=None):
-        """Draggable arrow. `color` (r, g, b) overrides the theme highlight, e.g. when that would blend into the scene."""
+    def set_extrude_handle(self, origin, axis, dist: float, color=None, show_value: bool = False, value_scale: float = 1.0):
+        """Draggable arrow. `color` (r, g, b) overrides the theme highlight, e.g. when that would blend into the scene.
+        `show_value` writes the distance (times `value_scale`) beside the shaft, also after the mouse is released."""
         self.extrude_handle = {"origin": np.asarray(origin, dtype=float), "axis": np.asarray(axis, dtype=float), "dist": float(dist),
-                               "color": color}
+                               "color": color, "show_value": show_value, "value_scale": value_scale}
         self.update()
 
     def clear_extrude_handle(self):
@@ -825,8 +829,9 @@ class Viewport3D(QOpenGLWidget):
         return so, apex, centre, radius
 
     def _draw_handle_value(self, painter: QPainter):
-        """While the extrude arrow is dragged: the distance as a label beside the middle of the shaft."""
-        g = self._handle_geometry() if self._handle_drag else None
+        """The distance of the extrude arrow as a label beside the middle of the shaft (stays after release)."""
+        h = self.extrude_handle
+        g = self._handle_geometry() if h and h.get("show_value") else None
         if g is None:
             return
         so, apex, _centre, _radius = g
@@ -835,7 +840,7 @@ class Viewport3D(QOpenGLWidget):
         nx, ny = (-dy / n, dx / n) if n > 1e-6 else (0.0, -1.0)
         if ny > 0:   # keep the label above the line rather than below
             nx, ny = -nx, -ny
-        text = f"{self.extrude_handle['dist']:.2f} mm"
+        text = f"{h['dist'] * h.get('value_scale', 1.0):.2f} mm"
         font = QFont(theme.font_family(), 10, QFont.Weight.Bold)
         painter.setFont(font)
         tw = painter.fontMetrics().horizontalAdvance(text) + 16
@@ -4466,6 +4471,15 @@ class Viewport3D(QOpenGLWidget):
         elif key == "delete":
             self.delete_selected_entities()
 
+    def _add_tool_entries(self, menu: QMenu, acts: dict):
+        """While a tool panel (Extrude, Fillet, ...) is open: finish or cancel it from the menu."""
+        title = self.active_tool_title()
+        if not title:
+            return
+        acts[theme.action_with_icon(menu, f"✔️ Finish {title}")] = ("cmd", "tool_ok")
+        acts[theme.action_with_icon(menu, f"✖️ Cancel {title}")] = ("cmd", "tool_cancel")
+        menu.addSeparator()
+
     def _add_history_and_view(self, menu: QMenu, acts: dict, sketch: bool):
         """The entries every right-click menu ends with: undo/redo and view options."""
         u, r = self.doc.undo_label(), self.doc.redo_label()
@@ -4517,11 +4531,29 @@ class Viewport3D(QOpenGLWidget):
         elif kind == "sketch":
             self.menu_command.emit(f"sketch:{arg}")
 
+    def _show_axis_menu(self, event):
+        """Right-click while the Move arrows are shown: pick the axis to drag along."""
+        menu = QMenu(self)
+        acts = {}
+        for ax, label in (("X", "🔴 Move along X"), ("Y", "🟢 Move along Y"), ("Z", "🔵 Move along Z")):
+            acts[theme.action_with_icon(menu, label)] = ax
+        menu.addSeparator()
+        general: dict = {}
+        self._add_tool_entries(menu, general)
+        chosen = menu.exec(event.globalPosition().toPoint())
+        if chosen in acts:
+            self.move_gizmo["active_axis"] = acts[chosen]
+            self.move_gizmo_axis_selected.emit(acts[chosen])
+            self.update()
+        elif chosen in general:
+            self._run_general(*general[chosen])
+
     def _show_general_menu(self, event):
         """Right-click on empty space: what you can do next, depending on whether a sketch is open."""
         menu = QMenu(self)
         acts: dict = {}
         sketch = self.doc.active_sketch is not None
+        self._add_tool_entries(menu, acts)
         if sketch:
             acts[theme.action_with_icon(menu, "✔️ Finish Sketch")] = ("finish", None)
             menu.addSeparator()
@@ -4566,13 +4598,20 @@ class Viewport3D(QOpenGLWidget):
         act_extrude = theme.action_with_icon(menu, "⬆️ Extrude this Face…")
         act_extrude.setToolTip("Pull the face into the body to cut it away, or out to add material.")
         menu.setToolTipsVisible(True)
-        menu.addSeparator()
         acts: dict = {}
+        if face.body_id in self.doc.bodies:
+            menu.addSeparator()
+            acts[theme.action_with_icon(menu, "⬇️ Lay this face on the ground (XY)")] = ("lay", "ground")
+            acts[theme.action_with_icon(menu, "⬇️ Lay this face on a face or plane…")] = ("lay", "pick")
+        menu.addSeparator()
+        self._add_tool_entries(menu, acts)
         self._add_history_and_view(menu, acts, False)
         chosen = menu.exec(event.globalPosition().toPoint())
         self.ctx_face = None
         self.update()
-        if chosen in acts:
+        if chosen in acts and acts[chosen][0] == "lay":
+            self.lay_face_requested.emit(face, acts[chosen][1])
+        elif chosen in acts:
             self._run_general(*acts[chosen])
         elif chosen is act_sketch:
             self.plane_picked.emit(self.plane_from_target(("face", face)))
@@ -4607,7 +4646,9 @@ class Viewport3D(QOpenGLWidget):
             self._rpress = None
             self.is_panning = False
             if moved < 4 and not self.plane_pick_mode and not self.edge_pick_mode:
-                if not self.doc.active_sketch:
+                if not self.doc.active_sketch and self.move_gizmo:
+                    self._show_axis_menu(event)
+                elif not self.doc.active_sketch:
                     target = self._pick_plane_target(event.position().x(), event.position().y())
                     if target is not None and target[0] == "face":
                         self._show_face_menu(event)
@@ -4673,6 +4714,8 @@ class Viewport3D(QOpenGLWidget):
                     self.section_base_picked.emit(plane)
                 elif purpose == "extrude_target":
                     self.target_plane_picked.emit(plane)
+                elif purpose == "lay_target":
+                    self.lay_target_picked.emit(plane)
                 else:
                     self.plane_picked.emit(plane)
             return
@@ -4825,8 +4868,14 @@ class Viewport3D(QOpenGLWidget):
                     self._end_move(False)
                 self.sketch_start_uv = None
                 self.dyn.reset()
-            else:
+            elif self.sketch_tool != "NONE":
                 self.set_sketch_tool("NONE")
+            elif self.active_tool_title():   # Esc always leaves the current function, also an open tool panel
+                self.menu_command.emit("tool_cancel")
+            elif self.doc.selected_profile or self.doc.selected_extra:
+                self.doc.selected_profile = None
+                self.doc.selected_extra = []
+                self.profile_picked.emit()
             self.setCursor(Qt.CursorShape.ArrowCursor)
             self.update()
         elif event.key() == Qt.Key.Key_F:

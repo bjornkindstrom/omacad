@@ -769,6 +769,25 @@ class Document:
         self.notify_changed()
         return feat
 
+    @undoable("Lay flat")
+    def lay_face_on(self, body_id: str, face_normal, face_origin, plane_point, plane_normal) -> Optional[MoveFeature]:
+        """Turns and moves a body so that one of its flat faces lies on a plane (the face then points
+        against the plane's normal, like a part resting on it). Done as a normal Move step."""
+        from omacad.model.geometry import rotation_aligning, euler_xyz_degrees
+        body = self.bodies.get(body_id)
+        if body is None or body.render_mesh is None:
+            return None
+        n = np.asarray(face_normal, dtype=float)
+        n = n / np.linalg.norm(n)
+        pn = np.asarray(plane_normal, dtype=float)
+        pn = pn / np.linalg.norm(pn)
+        R = rotation_aligning(n, -pn)
+        rx, ry, rz = euler_xyz_degrees(R)
+        centre = (np.asarray(body.render_mesh.bounds_min, dtype=float) + np.asarray(body.render_mesh.bounds_max, dtype=float)) * 0.5
+        moved = centre + R @ (np.asarray(face_origin, dtype=float) - centre)
+        shift = pn * float((np.asarray(plane_point, dtype=float) - moved) @ pn)   # only along the plane normal
+        return self.move_body(body_id, float(shift[0]), float(shift[1]), float(shift[2]), rx, ry, rz, pivot="center")
+
     @undoable("Import")
     def import_mesh(
         self,

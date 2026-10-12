@@ -3,6 +3,18 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.11 - 2026-10-12
+
+### Added
+- **Lay a face flat**: right-click a face > *Lay this face on the ground (XY)* or *on a face or plane...* turns and moves the body (one undoable Move step) so that face rests on the plane. `Document.lay_face_on`, helpers in `omacad/model/geometry.py`.
+- **Right-click while a tool panel is open** (Extrude, Fillet, ...): *Finish* and *Cancel* in the menu. Right-click on the Move arrows picks the axis (X/Y/Z).
+- **Esc leaves the current function** wherever the focus is: first a pending step, then the sketch tool, then the open tool panel, then the selection.
+
+### Fixed
+- The distance on the extrude arrow stays after you release the mouse (it follows the arrow until the tool closes; symmetric extrude shows the full distance).
+- Spin box up/down buttons were blank boxes in some themes: they now have a visible background and arrows in the theme's text colour.
+- The X/Y/Z buttons in Move were too narrow and hard to read: short labels, in the axis colours (filled when active).
+
 ## 0.6.10 - 2026-10-12
 
 ### Fixed

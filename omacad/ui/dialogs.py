@@ -1130,11 +1130,17 @@ class MoveBodyDialog(BaseFeatureDialog):
 
         # Active Drag Axis buttons (X, Y, Z)
         axis_layout = QHBoxLayout()
-        self.btn_axis_x = QPushButton("X (Röd)")
-        self.btn_axis_y = QPushButton("Y (Grön)")
-        self.btn_axis_z = QPushButton("Z (Blå)")
-        for b in (self.btn_axis_x, self.btn_axis_y, self.btn_axis_z):
+        self.btn_axis_x = QPushButton("X")
+        self.btn_axis_y = QPushButton("Y")
+        self.btn_axis_z = QPushButton("Z")
+        # the axis colours of the 3D arrows: red, green, blue. Checked = filled with the colour, white text.
+        for b, colour, name in ((self.btn_axis_x, "#D8453B", "red"), (self.btn_axis_y, "#2E9E4F", "green"),
+                                (self.btn_axis_z, "#2F7FE0", "blue")):
             b.setCheckable(True)
+            b.setToolTip(f"Drag along the {name} arrow")
+            b.setStyleSheet(
+                f"QPushButton {{ padding: 6px 0px; font-weight: bold; border: 2px solid {colour}; border-radius: 4px; }}"
+                f"QPushButton:checked {{ background-color: {colour}; color: #FFFFFF; }}")
             axis_layout.addWidget(b)
         self.btn_axis_x.setChecked(True)
         form.addRow("Dra i 3D-pil:", axis_layout)

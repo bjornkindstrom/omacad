@@ -218,8 +218,34 @@ def palette() -> Palette:
     return _palette
 
 
+_ARROW_DIR = Path.home() / ".cache/omacad/arrows"
+
+
+def _arrow_png(direction: str) -> str:
+    """Path of a small up/down arrow image in the theme's text colour (for spin box buttons)."""
+    from PySide6.QtGui import QPolygonF
+    from PySide6.QtCore import QPointF
+    colour = _palette.map_hex("#E0E3E7")
+    path = _ARROW_DIR / f"{direction}_{colour.lstrip('#')}.png"
+    if not path.exists():
+        _ARROW_DIR.mkdir(parents=True, exist_ok=True)
+        pm = QPixmap(18, 18)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(colour))
+        pts = [(3, 12), (15, 12), (9, 5)] if direction == "up" else [(3, 6), (15, 6), (9, 13)]
+        p.drawPolygon(QPolygonF([QPointF(x, y) for x, y in pts]))
+        p.end()
+        pm.save(str(path))
+    return str(path)
+
+
 def themeify(css: str) -> str:
     """Maps the colours (and font) of a stylesheet onto the active Omarchy theme."""
+    if "@ARROW_UP@" in css:
+        css = css.replace("@ARROW_UP@", _arrow_png("up").replace("\\", "/")).replace("@ARROW_DOWN@", _arrow_png("down").replace("\\", "/"))
     css = _HEX.sub(lambda m: _palette.map_hex(m.group(0)), css)
 
     def rgba(m):
@@ -502,6 +528,44 @@ QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
 }
 QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus {
     border: 1px solid #E26D28;
+}
+QSpinBox, QDoubleSpinBox {
+    padding-right: 22px;
+}
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    background-color: #33373E;
+    border-left: 1px solid #555C68;
+    border-bottom: 1px solid #555C68;
+    border-top-right-radius: 4px;
+}
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    background-color: #33373E;
+    border-left: 1px solid #555C68;
+    border-bottom-right-radius: 4px;
+}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+    background-color: #555C68;
+}
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
+    background-color: #E26D28;
+}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    image: url(@ARROW_UP@);
+    width: 9px;
+    height: 9px;
+}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    image: url(@ARROW_DOWN@);
+    width: 9px;
+    height: 9px;
 }
 QComboBox::drop-down {
     border: none;
