@@ -282,7 +282,7 @@ class CadKernel:
         return result
 
     @staticmethod
-    def circle_round_tool(edge, size: float, kind: str, arc_segments: int = 24) -> m3d.Manifold:
+    def circle_round_tool(edge, size: float, kind: str, arc_segments: int = 24, reach=(0.0, 0.0)) -> m3d.Manifold:
         """Same cross-section as a straight edge (a right angle between the flat face and the cylinder
         wall) revolved around the circle's axis."""
         R = float(edge.radius)
@@ -316,7 +316,14 @@ class CadKernel:
             cs = cs ^ half
         if cs.is_empty():
             return m3d.Manifold()
-        solid = m3d.Manifold.revolve(cs, circular_segments=max(int(getattr(edge, "nseg", 48)), 12))   # same segment count as the wall so vertices line up
+        nseg = max(int(getattr(edge, "nseg", 48)), 12)   # same segment count as the wall so vertices line up
+        if edge.is_arc:
+            # `reach`: how far (radians) the tool runs past each end, where the arc ends in open space
+            a0, sweep = edge.a0 - reach[0], edge.sweep + reach[0] + reach[1]
+            solid = m3d.Manifold.revolve(cs, circular_segments=nseg, revolve_degrees=math.degrees(sweep))
+            solid = solid.rotate((0.0, 0.0, math.degrees(a0)))
+        else:
+            solid = m3d.Manifold.revolve(cs, circular_segments=nseg)
         u, v = edge._basis()
         mat = np.column_stack([u, v, edge.axis, edge.center]).astype(float)
         return solid.transform(mat)

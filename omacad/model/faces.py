@@ -250,8 +250,14 @@ class CircularEdge:
     s2: float            # +1: the cylinder wall continues along +axis, -1: along -axis
     convex: bool         # rim of solid material (cut) vs inside corner (fill)
     nseg: int = 48       # segments of the tessellated circle (decides how far the chords sag inside the radius)
+    a0: float = 0.0      # an arc only: where it starts (radians, in `_basis`) and how far it runs
+    sweep: float = 2 * np.pi
 
     kind = "circle"
+
+    @property
+    def is_arc(self) -> bool:
+        return self.sweep < 2 * np.pi - 1e-6
 
     def _basis(self):
         a = self.axis
@@ -263,16 +269,24 @@ class CircularEdge:
 
     def polyline(self, n: int = 96) -> np.ndarray:
         u, v = self._basis()
-        ang = np.linspace(0.0, 2 * np.pi, n + 1)
+        ang = self.a0 + np.linspace(0.0, self.sweep, max(2, int(n * self.sweep / (2 * np.pi))) + 1)
         return self.center + self.radius * (np.outer(np.cos(ang), u) + np.outer(np.sin(ang), v))
 
     def same_as(self, other) -> bool:
         if getattr(other, "kind", "") != "circle":
             return False
+        if self.is_arc != other.is_arc:
+            return False
+        if self.is_arc and (float(self.axis @ other.axis) < 0.999 or abs(self.sweep - other.sweep) > 1e-3
+                            or abs(math.remainder(self.a0 - other.a0, 2 * np.pi)) > 1e-3):
+            return False
         return (abs(abs(float(self.axis @ other.axis)) - 1.0) < 1e-6 and abs(self.radius - other.radius) < 1e-4 * max(1.0, self.radius)
                 and np.linalg.norm(self.center - other.center) < 1e-4 * max(1.0, self.radius))
 
     def ref(self):
+        if self.is_arc:
+            return ("arc", tuple(map(float, self.center)), tuple(map(float, self.axis)), float(self.radius),
+                    float(self.a0), float(self.sweep))
         return ("circle", tuple(map(float, self.center)), tuple(map(float, self.axis)), float(self.radius))
 
 
@@ -570,8 +584,10 @@ def _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, plan
         for e0, e1, *_ in segs:
             deg[e0] = deg.get(e0, 0) + 1
             deg[e1] = deg.get(e1, 0) + 1
-        if len(segs) < 8 or any(d != 2 for d in deg.values()):
-            continue  # open arcs and partial rounds are not supported
+        ends = [k for k, d in deg.items() if d == 1]
+        closed = not ends and len(segs) >= 8
+        if not closed and not (len(ends) == 2 and all(d <= 2 for d in deg.values()) and len(segs) >= 4):
+            continue
         pts = v[list(deg.keys())]
         # circle fit in the plane of the face
         u = np.cross(n_plane, [1.0, 0.0, 0.0])
@@ -595,17 +611,48 @@ def _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, plan
         m = v[e0]
         # which side of the circle the flat face lies on: use the centre of its triangle (a corner can sit
         # exactly on the circle)
-        centroid = v[f[pl_tri]].mean(axis=0)
-        rho_pl = float(np.linalg.norm((centroid - center) - ((centroid - center) @ n_plane) * n_plane))
-        s1 = 1.0 if rho_pl > R else -1.0
+        # (only the direction matters: step from the middle of the segment into the flat triangle and see
+        # whether that moves away from the axis; the triangle's centroid can lie on the wrong side of a big face)
+        mid = (v[e0] + v[e1]) / 2.0
+        radial = (mid - center) - ((mid - center) @ n_plane) * n_plane
+        s1 = 1.0 if float((third_pl - mid) @ radial) > 0 else -1.0
         s2 = 1.0 if float((third_cu - center) @ n_plane) > 0 else -1.0
         convex = float(n_plane @ (third_cu - m)) < 0
-        out.append(CircularEdge(center, n_plane.copy(), R, s1, s2, convex, len(segs)))
+        if closed:
+            out.append(CircularEdge(center, n_plane.copy(), R, s1, s2, convex, len(segs)))
+            continue
+        # an open arc: walk the chain from one end and measure the angle it covers
+        nxt: dict = {}
+        for e0, e1, *_ in segs:
+            nxt.setdefault(e0, []).append(e1)
+            nxt.setdefault(e1, []).append(e0)
+        order, prev = [ends[0]], None
+        while True:
+            cand = [x for x in nxt[order[-1]] if x != prev]
+            if not cand:
+                break
+            prev = order[-1]
+            order.append(cand[0])
+        if len(order) != len(deg):
+            continue
+        q = v[order] - center
+        ang = np.unwrap(np.arctan2(q @ w, q @ u))
+        sweep = float(ang[-1] - ang[0])
+        a0 = float(ang[0])
+        if sweep < 0:
+            a0, sweep = float(ang[-1]), -sweep
+        if sweep < np.radians(8.0) or sweep > 2 * np.pi - 0.2:
+            continue
+        out.append(CircularEdge(center, n_plane.copy(), R, s1, s2, convex, int(round(len(segs) * 2 * np.pi / sweep)), a0, sweep))
     return out
 
 
 def edge_from_ref(ref, candidates):
     """The current edge a stored Fillet/Chamfer reference points at (lines may have been shortened)."""
+    if ref and ref[0] == "arc":
+        probe = CircularEdge(np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3]), 1.0, 1.0, True,
+                             a0=float(ref[4]), sweep=float(ref[5]))
+        return next((c for c in candidates if getattr(c, "kind", "") == "circle" and probe.same_as(c)), None)
     if ref and ref[0] == "circle":
         probe = CircularEdge(np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3]), 1.0, 1.0, True)
         return next((c for c in candidates if getattr(c, "kind", "") == "circle" and probe.same_as(c)), None)
@@ -626,9 +673,10 @@ def fuzzy_edge_from_ref(ref, candidates, used=(), reach: float = 1e9):
     def free(c):
         return not any(c is u or (getattr(c, "kind", "") == getattr(u, "kind", "") and c.same_as(u)) for u in used)
 
-    if ref and ref[0] == "circle":
+    if ref and ref[0] in ("circle", "arc"):
         c0, ax, R = np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3])
-        cand = [c for c in candidates if getattr(c, "kind", "") == "circle" and free(c) and float(c.axis @ ax) > 0.999]
+        cand = [c for c in candidates if getattr(c, "kind", "") == "circle" and free(c) and float(c.axis @ ax) > 0.999
+                and c.is_arc == (ref[0] == "arc")]
         cand = [c for c in cand if np.linalg.norm(c.center - c0) <= reach]
         # same side of the part: the circle's centre moves least along its own axis
         return min(cand, key=lambda c: np.linalg.norm(c.center - c0) + 0.05 * abs(c.radius - R), default=None)

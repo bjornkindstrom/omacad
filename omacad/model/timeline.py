@@ -531,6 +531,8 @@ class FilletFeature(Feature):
     def _norm_ref(e):
         if e and e[0] == "circle":
             return ("circle", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]))
+        if e and e[0] == "arc":
+            return ("arc", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]), float(e[4]), float(e[5]))
         if e and e[0] == "loop":
             return ("loop", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]))
         return (tuple(map(float, e[0])), tuple(map(float, e[1])))
@@ -549,6 +551,24 @@ class FilletFeature(Feature):
             q = end + direction * 3 * eps + inward * 3 * eps
             solid = not (probe.translate(tuple(q)) ^ body.manifold).is_empty()
             out.append(0.0 if solid else eps)
+        return tuple(out)
+
+    def _arc_reach(self, body, edge):
+        """How far the tool of an open arc runs past each end (radians): a little where the arc ends in open air
+        (the next face meets it at a slant, so a square end would leave a sliver), none where material continues."""
+        if not edge.convex:
+            return (0.0, 0.0)
+        eps = 1e-3
+        probe = m3d.Manifold.cube((eps, eps, eps), True)
+        u, v = edge._basis()
+        out = []
+        for ang, sgn in ((edge.a0, -1.0), (edge.a0 + edge.sweep, 1.0)):
+            radial = math.cos(ang) * u + math.sin(ang) * v
+            tangent = sgn * (-math.sin(ang) * u + math.cos(ang) * v)
+            end = edge.center + edge.radius * radial
+            q = end + tangent * 3 * eps + (edge.s1 * radial + edge.s2 * edge.axis) * 3 * eps
+            solid = not (probe.translate(tuple(q)) ^ body.manifold).is_empty()
+            out.append(0.0 if solid else min(4.0 * self.size / max(edge.radius, 1e-6), math.radians(80.0)))
         return tuple(out)
 
     def _mitred_tool(self, body, edge, edges):
@@ -634,6 +654,8 @@ class FilletFeature(Feature):
                 tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
             elif not edge.convex and getattr(edge, "kind", "") == "line":
                 tool = self._mitred_tool(body, edge, [e for b, e in seen if b is body])
+            elif getattr(edge, "kind", "") == "circle" and edge.is_arc:
+                tool = CadKernel.circle_round_tool(edge, self.size, self.kind, reach=self._arc_reach(body, edge))
             else:
                 tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
             (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
