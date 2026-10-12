@@ -190,6 +190,34 @@ class SettingsDialog(QDialog):
         fillet_row.addStretch()
         lay_sketch.addLayout(fillet_row)
 
+        # Camera: projection type and perspective field of view
+        proj_row = QHBoxLayout()
+        lbl_proj = QLabel("Kameratyp (3D-vy):")
+        lbl_proj.setMinimumWidth(200)
+        self.cmb_projection = QComboBox()
+        self.cmb_projection.addItem("Perspektiv", "perspective")
+        self.cmb_projection.addItem("Ortografisk (inget perspektiv)", "orthographic")
+        self.cmb_projection.setCurrentIndex(max(0, self.cmb_projection.findData(self.settings.get("view_projection", "perspective"))))
+        proj_row.addWidget(lbl_proj)
+        proj_row.addWidget(self.cmb_projection)
+        proj_row.addStretch()
+        lay_sketch.addLayout(proj_row)
+
+        fov_row = QHBoxLayout()
+        lbl_fov = QLabel("Perspektiv (synfält):")
+        lbl_fov.setMinimumWidth(200)
+        self.spn_fov = QDoubleSpinBox()
+        self.spn_fov.setRange(10.0, 60.0)
+        self.spn_fov.setDecimals(0)
+        self.spn_fov.setSuffix("°")
+        self.spn_fov.setValue(float(self.settings.get("view_fov", 30.0)))
+        self.spn_fov.setToolTip("Lägre = plattare bild och mindre förvrängning. Zoomen ändras inte.")
+        fov_row.addWidget(lbl_fov)
+        fov_row.addWidget(self.spn_fov)
+        fov_row.addWidget(QLabel("lägre = plattare, mindre skevt"))
+        fov_row.addStretch()
+        lay_sketch.addLayout(fov_row)
+
         # Restart on a new version
         self.chk_auto_restart = QCheckBox("Starta om automatiskt när en ny version har committats (arbetet sparas och återställs)")
         self.chk_auto_restart.setChecked(bool(self.settings.get("auto_restart", True)))
@@ -246,6 +274,8 @@ class SettingsDialog(QDialog):
             "invert_zoom": self.chk_invert_zoom.isChecked(),
             "grid_step": self.spn_grid.value(),
             "fillet_default_radius": self.spn_fillet.value(),
+            "view_projection": self.cmb_projection.currentData(),
+            "view_fov": self.spn_fov.value(),
             "auto_restart": self.chk_auto_restart.isChecked(),
         }
         self.settings.update(new_data)

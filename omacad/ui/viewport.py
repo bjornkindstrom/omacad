@@ -30,7 +30,7 @@ from omacad.model.sketch import (
     point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex, ref_id, ref_segment, EDGE_PTS
 )
 from omacad.model.sketch_snap import SketchSnapper, SnapResult
-from omacad.ui.math3d import perspective, orbit_view, ray_from_screen, ray_plane_intersect
+from omacad.ui.math3d import REF_FOVY, camera_matrices, ray_from_screen, ray_plane_intersect
 from omacad.ui.viewcube import ViewCube
 from omacad.ui import dyn_input
 from omacad.model import expr as expr_lib
@@ -173,7 +173,7 @@ class Viewport3D(QOpenGLWidget):
         self.azimuth: float = 45.0      # Orbit around Z (deg)
         self.elevation: float = 30.0    # Elevation above ground (deg)
         self.distance: float = 140.0    # Distance to target (mm)
-        self.fovy: float = 45.0
+        self.fovy: float = REF_FOVY   # zoom calibration only; the drawn field of view is the view_fov setting
 
         # Navigation state
         self.last_mouse_pos = QPoint()
@@ -2364,9 +2364,11 @@ class Viewport3D(QOpenGLWidget):
         w = max(1, self.width())
         h = max(1, self.height())
         aspect = float(w) / float(h)
-        proj = perspective(self.fovy, aspect, 1.0, 5000.0)
-
-        view = orbit_view(self.target, self.distance, self.azimuth, self.elevation)
+        from omacad.ui.settings import get_settings
+        settings = get_settings()
+        proj, view = camera_matrices(self.target, self.distance, self.azimuth, self.elevation, aspect,
+                                     float(settings.get("view_fov", 30.0)),
+                                     settings.get("view_projection", "perspective") == "orthographic")
         mvp = proj @ view
         return proj, view, mvp
 

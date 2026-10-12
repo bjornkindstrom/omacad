@@ -33,6 +33,24 @@ def ortho(left: float, right: float, bottom: float, top: float, near: float, far
     return m
 
 
+REF_FOVY = 45.0   # field of view that `distance` is calibrated against (visible height at the target)
+
+
+def camera_matrices(target, distance: float, azimuth: float, elevation: float, aspect: float,
+                    fov_deg: float = REF_FOVY, ortho_view: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    """(projection, view) of the orbit camera. `distance` keeps its meaning at every field of view: the
+    height visible at the target is 2*distance*tan(REF_FOVY/2), so changing the field of view or switching
+    to orthographic changes only the perspective distortion, never the zoom."""
+    half_h = distance * math.tan(math.radians(REF_FOVY) / 2.0)
+    if ortho_view:
+        far = distance + 5000.0
+        proj = ortho(-half_h * aspect, half_h * aspect, -half_h, half_h, -far, far)
+        return proj, orbit_view(target, distance, azimuth, elevation)
+    eye_d = half_h / math.tan(math.radians(fov_deg) / 2.0)
+    proj = perspective(fov_deg, aspect, max(0.5, eye_d * 0.01), eye_d + 5000.0)
+    return proj, orbit_view(target, eye_d, azimuth, elevation)
+
+
 def orbit_view(target, distance: float, azimuth: float, elevation: float) -> np.ndarray:
     """View matrix of the orbit camera. Z stays up at every elevation (the orbit is clamped just short of
     straight up/down), so the view turns smoothly when you pass over the top - no jump in roll."""
