@@ -83,6 +83,7 @@ Kör på den riktiga skärmen (Wayland); offscreen ger ingen GL-kontext. Sätt `
 - **`delete_body` kom tillbaka** (0.6.0): kroppen togs bara bort ur `doc.bodies`; nästa omräkning byggde den igen. Nu ett eget steg i tidslinjen (`DeleteBodyFeature`).
 - **`Manifold.revolve` ger tom kropp** om tvärsnittet går medurs. Vänd alltid till moturs.
 - **Ångra ändrade bara skisser** (0.6.0): `Document.undo` var bara för skisser. Hela dokumentet ångras nu via `snapshot`/`restore` (på plats, lyssnarna behålls).
+- **Fill pattern med polygoner**: `_best_pattern` i timeline.py söker tätaste gitter via K=(hull−hull)+gap (u, v, v−u på randen); udda polygoner testar även par med en 180°-vänd kopia. Hull måste vara moturs (`orient`) för att kantnormalen ska peka ut.
 
 ## Kända begränsningar
 Fillet saknas för koner och delbågar. Mönster, ytskisser och offset-plan är absoluta (följer inte kroppen, se S8 i planen). Bågar och slots finns inte i skisslösaren. Hole har modell men ännu ingen dialog. Se `PLAN.md` för vad som kommer.

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.28 - 2026-10-12
+
+### Changed
+- **Fill pattern packs polygons of 3 to 8 sides tightly** (Staggered / Triangular layout): the lattice is now searched for the polygon itself, so squares form a square grid, hexagons a honeycomb, octagons their tightest grid, and triangles, pentagons and other odd polygons pair each copy with one turned 180 degrees. The gap between neighbours stays exactly the chosen value. Non-regular convex polygons work too.
+
 ## 0.6.27 - 2026-10-12
 
 ### Fixed

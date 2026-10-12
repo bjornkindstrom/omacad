@@ -715,6 +715,112 @@ class FilletFeature(Feature):
         }
 
 
+_LATTICE_CACHE: Dict[Any, Any] = {}
+
+
+def _polygon_corners(foot):
+    """Corner count of `foot` when it is a convex polygon of 3..8 sides, else 0."""
+    try:
+        hull = foot.convex_hull
+        if hull.geom_type != "Polygon" or foot.area < 0.97 * hull.area:
+            return 0
+        bx0, by0, bx1, by1 = hull.bounds
+        pts = list(hull.simplify(1e-3 * max(bx1 - bx0, by1 - by0, 1e-6)).exterior.coords)[:-1]
+        return len(pts) if 3 <= len(pts) <= 8 else 0
+    except Exception:
+        return 0
+
+
+def _tight_lattice(shape, gap, odd=False, refine=True, n_samples=720):
+    """Densest lattice (v1, v2, area) of `shape` copies with `gap` mm between neighbours. Two copies are
+    closer than `gap` when their offset lies inside K = (hull - hull) grown by gap; the densest lattice
+    packing then puts u, v and v - u on the boundary of K, so it is searched along that boundary."""
+    from shapely import affinity
+    from shapely.geometry import MultiPoint
+    pts = np.array(shape.convex_hull.exterior.coords)[:-1]
+    diff = MultiPoint([tuple(p - q) for p in pts for q in pts]).convex_hull
+    K = diff.buffer(gap * 1.0005, quad_segs=64)
+    ring = K.exterior
+    total = ring.length
+
+    def at(frac):
+        u = ring.interpolate(frac * total)
+        u = np.array([u.x, u.y])
+        cut = ring.intersection(affinity.translate(K, u[0], u[1]).exterior)
+        best = None
+        for q in getattr(cut, "geoms", [cut]):
+            if q.geom_type != "Point":
+                continue
+            v = np.array([q.x, q.y])
+            area = abs(u[0] * v[1] - u[1] * v[0])
+            if area > 1e-9 and (best is None or area < best[2]):
+                best = (u, v, area)
+        return best
+
+    best, best_f = None, 0.0
+    for k in range(n_samples):
+        r = at(k / n_samples)
+        if r is not None and (best is None or r[2] < best[2] - 1e-9):
+            best, best_f = r, k / n_samples
+    if best is not None and refine:
+        step = 1.0 / n_samples
+        while step > 1e-7:
+            for f in (best_f - step, best_f + step):
+                r = at(f % 1.0)
+                if r is not None and r[2] < best[2] - 1e-9:
+                    best, best_f = r, f % 1.0
+            step /= 2.0
+    return best
+
+
+def _best_pattern(foot, gap):
+    """(members, v1, v2): copies per lattice cell as (turned 180 degrees?, offset) plus the lattice. Triangles,
+    pentagons and heptagons also try pairs of a copy and one turned 180 degrees next to it."""
+    from shapely import affinity
+    key = (foot.wkb_hex, round(gap, 6))
+    if key in _LATTICE_CACHE:
+        return _LATTICE_CACHE[key]
+    n = _polygon_corners(foot)
+    res = None
+    odd = n % 2 == 1
+    single = _tight_lattice(foot, gap, odd)
+    if single is not None:
+        res = ([(False, (0.0, 0.0))], single[0], single[1])
+        best_per = single[2]
+        if odd:
+            c = foot.centroid
+            inv = affinity.rotate(foot, 180, origin=(c.x, c.y))
+            pts = np.array(orient(foot.convex_hull, 1.0).exterior.coords)[:-1]   # counter-clockwise
+            cands = []
+            for k in range(len(pts)):
+                e = pts[(k + 1) % len(pts)] - pts[k]
+                ln = float(np.hypot(*e))
+                if ln < 1e-9:
+                    continue
+                d = np.array([e[1], -e[0]]) / ln
+                lo_, hi_ = 0.0, float(np.hypot(*np.ptp(pts, axis=0))) * 2 + gap
+                for _ in range(40):
+                    mid = (lo_ + hi_) / 2.0
+                    lo_, hi_ = (lo_, mid) if foot.distance(affinity.translate(inv, d[0] * mid, d[1] * mid)) >= gap - 1e-9 else (mid, hi_)
+                for shift in np.linspace(-0.5, 0.5, 11):   # slide the turned copy along the shared edge too
+                    w = d * hi_ + np.array([-d[1], d[0]]) * ln * shift
+                    if foot.distance(affinity.translate(inv, w[0], w[1])) < gap - 1e-6:
+                        continue
+                    pr = foot.union(affinity.translate(inv, w[0], w[1]))
+                    lat = _tight_lattice(pr, gap, True, refine=False, n_samples=120)
+                    if lat is not None:
+                        cands.append((lat[2], w, pr))
+            for _, w, pr in sorted(cands, key=lambda t: t[0])[:2]:
+                lat = _tight_lattice(pr, gap, True)
+                if lat is not None and lat[2] / 2.0 < best_per - 1e-6:
+                    best_per = lat[2] / 2.0
+                    res = ([(False, (0.0, 0.0)), (True, (float(w[0]), float(w[1])))], lat[0], lat[1])
+    _LATTICE_CACHE[key] = res
+    if len(_LATTICE_CACHE) > 64:
+        _LATTICE_CACHE.pop(next(iter(_LATTICE_CACHE)))
+    return res
+
+
 class PatternFeature(Feature):
     """Copies what some earlier steps did to a body (a hole and its chamfers, a boss ...) to other places:
     evenly spaced (linear), mirrored around the body (e.g. one corner hole -> all four corners) or around
@@ -981,6 +1087,45 @@ class PatternFeature(Feature):
                     if len(funcs) >= 1500:
                         return funcs
             return funcs
+
+        if self.mirror_mode in ("stagger", "triangular") and _polygon_corners(foot):
+            pat = _best_pattern(foot, gap)
+            if pat is not None:
+                members, v1, v2 = pat
+                cc = foot.centroid
+                M = np.eye(4)
+                M[:3, 0], M[:3, 1], M[:3, 2], M[:3, 3] = ua, va, n, o
+                M_inv = np.linalg.inv(M)
+                foot_inv = affinity.rotate(foot, 180, origin=(cc.x, cc.y))
+                rx0, ry0, rx1, ry1 = room.bounds
+                reach = max(abs(rx1 - c0.x), abs(rx0 - c0.x), abs(ry1 - c0.y), abs(ry0 - c0.y)) + bw + bh
+                step_sz = max(min(float(np.hypot(*v1)), float(np.hypot(*v2))) * abs(v1[0] * v2[1] - v1[1] * v2[0]) / max(float(np.hypot(*v1)) * float(np.hypot(*v2)), 1e-9), 1e-3)
+                imax = int(reach / step_sz) + 2
+                for j in range(-imax, imax + 1):
+                    for i in range(-imax, imax + 1):
+                        for mi, (inverted, off) in enumerate(members):
+                            if i == 0 and j == 0 and mi == 0:
+                                continue
+                            px, py = i * v1[0] + j * v2[0] + off[0], i * v1[1] + j * v2[1] + off[1]
+                            moved = affinity.translate(foot_inv if inverted else foot, px, py)
+                            if min_frac > 0:
+                                if not (prepared.intersects(moved) and clear_of_holes(moved) and moved.intersection(room).area >= min_frac * foot_area):
+                                    continue
+                            elif not prepared.contains(moved):
+                                continue
+                            if inverted:
+                                T = np.eye(4)
+                                T[0, 0] = -1.0; T[1, 1] = -1.0
+                                T[0, 3] = 2.0 * cc.x + px
+                                T[1, 3] = 2.0 * cc.y + py
+                                mat = (M @ T @ M_inv)[:3]
+                                funcs.append(lambda m, mat=mat: m.transform(mat))
+                            else:
+                                vec = tuple(ua * px + va * py)
+                                funcs.append(lambda m, vec=vec: m.translate(vec))
+                            if len(funcs) >= 1500:
+                                return funcs
+                return funcs
 
         def clear_dx(ax, ay, hi):   # smallest shift along (ax, ay) that leaves `gap` between two footprints
             lo_, hi_ = 0.0, hi
