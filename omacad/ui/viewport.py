@@ -162,6 +162,7 @@ class Viewport3D(QOpenGLWidget):
     body_clicked = Signal(str)  # body_id of clicked 3D body
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
+    menu_command = Signal(str)  # right-click menu entries the main window carries out: "undo", "redo", "sketch:XY"...
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -819,6 +820,32 @@ class Viewport3D(QOpenGLWidget):
         bs = self.world_to_screen(base)
         radius = math.hypot(edge[0] - bs[0], edge[1] - bs[1]) if edge is not None and bs is not None else 14.0
         return so, apex, centre, radius
+
+    def _draw_handle_value(self, painter: QPainter):
+        """While the extrude arrow is dragged: the distance as a label beside the middle of the shaft."""
+        g = self._handle_geometry() if self._handle_drag else None
+        if g is None:
+            return
+        so, apex, _centre, _radius = g
+        dx, dy = apex[0] - so[0], apex[1] - so[1]
+        n = math.hypot(dx, dy)
+        nx, ny = (-dy / n, dx / n) if n > 1e-6 else (0.0, -1.0)
+        if ny > 0:   # keep the label above the line rather than below
+            nx, ny = -nx, -ny
+        text = f"{self.extrude_handle['dist']:.2f} mm"
+        font = QFont(theme.font_family(), 10, QFont.Weight.Bold)
+        painter.setFont(font)
+        tw = painter.fontMetrics().horizontalAdvance(text) + 16
+        th = painter.fontMetrics().height() + 8
+        cx = (so[0] + apex[0]) / 2 + nx * (th / 2 + 12 + abs(nx) * tw / 2)
+        cy = (so[1] + apex[1]) / 2 + ny * (th / 2 + 12)
+        rect = QRectF(cx - tw / 2, cy - th / 2, tw, th)
+        painter.setPen(QPen(QColor(255, 255, 255, 200), 1))
+        painter.setBrush(QColor(20, 24, 30, 225))
+        painter.drawRoundedRect(rect, 5, 5)
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
 
     def _handle_hit(self, x: float, y: float) -> bool:
         """Generous: anywhere on the head (plus a margin, so it is easy to catch when it sits behind or inside
@@ -2921,6 +2948,7 @@ class Viewport3D(QOpenGLWidget):
         # 1. ViewCube
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
         self._draw_measure(painter)
+        self._draw_handle_value(painter)
 
         if self.doc.active_sketch and self.sketch_tool == "FILLET" and self.fillet_picked:
             for pt, _a, _b in self.fillet_picked:
@@ -4387,8 +4415,14 @@ class Viewport3D(QOpenGLWidget):
         add("fillet", "╭ Fillet corner…  (F)", "Rounds a corner between lines with an arc.")
         add("offset", "↔️ Offset…  (O)", "Makes a parallel copy at a distance you type (select several, or double-click, to offset a whole shape).")
         add("delete", "🗑️ Delete", "Removes this element (and its dimensions).")
+        menu.addSeparator()
+        general: dict = {}
+        self._add_history_and_view(menu, general, True)
 
         chosen = menu.exec(event.globalPosition().toPoint())
+        if chosen in general:
+            self._run_general(*general[chosen])
+            return
         key = acts.get(chosen)
         if key is None:
             return
@@ -4429,6 +4463,87 @@ class Viewport3D(QOpenGLWidget):
         elif key == "delete":
             self.delete_selected_entities()
 
+    def _add_history_and_view(self, menu: QMenu, acts: dict, sketch: bool):
+        """The entries every right-click menu ends with: undo/redo and view options."""
+        u, r = self.doc.undo_label(), self.doc.redo_label()
+        a = theme.action_with_icon(menu, f"↩️ Undo {u}" if u else "↩️ Undo")
+        a.setEnabled(u is not None)
+        acts[a] = ("cmd", "undo")
+        a = theme.action_with_icon(menu, f"↪️ Redo {r}" if r else "↪️ Redo")
+        a.setEnabled(r is not None)
+        acts[a] = ("cmd", "redo")
+        menu.addSeparator()
+        view = menu.addMenu("👁️ View")
+        if sketch:
+            acts[view.addAction("Look at sketch")] = ("look", None)
+        else:
+            for name in ("Home", "Top", "Front", "Right"):
+                acts[view.addAction(name)] = ("view", name)
+        acts[view.addAction("Fit to window")] = ("fit", None)
+        view.addSeparator()
+        g = view.addAction("Grid")
+        g.setCheckable(True)
+        g.setChecked(self.show_grid)
+        acts[g] = ("grid", None)
+        e = view.addAction("Edges")
+        e.setCheckable(True)
+        e.setChecked(self.show_edges)
+        acts[e] = ("edges", None)
+
+    def _run_general(self, kind, arg):
+        if kind == "cmd":
+            self.menu_command.emit(arg)
+        elif kind == "view":
+            self.set_view(arg)
+        elif kind == "fit":
+            self.zoom_fit()
+        elif kind == "look" and self.doc.active_sketch:
+            self.align_to_plane(self.doc.active_sketch.plane)
+        elif kind == "grid":
+            self.show_grid = not self.show_grid
+            self.update()
+        elif kind == "edges":
+            self.show_edges = not self.show_edges
+            self.update()
+        elif kind == "tool":
+            self.set_sketch_tool(arg)
+        elif kind == "construction":
+            self.toggle_construction_mode()
+        elif kind == "finish":
+            self.finish_sketch_requested.emit()
+        elif kind == "sketch":
+            self.menu_command.emit(f"sketch:{arg}")
+
+    def _show_general_menu(self, event):
+        """Right-click on empty space: what you can do next, depending on whether a sketch is open."""
+        menu = QMenu(self)
+        acts: dict = {}
+        sketch = self.doc.active_sketch is not None
+        if sketch:
+            acts[theme.action_with_icon(menu, "✔️ Finish Sketch")] = ("finish", None)
+            menu.addSeparator()
+            draw = menu.addMenu("✏️ Draw")
+            for label, tool in (("Line  (L)", "LINE"), ("Rectangle  (R)", "RECT"), ("Circle  (C)", "CIRCLE"),
+                                ("Arc", "ARC"), ("Slot", "SLOT"), ("Polygon", "POLYGON")):
+                acts[draw.addAction(label)] = ("tool", tool)
+            edit = menu.addMenu("🛠️ Modify")
+            for label, tool in (("Trim", "TRIM"), ("Offset  (O)", "OFFSET"), ("Mirror", "MIRROR"), ("Fillet  (F)", "FILLET")):
+                acts[edit.addAction(label)] = ("tool", tool)
+            acts[theme.action_with_icon(menu, "📏 Dimension")] = ("tool", "DIMENSION")
+            c = menu.addAction("Construction mode  (X)")
+            c.setCheckable(True)
+            c.setChecked(self.construction_mode)
+            acts[c] = ("construction", None)
+        else:
+            new = menu.addMenu("✏️ New Sketch on")
+            for name in ("XY", "XZ", "YZ"):
+                acts[new.addAction(f"{name} plane")] = ("sketch", name)
+        menu.addSeparator()
+        self._add_history_and_view(menu, acts, sketch)
+        chosen = acts.get(menu.exec(event.globalPosition().toPoint()))
+        if chosen:
+            self._run_general(*chosen)
+
     def _show_face_menu(self, event):
         """Right-click on a flat face: offer to sketch on it directly."""
         target = self._pick_plane_target(event.position().x(), event.position().y())
@@ -4442,10 +4557,15 @@ class Viewport3D(QOpenGLWidget):
         act_extrude = theme.action_with_icon(menu, "⬆️ Extrude this Face…")
         act_extrude.setToolTip("Pull the face into the body to cut it away, or out to add material.")
         menu.setToolTipsVisible(True)
+        menu.addSeparator()
+        acts: dict = {}
+        self._add_history_and_view(menu, acts, False)
         chosen = menu.exec(event.globalPosition().toPoint())
         self.ctx_face = None
         self.update()
-        if chosen is act_sketch:
+        if chosen in acts:
+            self._run_general(*acts[chosen])
+        elif chosen is act_sketch:
             self.plane_picked.emit(self.plane_from_target(("face", face)))
         elif chosen is act_extrude:
             self.face_extrude_requested.emit(face)
@@ -4479,11 +4599,17 @@ class Viewport3D(QOpenGLWidget):
             self.is_panning = False
             if moved < 4 and not self.plane_pick_mode and not self.edge_pick_mode:
                 if not self.doc.active_sketch:
-                    self._show_face_menu(event)
+                    target = self._pick_plane_target(event.position().x(), event.position().y())
+                    if target is not None and target[0] == "face":
+                        self._show_face_menu(event)
+                    else:
+                        self._show_general_menu(event)
                 elif self.sketch_tool in ("NONE", "DIMENSION") and not self._move:
                     ent = self._pick_entity(event.position().x(), event.position().y())
                     if ent is not None:
                         self._show_element_menu(event, ent)
+                    else:
+                        self._show_general_menu(event)
             return
         if self._drag is not None and event.button() == Qt.MouseButton.LeftButton:
             self._drag_release(event)

@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.10 - 2026-10-12
+
+### Added
+- **Value on the extrude arrow**: while you drag the arrow, the distance is shown as a label beside the middle of the shaft.
+- **More right-click menus**: on empty space in 3D you get New Sketch on XY/XZ/YZ, Undo/Redo and View (Home/Top/Front/Right, fit, grid, edges); in a sketch you get Finish Sketch, Draw and Modify tool lists, Dimension, Construction mode, Undo/Redo and View (Look at sketch). The face menu and the sketch element menu also end with Undo/Redo and View.
+
 ## 0.6.9 - 2026-10-12
 
 ### Added

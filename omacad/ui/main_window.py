@@ -151,6 +151,7 @@ class MainWindow(QMainWindow):
         self.viewport.construction_mode_changed.connect(self.ribbon.btn_construct.setChecked)
         self.ribbon.finish_sketch_clicked.connect(self.on_finish_sketch)
         self.viewport.finish_sketch_requested.connect(self.on_finish_sketch)
+        self.viewport.menu_command.connect(self.on_menu_command)
 
         # Connect Browser Signals
         self.browser.start_sketch_on_plane.connect(self.start_sketch_on_plane)
@@ -508,6 +509,15 @@ class MainWindow(QMainWindow):
         name = self.doc.undo()
         self._after_history_change()
         self.status_label.setText(f"Undo: {name}." if name else "Nothing to undo.")
+
+    def on_menu_command(self, cmd: str):
+        """Entries of the viewport's right-click menus that need the main window."""
+        if cmd == "undo":
+            self.on_undo()
+        elif cmd == "redo":
+            self.on_redo()
+        elif cmd.startswith("sketch:"):
+            self.start_sketch_on_plane(cmd.split(":", 1)[1])
 
     def on_redo(self):
         busy = self._busy_reason()
