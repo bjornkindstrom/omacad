@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.30 - 2026-10-12
+
+### Fixed
+- **Omacad.exe failed to start on some Windows PCs** ("LoadLibrary: invalid access to memory location"): the exe is no longer UPX-compressed or stripped, which could damage the Qt DLLs. It is larger but starts everywhere. The build also bundles python-solvespace, which was missing.
+
 ## 0.6.29 - 2026-10-12
 
 ### Fixed
