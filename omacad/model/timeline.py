@@ -878,13 +878,16 @@ class PatternFeature(Feature):
         # Hairline cracks between the face's triangles (and along the spot the source feature left) would be widened
         # to margin-wide channels by the inset below, so no copies would be placed along them: close them first.
         raw_face = raw_face.buffer(0.02, join_style=2).buffer(-0.02, join_style=2)
-        if all_obs and not all_obs.is_empty:
-            raw_face = raw_face.difference(all_obs)
         parts = [p for p in (raw_face.geoms if hasattr(raw_face, "geoms") else [raw_face]) if p.area > 1e-6]
         if not parts:
             return []
-        face_poly = unary_union(parts)
-        room = face_poly.buffer(-margin) if margin > 0 else face_poly
+        # The margin is for the outer edge of the face; holes in it and whatever stands on it only get the gap.
+        outline = unary_union([Polygon(p.exterior) for p in parts])
+        inner = unary_union([Polygon(i) for p in parts for i in p.interiors] + ([all_obs] if all_obs and not all_obs.is_empty else []))
+        room = outline.buffer(-margin) if margin > 0 else outline
+        if not inner.is_empty:
+            room = room.difference(inner.buffer(gap) if gap > 0 else inner)
+        room = unary_union([p for p in (room.geoms if hasattr(room, "geoms") else [room]) if p.area > 1e-6])
         if room.is_empty:
             return []
         minx, miny, maxx, maxy = foot.bounds

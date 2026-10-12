@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.27 - 2026-10-12
+
+### Fixed
+- **Fill pattern kept too far away from holes and bosses** (via F9): the edge margin was also applied round every hole and boss in the face, so large areas stayed empty. The margin now applies only to the outer edge; holes and bosses get just the gap between copies.
+
 ## 0.6.26 - 2026-10-12
 
 ### Fixed
