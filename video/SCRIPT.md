@@ -6,8 +6,9 @@ Target: YouTube, 1920x1080, 30 fps. Record with `video/record_demo.py` (drives t
 |---|------|-----------|-----------|
 | 1 | 0:00-0:10 | Empty Omacad window, then the title card "Omacad: native parametric CAD for Omarchy" | "This is Omacad, a native parametric 3D CAD for Omarchy Linux. Fast, keyboard-friendly, and it follows your theme." |
 | 2 | 0:10-0:30 | New sketch on the XY plane. A centre rounded rectangle is drawn (60 x 40 mm, 6 mm corners) | "Start the way you would in Fusion 360: pick a plane and sketch. Rectangles come with rounded corners built in, and every tool snaps to what is already there." |
-| 3 | 0:30-0:45 | Finish Sketch, Extrude 20 mm. The orbit camera turns around the block | "Finish the sketch and extrude it. Everything is a step in the timeline, so you can always go back." |
-| 4 | 0:45-1:05 | Sketch a circle on the top face, extrude it as a cut: a hole through the block | "Sketch right on a face. Its edges become real sketch lines you can snap to, offset and trim. Cut a hole and you are done." |
+| 3 | 0:30-0:45 | Finish Sketch, Extrude 10 mm. The orbit camera turns around the block | "Finish the sketch and extrude it. Everything is a step in the timeline, so you can always go back." |
+| 4 | 0:45-1:05 | One 5 mm hole cut near a corner, then Pattern/Mirror copies it to all four corners in one step | "Cut one hole, then mirror it: the same hole lands in all four corners with a single step." |
+| 4b | 1:05-1:20 | Hexagon cut, then Fill the face (honeycomb layout, 1.5 mm gaps, 4 mm margin) | "Fill the face: draw one hexagon and Omacad packs the whole surface with exact gaps, edge to edge." |
 | 5 | 1:05-1:25 | Fillet on the block edges, then a Section View slides through the part | "Round the edges with fillet or chamfer, and slide a section plane through the model to check the inside." |
 | 6 | 1:25-1:40 | Ctrl+Z three times, then Ctrl+Shift+Z: the model steps back and forward | "Undo covers everything, not only sketches. Your work can never be lost." |
 | 7 | 1:40-1:55 | F9 dialog "Report problem", typed text, the agent window | "Found a bug or want a feature? Press F9. Omacad sends a screenshot, your model and the log to your AI agent, which fixes the code, and the app restarts on the new version with your work intact." |

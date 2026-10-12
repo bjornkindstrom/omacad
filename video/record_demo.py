@@ -46,14 +46,14 @@ class Demo:
         self.sk = self.doc.start_sketch("XY")
         self.vp.align_to_plane(self.sk.plane)
         before = self.sk.to_dict()
-        self.sk.add_center_rounded_rect((0.0, 0.0), (30.0, 20.0), 6.0)
+        self.sk.add_center_rounded_rect((0.0, 0.0), (30.0, 20.0), 6.0)  # 60 x 40 mm plate
         self.doc.record_sketch_change(self.sk, before)
         self.doc.notify_changed()
 
     def s3_extrude(self):
         self.say("Finish the sketch and extrude. Every step is in the timeline.")
         self.doc.finish_sketch()
-        self.doc.extrude_profile(self.sk.sketch_id, 0, 20.0)
+        self.doc.extrude_profile(self.sk.sketch_id, 0, 10.0)
         self.vp.set_view("HOME")
         self.vp.zoom_fit()
         self.spin = QTimer(self.win)
@@ -64,16 +64,32 @@ class Demo:
         self.vp.azimuth += 1.2
         self.vp.update()
 
-    def s4_hole(self):
-        self.say("Sketch on a face, cut a hole.")
-        self.spin.stop()
-        self.vp.set_view("HOME")
+    def _cut(self, draw):
         sk = self.doc.start_sketch("XY")
         before = sk.to_dict()
-        sk.add_circle((0.0, 0.0), 7.0)
+        draw(sk)
         self.doc.record_sketch_change(sk, before)
         self.doc.finish_sketch()
-        self.doc.extrude_profile(sk.sketch_id, 0, 20.0, operation="cut")
+        self.doc.extrude_profile(sk.sketch_id, 0, 10.0, operation="cut")
+
+    def s4_hole(self):
+        self.say("One hole in a corner...")
+        self.spin.stop()
+        self.vp.set_view("HOME")
+        self._cut(lambda sk: sk.add_circle((22.0, 12.0), 2.5))
+
+    def s4b_mirror(self):
+        self.say("...copied to all four corners in one step (Mirror).")
+        feats = self.doc.timeline.features
+        self.doc.add_pattern([feats[-2].feature_id, feats[-1].feature_id], "mirror", mirror_mode="xy")
+
+    def s4c_fill(self):
+        self.say("Fill the face with hexagons: exact gaps, honeycomb layout.")
+        self._cut(lambda sk: sk.add_polygon((0.0, 0.0), (4.0, 0.0), 6))
+        feats = self.doc.timeline.features
+        self.doc.add_pattern([feats[-2].feature_id, feats[-1].feature_id], "fill",
+                             spacing1=1.5, spacing2=4.0, mirror_mode="stagger")
+        self.vp.set_view("HOME")
 
     def s5_section(self):
         self.say("Section View: look inside the part.")
@@ -96,7 +112,7 @@ class Demo:
         self.vp.set_view("HOME")
 
     SCENES = [
-        (8, "s1_title"), (12, "s2_sketch"), (12, "s3_extrude"), (14, "s4_hole"),
+        (8, "s1_title"), (12, "s2_sketch"), (12, "s3_extrude"), (6, "s4_hole"), (8, "s4b_mirror"), (12, "s4c_fill"),
         (12, "s5_section"), (5, "s6_undo"), (5, "s6b_redo"), (8, "s8_end"),
     ]
 
