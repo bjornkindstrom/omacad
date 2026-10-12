@@ -1,4 +1,6 @@
 """A rounded rectangle is dimensioned by its overall width and height; radii stay, holes measured from a wall follow."""
+import math
+
 import pytest
 
 from omacad.model.document import Document
@@ -58,3 +60,17 @@ def test_a_hole_measured_from_the_far_wall_and_the_top_follows_height_and_width(
     assert abs(top.p1[1] - c.center[1]) == pytest.approx(10, abs=1e-3)
     assert abs(right.p1[0] - left.p1[0]) == pytest.approx(100, abs=1e-3)
     assert abs(top.p1[1] - bottom.p1[1]) == pytest.approx(70, abs=1e-3)
+
+
+def test_widening_keeps_the_arcs_joined_to_the_walls():
+    """Report 200609: changing the width moved one wall and left the corner arcs behind."""
+    d, sk, _ = _make()
+    width = next(x for x in sk.dimensions if x.name == "Width")
+    assert d.update_dimension(sk.sketch_id, width.dim_id, 90)
+    ends = [p for e in sk.entities if isinstance(e, SketchLine) for p in (e.p1, e.p2)]
+    for arc in (e for e in sk.entities if isinstance(e, SketchArc)):
+        assert arc.get_circle_params()[1] == pytest.approx(10)
+        for p in (arc.p_start, arc.p_end):
+            assert min(math.hypot(p[0] - q[0], p[1] - q[1]) for q in ends) < 1e-6
+    assert len(sk.profiles) == 1
+    assert sk.profiles[0].area == pytest.approx(90 * 40 - (4 - math.pi) * 100, rel=2e-3)

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.26 - 2026-10-12
+
+### Fixed
+- **Changing a rounded rectangle's width did nothing visible** (via F9): the solver moved one wall but left the corner arcs and the neighbouring lines behind. Fillet arcs are now refitted to their lines after every solve.
+
 ## 0.6.25 - 2026-10-12
 
 ### Changed
