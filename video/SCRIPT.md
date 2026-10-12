@@ -37,3 +37,15 @@ Scene 7 (F9) is not automated, since it starts your real agent. Record it by han
 - Title: "Omacad: a native parametric CAD for Omarchy Linux (intro)"
 - Description: what it is, link to the repo, the shortcuts shown (P polygon, O offset, T trim, F fillet, F9 report), chapters from the table above.
 - Thumbnail: the finished block with the hole on the dark theme, large text "Native CAD".
+
+## Theme transition shot (pan_take.py)
+
+Render 5-7 takes with the same camera move, one per theme:
+
+```bash
+.venv/bin/python video/pan_take.py --themes tokyo-night,catppuccin,gruvbox,nord,rose-pine --seconds 6
+```
+
+Because the takes are frame-aligned, put them on one track each in the editor and cross-dissolve (or wipe) at the same timecode, or chain them with ffmpeg:
+`ffmpeg -i a.mp4 -i b.mp4 -filter_complex "xfade=transition=fade:duration=0.6:offset=2.7" out.mp4`.
+Best look: dissolve mid-pan while the camera is moving fastest (about 50 %), so the colours change while the part keeps turning.

@@ -3,6 +3,7 @@
 Everything here was written in a cloud session **without a screen or PySide6**, so nothing has been run yet. Fix it up on the real machine (Wayland).
 
 ## Files
+- `pan_take.py`: **frame-exact camera pan** over the finished part, one take per Omarchy theme (`--themes a,b,c,d,e`). The camera is a pure function of the frame number and frames are rendered with `grab()` to PNG, so every take has identical motion and lines up frame for frame; cross-dissolve between takes in the editor (or ffmpeg `xfade`) for the theme transition. Edit `START`/`END` at the top for the move. Output in `video/pan/` (git-ignored).
 - `SCRIPT.md`: scene table (time, on screen, narration), recording prep, YouTube title/description/thumbnail ideas.
 - `record_demo.py`: drives the real `MainWindow` through the scenes with captions. `--record` starts `wf-recorder` (-> `omacad_demo.mp4`), `--speed 1.5` for rehearsal.
 - `comfyui_prompts.md`: image prompts for the title card, end card, thumbnail and b-roll.
