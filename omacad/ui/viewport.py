@@ -1931,6 +1931,7 @@ class Viewport3D(QOpenGLWidget):
         self.dyn.reset()
         self.smart.reset()
         if tool_name == "SMART_CIRCLE":
+            QTimer.singleShot(0, self.setFocus)   # picked from the ribbon: the typed numbers must reach the view, not the button
             self.status_message.emit("Smart Circle: type the diameter, Enter. Then the distance to the nearest vertical line, Enter, "
                                      "then to the nearest horizontal line, Enter. Empty + Enter or a click takes the cursor position. "
                                      "Minus flips the side. Backspace on an empty field goes back.")
@@ -4538,6 +4539,8 @@ class Viewport3D(QOpenGLWidget):
                 )
                 self.active_snap = snap_res
                 if self.sketch_tool == "SMART_CIRCLE":
+                    if not self.hasFocus():
+                        self.setFocus()
                     self.smart.mouse = uv
                     self.smart.segments = self._smart_segments()
                 self.sketch_current_uv = snap_res.uv
