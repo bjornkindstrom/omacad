@@ -91,6 +91,17 @@ class Demo:
                              spacing1=1.5, spacing2=4.0, mirror_mode="stagger")
         self.vp.set_view("HOME")
 
+    def s4d_edit(self):
+        self.say("Go back to the first sketch and change it: the whole part follows.")
+        self.vp.set_view("HOME")
+        sk = self.doc.edit_sketch(self.sk.sketch_id)
+        before = sk.to_dict()
+        sk.delete_entities([e.entity_id for e in sk.entities])
+        sk.add_center_rounded_rect((0.0, 0.0), (40.0, 20.0), 10.0)   # 80 x 40 mm, rounder corners
+        self.doc.record_sketch_change(sk, before)
+        self.doc.finish_sketch()    # recomputes every step built on it
+        self.vp.zoom_fit()
+
     def s5_section(self):
         self.say("Section View: look inside the part.")
         self.sec = self.doc.add_section((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), 0.0)
@@ -112,7 +123,7 @@ class Demo:
         self.vp.set_view("HOME")
 
     SCENES = [
-        (8, "s1_title"), (12, "s2_sketch"), (12, "s3_extrude"), (6, "s4_hole"), (8, "s4b_mirror"), (12, "s4c_fill"),
+        (8, "s1_title"), (12, "s2_sketch"), (12, "s3_extrude"), (6, "s4_hole"), (8, "s4b_mirror"), (12, "s4c_fill"), (10, "s4d_edit"),
         (12, "s5_section"), (5, "s6_undo"), (5, "s6b_redo"), (8, "s8_end"),
     ]
 
