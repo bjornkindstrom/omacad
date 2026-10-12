@@ -167,6 +167,7 @@ class Viewport3D(QOpenGLWidget):
     edge_pick_cancelled = Signal()
     lay_face_requested = Signal(object, str)   # (face, "ground" | "pick"): turn the body so this face rests on a plane
     lay_target_picked = Signal(object)         # the plane a face is to be laid on
+    step_point_clicked = Signal(object)        # a point on a body surface clicked while choosing steps (Pattern/Mirror)
     menu_command = Signal(str)  # right-click menu entries the main window carries out: "undo", "redo", "sketch:XY"...
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
@@ -233,6 +234,7 @@ class Viewport3D(QOpenGLWidget):
 
         # Extrude arrow (drag to set the distance)
         self.active_tool_title = lambda: None   # set by the main window: title of the open tool panel, if any
+        self.pick_step_mode = False   # clicks on a body surface choose the step that made it
         self.extrude_handle = None   # dict(origin, axis, dist)
         self._handle_drag = False
         self._handle_hover = False
@@ -4546,6 +4548,34 @@ class Viewport3D(QOpenGLWidget):
         elif kind == "sketch":
             self.menu_command.emit(f"sketch:{arg}")
 
+    def _show_profile_menu(self, event, key):
+        """Right-click on a sketch profile (the shaded area inside closed lines): act on that profile only,
+        without lighting up the face around it."""
+        doc = self.doc
+        if key != doc.selected_profile and key not in doc.selected_extra:
+            doc.selected_profile, doc.selected_extra = key, []   # right-click selects it, like left-click
+            self.profile_picked.emit()
+        self.update()
+        menu = QMenu(self)
+        acts: dict = {}
+        self._add_tool_entries(menu, acts)
+        n = 1 + len(doc.selected_extra)
+        what = "profile" if n == 1 else f"{n} profiles"
+        acts[theme.action_with_icon(menu, f"⬆️ Extrude this {what}…")] = ("cmd", "extrude")
+        acts[theme.action_with_icon(menu, f"🔄 Revolve this {what}…")] = ("cmd", "revolve")
+        acts[theme.action_with_icon(menu, "✖️ Deselect")] = ("deselect", None)
+        menu.addSeparator()
+        self._add_history_and_view(menu, acts, False)
+        chosen = acts.get(menu.exec(event.globalPosition().toPoint()))
+        if chosen is None:
+            return
+        if chosen[0] == "deselect":
+            doc.selected_profile, doc.selected_extra = None, []
+            self.profile_picked.emit()
+            self.update()
+        else:
+            self._run_general(*chosen)
+
     def _show_axis_menu(self, event):
         """Right-click while the Move arrows are shown: pick the axis to drag along."""
         menu = QMenu(self)
@@ -4663,6 +4693,8 @@ class Viewport3D(QOpenGLWidget):
             if moved < 4 and not self.plane_pick_mode and not self.edge_pick_mode:
                 if not self.doc.active_sketch and self.move_gizmo:
                     self._show_axis_menu(event)
+                elif not self.doc.active_sketch and self.pick_profile(event.position().x(), event.position().y()) is not None:
+                    self._show_profile_menu(event, self.pick_profile(event.position().x(), event.position().y()))
                 elif not self.doc.active_sketch:
                     target = self._pick_plane_target(event.position().x(), event.position().y())
                     if target is not None and target[0] == "face":
@@ -4693,6 +4725,14 @@ class Viewport3D(QOpenGLWidget):
             self.is_orbiting = False
             self.is_panning = False
             self.select_entity_at(event.position().x(), event.position().y(), additive)
+            return
+        if was_click and self.pick_step_mode:
+            self._press_pos = None
+            self.is_orbiting = False
+            self.is_panning = False
+            hit = self._pick_surface(event.position().x(), event.position().y())
+            if hit is not None:
+                self.step_point_clicked.emit(hit["point"])
             return
         if was_click and self.edge_pick_mode:
             self._press_pos = None

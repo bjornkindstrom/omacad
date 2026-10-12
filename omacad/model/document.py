@@ -207,6 +207,18 @@ class Document:
             return m3d.Manifold.batch_boolean(parts, m3d.OpType.Add) if parts else None
         return merge(added), merge(removed)
 
+    def step_at_point(self, point, tol: float = 0.4) -> Optional[int]:
+        """Index of the latest timeline step whose added or removed material touches `point` (a point on a
+        body surface): the step that made that surface. None if no step claims it."""
+        probe = m3d.Manifold.cube((tol, tol, tol), True).translate(tuple(float(c) for c in point))
+        for i in range(len(self.timeline.features) - 1, -1, -1):
+            if self.timeline.features[i].feature_type in ("sketch", "pattern"):
+                continue
+            for part in self.step_changes(i):
+                if part is not None and not (probe ^ part).is_empty():
+                    return i
+        return None
+
     def undo(self) -> Optional[str]:
         name = self._swap_state(self.undo_stack, self.redo_stack)
         self._history_changed()

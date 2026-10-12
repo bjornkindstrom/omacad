@@ -26,6 +26,7 @@ The user pressed "Report problem" in the running app and wrote:
 > {note}
 
 Everything about the moment is in this folder ({folder}):
+- `screenshot_marked.png` (only if the user drew on the picture): the window screenshot with red marks showing WHERE the problem is. Look at it first.
 - `screenshot_window.png` and `screenshot_view.png`: what the user saw (LOOK AT THEM FIRST)
 - `document.json`: the whole document state (`Exporter.document_to_dict`) incl. the sketch being edited and the replay marker
 - `document.omacad`: the same as a project file (open with `Exporter.load_project`)

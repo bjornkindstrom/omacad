@@ -490,9 +490,34 @@ class MainWindow(QMainWindow):
                                  else "Nothing to copy with these settings (the chosen steps changed nothing, or it is already symmetric).")
             self.viewport.set_preview(solid, op, extra=extra, extra_op="join")
 
+        def on_step_clicked(point):
+            """Click on the thing to copy: tick the step that made that surface (and its sketch)."""
+            idx = self.doc.step_at_point(point)
+            if idx is None:
+                self.status_label.setText("Pattern: no step claims that spot. Tick the steps in the list instead.")
+                return
+            feat = self.doc.timeline.features[idx]
+            wanted = {feat.feature_id}
+            sk_id = getattr(feat, "sketch_id", None)
+            wanted |= {f.feature_id for f in self.doc.timeline.features if f.feature_type == "sketch" and sk_id and f.feature_id == sk_id}
+            items = [dlg.lst.item(i) for i in range(dlg.lst.count())]
+            main_item = next((it for it in items if it.data(Qt.ItemDataRole.UserRole) == feat.feature_id), None)
+            state = Qt.CheckState.Unchecked if main_item is not None and main_item.checkState() == Qt.CheckState.Checked \
+                else Qt.CheckState.Checked
+            for item in items:
+                if item.data(Qt.ItemDataRole.UserRole) in wanted:
+                    item.setCheckState(state)
+            self.status_label.setText(f"Pattern: {feat.name} is {'no longer' if state == Qt.CheckState.Unchecked else 'now'} part of the copy "
+                                      "(click it again to toggle).")
+
         dlg.changed.connect(preview)
+        self.viewport.pick_step_mode = True
+        self.viewport.step_point_clicked.connect(on_step_clicked)
+        self.status_label.setText("Pattern / Mirror: click the thing you want to copy in the 3D view, or tick steps in the list.")
         preview()
         ok = dlg.exec()
+        self.viewport.pick_step_mode = False
+        self.viewport.step_point_clicked.disconnect(on_step_clicked)
         self.viewport.set_preview(None)
         if ok and dlg.source_ids():
             feat = self.doc.add_pattern(dlg.source_ids(), dlg.kind(), exprs=dlg.get_expressions(), **dlg.get_params())
@@ -566,6 +591,10 @@ class MainWindow(QMainWindow):
             dlg = self.inspector.current_tool_dlg
             if dlg is not None:
                 dlg.accept() if cmd == "tool_ok" else dlg.reject()
+        elif cmd == "extrude":
+            self.prompt_extrude()
+        elif cmd == "revolve":
+            self.prompt_revolve()
         elif cmd == "undo":
             self.on_undo()
         elif cmd == "redo":
@@ -1546,8 +1575,11 @@ class MainWindow(QMainWindow):
                             "target": [float(x) for x in v.target]},
                  "sketch_tool": v.sketch_tool, "selected_sketch_entities": sorted(v.selected_entities),
                  "window_size": [self.width(), self.height()]}
-        folder = feedback.build_bundle(self.doc, dlg.text(), {"screenshot_window.png": png(window_shot.toImage()),
-                                                              "screenshot_view.png": png(view_shot)}, extra)
+        images = {"screenshot_window.png": png(window_shot.toImage()), "screenshot_view.png": png(view_shot)}
+        marked = dlg.marked_image()
+        if marked is not None:
+            images["screenshot_marked.png"] = png(marked)   # the user's drawing on the window screenshot
+        folder = feedback.build_bundle(self.doc, dlg.text(), images, extra)
         if dlg.fix_now() and feedback.launch_agent(folder):
             self.status_label.setText(f"Report sent to the AI agent (a terminal opened). Saved in {folder}")
         else:
