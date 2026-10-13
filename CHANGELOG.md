@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.4.8 - 2026-10-13
+
+### Fixed
+- Sketch mode did not start and the viewport crashed in paintGL: the viewport modularization left the mixins without imports (`math`, `ctypes`, `Qt`, `theme`, sketch classes ...). Added them and a test that checks every module for undefined names.
+
 ## 0.7.4 - 2026-10-13
 
 ### Fixed

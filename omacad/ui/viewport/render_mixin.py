@@ -1,11 +1,14 @@
 """OpenGL rendering methods mixin for Viewport3D."""
 
+import ctypes
+import math
 from typing import Optional, List, Dict
 import numpy as np
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from OpenGL import GL
 from omacad.ui import theme
 from omacad.model.timeline import profile_cross_section
+from omacad.model.sketch import Sketch, SketchArc, SketchSlot
 
 
 class RenderGLMixin:

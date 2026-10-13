@@ -19,7 +19,7 @@ import math
 from typing import Optional, List, Tuple, Dict
 import numpy as np
 from PySide6.QtCore import Qt, QPoint, QRectF, QPointF, Signal, QEvent, QTimer
-from PySide6.QtWidgets import (QWidget, QInputDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QWidget, QMenu, QInputDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                QPushButton)
 import omacad.ui.viewport as _vp_module
 from omacad.ui.expr_spin import ExprDoubleSpinBox

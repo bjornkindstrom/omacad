@@ -3,9 +3,13 @@
 import math
 from typing import Optional
 import numpy as np
+import manifold3d as m3d
 from OpenGL import GL
+from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
+from omacad.ui import theme
 from omacad.ui.theme import qcolor
+from omacad.model.kernel import CadKernel
 from omacad.ui.math3d import ray_from_screen
 
 

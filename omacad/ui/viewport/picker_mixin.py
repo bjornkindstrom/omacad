@@ -1,10 +1,14 @@
 """Selection and picking mixin for Viewport3D: bodies, edges, planes, surfaces."""
 
 from typing import Optional, List, Tuple
+import math
 import numpy as np
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from OpenGL import GL
 import omacad.ui.viewport as _vp_pkg
-from omacad.ui.math3d import ray_plane_intersect
+from omacad.ui import theme
+from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
 from omacad.model.faces import ray_hit_face
 
 

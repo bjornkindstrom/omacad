@@ -3,11 +3,17 @@
 import math
 from typing import Optional, List, Tuple
 import numpy as np
-from PySide6.QtCore import Qt, QPoint, QRectF, QPointF
+from PySide6.QtCore import Qt, QPoint, QRectF, QPointF, QTimer
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QFontMetrics
 from omacad.ui import theme
 from omacad.ui.theme import qcolor
-from omacad.model.sketch import point_of, arm_vector, arm_angle_deg
+from omacad.ui import dyn_input
+from omacad.ui.expr_spin import ExprDoubleSpinBox
+from omacad.model.sketch import (
+    SketchLine, SketchRect, SketchCircle, SketchCenterRect, SketchArc, SketchSlot,
+    point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex, ref_id, ref_segment, EDGE_PTS
+)
 
 
 class OverlayMixin:
