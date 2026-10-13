@@ -43,7 +43,7 @@ def main():
     for m, line in zip(marks["marks"], lines):
         if not line:
             continue
-        key = hashlib.sha1(f"{line}|{a.voice}|{a.seed}".encode()).hexdigest()[:12]
+        key = hashlib.sha1(f"clone2|{line}|{a.voice}|{a.seed}".encode()).hexdigest()[:12]
         path = os.path.join(AUDIO, f"{key}.flac")
         if not os.path.exists(path):
             print("TTS:", line)

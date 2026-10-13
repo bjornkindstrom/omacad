@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Local text-to-speech through ComfyUI (Qwen3-TTS VoiceDesign, nothing leaves the machine).
+"""Local text-to-speech through ComfyUI (Qwen3-TTS, nothing leaves the machine). The voice is designed once
+from a description (VoiceDesign) and every sentence is then a clone of that one clip, so it is the same person.
 
     .venv/bin/python video/tts.py "Text to say" out.flac                       # default narrator voice
     .venv/bin/python video/tts.py --voice "A warm female voice..." --seed 7 "Text" out.flac
@@ -46,13 +47,12 @@ def synthesize(text, out, voice=NARRATOR, seed=1, language="English", timeout=60
             time.sleep(5)
 
 
-def _synthesize(text: str, out: str, voice: str = NARRATOR, seed: int = 1, language: str = "English", timeout: int = 600) -> str:
-    graph = {
-        "1": {"class_type": "FB_Qwen3TTSVoiceDesign", "inputs": {
-            "text": text, "instruct": voice, "model_choice": "1.7B", "device": "auto", "precision": "bf16",
-            "language": language, "seed": seed, "max_new_tokens": 512, "attention": "sdpa", "unload_model_after_generate": True}},
-        "2": {"class_type": "SaveAudio", "inputs": {"audio": ["1", 0], "filename_prefix": "audio/omacad_tts"}},
-    }
+COMFY_INPUT = os.environ.get("COMFY_INPUT", os.path.expanduser("~/ComfyUI-Shared/input"))
+REF_TEXT = ("Welcome to Omacad. Today I will show you how a few simple steps can turn a sketch into a finished part, "
+            "with every measurement under your control.")
+
+
+def _run(graph, out, timeout):
     pid = _post("/prompt", {"prompt": graph})["prompt_id"]
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -77,6 +77,37 @@ def _synthesize(text: str, out: str, voice: str = NARRATOR, seed: int = 1, langu
                 return out
         time.sleep(1)
     raise TimeoutError("ComfyUI did not finish in time")
+
+
+def reference(voice: str, seed: int, language: str = "English") -> str:
+    """The narrator: VoiceDesign speaks REF_TEXT once. Every later line is a clone of this clip, so the voice
+    stays the same (VoiceDesign alone invents a slightly different person for every sentence)."""
+    import hashlib
+    key = hashlib.sha1(f"{voice}|{seed}|{REF_TEXT}".encode()).hexdigest()[:10]
+    name = f"omacad_narrator_{key}.flac"
+    dest = os.path.join(COMFY_INPUT, name)
+    if not os.path.exists(dest):
+        graph = {
+            "1": {"class_type": "FB_Qwen3TTSVoiceDesign", "inputs": {
+                "text": REF_TEXT, "instruct": voice, "model_choice": "1.7B", "device": "auto", "precision": "bf16",
+                "language": language, "seed": seed, "max_new_tokens": 1024, "attention": "sdpa", "unload_model_after_generate": True}},
+            "2": {"class_type": "SaveAudio", "inputs": {"audio": ["1", 0], "filename_prefix": "audio/omacad_ref"}},
+        }
+        _run(graph, dest, 600)
+    return name
+
+
+def _synthesize(text: str, out: str, voice: str = NARRATOR, seed: int = 1, language: str = "English", timeout: int = 600) -> str:
+    ref = reference(voice, seed, language)
+    graph = {
+        "0": {"class_type": "LoadAudio", "inputs": {"audio": ref}},
+        "1": {"class_type": "FB_Qwen3TTSVoiceClone", "inputs": {
+            "target_text": text, "ref_text": REF_TEXT, "model_choice": "1.7B", "device": "auto", "precision": "bf16",
+            "language": language, "ref_audio": ["0", 0], "seed": seed, "max_new_tokens": 512, "attention": "sdpa",
+            "unload_model_after_generate": True}},
+        "2": {"class_type": "SaveAudio", "inputs": {"audio": ["1", 0], "filename_prefix": "audio/omacad_tts"}},
+    }
+    return _run(graph, out, timeout)
 
 
 if __name__ == "__main__":
