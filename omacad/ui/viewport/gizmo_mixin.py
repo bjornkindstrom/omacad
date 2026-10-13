@@ -1,0 +1,354 @@
+"""Gizmo, arrow handle, and section view rendering mixin for Viewport3D."""
+
+import math
+from typing import Optional
+import numpy as np
+from OpenGL import GL
+from PySide6.QtGui import QPainter, QColor, QFont, QPen
+from omacad.ui.theme import qcolor
+from omacad.ui.math3d import ray_from_screen
+
+
+class GizmoMixin:
+    """Mixin providing gizmos (extrude arrow, move gizmo) and section planes."""
+    # ---- Section view -------------------------------------------------------------------
+    def set_section(self, origin, normal, offset: float, flip: bool = False, show_plane: bool = True):
+        """Cuts every body along a plane (base origin + normal * offset) and shows the cut face. View only."""
+        from omacad.model.sketch import SketchPlane
+        n = np.asarray(normal, dtype=float)
+        n = n / np.linalg.norm(n)
+        p = np.asarray(origin, dtype=float) + n * float(offset)
+        keep = n if flip else -n                       # the side that stays (the other side faces the viewer)
+        plane = SketchPlane.from_face(n, p)
+        inv = np.linalg.inv(np.vstack([plane.get_transform_matrix_3x4(), [0, 0, 0, 1]]))[:3]
+        meshes, cap_cs = {}, None
+        for bid, body in self.doc.bodies.items():
+            if not body.visible:
+                continue
+            try:
+                kept = body.manifold.trim_by_plane(tuple(keep), float(keep @ p))
+                meshes[bid] = CadKernel.extract_render_mesh(kept)   # empty when the whole body is cut away
+                polys = body.manifold.transform(inv).slice(1e-4 if not flip else -1e-4).to_polygons()
+                if polys:
+                    cs = m3d.CrossSection(polys)
+                    cap_cs = cs if cap_cs is None else cap_cs + cs
+            except Exception:
+                continue
+        cap = None
+        if cap_cs is not None:
+            slab = m3d.Manifold.extrude(cap_cs, 0.08).translate((0, 0, -0.04))
+            slab = slab.transform(plane.get_transform_matrix_3x4())
+            cap = CadKernel.extract_render_mesh(slab)
+        self.section = {"origin": np.asarray(origin, dtype=float), "normal": n, "offset": float(offset), "flip": flip,
+                        "meshes": meshes, "cap": cap}
+        self.set_preview_plane(plane if show_plane else None)
+        self.update()
+
+    def clear_section(self):
+        self.section = None
+        self.set_preview_plane(None)
+        self.clear_extrude_handle()
+        self.update()
+
+    def sync_section(self):
+        """Shows the document's active saved section (if any); not while one is being edited."""
+        if getattr(self, "section_editing", False):
+            return
+        act = self.doc.active_section()
+        if act is None:
+            if self.section is not None:
+                self.section = None
+                self.update()
+            return
+        sec = act[1]
+        self.set_section(sec["origin"], sec["normal"], sec["offset"], sec["flip"], show_plane=False)
+
+    def render_section_cap(self, mvp: np.ndarray):
+        """The cut face, in the highlight colour, so the inside of the model reads clearly."""
+        sec = self.section
+        if not sec or sec["cap"] is None or not self.prog_flat or len(sec["cap"].vertices) == 0:
+            return
+        GL.glUseProgram(self.prog_flat)
+        loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
+        loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
+        loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
+        GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
+        GL.glUniform4f(loc_col, *theme.palette().highlight01(0.0), 1.0)
+        self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, sec["cap"].vertices)
+        GL.glUseProgram(0)
+
+    # ---- Extrude arrow ------------------------------------------------------------------
+    def set_extrude_handle(self, origin, axis, dist: float, color=None, show_value: bool = False, value_scale: float = 1.0):
+        """Draggable arrow. `color` (r, g, b) overrides the theme highlight, e.g. when that would blend into the scene.
+        `show_value` writes the distance (times `value_scale`) beside the shaft, also after the mouse is released."""
+        self.extrude_handle = {"origin": np.asarray(origin, dtype=float), "axis": np.asarray(axis, dtype=float), "dist": float(dist),
+                               "color": color, "show_value": show_value, "value_scale": value_scale}
+        self.update()
+
+    def clear_extrude_handle(self):
+        self.extrude_handle = None
+        self._handle_drag = False
+        self._handle_hover = False
+        self.update()
+
+    def _arrow_size(self) -> float:
+        """Size of the extrude arrow's head in mm (the Arrow size setting scales it)."""
+        from omacad.ui.settings import get_settings
+        return self.distance * 0.04 * float(get_settings().get("arrow_size", 1.0))
+
+    def _arrow_lift(self, dist: float) -> float:
+        """The arrow is drawn a couple of mm off the surface, in the direction it points, so it never
+        starts inside the material (the Arrow distance setting)."""
+        from omacad.ui.settings import get_settings
+        return (1.0 if dist >= 0 else -1.0) * float(get_settings().get("arrow_gap", 2.0))
+
+    def _handle_screen(self):
+        h = self.extrude_handle
+        tip = h["origin"] + h["axis"] * h["dist"]
+        return self.world_to_screen(h["origin"]), self.world_to_screen(tip), tip
+
+    def _handle_geometry(self):
+        """Screen-space shape of the drawn arrow: (origin, apex, head centre, head radius in px) or None."""
+        h = self.extrude_handle
+        if not h:
+            return None
+        origin, axis, dist = h["origin"], h["axis"], h["dist"]
+        sign = 1.0 if dist >= 0 else -1.0
+        lift = self._arrow_lift(dist)
+        origin = origin + axis * lift
+        tip = origin + axis * dist
+        size = self._arrow_size()
+        so = self.world_to_screen(origin)
+        apex = self.world_to_screen(tip + axis * sign * size * 0.4)
+        base = tip - axis * sign * size * 0.8
+        centre = self.world_to_screen(tip - axis * sign * size * 0.2)
+        if so is None or apex is None or centre is None:
+            return None
+        u = np.cross(axis, [1.0, 0.0, 0.0])
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(axis, [0.0, 1.0, 0.0])
+        u = u / np.linalg.norm(u)
+        edge = self.world_to_screen(base + u * size * 0.5)
+        bs = self.world_to_screen(base)
+        radius = math.hypot(edge[0] - bs[0], edge[1] - bs[1]) if edge is not None and bs is not None else 14.0
+        return so, apex, centre, radius
+
+    def _draw_handle_value(self, painter: QPainter):
+        """The distance of the extrude arrow as a label beside the middle of the shaft (stays after release)."""
+        h = self.extrude_handle
+        g = self._handle_geometry() if h and h.get("show_value") else None
+        if g is None:
+            return
+        so, apex, _centre, _radius = g
+        dx, dy = apex[0] - so[0], apex[1] - so[1]
+        n = math.hypot(dx, dy)
+        nx, ny = (-dy / n, dx / n) if n > 1e-6 else (0.0, -1.0)
+        if ny > 0:   # keep the label above the line rather than below
+            nx, ny = -nx, -ny
+        text = f"{h['dist'] * h.get('value_scale', 1.0):.2f} mm"
+        font = QFont(theme.font_family(), 10, QFont.Weight.Bold)
+        painter.setFont(font)
+        tw = painter.fontMetrics().horizontalAdvance(text) + 16
+        th = painter.fontMetrics().height() + 8
+        cx = (so[0] + apex[0]) / 2 + nx * (th / 2 + 12 + abs(nx) * tw / 2)
+        cy = (so[1] + apex[1]) / 2 + ny * (th / 2 + 12)
+        rect = QRectF(cx - tw / 2, cy - th / 2, tw, th)
+        painter.setPen(QPen(QColor(255, 255, 255, 200), 1))
+        painter.setBrush(QColor(20, 24, 30, 225))
+        painter.drawRoundedRect(rect, 5, 5)
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+    def _handle_hit(self, x: float, y: float) -> bool:
+        """Generous: anywhere on the head (plus a margin, so it is easy to catch when it sits behind or inside
+        a body) or along the shaft."""
+        g = self._handle_geometry()
+        if g is None:
+            return False
+        so, apex, centre, radius = g
+        if math.hypot(x - centre[0], y - centre[1]) < max(26.0, radius * 1.3 + 8.0):
+            return True
+        return self._point_to_segment_dist((x, y), so, apex) < 12
+
+    def _handle_value(self, x: float, y: float):
+        """Distance along the arrow's axis that is closest to the mouse ray."""
+        h = self.extrude_handle
+        proj, view, _ = self.get_matrices()
+        r0, rd = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        r0, rd = np.asarray(r0, dtype=float), np.asarray(rd, dtype=float)
+        a, w = h["axis"], h["origin"] - r0
+        b, d1, e = float(a @ rd), float(a @ w), float(rd @ w)
+        denom = 1.0 - b * b
+        if abs(denom) < 1e-6:
+            return None
+        t = (b * e - d1) / denom
+        t -= self._arrow_lift(h["dist"])   # the arrow is drawn lifted off the surface
+        step = 0.1 if abs(t) < 10 else 0.5 if abs(t) < 50 else 1.0
+        return round(t / step) * step
+
+    def render_extrude_handle(self, mvp: np.ndarray):
+        h = self.extrude_handle
+        if not h or self.prog_flat is None or self.prog_thick is None:
+            return
+        origin, axis, dist = h["origin"], h["axis"], h["dist"]
+        sign = 1.0 if dist >= 0 else -1.0
+        origin = origin + axis * self._arrow_lift(dist)
+        tip = origin + axis * dist
+        size = self._arrow_size()
+        lit = self._handle_hover or self._handle_drag
+        from omacad.ui.settings import get_settings
+        custom_arrow = get_settings().arrow_color_rgb01()
+        if h.get("color"):
+            col = (*(min(1.0, c + (0.2 if lit else 0.0)) for c in h["color"]), 1.0)
+        elif custom_arrow is not None:
+            col = (*(min(1.0, c + (0.2 if lit else 0.0)) for c in custom_arrow), 1.0)
+        else:
+            col = (*theme.palette().highlight01(0.15 if lit else 0.0), 1.0)
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        shaft_end = tip - axis * sign * size * 0.8
+        self.draw_thick_lines(mvp, [*origin, *shaft_end], col, 4.0, halo=True)
+        # arrow head: a cone around the axis
+        u = np.cross(axis, [1.0, 0.0, 0.0])
+        if np.linalg.norm(u) < 1e-6:
+            u = np.cross(axis, [0.0, 1.0, 0.0])
+        u = u / np.linalg.norm(u)
+        v_ = np.cross(axis, u)
+        apex, base = tip + axis * sign * size * 0.4, tip - axis * sign * size * 0.8
+        ring = [base + size * 0.5 * (math.cos(t) * u + math.sin(t) * v_) for t in np.linspace(0, 2 * math.pi, 17)]
+        tris = []
+        for i in range(16):
+            tris += [*apex, *ring[i], *ring[i + 1], *base, *ring[i + 1], *ring[i]]
+        GL.glUseProgram(self.prog_flat)
+        loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
+        loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
+        loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
+        GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
+        GL.glUniform4f(loc_col, *col)
+        self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, np.array(tris, dtype=np.float32))
+        GL.glUseProgram(0)
+        # a white ring round the head so the grab point stands out also when the arrow sits behind or inside a body
+        hub = tip - axis * sign * size * 0.2
+        ring_pts = [hub + size * 0.75 * (math.cos(t) * u + math.sin(t) * v_) for t in np.linspace(0, 2 * math.pi, 33)]
+        ring = []
+        for i in range(32):
+            ring += [*ring_pts[i], *ring_pts[i + 1]]
+        self.draw_thick_lines(mvp, ring, (1.0, 1.0, 1.0, 0.9 if lit else 0.55), 2.0)
+        GL.glEnable(GL.GL_DEPTH_TEST)
+
+    # ---- 3D Translation Gizmo (Move Body) -------------------------------------------
+    def set_move_gizmo(self, origin, length=None):
+        """Sets the 3D translation triad gizmo at the given body/pivot origin."""
+        if length is None:
+            length = max(25.0, min(75.0, self.distance * 0.18))
+        self.move_gizmo = {
+            "origin": np.asarray(origin, dtype=float),
+            "length": float(length),
+            "hover_axis": None,
+            "active_axis": "X",
+            "dragging": False,
+            "start_proj": 0.0,
+        }
+        self.update()
+
+    def clear_move_gizmo(self):
+        self.move_gizmo = None
+        self.update()
+
+    def _gizmo_axis_screen(self, axis_name: str):
+        if not self.move_gizmo:
+            return None, None
+        g = self.move_gizmo
+        orig = g["origin"]
+        dirs = {
+            "X": np.array([1.0, 0.0, 0.0]),
+            "Y": np.array([0.0, 1.0, 0.0]),
+            "Z": np.array([0.0, 0.0, 1.0])
+        }
+        tip = orig + dirs[axis_name] * g["length"]
+        so = self.world_to_screen(orig)
+        st = self.world_to_screen(tip)
+        return so, st
+
+    def _gizmo_hit(self, x: float, y: float) -> Optional[str]:
+        if not self.move_gizmo:
+            return None
+        best_ax, best_dist = None, 20.0
+        for ax in ("X", "Y", "Z"):
+            so, st = self._gizmo_axis_screen(ax)
+            if so is None or st is None:
+                continue
+            d_tip = math.hypot(x - st[0], y - st[1])
+            if d_tip < best_dist:
+                best_dist = d_tip
+                best_ax = ax
+            d_shaft = self._point_to_segment_dist((x, y), so, st)
+            if d_shaft < 10.0 and d_shaft < best_dist:
+                best_dist = d_shaft
+                best_ax = ax
+        return best_ax
+
+    def _gizmo_project_mouse(self, x: float, y: float, axis_name: str) -> float:
+        if not self.move_gizmo:
+            return 0.0
+        g = self.move_gizmo
+        proj, view, _ = self.get_matrices()
+        r0, rd = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        r0, rd = np.asarray(r0, dtype=float), np.asarray(rd, dtype=float)
+        dirs = {
+            "X": np.array([1.0, 0.0, 0.0]),
+            "Y": np.array([0.0, 1.0, 0.0]),
+            "Z": np.array([0.0, 0.0, 1.0])
+        }
+        a = dirs[axis_name]
+        w = g["origin"] - r0
+        b, d1, e = float(a @ rd), float(a @ w), float(rd @ w)
+        denom = 1.0 - b * b
+        if abs(denom) < 1e-6:
+            return 0.0
+        t = (b * e - d1) / denom
+        step = 0.1 if abs(t) < 10 else 0.5 if abs(t) < 50 else 1.0
+        return round(t / step) * step
+
+    def render_move_gizmo(self, mvp: np.ndarray):
+        g = self.move_gizmo
+        if not g or self.prog_flat is None or self.prog_thick is None:
+            return
+        origin = g["origin"]
+        length = g["length"]
+        size = self.distance * 0.038
+        dirs = {
+            "X": (np.array([1.0, 0.0, 0.0]), (0.95, 0.25, 0.25)),
+            "Y": (np.array([0.0, 1.0, 0.0]), (0.25, 0.85, 0.35)),
+            "Z": (np.array([0.0, 0.0, 1.0]), (0.25, 0.55, 0.95)),
+        }
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        for ax, (axis_vec, base_col) in dirs.items():
+            is_hover = (g.get("hover_axis") == ax)
+            is_active = (g.get("active_axis") == ax and g.get("dragging"))
+            lit = is_hover or is_active
+            col = (*(min(1.0, c + (0.3 if lit else 0.0)) for c in base_col), 1.0)
+            tip = origin + axis_vec * length
+            shaft_end = tip - axis_vec * size * 0.8
+            self.draw_thick_lines(mvp, [*origin, *shaft_end], col, 5.0 if lit else 3.5, halo=True)
+
+            # 3D Arrowhead cone
+            u = np.cross(axis_vec, [1.0, 0.0, 0.0])
+            if np.linalg.norm(u) < 1e-6:
+                u = np.cross(axis_vec, [0.0, 1.0, 0.0])
+            u = u / np.linalg.norm(u)
+            v_ = np.cross(axis_vec, u)
+            apex = tip + axis_vec * size * 0.4
+            base = tip - axis_vec * size * 0.8
+            ring = [base + size * 0.5 * (math.cos(t) * u + math.sin(t) * v_) for t in np.linspace(0, 2 * math.pi, 17)]
+            tris = []
+            for i in range(16):
+                tris += [*apex, *ring[i], *ring[i + 1], *base, *ring[i + 1], *ring[i]]
+            GL.glUseProgram(self.prog_flat)
+            GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
+            GL.glUniform4f(GL.glGetUniformLocation(self.prog_flat, "u_color"), *col)
+            self.draw_buffer_arrays(GL.GL_TRIANGLES, GL.glGetAttribLocation(self.prog_flat, "in_pos"), np.array(tris, dtype=np.float32))
+
+        GL.glUseProgram(0)
+        GL.glEnable(GL.GL_DEPTH_TEST)
+
