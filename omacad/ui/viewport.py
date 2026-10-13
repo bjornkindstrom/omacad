@@ -5033,6 +5033,8 @@ class Viewport3D(QOpenGLWidget):
                 doc.selected_extra = []
                 self.profile_picked.emit()
                 self.update()
+            if picked is None and doc.selected_body_ids and self.pick_body(event.position().x(), event.position().y()) is None:
+                doc.select_body(None)    # a click in empty space clears the body selection
 
     def wheelEvent(self, event):
         delta = event.angleDelta().y()

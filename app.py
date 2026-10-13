@@ -38,6 +38,9 @@ def main():
     app.setOrganizationName("Omarchy")
     app.setDesktopFileName("omacad")
 
+    from omacad.ui import theme as _theme
+    _theme.apply_saved_choice()   # a theme picked by hand in Settings, before any widget is styled
+
     # Create & Show Main Window
     window = MainWindow()
     

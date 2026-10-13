@@ -107,6 +107,24 @@ class SettingsDialog(QDialog):
         lay_colors.setContentsMargins(12, 12, 12, 12)
         lay_colors.setSpacing(10)
 
+        # Theme: follow Omarchy live, or keep a chosen one
+        theme_row = QHBoxLayout()
+        lbl_theme = QLabel("Tema (Theme):")
+        lbl_theme.setMinimumWidth(200)
+        self.cmb_theme = QComboBox()
+        self.cmb_theme.addItem("Följ Omarchy-temat (live)", "omarchy")
+        self.cmb_theme.addItem("Omacad standard (mörk)", theme.BUILTIN)
+        for name in theme.available_themes():
+            self.cmb_theme.addItem(name.replace("-", " ").title(), name)
+        cur = "omarchy" if self.settings.get("theme_mode") != "fixed" else self.settings.get("theme_name")
+        self.cmb_theme.setCurrentIndex(max(0, self.cmb_theme.findData(cur)))
+        self.cmb_theme.setToolTip("Följ Omarchy: appen byter färger när du byter tema i Omarchy.\n"
+                                  "Annat val: appen behåller det temat, oavsett vad Omarchy gör.")
+        theme_row.addWidget(lbl_theme)
+        theme_row.addWidget(self.cmb_theme)
+        theme_row.addStretch()
+        lay_colors.addLayout(theme_row)
+
         info_lbl = QLabel("Anpassa färger för 3D-pilar, markeringar och verktyg i vyn:")
         info_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px;")
         lay_colors.addWidget(info_lbl)
@@ -308,6 +326,7 @@ class SettingsDialog(QDialog):
         self.spn_grid.setValue(5.0)
         self.spn_fillet.setValue(2.0)
         self.chk_auto_restart.setChecked(True)
+        self.cmb_theme.setCurrentIndex(0)
         self.cmb_curves.setCurrentIndex(max(0, self.cmb_curves.findData(96)))
         self.spn_arrow_size.setValue(1.0)
         self.spn_arrow_gap.setValue(2.0)
@@ -333,6 +352,9 @@ class SettingsDialog(QDialog):
             "view_projection": self.cmb_projection.currentData(),
             "view_fov": self.spn_fov.value(),
             "auto_restart": self.chk_auto_restart.isChecked(),
+            "theme_mode": "omarchy" if self.cmb_theme.currentData() == "omarchy" else "fixed",
+            "theme_name": self.settings.get("theme_name") if self.cmb_theme.currentData() == "omarchy" else self.cmb_theme.currentData(),
         }
         self.settings.update(new_data)
+        theme.set_fixed_theme(new_data["theme_name"] if new_data["theme_mode"] == "fixed" else None)
         super().accept()

@@ -327,6 +327,7 @@ class MainWindow(QMainWindow):
         before = get_settings().get("curve_segments")
         dlg = SettingsDialog(self)
         dlg.exec()
+        self.on_theme_changed()   # the theme choice may have changed (colours were re-applied by theme.set_fixed_theme)
         if get_settings().get("curve_segments") != before:
             self.rebuild_for_curve_quality()
 
@@ -359,7 +360,7 @@ class MainWindow(QMainWindow):
         """The Omarchy theme was switched: stylesheets were already re-applied by theme.refresh()."""
         self.apply_theme_font()
         self.viewport.update()
-        self.status_label.setText("Omarchy theme updated.")
+        self.status_label.setText("Theme updated.")
 
     def prompt_round_edges(self, kind: str = "fillet"):
         """Fillet / Chamfer: click edges (outside or inside corners), type the size, OK."""

@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.33 - 2026-10-13
+
+### Added
+- **Choose the theme: follow Omarchy or pick one** (Settings > Färger > Tema): "Följ Omarchy-temat (live)" as before, or a fixed theme that Omarchy theme switches no longer change. The Omarchy themes are now bundled with the app (`assets/themes`), so the choice also works on Windows, where "Omacad standard (mörk)" is the default look.
+- **Click in empty space to deselect the body** (a click on nothing clears the selection in the browser/inspector).
+
 ## 0.6.32 - 2026-10-13
 
 ### Changed

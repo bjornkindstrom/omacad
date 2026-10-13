@@ -29,6 +29,11 @@ STATE_DIR = Path.home() / ".local/state/omarchy/current"
 COLORS_FILE = STATE_DIR / "theme/colors.toml"
 NAME_FILE = STATE_DIR / "theme.name"
 
+# Bundled themes (the Omarchy ones, copied into assets/themes so they also exist where Omarchy does not, e.g. Windows).
+THEMES_DIR = Path(__file__).resolve().parents[2] / "assets" / "themes"
+BUILTIN = "builtin"          # the original Omacad dark palette
+FIXED_THEME: Optional[str] = None   # None = follow the Omarchy theme live; otherwise the name of a bundled theme (or BUILTIN)
+
 RGB = Tuple[float, float, float]
 
 
@@ -127,7 +132,42 @@ class Palette:
         return tuple(v / 255.0 for v in c)  # type: ignore[return-value]
 
 
+def available_themes() -> List[str]:
+    """Names of the bundled themes, for the settings list."""
+    try:
+        return sorted(p.stem for p in THEMES_DIR.glob("*.toml"))
+    except OSError:
+        return []
+
+
+def set_fixed_theme(name: Optional[str]) -> None:
+    """Pick a theme by hand (the app then ignores Omarchy theme switches), or None to follow Omarchy again."""
+    global FIXED_THEME
+    FIXED_THEME = name or None
+    refresh()
+
+
+def apply_saved_choice() -> None:
+    """Read the theme choice from the settings; called at start-up before any widget is built."""
+    global FIXED_THEME, _palette
+    try:
+        from omacad.ui.settings import get_settings
+        st = get_settings()
+        FIXED_THEME = st.get("theme_name") if st.get("theme_mode") == "fixed" else None
+    except Exception:
+        FIXED_THEME = None
+    _palette = load_palette()
+
+
 def load_palette() -> Palette:
+    if FIXED_THEME:
+        if FIXED_THEME == BUILTIN:
+            return Palette(None)
+        try:
+            with open(THEMES_DIR / f"{FIXED_THEME}.toml", "rb") as f:
+                return Palette(tomllib.load(f))
+        except (OSError, tomllib.TOMLDecodeError):
+            return Palette(None)
     try:
         with open(COLORS_FILE, "rb") as f:
             return Palette(tomllib.load(f))
@@ -321,6 +361,8 @@ class ThemeWatcher(QObject):
 
     def _reload(self):
         self._watch()  # replaced files fall out of the watch list
+        if FIXED_THEME:
+            return     # a theme was picked by hand: Omarchy theme switches are ignored
         refresh()
         self.changed.emit()
 
