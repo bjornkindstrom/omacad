@@ -251,6 +251,27 @@ class SettingsDialog(QDialog):
         gap_row.addStretch()
         lay_sketch.addLayout(gap_row)
 
+        # Toolbar button size
+        btn_size_row = QHBoxLayout()
+        lbl_btn_size = QLabel("Toolbar button size:")
+        lbl_btn_size.setMinimumWidth(200)
+        self.cmb_btn_size = QComboBox()
+        self.cmb_btn_size.addItem("Compact (75%)", 0.75)
+        self.cmb_btn_size.addItem("Medium (default, 100%)", 1.0)
+        self.cmb_btn_size.addItem("Large (125%)", 1.25)
+        self.cmb_btn_size.addItem("Extra large (150%)", 1.5)
+        cur_scale = float(self.settings.get("button_scale", 1.0))
+        idx_scale = self.cmb_btn_size.findData(cur_scale)
+        if idx_scale < 0:
+            self.cmb_btn_size.addItem(f"Custom ({int(round(cur_scale * 100))}%)", cur_scale)
+            idx_scale = self.cmb_btn_size.count() - 1
+        self.cmb_btn_size.setCurrentIndex(max(0, idx_scale))
+        self.cmb_btn_size.setToolTip("Adjusts the height and icon sizes of buttons in the top toolbar ribbon.")
+        btn_size_row.addWidget(lbl_btn_size)
+        btn_size_row.addWidget(self.cmb_btn_size)
+        btn_size_row.addStretch()
+        lay_sketch.addLayout(btn_size_row)
+
         # Request for change
         rfc_row = QHBoxLayout()
         lbl_rfc = QLabel("Your name on change requests:")
@@ -377,6 +398,7 @@ class SettingsDialog(QDialog):
         self.cmb_curves.setCurrentIndex(max(0, self.cmb_curves.findData(96)))
         self.spn_arrow_size.setValue(1.0)
         self.spn_arrow_gap.setValue(2.0)
+        self.cmb_btn_size.setCurrentIndex(max(0, self.cmb_btn_size.findData(1.0)))
 
     def accept(self):
         self.save_and_close()
@@ -395,6 +417,7 @@ class SettingsDialog(QDialog):
             "fillet_default_radius": self.spn_fillet.value(),
             "arrow_size": self.spn_arrow_size.value(),
             "arrow_gap": self.spn_arrow_gap.value(),
+            "button_scale": float(self.cmb_btn_size.currentData() or 1.0),
             "curve_segments": self.cmb_curves.currentData(),
             "view_projection": self.cmb_projection.currentData(),
             "view_fov": self.spn_fov.value(),

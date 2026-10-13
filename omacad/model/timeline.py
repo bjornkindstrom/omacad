@@ -571,6 +571,42 @@ class FilletFeature(Feature):
             out.append(0.0 if solid else min(4.0 * self.size / max(edge.radius, 1e-6), math.radians(80.0)))
         return tuple(out)
 
+    @staticmethod
+    def _safe_edge_size(body, edge, requested_size: float) -> float:
+        """Limits the rounding/bevel size on a convex straight edge so that it does not cut past
+        adjacent face boundaries, holes, or opposite walls on either adjacent face."""
+        if not edge.convex or getattr(edge, "kind", "") != "line" or requested_size <= 1e-6:
+            return requested_size
+        t = (edge.p1 - edge.p0) / max(float(np.linalg.norm(edge.p1 - edge.p0)), 1e-12)
+        L = float(np.linalg.norm(edge.p1 - edge.p0))
+        limit = requested_size
+        for d, n in [(edge.d1, edge.n1), (edge.d2, edge.n2)]:
+            for other in body.edges:
+                if other is edge:
+                    continue
+                k = getattr(other, "kind", "line")
+                if k == "line":
+                    if abs(float((other.p0 - edge.p0) @ n)) < 1e-3 and abs(float((other.p1 - edge.p0) @ n)) < 1e-3:
+                        t0 = float((other.p0 - edge.p0) @ t)
+                        t1 = float((other.p1 - edge.p0) @ t)
+                        if max(min(t0, t1), 0.0) < min(max(t0, t1), L) - 1e-3:
+                            d0 = float((other.p0 - edge.p0) @ d)
+                            d1 = float((other.p1 - edge.p0) @ d)
+                            dist = min(d0, d1)
+                            if dist > 1e-4:
+                                limit = min(limit, dist * 0.99)
+                elif k in ("circle", "loop"):
+                    pts = other.pts if k == "loop" else [other.center]
+                    if all(abs(float((p - edge.p0) @ n)) < 1e-3 for p in pts):
+                        t_vals = [float((p - edge.p0) @ t) for p in pts]
+                        if max(min(t_vals), 0.0) < min(max(t_vals), L) - 1e-3:
+                            d_vals = [float((p - edge.p0) @ d) for p in pts]
+                            r_sub = other.radius if k == "circle" else 0.0
+                            dist = min(d_vals) - r_sub
+                            if dist > 1e-4:
+                                limit = min(limit, dist * 0.99)
+        return max(limit, 0.01)
+
     def _mitred_tool(self, body, edge, edges):
         """Fill tool for a straight edge at the foot of a wall. Where the next selected foot edge meets it on the
         same floor, both bands run past the corner and are cut off along the bisector (mitred), so the roundings
@@ -650,6 +686,7 @@ class FilletFeature(Feature):
 
         for body, edge in seen:
             ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
+            eff_size = self._safe_edge_size(body, edge, self.size)
             if getattr(edge, "kind", "") == "loop" and not edge.convex:
                 tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
             elif not edge.convex and getattr(edge, "kind", "") == "line":
@@ -657,7 +694,7 @@ class FilletFeature(Feature):
             elif getattr(edge, "kind", "") == "circle" and edge.is_arc:
                 tool = CadKernel.circle_round_tool(edge, self.size, self.kind, reach=self._arc_reach(body, edge))
             else:
-                tool = CadKernel.round_tool(edge, self.size, self.kind, extend=ext)
+                tool = CadKernel.round_tool(edge, eff_size, self.kind, extend=ext)
             (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
 
         # Inside corners of a face outline: the two bevel bands end square at the corner and leave a notch there.
@@ -674,10 +711,12 @@ class FilletFeature(Feature):
                 same_face = any(float(na @ nb) > 0.999 for na in (ea.n1, ea.n2) for nb in (eb.n1, eb.n2))
                 if not shared or not same_face or abs(float(da @ db)) > 0.999:
                     continue
-                ext = 40.0 * self.size + 10.0
+                sa = self._safe_edge_size(ba, ea, self.size)
+                sb = self._safe_edge_size(bb, eb, self.size)
+                ext = 40.0 * min(sa, sb) + 10.0
                 try:
-                    corner = (CadKernel.edge_round_tool(ea, self.size, self.kind, extend=ext)
-                              ^ CadKernel.edge_round_tool(eb, self.size, self.kind, extend=ext))
+                    corner = (CadKernel.edge_round_tool(ea, sa, self.kind, extend=ext)
+                              ^ CadKernel.edge_round_tool(eb, sb, self.kind, extend=ext))
                 except Exception:
                     continue
                 if not corner.is_empty():

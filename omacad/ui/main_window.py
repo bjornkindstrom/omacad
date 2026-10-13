@@ -329,11 +329,14 @@ class MainWindow(QMainWindow):
     def on_open_settings(self):
         from omacad.ui.settings_dialog import SettingsDialog
         from omacad.ui.settings import get_settings
-        before = get_settings().get("curve_segments")
+        before_curves = get_settings().get("curve_segments")
+        before_scale = get_settings().get("button_scale")
         dlg = SettingsDialog(self)
         dlg.exec()
         self.on_theme_changed()   # the theme choice may have changed (colours were re-applied by theme.set_fixed_theme)
-        if get_settings().get("curve_segments") != before:
+        if get_settings().get("button_scale") != before_scale:
+            self.ribbon.update_button_scale()
+        if get_settings().get("curve_segments") != before_curves:
             self.rebuild_for_curve_quality()
 
     def rebuild_for_curve_quality(self):
@@ -413,12 +416,17 @@ class MainWindow(QMainWindow):
 
         def preview():
             from omacad.model.kernel import CadKernel
+            from omacad.model.timeline import FilletFeature
             edges = self.viewport.selected_edges
             dlg.set_count(len(edges))
             solid, problem = None, None
+            # Find which body owns each edge for clearance checks
+            doc_bodies = list(self.doc.bodies.values())
             for e in edges:
                 try:
-                    tool = CadKernel.round_tool(e, dlg.spn_size.value(), dlg.kind())
+                    owner_body = next((b for b in doc_bodies if e in b.edges), doc_bodies[0] if doc_bodies else None)
+                    eff_size = FilletFeature._safe_edge_size(owner_body, e, dlg.spn_size.value()) if owner_body else dlg.spn_size.value()
+                    tool = CadKernel.round_tool(e, eff_size, dlg.kind())
                     solid = tool if solid is None else solid + tool
                 except Exception as ex:
                     problem = str(ex) or "This edge can't be rounded with that size."

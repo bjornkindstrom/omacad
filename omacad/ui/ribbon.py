@@ -18,44 +18,61 @@ from omacad.model.document import Document
 
 
 
+def ribbon_button_scale() -> float:
+    from omacad.ui.settings import get_settings
+    try:
+        return float(get_settings().get("button_scale", 1.0))
+    except Exception:
+        return 1.0
+
+
 class RibbonButton(QToolButton):
     """Large Fusion 360 style ribbon tool button with vertical icon and label."""
 
     def __init__(self, text: str, icon_symbol: str, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self.raw_text = text
+        self.icon_symbol = icon_symbol
         self.setText(text)
-        self.setIcon(theme.emoji_icon(icon_symbol, 30))
-        self.setIconSize(QSize(30, 30))
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self.setMinimumHeight(76)
-        style(self, """
-            QToolButton {
+        self.apply_scale()
+
+    def apply_scale(self):
+        scale = ribbon_button_scale()
+        icon_px = max(18, int(round(30 * scale)))
+        font_px = max(8, int(round(10 * scale)))
+        min_h = max(50, int(round(76 * scale)))
+        self.setIcon(theme.emoji_icon(self.icon_symbol, icon_px))
+        self.setIconSize(QSize(icon_px, icon_px))
+        self.setMinimumHeight(min_h)
+        style(self, f"""
+            QToolButton {{
                 background-color: transparent;
                 border: 1px solid transparent;
                 border-radius: 4px;
                 color: #D2D6DC;
-                font-size: 10px;
+                font-size: {font_px}px;
                 font-weight: 500;
                 text-align: center;
-                padding: 4px;
-            }
-            QToolButton:hover {
+                padding: {max(2, int(round(4 * scale)))}px;
+            }}
+            QToolButton:hover {{
                 background-color: #353A42;
                 border: 1px solid #484F5A;
                 color: #FFFFFF;
-            }
-            QToolButton:pressed, QToolButton:checked {
+            }}
+            QToolButton:pressed, QToolButton:checked {{
                 background-color: #E26D28;
                 border: 1px solid #E26D28;
                 color: #FFFFFF;
-            }
+            }}
         """)
-        # Width follows the font the stylesheet actually gives the button, so long labels
-        # never overlap their neighbours (the Omarchy font is wider than a proportional one)
         self.ensurePolished()
         fm = self.fontMetrics()
         widest = max(fm.horizontalAdvance(line) for line in self.text().split("\n"))
-        self.setMinimumWidth(max(68, widest + 22))
+        base_w = max(48, int(round(68 * scale)))
+        pad_w = max(14, int(round(22 * scale)))
+        self.setMinimumWidth(max(base_w, widest + pad_w))
 
 
 class Ribbon(QWidget):
@@ -102,7 +119,8 @@ class Ribbon(QWidget):
 
         # Tab Widget
         self.tabs = QTabWidget()
-        self.tabs.setFixedHeight(122)
+        scale = ribbon_button_scale()
+        self.tabs.setFixedHeight(max(80, int(round(122 * scale))))
         layout.addWidget(self.tabs)
 
         # 1. SOLID Tab
@@ -117,6 +135,15 @@ class Ribbon(QWidget):
 
         # Hide sketch tab by default until sketch is started
         self.tabs.setTabVisible(1, False)
+
+    def update_button_scale(self):
+        """Update heights, icons and fonts for all ribbon buttons when button_scale setting changes."""
+        scale = ribbon_button_scale()
+        self.tabs.setFixedHeight(max(80, int(round(122 * scale))))
+        for btn in self.findChildren(RibbonButton):
+            btn.apply_scale()
+        if hasattr(self, "btn_finish") and self.btn_finish:
+            self.btn_finish.setMinimumSize(max(100, int(round(140 * scale))), max(34, int(round(48 * scale))))
 
     @staticmethod
     def _scrollable(content: QWidget) -> QScrollArea:
@@ -379,10 +406,11 @@ class Ribbon(QWidget):
         h_layout.addStretch()
 
         # Big Green Finish Sketch Button (Fusion 360 hallmark)
-        btn_finish = QToolButton()
-        btn_finish.setText("✅  Finish Sketch")
-        btn_finish.setMinimumSize(140, 48)
-        style(btn_finish, """
+        scale = ribbon_button_scale()
+        self.btn_finish = QToolButton()
+        self.btn_finish.setText("✅  Finish Sketch")
+        self.btn_finish.setMinimumSize(max(100, int(round(140 * scale))), max(34, int(round(48 * scale))))
+        style(self.btn_finish, """
             QToolButton {
                 background-color: #2E7D32;
                 border: 1px solid #388E3C;
@@ -399,8 +427,8 @@ class Ribbon(QWidget):
                 background-color: #1B5E20;
             }
         """)
-        btn_finish.clicked.connect(self.finish_sketch_clicked)
-        h_layout.addWidget(btn_finish)
+        self.btn_finish.clicked.connect(self.finish_sketch_clicked)
+        h_layout.addWidget(self.btn_finish)
 
     def _build_rect_button(self):
         """One rectangle button with a dropdown: the button itself draws the default rectangle,

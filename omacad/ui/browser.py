@@ -41,15 +41,6 @@ class BrowserTree(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Header bar
-        header = QWidget()
-        style(header, "background-color: #202225; border-bottom: 1px solid #33373D; padding: 4px 8px;")
-        h_layout = QHBoxLayout(header)
-        h_layout.setContentsMargins(6, 4, 6, 4)
-        title = QLabel("BROWSER")
-        style(title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.5px;")
-        h_layout.addWidget(title)
-        layout.addWidget(header)
 
         # Tree Widget
         self.tree = QTreeWidget()

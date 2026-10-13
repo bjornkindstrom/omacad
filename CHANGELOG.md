@@ -3,6 +3,17 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.1 - 2026-10-13
+
+### Added
+- **Toolbar button size** (Settings > Toolbar button size): adjust button and icon size in the top ribbon (Compact 75%, Medium 100%, Large 125%, Extra large 150%).
+- **Fillet clearance clamping**: 3D fillet/chamfer automatically limits reach on convex straight edges so exaggerated radii do not cut past opposite walls or adjacent boundary edges.
+
+### Fixed
+- Dimension badges no longer obscure sketch circles/geometry when dimensioning circle to line.
+- Smart circle anchor point fix: editing circle-to-edge distance moves the circle instead of shifting the entire sketch off origin.
+- Removed redundant duplicate "BROWSER" inner header label in the left dock panel.
+
 ## 0.7.0 - 2026-10-13
 
 ### Added

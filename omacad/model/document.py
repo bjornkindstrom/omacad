@@ -1071,7 +1071,12 @@ class Document:
             return {}  # measured to a fixed face edge: the dimensioned point is the only thing that can move
         if dim.dim_type == "ANGLE":
             return {"fixed_ids": [dim.target_entity_id]}
-        if dim.dim_type in ("DISTANCE", "HORIZ_DIST", "VERT_DIST", "PT_LINE_DIST") and dim.pts:
+        if dim.dim_type == "PT_LINE_DIST" and dim.refs:
+            ref = dim.refs[0]
+            if not ref.startswith("ref:"):
+                return {"pinned": [(ref, "p1")]}
+            return {}
+        if dim.dim_type in ("DISTANCE", "HORIZ_DIST", "VERT_DIST") and dim.pts:
             return {"pinned": [(dim.target_entity_id, "center" if dim.pts[0] in ("edge_near", "edge_far") else dim.pts[0])]}
         if dim.dim_type == "LENGTH":
             return {"pinned": [(dim.target_entity_id, "p1")]}

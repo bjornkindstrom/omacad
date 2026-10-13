@@ -3684,9 +3684,19 @@ class Viewport3D(QOpenGLWidget):
                         if P and L2 > 1e-12:
                             t = ((P[0] - x1) * (x2 - x1) + (P[1] - y1) * (y2 - y1)) / L2
                             foot = (x1 + t * (x2 - x1), y1 + t * (y2 - y1))
-                            lines_to_draw = [(P, foot)]
-                            dim_p1_uv, dim_p2_uv = P, foot
-                            badge_pos_uv = ((P[0] + foot[0]) / 2.0, (P[1] + foot[1]) / 2.0)
+                            dx, dy = P[0] - foot[0], P[1] - foot[1]
+                            dl = math.hypot(dx, dy) or 1.0
+                            # Offset perpendicular to dimension line so the badge doesn't cover circle or lines
+                            line_dir = ((x2 - x1) / math.sqrt(L2), (y2 - y1) / math.sqrt(L2))
+                            # Determine offset shift: for circle, shift outside the circle radius
+                            r_shift = (ent.radius + 6.0) if isinstance(ent, SketchCircle) else 8.0
+                            # Choose shift direction along the reference line
+                            off_vec = (line_dir[0] * r_shift, line_dir[1] * r_shift)
+                            p_off = (P[0] + off_vec[0], P[1] + off_vec[1])
+                            foot_off = (foot[0] + off_vec[0], foot[1] + off_vec[1])
+                            lines_to_draw = [(P, p_off), (foot, foot_off), (foot_off, p_off)]
+                            dim_p1_uv, dim_p2_uv = foot_off, p_off
+                            badge_pos_uv = ((p_off[0] + foot_off[0]) / 2.0, (p_off[1] + foot_off[1]) / 2.0)
                     elif len(dim.pts) == 2:
                         A, B = point_of(ent, dim.pts[0]), point_of(other, dim.pts[1])
                         off = dim.offset_distance
