@@ -1,10 +1,12 @@
+from pathlib import Path
+
 from omacad.io.exporter import Exporter
 from omacad.model.timeline import FilletFeature
 
 
 def test_fillet_overrun_capped_to_adjacent_clearance():
     # Load user's test document where 50x50 box has a pocket with 2 mm wall
-    doc = Exporter.load_project("/home/kindstrom/.local/share/omacad/feedback/20261013-180912/document.omacad")
+    doc = Exporter.load_project(str(Path(__file__).parent / "data" / "fillet_clearance.omacad"))
     # Last feature is the outer top edge fillet
     fillet = doc.timeline.features[-1]
     assert isinstance(fillet, FilletFeature)
