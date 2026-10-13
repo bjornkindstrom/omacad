@@ -1165,6 +1165,11 @@ class MainWindow(QMainWindow):
             body = self.doc.bodies[bid]
             body.visible = False
             current_hidden_id[0] = bid
+            switched = self.viewport.shell_target_body_id != bid
+            self.viewport.shell_target_body_id = bid
+            if switched and dlg.open_faces:   # open faces belong to the previous body
+                dlg.clear_faces()
+                return
 
             shelled = ShellFeature.compute_shell(body.manifold, thickness, dlg.direction(),
                                                  dlg.spn_thickness2.value(), open_faces)

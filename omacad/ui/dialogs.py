@@ -4,6 +4,7 @@ Floating/docked dialogs for Extrude, Box, Cylinder, Sphere, Combine, and Sketch 
 """
 
 from typing import Optional, Dict
+import numpy as np
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QDoubleSpinBox, QComboBox,

@@ -262,6 +262,7 @@ class Viewport3D(QOpenGLWidget):
         self.section = None         # active section view: dict(origin, normal, offset, flip, meshes, cap)
         self.preview_plane = None   # SketchPlane drawn while an Offset Plane is being set up
         self.plane_pick_purpose: str = "sketch"  # "sketch" or "extrude_target"
+        self.shell_target_body_id: str = ""      # body whose faces "shell_face" picking may hit
         self.hover_plane = None  # ("origin", name) or ("face", PlanarFace)
         self.highlighted_faces: list = []  # list of faces or dicts to highlight (e.g. Shell open faces)
 
@@ -2410,7 +2411,10 @@ class Viewport3D(QOpenGLWidget):
         half = self._origin_plane_half_size()
         candidates = [(("origin", n), pl) for n, pl in self.doc.origin_planes.items()]
         only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_origin_only"
-        if not only_origin:
+        shell_pick = self.plane_pick_mode and self.plane_pick_purpose == "shell_face"
+        if shell_pick:
+            candidates = []
+        elif not only_origin:
             candidates += [(("cplane", pid), self.doc.construction_plane(pid))
                            for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
         for key, plane in candidates:
@@ -2425,7 +2429,10 @@ class Viewport3D(QOpenGLWidget):
         # would otherwise hide the faces behind it)
         face_best, face_t = None, float("inf")
         for body in ([] if only_origin else self.doc.bodies.values()):
-            if not body.visible:
+            if shell_pick:   # the shelled body is hidden behind its preview; only its faces count
+                if body.body_id != self.shell_target_body_id:
+                    continue
+            elif not body.visible:
                 continue
             for face in body.faces:
                 t = ray_hit_face(face, origin, ray_dir)
@@ -2481,7 +2488,7 @@ class Viewport3D(QOpenGLWidget):
     def render_plane_pick(self, mvp: np.ndarray):
         """Translucent origin-plane quads and hovered face while choosing a sketch plane."""
         cplanes = [(pid, self.doc.construction_plane(pid)) for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
-        if self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface",):
+        if self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face"):
             cplanes = []
         if (not self.plane_pick_mode and self.ctx_face is None and not cplanes and self.preview_plane is None) or not self.prog_flat:
             return
@@ -2494,7 +2501,7 @@ class Viewport3D(QOpenGLWidget):
         GL.glDisable(GL.GL_DEPTH_TEST)
         half = self._origin_plane_half_size()
         base = {"XY": (0.30, 0.55, 1.0), "XZ": (0.35, 0.85, 0.40), "YZ": (1.0, 0.40, 0.35)}
-        for name, plane in (self.doc.origin_planes.items() if self.plane_pick_mode and self.plane_pick_purpose != "offset_surface" else ()):
+        for name, plane in (self.doc.origin_planes.items() if self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face") else ()):
             hovered = self.hover_plane == ("origin", name)
             corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
                        plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]

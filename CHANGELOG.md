@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.4 - 2026-10-13
+
+### Fixed
+- **Shell: open faces can be picked again.** Clicking a face crashed (missing numpy import), and the hidden target body could not be hit. Shell now only offers the faces of the chosen body and no longer draws the origin planes.
+
 ## 0.7.3 - 2026-10-13
 
 ### Added
