@@ -5,15 +5,19 @@ import shutil
 import subprocess
 
 import numpy as np
-from PySide6.QtCore import QEvent, QPointF, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPolygonF
 
 W, H, FPS = 1280, 720, 30
 
 
 class Take:
-    def __init__(self, app, win, outdir):
+    def __init__(self, app, win, outdir, window=False):
+        """window=True films the whole window (ribbon, tree, timeline) instead of just the 3D view; static
+        waits (shoot(n)) then render one frame and copy it, which saves a lot of time."""
         self.outdir = outdir
+        self.window = window
+        self.scene_active = False
         self.marks = []
         self.app, self.win, self.vp = app, win, win.viewport
         self.frame, self.caption, self.cursor = 0, "", QPointF(W * 0.62, H * 0.75)
@@ -22,31 +26,79 @@ class Take:
 
     # --- rendering ---
     def shoot(self, n: int = 1):
+        if self.window and n > 1:
+            self._render()
+            self.hold(n - 1)
+            return
         for _ in range(n):
-            for _ in range(3):
-                self.app.processEvents()
-            img = self.vp.grabFramebuffer()
-            p = QPainter(img)
-            p.setRenderHint(QPainter.RenderHint.Antialiasing)
-            if self.caption:
-                f = QFont("sans", 20)
-                p.setFont(f)
-                w = p.fontMetrics().horizontalAdvance(self.caption) + 48
-                p.setBrush(QColor(0, 0, 0, 175))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawRoundedRect((W - w) // 2, H - 140, w, 54, 10, 10)
-                p.setPen(QColor("white"))
-                p.drawText((W - w) // 2, H - 140, w, 54, Qt.AlignmentFlag.AlignCenter, self.caption)
-            c = self.cursor     # arrow cursor
-            p.setBrush(QColor("white"))
-            p.setPen(QColor("black"))
-            p.drawPolygon(QPolygonF([c, c + QPointF(0, 19), c + QPointF(5, 15), c + QPointF(9, 24), c + QPointF(12, 22.5),
-                                     c + QPointF(8, 14), c + QPointF(14, 14)]))
-            p.end()
-            img.save(os.path.join(self.outdir, f"f{self.frame:05d}.png"))
+            self._render()
+
+    def hold(self, n):
+        """n more copies of the last frame."""
+        last = os.path.join(self.outdir, f"f{self.frame - 1:05d}.png")
+        for _ in range(n):
+            dest = os.path.join(self.outdir, f"f{self.frame:05d}.png")
+            try:
+                os.link(last, dest)
+            except OSError:
+                shutil.copyfile(last, dest)
             self.frame += 1
 
+    def _grab(self):
+        for _ in range(3):
+            self.app.processEvents()
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)   # old timeline chips etc. are gone before the grab
+        return self.win.grab().toImage() if self.window else self.vp.grabFramebuffer()
+
+    def _render(self):
+        self._finish(self._grab())
+
+    def _finish(self, img):
+        """Draw caption and cursor on a grabbed image and save it as the next frame."""
+        if self.window:
+            off = self.vp.mapTo(self.win, QPoint(0, 0))
+            vw, vh = self.vp.width(), self.vp.height()
+        else:
+            off, vw, vh = QPoint(0, 0), W, H
+        p = QPainter(img)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.caption:
+            p.setFont(QFont("sans", 20 if not self.window else 22))
+            w = p.fontMetrics().horizontalAdvance(self.caption) + 48
+            x, y = off.x() + (vw - w) // 2, off.y() + vh - 110
+            p.setBrush(QColor(0, 0, 0, 175))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(x, y, w, 54, 10, 10)
+            p.setPen(QColor("white"))
+            p.drawText(x, y, w, 54, Qt.AlignmentFlag.AlignCenter, self.caption)
+        c = self.cursor + QPointF(off)
+        p.setBrush(QColor("white"))
+        p.setPen(QColor("black"))
+        p.drawPolygon(QPolygonF([c, c + QPointF(0, 19), c + QPointF(5, 15), c + QPointF(9, 24), c + QPointF(12, 22.5),
+                                 c + QPointF(8, 14), c + QPointF(14, 14)]))
+        p.end()
+        img.save(os.path.join(self.outdir, f"f{self.frame:05d}.png"))
+        self.frame += 1
+
+    def scene(self, caption, line, action, seconds=None):
+        """One narrated scene: the action runs, then the picture is held until the sentence has been spoken."""
+        start = self.frame
+        self.marks.append({"frame": start, "text": caption, "line": line})
+        self.caption = caption
+        self.scene_active = True
+        try:
+            action()
+        finally:
+            self.scene_active = False
+        want = start + int(round((seconds if seconds is not None else self.durations.get(line, 0) + 0.7) * FPS))
+        if self.frame < want:
+            self.hold(want - self.frame)
+
+    durations = {}
+
     def say(self, text):
+        if self.scene_active:
+            return
         self.caption = text
         self.marks.append({"frame": self.frame, "text": text})   # scene starts, used by narrate.py
 
@@ -108,6 +160,16 @@ class Take:
         os.makedirs(os.path.dirname(out), exist_ok=True)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS), "-i", os.path.join(self.outdir, "f%05d.png"),
                         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "17", out], check=True)
+        import json
+        json.dump({"fps": FPS, "frames": self.frame, "marks": self.marks}, open(os.path.join(self.outdir, "marks.json"), "w"), indent=1)
+        print("Saved", out)
+
+    def encode_scaled(self, out):
+        """Encode full-window frames (any 16:9 size) to 1080p."""
+        out = os.path.abspath(os.path.expanduser(out))
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS), "-i", os.path.join(self.outdir, "f%05d.png"),
+                        "-vf", "scale=1920:1080:flags=lanczos", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "17", out], check=True)
         import json
         json.dump({"fps": FPS, "frames": self.frame, "marks": self.marks}, open(os.path.join(self.outdir, "marks.json"), "w"), indent=1)
         print("Saved", out)
