@@ -25,14 +25,28 @@ NARRATOR = ("A calm, clear male narrator in his thirties with a warm, friendly t
 
 def _post(path, data):
     req = urllib.request.Request(SERVER + path, json.dumps(data).encode(), {"Content-Type": "application/json"})
-    return json.load(urllib.request.urlopen(req))
+    body = urllib.request.urlopen(req).read()
+    return json.loads(body) if body.strip() else {}
 
 
 def _get(path):
     return urllib.request.urlopen(SERVER + path).read()
 
 
-def synthesize(text: str, out: str, voice: str = NARRATOR, seed: int = 1, language: str = "English", timeout: int = 600) -> str:
+def synthesize(text, out, voice=NARRATOR, seed=1, language="English", timeout=600, tries=4):
+    """Retries after freeing ComfyUI's GPU memory: on an 8 GB card the model sometimes does not fit on the first try."""
+    for k in range(tries):
+        try:
+            _post("/free", {"unload_models": True, "free_memory": True})
+            time.sleep(2)
+            return _synthesize(text, out, voice, seed, language, timeout)
+        except RuntimeError as e:
+            if "out of memory" not in str(e) or k == tries - 1:
+                raise
+            time.sleep(5)
+
+
+def _synthesize(text: str, out: str, voice: str = NARRATOR, seed: int = 1, language: str = "English", timeout: int = 600) -> str:
     graph = {
         "1": {"class_type": "FB_Qwen3TTSVoiceDesign", "inputs": {
             "text": text, "instruct": voice, "model_choice": "1.7B", "device": "auto", "precision": "bf16",
