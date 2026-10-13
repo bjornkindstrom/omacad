@@ -31,7 +31,7 @@ from OpenGL.GL import shaders
 from omacad.model.document import Document
 from omacad.model.kernel import CadKernel
 from omacad.model.timeline import profile_cross_section
-from omacad.model.faces import ray_hit_face
+from omacad.model.faces import ray_hit_face, tangent_chain
 import manifold3d as m3d
 from omacad.model.sketch_solver import solve_sketch
 from omacad.model.sketch import (
@@ -2293,7 +2293,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             e = self._pick_edge(event.position().x(), event.position().y())
             if e is not None:
                 if event.modifiers() & Qt.KeyboardModifier.ControlModifier:   # Ctrl+click only removes
-                    self.selected_edges = [k for k in self.selected_edges if not self._same_edge(k, e)]
+                    chain = tangent_chain(e, self._visible_edges())
+                    self.selected_edges = [k for k in self.selected_edges if not any(self._same_edge(k, c) for c in chain)]
                     self.edges_selection_changed.emit()
                     self.update()
                 else:

@@ -323,6 +323,33 @@ class LoopEdge:
         return ("loop", tuple(map(float, self.centroid)), tuple(map(float, self.n)), float(self.perimeter))
 
 
+def tangent_chain(edge, edges) -> list:
+    """`edge` plus every straight piece or arc joined to it end to end with a smooth (tangent) turn,
+    e.g. the straight side and the rounded corner next to it. Corners with a visible knick stop the chain."""
+    def ends(e):
+        pts = e.polyline()
+        t0 = pts[1] - pts[0]
+        t1 = pts[-1] - pts[-2]
+        return [(pts[0], -t0 / np.linalg.norm(t0)), (pts[-1], t1 / np.linalg.norm(t1))]
+    pool = [c for c in edges if c.kind == "line" or (c.kind == "circle" and c.is_arc)]
+    if edge.kind not in ("line", "circle") or (edge.kind == "circle" and not edge.is_arc):
+        return [edge]
+    chain, frontier = [edge], [edge]
+    while frontier:
+        cur = frontier.pop()
+        for p, t in ends(cur):
+            for c in pool:
+                if any(c.same_as(k) for k in chain):
+                    continue
+                for q, u in ends(c):
+                    # both directions point away from the joint, so a smooth continuation has them opposite
+                    if np.linalg.norm(p - q) < 1e-4 and float(t @ u) < -0.995:
+                        chain.append(c)
+                        frontier.append(c)
+                        break
+    return chain
+
+
 def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
     """Outlines of flat faces made of straight pieces and arcs with square walls (see LoopEdge)."""
     by_face: dict = {}

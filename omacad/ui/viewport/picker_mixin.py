@@ -9,7 +9,7 @@ from OpenGL import GL
 import omacad.ui.viewport as _vp_pkg
 from omacad.ui import theme
 from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
-from omacad.model.faces import ray_hit_face
+from omacad.model.faces import ray_hit_face, tangent_chain
 
 
 class PickerMixin:
@@ -119,13 +119,16 @@ class PickerMixin:
             self.hover_edge = e
             self.update()
 
+    def _visible_edges(self):
+        return [c for b in self.doc.bodies.values() if b.visible for c in b.edges]
+
     def _toggle_edge(self, e):
-        for i, sel in enumerate(self.selected_edges):
-            if self._same_edge(sel, e):
-                del self.selected_edges[i]
-                break
+        """Click: the edge and everything joined to it smoothly is added, or removed if `e` is already picked."""
+        chain = tangent_chain(e, self._visible_edges())
+        if any(self._same_edge(sel, e) for sel in self.selected_edges):
+            self.selected_edges = [s for s in self.selected_edges if not any(self._same_edge(s, c) for c in chain)]
         else:
-            self.selected_edges.append(e)
+            self.selected_edges += [c for c in chain if not any(self._same_edge(c, s) for s in self.selected_edges)]
         self.edges_selection_changed.emit()
         self.update()
 

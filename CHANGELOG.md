@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.4.9 - 2026-10-13
+
+### Fixed
+- Fillet/Chamfer: picking an edge now selects the whole smooth chain (straight sides and tangent arcs), and the preview covers every picked edge instead of failing with "truth value of an array is ambiguous".
+
 ## 0.7.4.8 - 2026-10-13
 
 ### Fixed

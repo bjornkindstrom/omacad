@@ -35,7 +35,7 @@ class ToolPromptsMixin:
         self.dock(dlg)
         self._round_dlg = dlg
         self.viewport.begin_edge_pick()
-        self.status_label.setText("Fillet/Chamfer: click edges (double-click = loop, Shift+double-click = loop on the other face, X or Alt = see-through, Ctrl+click = remove, Backspace = undo last, Ctrl+Backspace = clear). Esc cancels.")
+        self.status_label.setText("Fillet/Chamfer: click an edge (joined edges follow, double-click = loop, Shift+double-click = loop on the other face, X or Alt = see-through, Ctrl+click = remove, Backspace = undo last, Ctrl+Backspace = clear). Esc cancels.")
 
         def update_arrow():
             edges = self.viewport.selected_edges
@@ -74,7 +74,7 @@ class ToolPromptsMixin:
             doc_bodies = list(self.doc.bodies.values())
             for e in edges:
                 try:
-                    owner_body = next((b for b in doc_bodies if e in b.edges), doc_bodies[0] if doc_bodies else None)
+                    owner_body = next((b for b in doc_bodies if any(e.same_as(k) for k in b.edges)), doc_bodies[0] if doc_bodies else None)
                     eff_size = FilletFeature._safe_edge_size(owner_body, e, dlg.spn_size.value()) if owner_body else dlg.spn_size.value()
                     tool = CadKernel.round_tool(e, eff_size, dlg.kind())
                     solid = tool if solid is None else solid + tool
