@@ -32,6 +32,9 @@ NAME_FILE = STATE_DIR / "theme.name"
 # Bundled themes (the Omarchy ones, copied into assets/themes so they also exist where Omarchy does not, e.g. Windows).
 THEMES_DIR = Path(__file__).resolve().parents[2] / "assets" / "themes"
 BUILTIN = "builtin"          # the original Omacad dark palette
+CUSTOM_DIR = Path.home() / ".config" / "omacad" / "themes"   # themes made in the Settings theme editor
+CUSTOM_PREFIX = "user:"      # FIXED_THEME / theme_name of a custom theme: "user:<name>"
+PREVIEW: Optional[dict] = None   # unsaved colours from the theme editor, shown live
 FIXED_THEME: Optional[str] = None   # None = follow the Omarchy theme live; otherwise the name of a bundled theme (or BUILTIN)
 
 RGB = Tuple[float, float, float]
@@ -93,6 +96,11 @@ class Palette:
         self.highlight = best if (self.loaded and _sat(best) >= 0.3) else ORANGE_BASE
         if not self.loaded:
             self.highlight = ORANGE_BASE
+        # explicit overrides from the theme editor
+        self.canvas = _rgb(d["canvas"]) if "canvas" in d else None
+        self.grid = _rgb(d["grid"]) if "grid" in d else None
+        if "highlight" in d:
+            self.highlight = _rgb(d["highlight"])
 
     # -- mapping -----------------------------------------------------------
     def _neutral(self, c: RGB) -> RGB:
@@ -120,10 +128,14 @@ class Palette:
 
     # -- roles used directly by the viewport ----------------------------------
     def canvas_rgb01(self) -> Tuple[float, float, float]:
+        if self.canvas is not None:
+            return tuple(v / 255.0 for v in self.canvas)  # type: ignore[return-value]
         c = _mix(self.darker, self.background, 0.5) if self.loaded else (41, 43, 48)
         return tuple(v / 255.0 for v in c)  # type: ignore[return-value]
 
     def grid_rgb01(self) -> Tuple[float, float, float]:
+        if self.grid is not None:
+            return tuple(v / 255.0 for v in self.grid)  # type: ignore[return-value]
         c = _mix(tuple(v * 255 for v in self.canvas_rgb01()), self.foreground, 0.16)
         return tuple(v / 255.0 for v in c)  # type: ignore[return-value]
 
@@ -138,6 +150,55 @@ def available_themes() -> List[str]:
         return sorted(p.stem for p in THEMES_DIR.glob("*.toml"))
     except OSError:
         return []
+
+
+def custom_themes() -> List[str]:
+    """Names of the themes saved from the theme editor."""
+    try:
+        return sorted(p.stem for p in CUSTOM_DIR.glob("*.toml"))
+    except OSError:
+        return []
+
+
+def load_theme_data(key: str) -> Optional[dict]:
+    """Raw colours of a theme key: BUILTIN (editor defaults), "user:<name>" or a bundled theme name."""
+    try:
+        if key == BUILTIN:
+            return None
+        base = CUSTOM_DIR / f"{key[len(CUSTOM_PREFIX):]}.toml" if key.startswith(CUSTOM_PREFIX) else THEMES_DIR / f"{key}.toml"
+        with open(base, "rb") as f:
+            return tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
+def safe_theme_name(name: str) -> str:
+    return re.sub(r"[^\w\- ]", "", name).strip()
+
+
+def save_custom_theme(name: str, data: dict) -> str:
+    """Writes ~/.config/omacad/themes/<name>.toml and returns its theme key."""
+    name = safe_theme_name(name)
+    if not name:
+        raise ValueError("Give the theme a name")
+    CUSTOM_DIR.mkdir(parents=True, exist_ok=True)
+    lines = [f'{k} = "{v}"' if isinstance(v, str) else f"{k} = {v!r}" for k, v in data.items() if v is not None]
+    (CUSTOM_DIR / f"{name}.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return CUSTOM_PREFIX + name
+
+
+def delete_custom_theme(name: str) -> None:
+    try:
+        (CUSTOM_DIR / f"{safe_theme_name(name)}.toml").unlink()
+    except OSError:
+        pass
+
+
+def set_preview(data: Optional[dict]) -> None:
+    """Show unsaved editor colours live (None = back to the chosen theme)."""
+    global PREVIEW
+    PREVIEW = data
+    refresh()
 
 
 def set_fixed_theme(name: Optional[str]) -> None:
@@ -160,14 +221,12 @@ def apply_saved_choice() -> None:
 
 
 def load_palette() -> Palette:
+    if PREVIEW:
+        return Palette(PREVIEW)
     if FIXED_THEME:
         if FIXED_THEME == BUILTIN:
             return Palette(None)
-        try:
-            with open(THEMES_DIR / f"{FIXED_THEME}.toml", "rb") as f:
-                return Palette(tomllib.load(f))
-        except (OSError, tomllib.TOMLDecodeError):
-            return Palette(None)
+        return Palette(load_theme_data(FIXED_THEME))
     try:
         with open(COLORS_FILE, "rb") as f:
             return Palette(tomllib.load(f))
@@ -318,10 +377,32 @@ def qcolor(r: int, g: int, b: int, a: int = 255) -> QColor:
     return QColor(round(nr), round(ng), round(nb), a)
 
 
+def apply_qt_palette() -> None:
+    """Gives Qt's own palette the theme colours too: widgets without a stylesheet (the inside of scroll
+    areas, the ribbon behind the buttons) otherwise stay Fusion dark whatever the theme is."""
+    from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None or not _palette.loaded:
+        return
+    m = lambda h: QColor(_palette.map_hex(h))
+    pal = QPalette()
+    for role, h in ((QPalette.ColorRole.Window, "#1E2022"), (QPalette.ColorRole.Base, "#25282C"),
+                    (QPalette.ColorRole.AlternateBase, "#2D3136"), (QPalette.ColorRole.Button, "#2D3136"),
+                    (QPalette.ColorRole.ToolTipBase, "#25282C"), (QPalette.ColorRole.Text, "#E0E3E7"),
+                    (QPalette.ColorRole.WindowText, "#E0E3E7"), (QPalette.ColorRole.ButtonText, "#E0E3E7"),
+                    (QPalette.ColorRole.ToolTipText, "#E0E3E7")):
+        pal.setColor(role, m(h))
+    pal.setColor(QPalette.ColorRole.Highlight, QColor(*(round(v) for v in _palette.accent)))
+    pal.setColor(QPalette.ColorRole.HighlightedText, QColor(*(round(v) for v in _palette.darker)))
+    app.setPalette(pal)
+
+
 def refresh() -> None:
     global _palette, _font
     _palette = load_palette()
     _font = current_font()
+    apply_qt_palette()
     alive = []
     for ref, css in _styled:
         w = ref()
@@ -361,7 +442,7 @@ class ThemeWatcher(QObject):
 
     def _reload(self):
         self._watch()  # replaced files fall out of the watch list
-        if FIXED_THEME:
+        if FIXED_THEME or PREVIEW:
             return     # a theme was picked by hand: Omarchy theme switches are ignored
         refresh()
         self.changed.emit()

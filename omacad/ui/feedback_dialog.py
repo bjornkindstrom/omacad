@@ -42,7 +42,10 @@ class MarkableImage(QWidget):
 
     def __init__(self, pixmap: QPixmap, parent=None):
         super().__init__(parent)
-        self.pixmap = pixmap
+        # A grab on a scaled (HiDPI) screen has devicePixelRatio > 1: pixmap.width() counts real pixels but drawPixmap draws it
+        # smaller, so the fitted picture ended up too small (zoomed out). Work in real pixels throughout.
+        self.pixmap = QPixmap(pixmap)
+        self.pixmap.setDevicePixelRatio(1.0)
         self.marks: List[Mark] = []
         self.tool = "pen"
         self.scale = 1.0
@@ -50,7 +53,7 @@ class MarkableImage(QWidget):
         self._current: Optional[Mark] = None
         self._pan_from: Optional[QPointF] = None
         self._fitted = False
-        self.setMinimumSize(480, 300)
+        self.setMinimumSize(320, 160)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMouseTracking(False)
@@ -157,7 +160,11 @@ class FeedbackDialog(QDialog):
         super().__init__(parent)
         self.mode = mode
         self.setWindowTitle("Request a change" if mode == "request" else "Report problem")
-        self.resize(1000, 760)
+        # Fit the screen: on a small or scaled (Windows) display a fixed 1000x760 pushed the text box and buttons out of sight.
+        from PySide6.QtGui import QGuiApplication
+        scr = (parent.screen() if parent is not None else QGuiApplication.primaryScreen()) or QGuiApplication.primaryScreen()
+        avail = scr.availableGeometry() if scr is not None else None
+        self.resize(min(1000, int(avail.width() * 0.9)) if avail else 1000, min(760, int(avail.height() * 0.9)) if avail else 760)
         lay = QVBoxLayout(self)
         if mode == "request":
             lay.addWidget(QLabel("What would you like to change or add? Describe it in a few sentences. The screenshot, the model "
@@ -166,7 +173,12 @@ class FeedbackDialog(QDialog):
         else:
             lay.addWidget(QLabel("What is wrong? A sentence is enough. The screenshot, the model and the log are sent along. "
                                  "Zoom with the mouse wheel and draw where the problem is."))
+        for i in range(lay.count()):
+            w = lay.itemAt(i).widget()
+            if isinstance(w, QLabel):
+                w.setWordWrap(True)
         self.image: Optional[MarkableImage] = None
+        self._note_label = QLabel("<b>Your message:</b> (type in the framed box below)")
         if screenshot is not None and not screenshot.isNull():
             tools = QHBoxLayout()
             group = QButtonGroup(self)
@@ -185,13 +197,18 @@ class FeedbackDialog(QDialog):
                 b.clicked.connect(slot)
                 tools.addWidget(b)
             tools.addStretch()
-            tools.addWidget(QLabel("Wheel = zoom · middle/right button or Ctrl+drag = move · double-click = fit"))
             lay.addLayout(tools)
+            hint = QLabel("Wheel = zoom · middle/right button or Ctrl+drag = move · double-click = fit")
+            hint.setWordWrap(True)
+            lay.addWidget(hint)
             lay.addWidget(self.image, 1)
         self.note = QPlainTextEdit()
+        self.note.setStyleSheet("QPlainTextEdit { border: 2px solid #E26D28; border-radius: 4px; }")
         self.note.setPlaceholderText("e.g. I would like to be able to ..." if mode == "request"
                                      else "e.g. the corner of the offset is not rounded like the original")
-        self.note.setFixedHeight(80)
+        self.note.setMinimumHeight(90)
+        self.note.setMaximumHeight(140)
+        lay.addWidget(self._note_label)
         lay.addWidget(self.note)
         self.chk_fix = QCheckBox("Let the AI (Omarchy's default agent) fix it now")
         self.chk_fix.setChecked(True)
@@ -203,7 +220,9 @@ class FeedbackDialog(QDialog):
             self.edt_name.setPlaceholderText("Your name (so the owner knows who asked)")
             self.edt_name.setText(str(get_settings().get("rfc_name") or ""))
             lay.addWidget(self.edt_name)
-            lay.addWidget(QLabel("Sent to the owner of Omacad on GitHub: your text, the screenshot, the model and the log of this session."))
+            sent = QLabel("Sent to the owner of Omacad on GitHub: your text, the screenshot, the model and the log of this session.")
+            sent.setWordWrap(True)
+            lay.addWidget(sent)
         else:
             lay.addWidget(self.chk_fix)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)

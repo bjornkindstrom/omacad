@@ -360,6 +360,7 @@ class MainWindow(QMainWindow):
             f = QFont(theme.font_family())
             f.setPixelSize(13)
             app.setFont(f)
+            theme.apply_qt_palette()
 
     def on_theme_changed(self):
         """The Omarchy theme was switched: stylesheets were already re-applied by theme.refresh()."""

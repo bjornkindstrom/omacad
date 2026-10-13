@@ -4,7 +4,7 @@ GUI for configuring user preferences including custom colors, sketch palette pla
 """
 
 from typing import Dict, Optional
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QLineEdit, 
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QLabel,
@@ -17,6 +17,8 @@ from omacad.ui.settings import get_settings, rgb01_to_hex
 
 
 class ColorRow(QWidget):
+    changed = Signal()
+
     def __init__(self, label: str, current_hex: Optional[str], default_hex: Optional[str] = None,
                  parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -79,10 +81,12 @@ class ColorRow(QWidget):
         if color.isValid():
             self.current_hex = color.name().upper()
             self.update_swatch()
+            self.changed.emit()
 
     def reset_color(self):
         self.current_hex = self.default_hex
         self.update_swatch()
+        self.changed.emit()
 
 
 class SettingsDialog(QDialog):
@@ -93,6 +97,7 @@ class SettingsDialog(QDialog):
         theme.style(self, theme._BASE_CSS)
 
         self.settings = get_settings()
+        self._just_saved = ""
 
         main_lay = QVBoxLayout(self)
         main_lay.setContentsMargins(16, 16, 16, 16)
@@ -116,6 +121,8 @@ class SettingsDialog(QDialog):
         self.cmb_theme.addItem("Omacad default (dark)", theme.BUILTIN)
         for name in theme.available_themes():
             self.cmb_theme.addItem(name.replace("-", " ").title(), name)
+        for name in theme.custom_themes():
+            self.cmb_theme.addItem(f"★ {name}", theme.CUSTOM_PREFIX + name)
         cur = "omarchy" if self.settings.get("theme_mode") != "fixed" else self.settings.get("theme_name")
         self.cmb_theme.setCurrentIndex(max(0, self.cmb_theme.findData(cur)))
         self.cmb_theme.setToolTip("Follow Omarchy: the app changes colours when you switch theme in Omarchy.\n"
@@ -146,6 +153,12 @@ class SettingsDialog(QDialog):
 
         lay_colors.addStretch()
         self.tabs.addTab(tab_colors, "🎨 Colours")
+
+        # Tab: theme editor (every colour by hand, saved under a name)
+        from omacad.ui.theme_editor import ThemeEditorTab
+        self.editor = ThemeEditorTab()
+        self.editor.saved.connect(self._theme_saved)
+        self.tabs.addTab(self.editor, "🖌 Theme editor")
 
         # Tab 2: Sketch & View
         tab_sketch = QWidget()
@@ -331,6 +344,21 @@ class SettingsDialog(QDialog):
 
         main_lay.addLayout(btn_row)
 
+    def _theme_saved(self, key: str):
+        """A theme was saved (or deleted) in the editor: update the list and pick it."""
+        self._just_saved = key
+        cur = self.cmb_theme.currentData()
+        for i in reversed(range(self.cmb_theme.count())):
+            if str(self.cmb_theme.itemData(i)).startswith(theme.CUSTOM_PREFIX):
+                self.cmb_theme.removeItem(i)
+        for name in theme.custom_themes():
+            self.cmb_theme.addItem(f"★ {name}", theme.CUSTOM_PREFIX + name)
+        self.cmb_theme.setCurrentIndex(max(0, self.cmb_theme.findData(key or cur)))
+
+    def reject(self):
+        theme.set_preview(None)
+        super().reject()
+
     def reset_all(self):
         self.row_arrow.reset_color()
         self.row_measure.reset_color()
@@ -376,6 +404,15 @@ class SettingsDialog(QDialog):
             "theme_mode": "omarchy" if self.cmb_theme.currentData() == "omarchy" else "fixed",
             "theme_name": self.settings.get("theme_name") if self.cmb_theme.currentData() == "omarchy" else self.cmb_theme.currentData(),
         }
+        key = new_data["theme_name"] if new_data["theme_mode"] == "fixed" else ""
+        if key.startswith(theme.CUSTOM_PREFIX):
+            # a saved theme carries its tool colours
+            tdata = theme.load_theme_data(key) or {}
+            from omacad.ui.theme_editor import TOOL_ROLES
+            for tkey, setting, _label in TOOL_ROLES:
+                if tkey in tdata and (key != self.settings.get("theme_name") or key == self._just_saved):
+                    new_data[setting] = tdata.get(tkey)
+        theme.PREVIEW = None
         self.settings.update(new_data)
         theme.set_fixed_theme(new_data["theme_name"] if new_data["theme_mode"] == "fixed" else None)
         super().accept()

@@ -1,10 +1,10 @@
 # Omacad ⚡
 
-**Version 0.6.1** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
+**Version 0.7.0** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 
 **Omacad** är ett native parametriskt 3D CAD-program för **Omarchy Linux** (Arch + Hyprland/Wayland), inspirerat av **Autodesk Fusion 360**.
 Byggt med **Python 3.14**, **PySide6 (Qt6) + OpenGL**, **manifold3d** (vattentäta booleans), **shapely** och **SolveSpace** (skiss-villkor).
-Fönstret följer Omarchys aktiva tema och typsnitt.
+Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inställningar › Theme editor** låter dig ställa alla färger, se dem live och spara dem under ett namn.
 
 ![Omacad](screenshots/10_overview.png)
 

@@ -3,6 +3,16 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.0 - 2026-10-13
+
+### Added
+- **Theme editor** (Settings > Theme editor): set every colour by hand (background, dark background, text, muted text, accent, 3D highlight, 3D view background, grid, and the four tool colours), see it live, save it under a name. Saved themes (`~/.config/omacad/themes`) appear with a star in the Theme list and carry their tool colours.
+- `skills/omacad-video`: a skill describing how the demo videos are made (frame-exact capture, local narration and music).
+
+### Fixed
+- The inside of scroll areas (ribbon background, lists in dialogs) ignored the theme and stayed dark; Qt's own palette now follows the theme.
+- Report problem / Request a change: the screenshot was shown too small on scaled (HiDPI) screens, and the dialog could be larger than a small screen so the text box was out of reach. It now fits the screen and the message box is framed and labelled.
+
 ## 0.6.34 - 2026-10-13
 
 ### Added
