@@ -5056,6 +5056,24 @@ class Viewport3D(QOpenGLWidget):
         self.update()
 
     def keyPressEvent(self, event):
+        # If a feature tool dialog (e.g. Extrude) is open with an active distance input,
+        # typing numbers, minus, period, comma, backspace or enter in the 3D view should
+        # directly type into that field.
+        if not self.doc.active_sketch:
+            from omacad.ui import dialogs as _dialogs
+            host = _dialogs.SIDE_HOST
+            tool_dlg = getattr(host, "_extrude_dlg", None) or getattr(getattr(host, "inspector", None), "current_tool_dlg", None)
+            if tool_dlg is not None and hasattr(tool_dlg, "spn_dist") and hasattr(tool_dlg, "focus_distance"):
+                txt = event.text()
+                if (txt and txt in "0123456789+-/*().,") or event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
+                    tool_dlg.focus_distance()
+                    if txt:
+                        tool_dlg.spn_dist.lineEdit().event(event)
+                    return
+                elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    tool_dlg.accept()
+                    return
+
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()
             return

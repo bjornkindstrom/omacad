@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.2 - 2026-10-13
+
+### Improved
+- **Direct typing on Extrude**: when starting Extrude or picking a sketch profile in the 3D viewport, the distance input field is immediately focused with its value selected so you can type the desired distance right away without having to click the text box. Keystrokes in the 3D viewport also automatically forward directly to the distance input.
+
 ## 0.7.1 - 2026-10-13
 
 ### Added

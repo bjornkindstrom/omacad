@@ -935,6 +935,7 @@ class MainWindow(QMainWindow):
             if self.doc.selected_profile:
                 dlg.select_profile(self.doc.selected_profile)
             refresh_preview()
+            dlg.focus_distance()
 
         def on_pick_face():
             self.viewport.begin_plane_pick("extrude_target")
@@ -989,6 +990,8 @@ class MainWindow(QMainWindow):
         dlg.finished.connect(on_finished)
         dlg.show()
         refresh_preview()
+        dlg.focus_distance()
+        QTimer.singleShot(0, dlg.focus_distance)
 
     def prompt_revolve(self):
         """Revolve: profile (click it in the view), axis, angle, direction and operation, with live preview."""

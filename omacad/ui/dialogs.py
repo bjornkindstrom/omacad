@@ -220,8 +220,13 @@ class ExtrudeDialog(BaseFeatureDialog):
 
     def focus_distance(self):
         """Distance field active with its text selected: just type, e.g. -10, and press Enter."""
-        self.spn_dist.setFocus()
-        self.spn_dist.selectAll()
+        self.spn_dist.setFocus(Qt.FocusReason.OtherFocusReason)
+        line_edit = self.spn_dist.lineEdit()
+        if line_edit is not None:
+            line_edit.setFocus(Qt.FocusReason.OtherFocusReason)
+            line_edit.selectAll()
+        else:
+            self.spn_dist.selectAll()
 
     def set_distance(self, value: float):
         """Used by 'To face': one-sided extrusion by the given (signed) distance."""
