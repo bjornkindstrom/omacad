@@ -41,10 +41,13 @@ PLATE_C = (30.0, 20.0, 4.0)
 LINES = {
     "intro": "This is Oh-mah-cad: a native, parametric 3D C A D for Oh-mar-key Linux. Here is a quick tour.",
     "sketch": "Everything starts with a sketch. Pick the rounded rectangle, then just type the width, the height and the corner radius.",
-    "smart": "Smart Circle places a hole with numbers. Type the diameter, then the distance to a wall in each direction. Every number becomes a dimension, so the sketch stays fully defined.",
+    "smart_a": "Smart Circle places a hole with numbers. First type the diameter, and press Enter. The diameter shows up on the circle straight away.",
+    "smart_b": "Then move next to a wall, and type how far from it the centre should be. The wall lights up, and the distance appears as a dimension.",
+    "smart_c": "Do the same for the other direction. Every number is now a real dimension on the sketch, so the hole stays fully defined.",
     "extrude": "Extrude the sketch, and the circle becomes a hole. Drag the arrow or type the distance, and Auto mode decides whether to add or cut.",
     "chamfer": "Round or bevel edges with fillet and chamfer. It works on straight edges, circles and whole outlines.",
-    "mirror": "Copy the hole with its chamfer to all four corners, with a single Mirror step.",
+    "mirror_a": "Now copy the hole with its chamfer. Open Pattern and Mirror, and tick the steps you want copied. The preview shows the result as you change the settings: mirrored left to right, front to back, or all four corners at once.",
+    "mirror_b": "It is all adjustable. Switch to evenly spaced copies, and set the number and the spacing, or go around an axis. Settle on the four corners, press OK, and the hole is copied with its chamfer.",
     "fill": "Fill pattern covers a whole face. Draw one polygon, and Oh-mah-cad packs the surface with exact gaps, steering around anything that stands on it.",
     "polygons": "It works for any polygon from three to eight sides, and everything is parametric. Change the sketch, and the pattern packs itself again.",
     "revolve": "Revolve turns a profile into a turned part, around any axis you choose.",
@@ -56,9 +59,30 @@ LINES = {
 }
 
 
+def splice(t, old_dir, out):
+    """New frames so far + the old run's frames from its "Fill pattern" scene to the end, then encode."""
+    import json
+    old = json.load(open(os.path.join(old_dir, "marks.json")))
+    first = next(i for i, m in enumerate(old["marks"]) if m["text"] == "Fill pattern")
+    start = old["marks"][first]["frame"]
+    delta = t.frame - start
+    for f in range(start, old["frames"]):
+        dest = os.path.join(t.outdir, f"f{f + delta:05d}.png")
+        try:
+            os.link(os.path.join(old_dir, f"f{f:05d}.png"), dest)
+        except OSError:
+            import shutil
+            shutil.copyfile(os.path.join(old_dir, f"f{f:05d}.png"), dest)
+    t.marks += [{**m, "frame": m["frame"] + delta} for m in old["marks"][first:]]
+    t.frame = old["frames"] + delta
+    t.encode_scaled(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(OUTDIR, "tour_silent.mp4"))
+    ap.add_argument("--reuse", help="directory of an earlier full run: render only up to the Pattern/Mirror scenes and take the "
+                                    "frames from the Fill pattern scene onward from that run (replaces just those scenes)")
     args = ap.parse_args()
     # speak every sentence first, so the scenes can be as long as the speech
     durations = {}
@@ -151,16 +175,36 @@ def main():
 
         t.scene("Sketch: rounded rectangle", L["sketch"], sketch_scene)
 
-        # ---- 3. smart circle ----
-        def smart_scene():
+        # ---- 3. smart circle: slow, zoomed in, every typed number shows up as a dimension ----
+        def smart_a():
             v.set_sketch_tool("SMART_CIRCLE")
             v.setFocus()
-            t.glide((14.0, 14.0), 24)
-            t.circle("6", (3.0, 12.0), "8", (12.0, 3.0), "8")
-            v.set_sketch_tool("NONE")
-            t.shoot(20)
+            t.fly((18.0, 12.0, 0.0), 46.0, v.azimuth, v.elevation, 30)
+            t.glide((18.0, 18.0), 24)
+            t.shoot(15)
+            t.type_number("6", per_key=20)
+            t.shoot(25)
+            t.enter(60)
 
-        t.scene("Smart Circle: numbers and Enter", L["smart"], smart_scene)
+        def smart_b():
+            t.glide((3.0, 12.0), 30)
+            t.shoot(30)
+            t.type_number("8", per_key=20)
+            t.shoot(20)
+            t.enter(60)
+
+        def smart_c():
+            t.glide((12.0, 3.0), 30)
+            t.shoot(30)
+            t.type_number("8", per_key=20)
+            t.shoot(20)
+            t.enter(90)
+            v.set_sketch_tool("NONE")
+            t.fly((30.0, 20.0, 0.0), 72.0, v.azimuth, v.elevation, 40)
+
+        t.scene("Smart Circle: the diameter", L["smart_a"], smart_a)
+        t.scene("Smart Circle: distance from a wall", L["smart_b"], smart_b)
+        t.scene("Smart Circle: the other direction", L["smart_c"], smart_c)
 
         # ---- 4. extrude ----
         def extrude_scene():
@@ -182,13 +226,77 @@ def main():
 
         t.scene("Fillet and Chamfer", L["chamfer"], chamfer_scene)
 
-        # ---- 6. mirror ----
-        def mirror_scene():
-            ext = [f for f in d.timeline.features if f.feature_type == "extrude"][0]
-            d.add_pattern([ext.feature_id, ch_holder["f"].feature_id], "mirror", mirror_mode="xy")
-            t.fly(PLATE_C, 85.0, 30.0, 45.0, 45)
+        # ---- 6. pattern / mirror: the real docked panel, driven step by step with a live preview ----
+        pat = {}
 
-        t.scene("Mirror and Pattern", L["mirror"], mirror_scene)
+        def preview():
+            from omacad.model.timeline import PatternFeature
+            dlg = pat["dlg"]
+            ids = dlg.source_ids()
+            if not ids:
+                dlg.lbl_info.setText("Tick the steps to copy (for example the hole's sketch, cut and chamfer).")
+                vp().set_preview(None)
+                return
+            feat = PatternFeature("tmp", "tmp", ids, dlg.kind(), **dlg.get_params())
+            solid, op, extra, copies = None, "cut", None, 0
+            for bid in list(d.bodies):
+                res = feat.compute(d, bid)
+                if res is None:
+                    continue
+                rem, add = res
+                copies = feat.copies
+                solid, op = (rem, "cut") if rem is not None else (add, "join")
+                extra = add if rem is not None else None
+                break
+            dlg.lbl_info.setText(f"{copies} copies will be made." if solid is not None else "Nothing to copy with these settings.")
+            vp().set_preview(solid, op, extra=extra, extra_op="join")
+
+        def mirror_a():
+            from omacad.ui.dialogs import PatternDialog
+            from PySide6.QtCore import Qt
+            t.fly(PLATE_C, 85.0, 30.0, 45.0, 30)
+            d.timeline.recompute(d)
+            dlg = PatternDialog(d, win)
+            pat["dlg"] = dlg
+            dlg.changed.connect(preview)
+            win.dock(dlg)
+            dlg.show()
+            dlg.cmb_kind.setCurrentIndex(1)                       # Mirror around the body
+            items = [dlg.lst.item(i) for i in range(dlg.lst.count())]
+            for it in items:                                      # start with nothing ticked, then tick the hole's steps one by one
+                it.setCheckState(Qt.CheckState.Unchecked)
+            t.shoot(40)
+            for it in items:
+                it.setCheckState(Qt.CheckState.Checked)
+                t.shoot(30)
+            for idx in (1, 2, 3):                                 # left-right, front-back, all four corners
+                dlg.cmb_mirror.setCurrentIndex(idx)
+                t.shoot(55)
+
+        def mirror_b():
+            dlg = pat["dlg"]
+            dlg.cmb_kind.setCurrentIndex(0)                       # evenly spaced copies
+            t.shoot(30)
+            for n in (3, 2, 3):
+                dlg.spn_count1.setValue(n)
+                t.shoot(30)
+            dlg.spn_space1.setValue(22.0)
+            t.shoot(45)
+            dlg.cmb_kind.setCurrentIndex(1)                       # back to mirror, four corners
+            dlg.cmb_mirror.setCurrentIndex(3)
+            t.shoot(45)
+            d.add_pattern(dlg.source_ids(), dlg.kind(), **dlg.get_params())
+            dlg.accept()
+            vp().set_preview(None)
+            t.fly(PLATE_C, 85.0, 30.0, 45.0, 40)
+
+        t.scene("Pattern and Mirror: preview", L["mirror_a"], mirror_a)
+        t.scene("Pattern and Mirror: adjustable", L["mirror_b"], mirror_b)
+
+        if args.reuse:
+            splice(t, args.reuse, args.out)
+            app.quit()
+            return
 
         # ---- 7. cylinder + polygon fill ----
         hex_holder = {}

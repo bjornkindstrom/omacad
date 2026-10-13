@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.32 - 2026-10-13
+
+### Changed
+- **Smart Circle shows its numbers as dimensions while you type**: after Enter on the diameter, a diameter dimension appears on the circle; after each distance, a dimension line from the wall to the centre with its value. Before, the numbers only appeared once the circle was finished.
+
 ## 0.6.31 - 2026-10-12
 
 ### Fixed

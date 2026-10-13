@@ -5,7 +5,7 @@ import shutil
 import subprocess
 
 import numpy as np
-from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
 from PySide6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPolygonF
 
 W, H, FPS = 1280, 720, 30
@@ -48,7 +48,17 @@ class Take:
         for _ in range(3):
             self.app.processEvents()
         self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)   # old timeline chips etc. are gone before the grab
-        return self.win.grab().toImage() if self.window else self.vp.grabFramebuffer()
+        if not self.window:
+            return self.vp.grabFramebuffer()
+        # win.grab() leaves out what the 3D view paints itself (dimension badges, tool tips, ViewCube, the
+        # Orbit/Pan/Fit bar), so the view is grabbed on its own and drawn over its place in the window picture
+        img = self.win.grab().toImage()
+        fb = self.vp.grabFramebuffer()
+        off = self.vp.mapTo(self.win, QPoint(0, 0))
+        p = QPainter(img)
+        p.drawImage(QRect(off.x(), off.y(), self.vp.width(), self.vp.height()), fb)   # fb is in device pixels (1.25x here)
+        p.end()
+        return img
 
     def _render(self):
         self._finish(self._grab())

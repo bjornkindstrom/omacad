@@ -1610,6 +1610,43 @@ class Viewport3D(QOpenGLWidget):
         self.status_message.emit("Smart Circle: placed. Type the next diameter for another one, or Esc.")
         self.doc.notify_changed()
 
+    def _draw_smart_dimensions(self, painter: QPainter, sc, scr, c, d, colour):
+        """The numbers typed so far show up on screen as dimensions: the diameter on the circle and the distance
+        from each wall to the centre, each with a value badge, before the circle is even created."""
+        painter.setFont(QFont(theme.font_family(), 9))
+        fm = painter.fontMetrics()
+
+        def badge(at: QPointF, text: str):
+            rect = QRectF(at.x() - (fm.horizontalAdvance(text) + 16) / 2, at.y() - 11, fm.horizontalAdvance(text) + 16, 22)
+            painter.setBrush(QBrush(qcolor(37, 40, 44, 240)))
+            painter.setPen(QPen(colour, 1.5))
+            painter.drawRoundedRect(rect, 4, 4)
+            painter.setPen(qcolor(255, 255, 255))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+
+        def line(a: QPointF, b: QPointF, text: str):
+            painter.setPen(QPen(colour, 1.5))
+            painter.drawLine(a, b)
+            dx, dy = b.x() - a.x(), b.y() - a.y()
+            ln = math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / ln * 5.0, dx / ln * 5.0
+            for p in (a, b):                       # end ticks
+                painter.drawLine(QPointF(p.x() - nx, p.y() - ny), QPointF(p.x() + nx, p.y() + ny))
+            badge(QPointF((a.x() + b.x()) / 2, (a.y() + b.y()) / 2), text)
+
+        sc_c = scr(c)
+        if d and sc.diameter is not None and sc_c is not None:       # diameter, once Enter was pressed
+            r = sc.diameter / 2.0
+            a, b = scr((c[0] - r * 0.7071, c[1] - r * 0.7071)), scr((c[0] + r * 0.7071, c[1] + r * 0.7071))
+            if a is not None and b is not None:
+                line(a, b, f"\u00d8 {sc.diameter:g} mm")
+        for stage, (seg, dist) in sc.dimension.items():
+            k = 0 if stage == smart_circle.ACROSS else 1
+            foot = (seg[0][0], c[1]) if k == 0 else (c[0], seg[0][1])
+            sf = scr(foot)
+            if sf is not None and sc_c is not None:
+                line(sf, sc_c, f"{dist:g} mm")
+
     def draw_smart_circle(self, painter: QPainter):
         sc = self.smart
         if self.sketch_tool != "SMART_CIRCLE" or not self.doc.active_sketch or sc.mouse is None:
@@ -1647,6 +1684,7 @@ class Viewport3D(QOpenGLWidget):
         anchor = scr(c) if c is not None else None
         if anchor is None:
             return
+        self._draw_smart_dimensions(painter, sc, scr, c, d, cyan)
         if not d:   # no size yet: a small shadow circle on the cursor shows that Smart Circle is the active tool
             painter.setPen(QPen(orange, 1.5, Qt.PenStyle.DashLine))
             painter.setBrush(QBrush(qcolor(226, 109, 40, 55)))
