@@ -486,8 +486,22 @@ class PatternFeature(Feature):
             if piece.is_empty():
                 continue
             if (piece - before).volume() > 0.25 * piece.volume():
-                out = out + shifted
+                out = PatternFeature._extend_end(out, axis, sgn, eps)
         return out
+
+    @staticmethod
+    def _extend_end(solid, axis, sgn, eps):
+        """Pushes the vertices of the end face on one side out by eps. Unlike a union with a shifted copy this
+        leaves no coplanar walls to cross, which used to leave zero-thickness fins in hole walls."""
+        bb = solid.bounding_box()
+        edge = bb[3 + axis] if sgn > 0 else bb[axis]
+
+        def push(v):
+            v = np.array(v, dtype=float)
+            if abs(v[axis] - edge) < 1e-6:
+                v[axis] += sgn * eps
+            return v
+        return solid.warp(push)
 
     def _resolve_plane(self, doc):
         """(point, unit normal) of the plane named in mirror_mode 'plane:<id>'."""
