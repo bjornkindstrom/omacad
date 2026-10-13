@@ -55,6 +55,11 @@ Användaren trycker **F9 / "Report problem"** i appen. `omacad/feedback.py` skri
 Kör på den riktiga skärmen (Wayland); offscreen ger ingen GL-kontext. Sätt `QSurfaceFormat` med depth 24 före `QApplication`, vänta ~1,5 s efter `show()`, använd små former (vyn är bara ca 410 px bred eftersom inspektören tar resten) och rikta vyn med `align_to_plane` före musklick. `QTest.mouseMove` är opålitlig här: anropa `mouseMoveEvent` direkt vid behov. Ändra aldrig det riktiga temat i tester (peka `theme.COLORS_FILE` på en tema-fil i stället). Modal dialog som blockerar: ersätt `prompt_dimension_value` med en lambda.
 
 ## Lösningslogg (rotorsak och rättning, nyast överst)
+- **Trädstruktur för kroppar/skisser, markering i 3D, samt Shell live preview och skissrensning** (0.7.3, via feedback):
+  1. Skisser skapade på en yta av en viss solid kropp kopplas automatiskt med `parent_body_id` och grupperas under kroppen i Model Browser. Fristående skisser (på XY, XZ, YZ eller plan) stannar i skiss-grenen.
+  2. Klick med vänster musknapp i 3D-viewporten markerar kroppen och aktiverar den i dialoger som Move, Split och Shell.
+  3. Shell döljer förbrukade skisser och ger direkt interaktiv 3D-förhandsvisning med `compute_shell` och färgmarkering för öppna ytor. Test i `tests/test_shell_preview_and_sketches.py`.
+- **Direktinmatning på Extrude** (0.7.2): Fokus och markering sätts direkt i avståndsfältet, numeriska tangenttryck i 3D-vyn vidarebefordras till dialogen. Test i `tests/test_extrude_direct_typing.py`.
 - **Fillet skar genom motsatt vägg vid överdriven radie, måttbrickor skymde geometri, knappstorlek i inställningar** (0.7.1, via F8/F9):
   1. `FilletFeature._safe_edge_size` begränsar radien/fasningen på konvexa raka kanter till 99 % av minsta avståndet till angränsande ytors hål och väggar, så en överdriven fillet inte skär förbi intilliggande kanter. Test i `tests/test_fillet_clearance_limit.py`.
   2. Måttbrickor för cirkel-mot-linje förskjuts nu utanför cirkelns radie längs referenslinjen istället för att lägga brickan direkt över cirkelns omkrets.

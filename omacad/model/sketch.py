@@ -658,6 +658,7 @@ class Sketch:
         self.reference_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
         self.visible: bool = True
         self.face_key = None  # set for sketches made from a body face, so the same face is not duplicated
+        self.parent_body_id: Optional[str] = None  # body this sketch was drawn on, or None if independent
 
     def _new_entity_id(self, prefix: str) -> str:
         """Unique id even after entities were deleted."""
@@ -1513,6 +1514,7 @@ class Sketch:
             "dimensions": [d.to_dict() for d in self.dimensions],
             "constraints": [c.to_dict() for c in self.constraints],
             "face_key": list(self.face_key) if self.face_key else None,
+            "parent_body_id": self.parent_body_id,
             "visible": self.visible,
         }
 
@@ -1529,6 +1531,7 @@ class Sketch:
         sketch = cls(data["sketch_id"], name=data.get("name", "Sketch"), plane=plane)
         sketch.visible = data.get("visible", True)
         sketch.face_key = tuple(data["face_key"]) if data.get("face_key") else None
+        sketch.parent_body_id = data.get("parent_body_id", None)
 
         groups = {ed.get("entity_id"): ed["group"] for ed in data.get("entities", []) if ed.get("group")}
         for ent_data in data.get("entities", []):

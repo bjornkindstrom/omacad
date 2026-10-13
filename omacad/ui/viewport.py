@@ -157,6 +157,8 @@ class Viewport3D(QOpenGLWidget):
     surface_hover = Signal(object)        # same, while the mouse moves (None = no surface)
     surface_picked = Signal(object)       # dict(point, patch) of any body surface (planar or curved)
     target_plane_picked = Signal(object)  # plane chosen as an extrude target (distance to face)
+    shell_face_picked = Signal(object)   # plane/face chosen for hollow shell open face
+    move_body_picked = Signal(object)    # plane/face chosen for move body selection
     status_message = Signal(str)
     edges_selection_changed = Signal()
     extrude_handle_dragged = Signal(float)  # signed distance along the extrude arrow while it is dragged
@@ -261,6 +263,7 @@ class Viewport3D(QOpenGLWidget):
         self.preview_plane = None   # SketchPlane drawn while an Offset Plane is being set up
         self.plane_pick_purpose: str = "sketch"  # "sketch" or "extrude_target"
         self.hover_plane = None  # ("origin", name) or ("face", PlanarFace)
+        self.highlighted_faces: list = []  # list of faces or dicts to highlight (e.g. Shell open faces)
 
         # ViewCube overlay
         self.viewcube = ViewCube(size=90, on_face_clicked=self.set_view)
@@ -2385,6 +2388,7 @@ class Viewport3D(QOpenGLWidget):
     def end_plane_pick(self, cancelled: bool = False):
         self.plane_pick_mode = False
         self.hover_plane = None
+        self.highlighted_faces = []
         if cancelled:
             self.plane_pick_cancelled.emit()
         self.plane_pick_purpose = "sketch"
@@ -2524,6 +2528,13 @@ class Viewport3D(QOpenGLWidget):
             tris = (face.tris + lift).reshape(-1, 3).astype(np.float32)
             GL.glUniform4f(loc_col, *theme.palette().highlight01(0.1), 0.55)
             self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, tris)
+        for hf in self.highlighted_faces:
+            face = getattr(hf, "face", hf) if not isinstance(hf, dict) else None
+            if face is not None and hasattr(face, "tris"):
+                lift = face.normal * 0.05
+                tris = (face.tris + lift).reshape(-1, 3).astype(np.float32)
+                GL.glUniform4f(loc_col, 0.95, 0.35, 0.25, 0.6)  # warm red/coral for open faces
+                self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, tris)
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glDepthMask(GL.GL_TRUE)
         GL.glUseProgram(0)
@@ -5016,6 +5027,10 @@ class Viewport3D(QOpenGLWidget):
                     self.section_base_picked.emit(plane)
                 elif purpose == "extrude_target":
                     self.target_plane_picked.emit(plane)
+                elif purpose == "shell_face":
+                    self.shell_face_picked.emit(plane)
+                elif purpose == "move_body":
+                    self.move_body_picked.emit(plane)
                 elif purpose == "lay_target":
                     self.lay_target_picked.emit(plane)
                 else:
@@ -5043,8 +5058,16 @@ class Viewport3D(QOpenGLWidget):
                 doc.selected_extra = []
                 self.profile_picked.emit()
                 self.update()
-            if picked is None and doc.selected_body_ids and self.pick_body(event.position().x(), event.position().y()) is None:
-                doc.select_body(None)    # a click in empty space clears the body selection
+            if picked is None:
+                clicked_body_id = self.pick_body(event.position().x(), event.position().y())
+                if clicked_body_id is not None:
+                    multi = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                    doc.select_body(clicked_body_id, multi=multi)
+                    self.body_clicked.emit(clicked_body_id)
+                    self.update()
+                elif doc.selected_body_ids:
+                    doc.select_body(None)    # a click in empty space clears the body selection
+                    self.update()
 
     def wheelEvent(self, event):
         delta = event.angleDelta().y()

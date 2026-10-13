@@ -119,6 +119,28 @@ class BrowserTree(QWidget):
         if self.doc.construction_planes:
             origin_item.setExpanded(True)
 
+        # Classify sketches into body-specific (drawn on a body face) vs standalone
+        body_sketches: Dict[str, list] = {b_id: [] for b_id in self.doc.bodies}
+        standalone_sketches = []
+        for s_id, sketch in self.doc.sketches.items():
+            pid = getattr(sketch, "parent_body_id", None)
+            if pid and pid in body_sketches:
+                body_sketches[pid].append((s_id, sketch))
+            else:
+                standalone_sketches.append((s_id, sketch))
+
+        def add_sketch_item(parent_node, s_id, sketch):
+            s_item = QTreeWidgetItem(parent_node, ["✏️ " + sketch.name, ""])
+            s_item.setData(0, Qt.ItemDataRole.UserRole, ("sketch", s_id))
+            s_item.setFlags(s_item.flags() | Qt.ItemFlag.ItemIsEditable)
+            if sketch == self.doc.active_sketch:
+                font = QFont(s_item.font(0))
+                font.setBold(True)
+                s_item.setFont(0, font)
+                s_item.setToolTip(0, "Active sketch")
+            self._style_eye(s_item, sketch.visible)
+            return s_item
+
         # Bodies Group Node
         bodies_group = QTreeWidgetItem(root, [f"🧊 Bodies ({len(self.doc.bodies)})"])
         bodies_group.setExpanded(True)
@@ -129,20 +151,16 @@ class BrowserTree(QWidget):
             self._style_eye(b_item, body.visible)
             if body.selected:
                 b_item.setSelected(True)
+            for s_id, sk in body_sketches.get(b_id, []):
+                add_sketch_item(b_item, s_id, sk)
+            if body_sketches.get(b_id):
+                b_item.setExpanded(True)
 
-        # Sketches Group Node
-        sketches_group = QTreeWidgetItem(root, [f"✏️ Sketches ({len(self.doc.sketches)})"])
+        # Standalone Sketches Group Node
+        sketches_group = QTreeWidgetItem(root, [f"✏️ Sketches ({len(standalone_sketches)})"])
         sketches_group.setExpanded(True)
-        for s_id, sketch in self.doc.sketches.items():
-            s_item = QTreeWidgetItem(sketches_group, [sketch.name, ""])
-            s_item.setData(0, Qt.ItemDataRole.UserRole, ("sketch", s_id))
-            s_item.setFlags(s_item.flags() | Qt.ItemFlag.ItemIsEditable)
-            if sketch == self.doc.active_sketch:  # shown in bold (the name itself stays editable text)
-                font = QFont(s_item.font(0))
-                font.setBold(True)
-                s_item.setFont(0, font)
-                s_item.setToolTip(0, "Active sketch")
-            self._style_eye(s_item, sketch.visible)
+        for s_id, sketch in standalone_sketches:
+            add_sketch_item(sketches_group, s_id, sketch)
 
         if self.doc.sections:
             sec_group = QTreeWidgetItem(root, [f"✂️ Section Views ({len(self.doc.sections)})"])

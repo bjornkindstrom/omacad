@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.3 - 2026-10-13
+
+### Added
+- **Trädstruktur för Bodies och Skisser**: Skisser som skapas på en yta av en viss kropp (eller Face-to-Sketch) grupperas nu automatiskt under den tillhörande kroppen som en utfällbar gren i Model Browser. Fristående skisser på basplan (XY, XZ, YZ) eller konstruktionsplan visas i en egen skiss-gren.
+- **3D-markering av bodies med vänsterklick**: Klick på en solid i 3D-viewporten markerar kroppen direkt och sätter den som aktiv för verktyg som Move, Split och Shell. Klick i tomt utrymme avmarkerar.
+
+### Improved
+- **Shell live preview & skissrensning**: När Shell-verktyget öppnas döljs förbrukade skisser automatiskt. Ändring av väggtjocklek eller val av öppna ytor ger direkt 3D-förhandsvisning med tydlig färgmarkering på öppna ytor.
+
 ## 0.7.2 - 2026-10-13
 
 ### Improved

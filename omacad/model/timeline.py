@@ -1763,67 +1763,82 @@ class ShellFeature(Feature):
                 return out
         return m.minkowski_sum(m3d.Manifold.sphere(t, 24))
 
-    def execute(self, doc: Any) -> None:
-        target = doc.bodies.get(self.target_body_id)
-        t_in, t_out = self.wall_sizes()
-        if not target or (t_in <= 0.001 and t_out <= 0.001):
-            return
-        body = target.manifold
+    @classmethod
+    def compute_shell(cls, body, thickness: float, direction: str = "inside", thickness2: float = 2.0, open_faces: Optional[list] = None):
+        """Hollows out a manifold body with wall thickness and optional open faces. Returns new Manifold or None."""
+        if direction == "outside":
+            t_in, t_out = 0.0, float(thickness)
+        elif direction == "both":
+            t_in, t_out = float(thickness), float(thickness2)
+        else:
+            t_in, t_out = float(thickness), 0.0
 
-        # 1. The empty space: the body eroded by the inside wall (or the body itself for an outside-only wall)
+        if t_in <= 0.001 and t_out <= 0.001:
+            return body
+
+        # 1. The empty space: eroded by inside wall (or body itself for outside-only)
         cavity = body
         if t_in > 0.001:
             try:
                 cavity = body.minkowski_difference(m3d.Manifold.sphere(t_in, 24))
             except Exception as e:
                 print(f"ShellFeature Minkowski difference error: {e}")
-                return
+                return None
             if cavity.is_empty() or cavity.volume() < 1e-6:
-                print(f"ShellFeature: wall thickness {t_in} mm is too thick for body {target.name}.")
-                return
+                return None
 
-        # 2. The outer skin: the body grown by the outside wall
+        # 2. Outer skin: grown by outside wall
         outer = body
         if t_out > 0.001:
             try:
-                outer = self._grow(body, t_out)
+                outer = cls._grow(body, t_out)
             except Exception as e:
                 print(f"ShellFeature grow error: {e}")
-                return
+                return None
 
-        # 3. Open faces: the outer skin ends flush with the open face, and the empty space is swept out
-        # through the face (copies spaced so they overlap)
-        for f in self.open_faces:
+        # 3. Open faces: sweep cavity out through open face
+        open_faces = list(open_faces or [])
+        for f in open_faces:
             nf = np.array(f.get("normal", [0, 0, 1]), dtype=float)
             ln = float(np.linalg.norm(nf))
             if ln > 1e-6 and t_out > 0.001:
                 nf = nf / ln
                 df = float(nf @ np.array(f.get("origin", [0, 0, 0]), dtype=float))
-                outer = outer.trim_by_plane(tuple(-nf), -df)   # keep n.x <= d
+                outer = outer.trim_by_plane(tuple(-nf), -df)
+
         sweep = cavity
         total = t_in + t_out + 1.0
-        for f in self.open_faces:
+        for f in open_faces:
             norm = np.array(f.get("normal", [0, 0, 1]), dtype=float)
             ln = float(np.linalg.norm(norm))
             if ln < 1e-6:
                 continue
             norm = norm / ln
             bb = np.array(cavity.bounding_box())
-            ext = float(np.abs(norm) @ (bb[3:] - bb[:3]))        # how deep the cavity is along the normal
+            ext = float(np.abs(norm) @ (bb[3:] - bb[:3]))
             step = max(0.25 * ext, 0.2)
             k = 1
             while k * step < total + step:
                 sweep = sweep + cavity.translate(tuple(norm * min(k * step, total)))
                 k += 1
 
-        # 4. Wall = outer skin minus the empty space
+        # 4. Wall = outer skin minus empty space
         try:
             shelled = outer - sweep
             if not shelled.is_empty() and shelled.volume() > 1e-6:
-                target.manifold = shelled
-                target.update_render_mesh()
+                return shelled
         except Exception as e:
             print(f"ShellFeature boolean subtraction error: {e}")
+        return None
+
+    def execute(self, doc: Any) -> None:
+        target = doc.bodies.get(self.target_body_id)
+        if not target:
+            return
+        shelled = self.compute_shell(target.manifold, self.thickness, self.direction, self.thickness2, self.open_faces)
+        if shelled is not None:
+            target.manifold = shelled
+            target.update_render_mesh()
 
     def to_dict(self) -> Dict[str, Any]:
         return {

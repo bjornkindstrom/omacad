@@ -993,6 +993,11 @@ class SplitBodyDialog(BaseFeatureDialog):
             if hasattr(self, "btn_ok"):
                 self.btn_ok.setEnabled(True)
 
+    def select_body(self, body_id: str):
+        if body_id in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(body_id))
+            self.update_preview()
+
     def get_values(self):
         b_idx = self.cmb_target.currentIndex()
         p_idx = self.cmb_plane.currentIndex()
@@ -1086,16 +1091,31 @@ class ShellDialog(BaseFeatureDialog):
         if found_idx >= 0:
             self.open_faces.pop(found_idx)
         else:
-            self.open_faces.append({"normal": fn, "origin": fo, "body_id": getattr(face, "body_id", "")})
+            self.open_faces.append({"normal": fn, "origin": fo, "body_id": getattr(face, "body_id", ""), "_face": face})
 
         count = len(self.open_faces)
         self.lbl_faces.setText(f"{count} open face{'s' if count != 1 else ''} selected.\n(Click again to deselect)")
+        parent = self.parent()
+        vp = getattr(parent, "viewport", None)
+        if vp is not None:
+            vp.highlighted_faces = [f["_face"] for f in self.open_faces if "_face" in f]
+            vp.update()
         self.changed.emit()
 
     def clear_faces(self):
         self.open_faces = []
         self.lbl_faces.setText("0 open face(s) selected.\n(Click faces in viewport to leave them open)")
+        parent = self.parent()
+        vp = getattr(parent, "viewport", None)
+        if vp is not None:
+            vp.highlighted_faces = []
+            vp.update()
         self.changed.emit()
+
+    def select_body(self, body_id: str):
+        if body_id in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(body_id))
+            self.changed.emit()
 
     def get_expressions(self) -> dict:
         out = {"thickness": self.spn_thickness.expression()}

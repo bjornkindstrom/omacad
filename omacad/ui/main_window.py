@@ -1119,9 +1119,10 @@ class MainWindow(QMainWindow):
             )
             return
 
+        selected_id = target_body_id or (self.doc.selected_body_ids[0] if self.doc.selected_body_ids else "")
         dlg = SplitBodyDialog(
             self.doc, self,
-            preselected_body_id=target_body_id or None,
+            preselected_body_id=selected_id or None,
             preselected_plane_id=plane_id or None,
         )
         if dlg.exec():
@@ -1142,23 +1143,60 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Shell", "Create a 3D body first before shelling!")
             return
 
-        dlg = ShellDialog(self.doc, self, preselected_body_id=target_body_id or None)
+        selected_id = target_body_id or (self.doc.selected_body_ids[0] if self.doc.selected_body_ids else "")
+        dlg = ShellDialog(self.doc, self, preselected_body_id=selected_id or None)
         self.dock(dlg)
+        self.doc.hide_used_sketches()
+
+        current_hidden_id = [None]
+
+        def refresh_preview():
+            bid, thickness, open_faces = dlg.get_values()
+            if not bid or bid not in self.doc.bodies or thickness <= 0:
+                if current_hidden_id[0] and current_hidden_id[0] in self.doc.bodies:
+                    self.doc.bodies[current_hidden_id[0]].visible = True
+                    current_hidden_id[0] = None
+                self.viewport.set_preview(None)
+                return
+
+            if current_hidden_id[0] and current_hidden_id[0] != bid and current_hidden_id[0] in self.doc.bodies:
+                self.doc.bodies[current_hidden_id[0]].visible = True
+
+            body = self.doc.bodies[bid]
+            body.visible = False
+            current_hidden_id[0] = bid
+
+            shelled = ShellFeature.compute_shell(body.manifold, thickness, dlg.direction(),
+                                                 dlg.spn_thickness2.value(), open_faces)
+            if shelled is not None:
+                self.viewport.set_preview(shelled, "new_body")
+            else:
+                self.viewport.set_preview(body.manifold, "new_body")
 
         def on_face_picked(plane):
             if getattr(plane, "face", None):
                 dlg.toggle_face(plane.face)
+                self.viewport.highlighted_faces = [f["_face"] for f in dlg.open_faces if "_face" in f]
+                self.viewport.update()
 
-        self.viewport.plane_picked.connect(on_face_picked)
+        self.viewport.shell_face_picked.connect(on_face_picked)
         self.viewport.begin_plane_pick("shell_face")
         self.status_label.setText("Shell: choose the body and the wall thickness. Click faces in 3D to leave them open.")
 
         def cleanup():
             try:
-                self.viewport.plane_picked.disconnect(on_face_picked)
+                self.viewport.shell_face_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            try:
+                self.viewport.body_clicked.disconnect(dlg.select_body)
             except Exception:
                 pass
             self.viewport.end_plane_pick()
+            self.viewport.set_preview(None)
+            if current_hidden_id[0] and current_hidden_id[0] in self.doc.bodies:
+                self.doc.bodies[current_hidden_id[0]].visible = True
+                current_hidden_id[0] = None
             self.inspector.undock_tool()
 
         def on_finished(result):
@@ -1177,7 +1215,10 @@ class MainWindow(QMainWindow):
                 self.status_label.setText("Shell cancelled.")
                 self.viewport.update()
 
+        dlg.changed.connect(refresh_preview)
         dlg.finished.connect(on_finished)
+        self.viewport.body_clicked.connect(dlg.select_body)
+        refresh_preview()
         dlg.show()
 
     def prompt_move_body(self, target_body_id: str = ""):
@@ -1296,7 +1337,11 @@ class MainWindow(QMainWindow):
 
         def cleanup():
             try:
-                self.viewport.plane_picked.disconnect(on_face_picked)
+                self.viewport.move_body_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            try:
+                self.viewport.body_clicked.disconnect(dlg.select_body)
             except Exception:
                 pass
             try:
@@ -1333,7 +1378,8 @@ class MainWindow(QMainWindow):
         dlg.finished.connect(on_finished)
         self.viewport.extrude_handle_dragged.connect(on_handle_drag)
         self.viewport.extrude_handle_drag_finished.connect(on_drag_finished)
-        self.viewport.plane_picked.connect(on_face_picked)
+        self.viewport.move_body_picked.connect(on_face_picked)
+        self.viewport.body_clicked.connect(dlg.select_body)
         self.viewport.begin_plane_pick("move_body")
         self.status_label.setText("Move: drag the 3D arrow or type mm/degrees. Click another body in 3D to choose it.")
 

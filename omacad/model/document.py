@@ -291,6 +291,9 @@ class Document:
         """Starts a sketch on an arbitrary plane (origin plane or body face)."""
         sketch_id = f"sketch_{len(self.sketches) + 1}"
         sketch = Sketch(sketch_id, f"Sketch {len(self.sketches) + 1}", plane)
+        face = getattr(plane, "face", None)
+        if face is not None and getattr(face, "body_id", None):
+            sketch.parent_body_id = face.body_id
         self.refresh_sketch_references(sketch)
         if getattr(plane, "name", "") == "FACE" and self.auto_include_edges:
             sketch.include_reference_edges()   # the face outline can be used like drawn lines (offset, snap, draw on)
@@ -328,6 +331,8 @@ class Document:
         sketch_id = f"sketch_{len(self.sketches) + 1}"
         sk = Sketch(sketch_id, f"Face {n}", plane)
         sk.face_key = key
+        if getattr(face, "body_id", None):
+            sk.parent_body_id = face.body_id
         sk.visible = False  # a helper: it only supplies the outline for extruding
         self.refresh_sketch_references(sk)
         sk.add_loop(list(shape.exterior.coords)[:-1])
@@ -753,6 +758,7 @@ class Document:
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)
+        self.hide_used_sketches()
         self.notify_changed()
         return feat
 
