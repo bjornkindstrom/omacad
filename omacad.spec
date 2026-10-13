@@ -15,6 +15,12 @@ hiddenimports = [
     'OpenGL.arrays.ctypesarrays',
     'shapely',
     'python_solvespace',
+    'urllib.request',
+    'http.client',
+    'email.message',
+    'ssl',
+    'omacad.rfc',
+    'omacad._rfc_secret',
     'tomllib',
 ]
 
@@ -28,9 +34,6 @@ excludes = [
     'distutils',
     'pydoc',
     'sqlite3',
-    'email',
-    'html',
-    'http',
     'xmlrpc',
     'curses',
     'IPython',

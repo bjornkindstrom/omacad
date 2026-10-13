@@ -231,7 +231,7 @@ class ImageCanvasWidget(QWidget):
             p.setPen(QColor(160, 168, 180))
             p.setFont(QFont("sans-serif", 12))
             p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                       "📁 Klicka här eller dra och släpp en bildfil\n(PNG, JPG, WEBP, BMP)\n\nDu kan även klicka på 'Välj bild...' till höger")
+                       "📁 Click here or drop an image file\n(PNG, JPG, WEBP, BMP)\n\nYou can also click 'Choose image...' on the right")
             return
 
         img_rect = self.image_to_widget_rect()
@@ -308,24 +308,24 @@ class CanvasEditorDialog(QDialog):
         # Zoom & Navigation toolbar
         zoom_bar = QHBoxLayout()
         self.btn_zoom_in = QPushButton("🔍 +")
-        self.btn_zoom_in.setToolTip("Zooma in (eller scrolla upp med mushjulet)")
+        self.btn_zoom_in.setToolTip("Zoom in (or scroll up with the mouse wheel)")
         self.btn_zoom_in.setFixedWidth(44)
 
         self.btn_zoom_out = QPushButton("🔍 −")
-        self.btn_zoom_out.setToolTip("Zooma ut (eller scrolla ner med mushjulet)")
+        self.btn_zoom_out.setToolTip("Zoom out (or scroll down with the mouse wheel)")
         self.btn_zoom_out.setFixedWidth(44)
 
         self.btn_zoom_100 = QPushButton("1:1")
-        self.btn_zoom_100.setToolTip("Återställ till 100% skala")
+        self.btn_zoom_100.setToolTip("Reset to 100% scale")
         self.btn_zoom_100.setFixedWidth(44)
 
         self.btn_zoom_fit = QPushButton("🔲 Anpassa")
-        self.btn_zoom_fit.setToolTip("Anpassa bilden till fönstret")
+        self.btn_zoom_fit.setToolTip("Fit the image to the window")
 
         self.lbl_zoom = QLabel("Zoom: 100%")
         self.lbl_zoom.setStyleSheet("font-weight: bold; color: #A0AAB8; min-width: 80px;")
 
-        lbl_hint = QLabel("💡 Scrolla: zooma • Dra: panorera")
+        lbl_hint = QLabel("💡 Scroll: zoom • Drag: pan")
         lbl_hint.setStyleSheet("color: #717885; font-size: 11px;")
 
         zoom_bar.addWidget(self.btn_zoom_in)
@@ -360,21 +360,21 @@ class CanvasEditorDialog(QDialog):
         grp_file = QGroupBox("Bildfil")
         form_file = QVBoxLayout(grp_file)
         h_file_btns = QHBoxLayout()
-        self.btn_load = QPushButton("📁 Välj bild...")
+        self.btn_load = QPushButton("📁 Choose image...")
         self.btn_load.clicked.connect(self.choose_image)
         h_file_btns.addWidget(self.btn_load)
-        self.btn_paste = QPushButton("📋 Klistra in")
-        self.btn_paste.setToolTip("Klistra in bild från urklipp (Ctrl+V)")
+        self.btn_paste = QPushButton("📋 Paste")
+        self.btn_paste.setToolTip("Paste an image from the clipboard (Ctrl+V)")
         self.btn_paste.clicked.connect(self.paste_image_from_clipboard)
         h_file_btns.addWidget(self.btn_paste)
         form_file.addLayout(h_file_btns)
-        self.lbl_file_info = QLabel("Ingen fil vald")
+        self.lbl_file_info = QLabel("No file chosen")
         self.lbl_file_info.setWordWrap(True)
         form_file.addWidget(self.lbl_file_info)
         tools_layout.addWidget(grp_file)
 
-        # 2. Calibration Group (Måttband)
-        grp_calib = QGroupBox("Kalibrera med måttband")
+        # 2. Calibration Group (measuring tape)
+        grp_calib = QGroupBox("Calibrate with a known distance")
         form_calib = QFormLayout(grp_calib)
         self.btn_calib = QPushButton("📏 Starta kalibrering")
         self.btn_calib.setCheckable(True)
@@ -387,16 +387,16 @@ class CanvasEditorDialog(QDialog):
         self.spn_calib_dist.setSuffix(" mm")
         self.spn_calib_dist.setDecimals(2)
         self.spn_calib_dist.valueChanged.connect(self.apply_calibration)
-        form_calib.addRow("Verklig längd:", self.spn_calib_dist)
+        form_calib.addRow("Real length:", self.spn_calib_dist)
 
-        self.lbl_calib_status = QLabel("Klicka på 2 punkter på bilden vars avstånd du känner till.")
+        self.lbl_calib_status = QLabel("Click 2 points on the image whose distance you know.")
         self.lbl_calib_status.setWordWrap(True)
         style(self.lbl_calib_status, "color: #9AA2B0; font-size: 11px;")
         form_calib.addRow(self.lbl_calib_status)
         tools_layout.addWidget(grp_calib)
 
-        # 3. Light & Color Adjustments (Ljus & Färg)
-        grp_adj = QGroupBox("Ljus, Färg & Beskärning")
+        # 3. Light & Color Adjustments (Light & Colour)
+        grp_adj = QGroupBox("Light, Colour & Crop")
         form_adj = QFormLayout(grp_adj)
 
         self.sld_bright = QSlider(Qt.Orientation.Horizontal)
@@ -409,17 +409,17 @@ class CanvasEditorDialog(QDialog):
         self.sld_contrast.valueChanged.connect(self.refresh_image_processing)
         form_adj.addRow("Kontrast:", self.sld_contrast)
 
-        self.chk_gray = QCheckBox("Svartvitt (Gråskala)")
+        self.chk_gray = QCheckBox("Black and white (greyscale)")
         self.chk_gray.toggled.connect(self.refresh_image_processing)
         form_adj.addRow(self.chk_gray)
 
-        self.chk_invert = QCheckBox("Invertera färger (Negativ)")
+        self.chk_invert = QCheckBox("Invert colours (negative)")
         self.chk_invert.toggled.connect(self.refresh_image_processing)
         form_adj.addRow(self.chk_invert)
 
         # Rotate & Flip buttons
         h_rot = QHBoxLayout()
-        btn_rot = QPushButton("🔄 Rotera 90°")
+        btn_rot = QPushButton("🔄 Rotate 90°")
         btn_rot.clicked.connect(self.rotate_image)
         btn_fliph = QPushButton("↔ Spegla H")
         btn_fliph.clicked.connect(self.flip_horizontal)
@@ -429,10 +429,10 @@ class CanvasEditorDialog(QDialog):
 
         # Crop tool
         h_crop = QHBoxLayout()
-        self.btn_crop_tool = QPushButton("✂ Markera beskärning")
+        self.btn_crop_tool = QPushButton("✂ Mark crop")
         self.btn_crop_tool.setCheckable(True)
         self.btn_crop_tool.clicked.connect(self.toggle_crop)
-        self.btn_apply_crop = QPushButton("Beskär nu")
+        self.btn_apply_crop = QPushButton("Crop now")
         self.btn_apply_crop.clicked.connect(self.apply_crop)
         h_crop.addWidget(self.btn_crop_tool)
         h_crop.addWidget(self.btn_apply_crop)
@@ -455,13 +455,13 @@ class CanvasEditorDialog(QDialog):
             idx = self.cmb_plane.findData(preselected_plane_id)
             if idx >= 0:
                 self.cmb_plane.setCurrentIndex(idx)
-        form_place.addRow("Plan:", self.cmb_plane)
+        form_place.addRow("Plane:", self.cmb_plane)
 
         self.sld_opacity = QSlider(Qt.Orientation.Horizontal)
         self.sld_opacity.setRange(5, 100); self.sld_opacity.setValue(50)
         form_place.addRow("Opacitet:", self.sld_opacity)
 
-        self.lbl_dims = QLabel("Mått: - x - mm")
+        self.lbl_dims = QLabel("Size: - x - mm")
         form_place.addRow(self.lbl_dims)
         tools_layout.addWidget(grp_place)
 
@@ -469,7 +469,7 @@ class CanvasEditorDialog(QDialog):
 
         # OK / Cancel
         btn_box = QHBoxLayout()
-        btn_cancel = QPushButton("Avbryt")
+        btn_cancel = QPushButton("Cancel")
         btn_cancel.clicked.connect(self.reject)
         btn_box.addWidget(btn_cancel)
 
@@ -489,7 +489,7 @@ class CanvasEditorDialog(QDialog):
 
     def choose_image(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Välj referensbild", "", "Bilder (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff);;Alla filer (*.*)"
+            self, "Choose reference image", "", "Images (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff);;All files (*.*)"
         )
         if path:
             self.load_image_file(path)
@@ -509,12 +509,12 @@ class CanvasEditorDialog(QDialog):
             self.btn_ok.setEnabled(True)
             self.refresh_image_processing()
         else:
-            QMessageBox.information(self, "Urklipp", "Ingen bild hittades i urklipp. Kopiera en bild eller skärmdump först.")
+            QMessageBox.information(self, "Clipboard", "No image found on the clipboard. Copy an image or a screenshot first.")
 
     def load_image_file(self, path: str):
         img = QImage(path)
         if img.isNull():
-            QMessageBox.warning(self, "Fel", f"Kunde inte ladda bilden:\n{path}")
+            QMessageBox.warning(self, "Error", f"Could not load the image:\n{path}")
             return
         self.original_image = img
         self.current_image = img.copy()
@@ -532,7 +532,7 @@ class CanvasEditorDialog(QDialog):
         if checked:
             self.canvas_view.crop_mode = False
             self.btn_crop_tool.setChecked(False)
-            self.lbl_calib_status.setText("Klicka på punkt 1 och punkt 2 på bilden.")
+            self.lbl_calib_status.setText("Click point 1 and point 2 on the image.")
         else:
             self.lbl_calib_status.setText("Kalibrering avslutad.")
         self.canvas_view.update_cursor()
@@ -542,7 +542,7 @@ class CanvasEditorDialog(QDialog):
         p2 = self.canvas_view.calib_pt2
         if p1 and p2:
             dist_px = math.hypot(p2.x() - p1.x(), p2.y() - p1.y())
-            self.lbl_calib_status.setText(f"Mätt: {dist_px:.1f} pixlar. Ange verklig längd i fältet ovan.")
+            self.lbl_calib_status.setText(f"Measured: {dist_px:.1f} pixels. Enter the real length in the field above.")
             self.apply_calibration()
 
     def apply_calibration(self):
@@ -560,7 +560,7 @@ class CanvasEditorDialog(QDialog):
             return
         w_mm = self.current_image.width() / max(self.px_per_mm, 1e-4)
         h_mm = self.current_image.height() / max(self.px_per_mm, 1e-4)
-        self.lbl_dims.setText(f"Mått: {w_mm:.1f} x {h_mm:.1f} mm\n({self.px_per_mm:.2f} px/mm)")
+        self.lbl_dims.setText(f"Size: {w_mm:.1f} x {h_mm:.1f} mm\n({self.px_per_mm:.2f} px/mm)")
 
     def rotate_image(self):
         self.rotation_quarter = (self.rotation_quarter + 1) % 4

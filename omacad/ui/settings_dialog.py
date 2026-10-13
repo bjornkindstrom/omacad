@@ -6,7 +6,7 @@ GUI for configuring user preferences including custom colors, sketch palette pla
 from typing import Dict, Optional
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (
+from PySide6.QtWidgets import (QLineEdit, 
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QLabel,
     QPushButton, QComboBox, QCheckBox, QDoubleSpinBox, QColorDialog,
     QFrame, QGridLayout
@@ -37,11 +37,11 @@ class ColorRow(QWidget):
         self.btn_swatch.clicked.connect(self.choose_color)
         lay.addWidget(self.btn_swatch)
 
-        self.btn_pick = QPushButton("Välj färg…")
+        self.btn_pick = QPushButton("Choose colour…")
         self.btn_pick.clicked.connect(self.choose_color)
         lay.addWidget(self.btn_pick)
 
-        self.btn_reset = QPushButton("Följ tema" if default_hex is None else "Återställ")
+        self.btn_reset = QPushButton("Follow theme" if default_hex is None else "Reset")
         self.btn_reset.clicked.connect(self.reset_color)
         lay.addWidget(self.btn_reset)
         lay.addStretch()
@@ -75,7 +75,7 @@ class ColorRow(QWidget):
 
     def choose_color(self):
         initial = QColor(self.current_hex) if self.current_hex else QColor(*[int(c * 255) for c in theme.palette().highlight01()])
-        color = QColorDialog.getColor(initial, self, "Välj färg")
+        color = QColorDialog.getColor(initial, self, "Choose colour")
         if color.isValid():
             self.current_hex = color.name().upper()
             self.update_swatch()
@@ -88,7 +88,7 @@ class ColorRow(QWidget):
 class SettingsDialog(QDialog):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("Inställningar (Settings)")
+        self.setWindowTitle("Settings")
         self.setMinimumWidth(520)
         theme.style(self, theme._BASE_CSS)
 
@@ -101,7 +101,7 @@ class SettingsDialog(QDialog):
         self.tabs = QTabWidget()
         main_lay.addWidget(self.tabs)
 
-        # Tab 1: Färger
+        # Tab 1: Colours
         tab_colors = QWidget()
         lay_colors = QVBoxLayout(tab_colors)
         lay_colors.setContentsMargins(12, 12, 12, 12)
@@ -112,27 +112,27 @@ class SettingsDialog(QDialog):
         lbl_theme = QLabel("Tema (Theme):")
         lbl_theme.setMinimumWidth(200)
         self.cmb_theme = QComboBox()
-        self.cmb_theme.addItem("Följ Omarchy-temat (live)", "omarchy")
-        self.cmb_theme.addItem("Omacad standard (mörk)", theme.BUILTIN)
+        self.cmb_theme.addItem("Follow the Omarchy theme (live)", "omarchy")
+        self.cmb_theme.addItem("Omacad default (dark)", theme.BUILTIN)
         for name in theme.available_themes():
             self.cmb_theme.addItem(name.replace("-", " ").title(), name)
         cur = "omarchy" if self.settings.get("theme_mode") != "fixed" else self.settings.get("theme_name")
         self.cmb_theme.setCurrentIndex(max(0, self.cmb_theme.findData(cur)))
-        self.cmb_theme.setToolTip("Följ Omarchy: appen byter färger när du byter tema i Omarchy.\n"
-                                  "Annat val: appen behåller det temat, oavsett vad Omarchy gör.")
+        self.cmb_theme.setToolTip("Follow Omarchy: the app changes colours when you switch theme in Omarchy.\n"
+                                  "Any other choice: the app keeps that theme, whatever Omarchy does.")
         theme_row.addWidget(lbl_theme)
         theme_row.addWidget(self.cmb_theme)
         theme_row.addStretch()
         lay_colors.addLayout(theme_row)
 
-        info_lbl = QLabel("Anpassa färger för 3D-pilar, markeringar och verktyg i vyn:")
+        info_lbl = QLabel("Customise colours for 3D arrows, highlights and tools in the view:")
         info_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px;")
         lay_colors.addWidget(info_lbl)
 
         self.row_arrow = ColorRow("Extrude-pil / Dragger:", self.settings.get("arrow_color"), default_hex=None)
         lay_colors.addWidget(self.row_arrow)
 
-        self.row_measure = ColorRow("Mätverktyg (Measure overlay):", self.settings.get("measure_color"), default_hex="#FFAA3C")
+        self.row_measure = ColorRow("Measure tool (overlay):", self.settings.get("measure_color"), default_hex="#FFAA3C")
         lay_colors.addWidget(self.row_measure)
 
         self.row_sketch = ColorRow("Aktiva sketchlinjer:", self.settings.get("sketch_line_color"), default_hex="#4CE0FF")
@@ -145,7 +145,7 @@ class SettingsDialog(QDialog):
         lay_colors.addWidget(self.row_highlight)
 
         lay_colors.addStretch()
-        self.tabs.addTab(tab_colors, "🎨 Färger")
+        self.tabs.addTab(tab_colors, "🎨 Colours")
 
         # Tab 2: Sketch & Visning
         tab_sketch = QWidget()
@@ -158,10 +158,10 @@ class SettingsDialog(QDialog):
         lbl_pos = QLabel("Sketch-palett placering:")
         lbl_pos.setMinimumWidth(200)
         self.cmb_pos = QComboBox()
-        self.cmb_pos.addItem("Nere till höger (rekommenderas)", "bottom_right")
-        self.cmb_pos.addItem("Uppe till vänster", "top_left")
-        self.cmb_pos.addItem("Nere till vänster", "bottom_left")
-        self.cmb_pos.addItem("Uppe till höger", "top_right")
+        self.cmb_pos.addItem("Bottom right (recommended)", "bottom_right")
+        self.cmb_pos.addItem("Top left", "top_left")
+        self.cmb_pos.addItem("Bottom left", "bottom_left")
+        self.cmb_pos.addItem("Top right", "top_right")
         cur_pos = self.settings.get("palette_position", "bottom_right")
         idx = self.cmb_pos.findData(cur_pos)
         if idx >= 0:
@@ -172,19 +172,19 @@ class SettingsDialog(QDialog):
         lay_sketch.addLayout(pos_row)
 
         # Autohide on measure
-        self.chk_autohide = QCheckBox("Dölj sketch-paletten automatiskt under mätning (M)")
-        self.chk_autohide.setToolTip("Gör att paletten inte skymmer linjer eller mått när du mäter.")
+        self.chk_autohide = QCheckBox("Hide the sketch palette automatically while measuring (M)")
+        self.chk_autohide.setToolTip("Stops the palette from covering lines or dimensions while you measure.")
         self.chk_autohide.setChecked(bool(self.settings.get("autohide_palette_on_measure", True)))
         lay_sketch.addWidget(self.chk_autohide)
 
         # Invert zoom
-        self.chk_invert_zoom = QCheckBox("Omvänd zoomriktning på mushjul")
+        self.chk_invert_zoom = QCheckBox("Reverse the mouse wheel zoom direction")
         self.chk_invert_zoom.setChecked(bool(self.settings.get("invert_zoom", False)))
         lay_sketch.addWidget(self.chk_invert_zoom)
 
         # Grid step
         grid_row = QHBoxLayout()
-        lbl_grid = QLabel("Rutnätssteg (Grid step, mm):")
+        lbl_grid = QLabel("Grid step (mm):")
         lbl_grid.setMinimumWidth(200)
         self.spn_grid = QDoubleSpinBox()
         self.spn_grid.setRange(0.5, 100.0)
@@ -197,7 +197,7 @@ class SettingsDialog(QDialog):
 
         # Default fillet radius
         fillet_row = QHBoxLayout()
-        lbl_fillet = QLabel("Förvald radie för Sketch Fillet:")
+        lbl_fillet = QLabel("Default radius for Sketch Fillet:")
         lbl_fillet.setMinimumWidth(200)
         self.spn_fillet = QDoubleSpinBox()
         self.spn_fillet.setRange(0.1, 1000.0)
@@ -224,7 +224,7 @@ class SettingsDialog(QDialog):
         lay_sketch.addLayout(arrow_row)
 
         gap_row = QHBoxLayout()
-        lbl_gap = QLabel("Pilens avstånd från ytan:")
+        lbl_gap = QLabel("Arrow distance from the surface:")
         lbl_gap.setMinimumWidth(200)
         self.spn_arrow_gap = QDoubleSpinBox()
         self.spn_arrow_gap.setRange(0.0, 20.0)
@@ -232,19 +232,38 @@ class SettingsDialog(QDialog):
         self.spn_arrow_gap.setDecimals(1)
         self.spn_arrow_gap.setSuffix(" mm")
         self.spn_arrow_gap.setValue(float(self.settings.get("arrow_gap", 2.0)))
-        self.spn_arrow_gap.setToolTip("Pilen ritas så här långt från ytan, åt det håll den pekar, så den aldrig börjar inne i materialet.")
+        self.spn_arrow_gap.setToolTip("The arrow is drawn this far off the surface, in the direction it points, so it never starts inside the material.")
         gap_row.addWidget(lbl_gap)
         gap_row.addWidget(self.spn_arrow_gap)
         gap_row.addStretch()
         lay_sketch.addLayout(gap_row)
 
+        # Request for change
+        rfc_row = QHBoxLayout()
+        lbl_rfc = QLabel("Your name on change requests:")
+        lbl_rfc.setMinimumWidth(200)
+        self.edt_rfc_name = QLineEdit(str(self.settings.get("rfc_name") or ""))
+        self.edt_rfc_name.setPlaceholderText("Help > Request a change (F8)")
+        rfc_row.addWidget(lbl_rfc)
+        rfc_row.addWidget(self.edt_rfc_name)
+        lay_sketch.addLayout(rfc_row)
+        tok_row = QHBoxLayout()
+        lbl_tok = QLabel("GitHub token for requests (optional):")
+        lbl_tok.setMinimumWidth(200)
+        self.edt_rfc_token = QLineEdit(str(self.settings.get("rfc_token") or ""))
+        self.edt_rfc_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.edt_rfc_token.setPlaceholderText("empty = use the one built into the app")
+        tok_row.addWidget(lbl_tok)
+        tok_row.addWidget(self.edt_rfc_token)
+        lay_sketch.addLayout(tok_row)
+
         # Smoothness of round shapes
         q_row = QHBoxLayout()
-        lbl_q = QLabel("Rundhet (Curve smoothness):")
+        lbl_q = QLabel("Curve smoothness:")
         lbl_q.setMinimumWidth(200)
         self.cmb_curves = QComboBox()
-        for label, n in (("Lätt (32), snabbast", 32), ("Normal (64)", 64), ("Mjuk (96), standard", 96),
-                         ("Extra mjuk (192)", 192), ("Sömlös (360), tung", 360)):
+        for label, n in (("Light (32), fastest", 32), ("Normal (64)", 64), ("Smooth (96), default", 96),
+                         ("Extra smooth (192)", 192), ("Seamless (360), heavy", 360)):
             self.cmb_curves.addItem(label, n)
         cur = int(self.settings.get("curve_segments", 96))
         idx = self.cmb_curves.findData(cur)
@@ -252,7 +271,7 @@ class SettingsDialog(QDialog):
             self.cmb_curves.addItem(f"Egen ({cur})", cur)
             idx = self.cmb_curves.count() - 1
         self.cmb_curves.setCurrentIndex(idx)
-        self.cmb_curves.setToolTip("Hur många plana bitar en cirkel delas i. Fler = mjukare runda ytor men tyngre för datorn. Gäller hela modellen, som räknas om.")
+        self.cmb_curves.setToolTip("How many flat pieces a circle is cut into. More = smoother round surfaces but heavier for the computer. Applies to the whole model, which is rebuilt.")
         q_row.addWidget(lbl_q)
         q_row.addWidget(self.cmb_curves)
         q_row.addStretch()
@@ -272,22 +291,22 @@ class SettingsDialog(QDialog):
         lay_sketch.addLayout(proj_row)
 
         fov_row = QHBoxLayout()
-        lbl_fov = QLabel("Perspektiv (synfält):")
+        lbl_fov = QLabel("Perspective (field of view):")
         lbl_fov.setMinimumWidth(200)
         self.spn_fov = QDoubleSpinBox()
         self.spn_fov.setRange(10.0, 60.0)
         self.spn_fov.setDecimals(0)
         self.spn_fov.setSuffix("°")
         self.spn_fov.setValue(float(self.settings.get("view_fov", 30.0)))
-        self.spn_fov.setToolTip("Lägre = plattare bild och mindre förvrängning. Zoomen ändras inte.")
+        self.spn_fov.setToolTip("Lower = flatter image and less distortion. The zoom does not change.")
         fov_row.addWidget(lbl_fov)
         fov_row.addWidget(self.spn_fov)
-        fov_row.addWidget(QLabel("lägre = plattare, mindre skevt"))
+        fov_row.addWidget(QLabel("lower = flatter, less skewed"))
         fov_row.addStretch()
         lay_sketch.addLayout(fov_row)
 
         # Restart on a new version
-        self.chk_auto_restart = QCheckBox("Starta om automatiskt när en ny version har committats (arbetet sparas och återställs)")
+        self.chk_auto_restart = QCheckBox("Restart automatically when a new version has been committed (your work is saved and restored)")
         self.chk_auto_restart.setChecked(bool(self.settings.get("auto_restart", True)))
         lay_sketch.addWidget(self.chk_auto_restart)
 
@@ -296,16 +315,16 @@ class SettingsDialog(QDialog):
 
         # Bottom buttons
         btn_row = QHBoxLayout()
-        btn_reset_all = QPushButton("Återställ standard")
+        btn_reset_all = QPushButton("Reset to defaults")
         btn_reset_all.clicked.connect(self.reset_all)
         btn_row.addWidget(btn_reset_all)
         btn_row.addStretch()
 
-        btn_cancel = QPushButton("Avbryt")
+        btn_cancel = QPushButton("Cancel")
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
 
-        btn_save = QPushButton("Spara")
+        btn_save = QPushButton("Save")
         btn_save.setDefault(True)
         btn_save.clicked.connect(self.save_and_close)
         btn_row.addWidget(btn_save)
@@ -352,6 +371,8 @@ class SettingsDialog(QDialog):
             "view_projection": self.cmb_projection.currentData(),
             "view_fov": self.spn_fov.value(),
             "auto_restart": self.chk_auto_restart.isChecked(),
+            "rfc_name": self.edt_rfc_name.text().strip(),
+            "rfc_token": self.edt_rfc_token.text().strip(),
             "theme_mode": "omarchy" if self.cmb_theme.currentData() == "omarchy" else "fixed",
             "theme_name": self.settings.get("theme_name") if self.cmb_theme.currentData() == "omarchy" else self.cmb_theme.currentData(),
         }

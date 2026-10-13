@@ -1485,7 +1485,7 @@ class Viewport3D(QOpenGLWidget):
         if (text and len(text) == 1 and (text.isalpha() or text == "_") and self.dyn.active
                 and (cur or getattr(self.dyn, "editing", False) or starts_name)
                 and not (text in "xX" and cur[-1:].isdigit())):
-            self.dyn.type_char(text)  # a parameter name such as width or Höjd
+            self.dyn.type_char(text)  # a parameter name such as width or Height
             self._refresh_dyn()
             return True
         formula_char = text in ("+", "*", "/", "(", ")", "^", "×") or (text in ("x", "X") and cur[-1:].isdigit() or text in ("x", "X") and cur[-1:] == ")")
@@ -2173,7 +2173,7 @@ class Viewport3D(QOpenGLWidget):
         self.selection_changed.emit()
         self.doc.timeline.recompute(self.doc)
         self.doc.notify_changed()
-        self.status_message.emit(f"Fillet: hörnet avrundat med radie {radius:g} mm.")
+        self.status_message.emit(f"Fillet: corner rounded with radius {radius:g} mm.")
         self.update()
 
     def _start_rubber(self, event) -> bool:
@@ -2348,7 +2348,7 @@ class Viewport3D(QOpenGLWidget):
             if corners:
                 from omacad.ui.settings import get_settings
                 default_r = float(get_settings().get("fillet_default_radius", 2.0))
-                res = self.prompt_dimension_value("Fillet", f"Radie för {len(corners)} hörn:", default_r, lo=0.1, hi=2000.0)
+                res = self.prompt_dimension_value("Fillet", f"Radius for {len(corners)} corners:", default_r, lo=0.1, hi=2000.0)
                 if res and res[0] > 0.001:
                     radius = res[0]
                     before = sk.to_dict()
@@ -2364,10 +2364,10 @@ class Viewport3D(QOpenGLWidget):
                         self.selection_changed.emit()
                         self.doc.timeline.recompute(self.doc)
                         self.doc.notify_changed()
-                        self.status_message.emit(f"Fillet: {len(created_arcs)} hörn avrundade med radie {radius:g} mm.")
+                        self.status_message.emit(f"Fillet: {len(created_arcs)} corners rounded with radius {radius:g} mm.")
                         self.update()
                     return
-        self.status_message.emit("Fillet: Klicka på ett hörn mellan två linjer, eller klicka två linjer (Esc avbryter).")
+        self.status_message.emit("Fillet: click a corner between two lines, or click two lines (Esc cancels).")
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -4301,7 +4301,7 @@ class Viewport3D(QOpenGLWidget):
             if event.button() == Qt.MouseButton.RightButton:
                 if self.fillet_first_line:
                     self.fillet_first_line = None
-                    self.status_message.emit("Fillet: Klicka på ett hörn mellan två linjer, eller klicka två linjer (Esc avbryter).")
+                    self.status_message.emit("Fillet: click a corner between two lines, or click two lines (Esc cancels).")
                     self.update()
                     return
                 self.set_sketch_tool("NONE")
@@ -4333,14 +4333,14 @@ class Viewport3D(QOpenGLWidget):
                 if ent and isinstance(ent, SketchLine):
                     if self.fillet_first_line is None:
                         self.fillet_first_line = ent
-                        self.status_message.emit("Fillet: Klicka nu på den andra linjen för att runda hörnet mellan dem.")
+                        self.status_message.emit("Fillet: now click the second line to round the corner between them.")
                     else:
                         first = self.fillet_first_line
                         self.fillet_first_line = None
                         if first.entity_id != ent.entity_id:
                             self.prompt_fillet_radius(first, ent)
                         else:
-                            self.status_message.emit("Fillet: Välj två olika linjer.")
+                            self.status_message.emit("Fillet: pick two different lines.")
                     self.update()
                     return
                 if self._start_rubber(event):

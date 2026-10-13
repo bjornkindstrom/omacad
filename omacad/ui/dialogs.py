@@ -1143,7 +1143,7 @@ class MoveBodyDialog(BaseFeatureDialog):
                 f"QPushButton:checked {{ background-color: {colour}; color: #FFFFFF; }}")
             axis_layout.addWidget(b)
         self.btn_axis_x.setChecked(True)
-        form.addRow("Dra i 3D-pil:", axis_layout)
+        form.addRow("Drag 3D arrow:", axis_layout)
 
         # Translation
         self.spn_dx = ExprDoubleSpinBox()
@@ -1151,21 +1151,21 @@ class MoveBodyDialog(BaseFeatureDialog):
         self.spn_dx.setDecimals(2)
         self.spn_dx.setSuffix(" mm")
         self.spn_dx.setValue(0.0)
-        form.addRow("Flytta X (dx):", self.spn_dx)
+        form.addRow("Move X (dx):", self.spn_dx)
 
         self.spn_dy = ExprDoubleSpinBox()
         self.spn_dy.setRange(-10000.0, 10000.0)
         self.spn_dy.setDecimals(2)
         self.spn_dy.setSuffix(" mm")
         self.spn_dy.setValue(0.0)
-        form.addRow("Flytta Y (dy):", self.spn_dy)
+        form.addRow("Move Y (dy):", self.spn_dy)
 
         self.spn_dz = ExprDoubleSpinBox()
         self.spn_dz.setRange(-10000.0, 10000.0)
         self.spn_dz.setDecimals(2)
         self.spn_dz.setSuffix(" mm")
         self.spn_dz.setValue(0.0)
-        form.addRow("Flytta Z (dz):", self.spn_dz)
+        form.addRow("Move Z (dz):", self.spn_dz)
 
         # Pivot point for rotation
         self.cmb_pivot = QComboBox()
@@ -1178,21 +1178,21 @@ class MoveBodyDialog(BaseFeatureDialog):
         self.spn_rx.setDecimals(2)
         self.spn_rx.setSuffix(" °")
         self.spn_rx.setValue(0.0)
-        form.addRow("Rotera X (rx):", self.spn_rx)
+        form.addRow("Rotate X (rx):", self.spn_rx)
 
         self.spn_ry = ExprDoubleSpinBox()
         self.spn_ry.setRange(-3600.0, 3600.0)
         self.spn_ry.setDecimals(2)
         self.spn_ry.setSuffix(" °")
         self.spn_ry.setValue(0.0)
-        form.addRow("Rotera Y (ry):", self.spn_ry)
+        form.addRow("Rotate Y (ry):", self.spn_ry)
 
         self.spn_rz = ExprDoubleSpinBox()
         self.spn_rz.setRange(-3600.0, 3600.0)
         self.spn_rz.setDecimals(2)
         self.spn_rz.setSuffix(" °")
         self.spn_rz.setValue(0.0)
-        form.addRow("Rotera Z (rz):", self.spn_rz)
+        form.addRow("Rotate Z (rz):", self.spn_rz)
 
         # Lay a face flat: click a face of the body and the rotation and height below are filled in for you
         self.btn_lay = QPushButton("Lay a face on the ground…")

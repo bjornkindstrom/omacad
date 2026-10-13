@@ -163,7 +163,7 @@ class InspectorPanel(QWidget):
                 lbl = QLabel(line)
                 style(lbl, "color: #FFC83B; font-weight: bold; font-size: 13px; border: none; background: transparent;")
                 form.addRow(lbl)
-            self.info_layout.addWidget(self._make_card("📏 Mätresultat (Measure)", form))
+            self.info_layout.addWidget(self._make_card("📏 Measurement", form))
             return
 
         # B. Sketch mode active?
@@ -174,7 +174,7 @@ class InspectorPanel(QWidget):
             form.setSpacing(6)
 
             plane_name = sk.plane.name if hasattr(sk.plane, "name") else "Sketch Plane"
-            form.addRow("Plan:", QLabel(plane_name))
+            form.addRow("Plane:", QLabel(plane_name))
 
             status_str = self.doc.sketch_status(sk)
             lbl_status = QLabel(status_str or "Under defined")
@@ -184,10 +184,10 @@ class InspectorPanel(QWidget):
                 style(lbl_status, "color: #FFA726; border: none; background: transparent;")
             form.addRow("Status:", lbl_status)
 
-            form.addRow("Element:", QLabel(f"{len(sk.entities)} st"))
-            form.addRow("Villkor:", QLabel(f"{len(sk.constraints)} st"))
-            form.addRow("Mått:", QLabel(f"{len(sk.dimensions)} st"))
-            form.addRow("Profiler:", QLabel(f"{len(sk.profiles)} st"))
+            form.addRow("Elements:", QLabel(f"{len(sk.entities)}"))
+            form.addRow("Constraints:", QLabel(f"{len(sk.constraints)}"))
+            form.addRow("Dimensions:", QLabel(f"{len(sk.dimensions)}"))
+            form.addRow("Profiles:", QLabel(f"{len(sk.profiles)}"))
 
             if selected_entities:
                 n_sel = len(selected_entities)
@@ -195,7 +195,7 @@ class InspectorPanel(QWidget):
                 style(lbl_sel, "color: #42A5F5; font-weight: bold; border: none; background: transparent;")
                 form.addRow("Markering:", lbl_sel)
 
-            self.info_layout.addWidget(self._make_card(f"✏️ Skiss: {sk.name}", form))
+            self.info_layout.addWidget(self._make_card(f"✏️ Sketch: {sk.name}", form))
             return
 
         # C. Body selected?
@@ -221,8 +221,8 @@ class InspectorPanel(QWidget):
             form.addRow("Yta:", lbl_area)
 
             form.addRow("Storlek:", QLabel(f"{dx:.1f} × {dy:.1f} × {dz:.1f} mm"))
-            form.addRow("Plana ytor:", QLabel(f"{len(body.faces)} st"))
-            form.addRow("Kanter:", QLabel(f"{len(body.edges)} st"))
+            form.addRow("Flat faces:", QLabel(f"{len(body.faces)}"))
+            form.addRow("Edges:", QLabel(f"{len(body.edges)}"))
 
             self.info_layout.addWidget(self._make_card(f"📦 Kropp: {body.name}", form))
             return
@@ -232,13 +232,13 @@ class InspectorPanel(QWidget):
         form_doc.setContentsMargins(0, 4, 0, 0)
         form_doc.setSpacing(6)
         form_doc.addRow("Dokument:", QLabel(self.doc.name))
-        form_doc.addRow("Bodies:", QLabel(f"{len(self.doc.bodies)} st"))
-        form_doc.addRow("Skisser:", QLabel(f"{len(self.doc.sketches)} st"))
-        form_doc.addRow("Features:", QLabel(f"{len(self.doc.timeline.features)} st"))
-        form_doc.addRow("Offset-plan:", QLabel(f"{len(self.doc.construction_planes)} st"))
+        form_doc.addRow("Bodies:", QLabel(f"{len(self.doc.bodies)}"))
+        form_doc.addRow("Sketches:", QLabel(f"{len(self.doc.sketches)}"))
+        form_doc.addRow("Features:", QLabel(f"{len(self.doc.timeline.features)}"))
+        form_doc.addRow("Offset planes:", QLabel(f"{len(self.doc.construction_planes)}"))
         if hasattr(self.doc, "canvases"):
-            form_doc.addRow("Canvases:", QLabel(f"{len(self.doc.canvases)} st"))
-        self.info_layout.addWidget(self._make_card("📋 Designöversikt", form_doc))
+            form_doc.addRow("Canvases:", QLabel(f"{len(self.doc.canvases)}"))
+        self.info_layout.addWidget(self._make_card("📋 Design overview", form_doc))
 
         # Quick tips
         v_tips = QVBoxLayout()
@@ -247,13 +247,13 @@ class InspectorPanel(QWidget):
         tips = [
             "E - Extrudera profil",
             "F - Fit View / Centrera",
-            "I - Mätverktyg (Measure)",
+            "I - Measure tool",
             "Ctrl+P - Parametrar",
-            "Högerklick yta - Skissa / Extrudera",
-            "Högerklick plan - Splitta body / Skissa",
+            "Right-click face - Sketch / Extrude",
+            "Right-click plane - Split body / Sketch",
         ]
         for tip in tips:
             lbl = QLabel(tip)
             style(lbl, "color: #8E95A0; font-size: 11px; border: none; background: transparent;")
             v_tips.addWidget(lbl)
-        self.info_layout.addWidget(self._make_card("⚡ Snabbkommandon", v_tips))
+        self.info_layout.addWidget(self._make_card("⚡ Shortcuts", v_tips))

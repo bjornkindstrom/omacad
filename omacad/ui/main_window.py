@@ -303,6 +303,11 @@ class MainWindow(QMainWindow):
         act_report.setToolTip("Describe what is wrong; the AI gets a screenshot, the model and the log, and fixes it")
         act_report.triggered.connect(self.on_report_problem)
         menu_help.addAction(act_report)
+        act_request = QAction("Request a change…", self)
+        act_request.setShortcut(QKeySequence("F8"))
+        act_request.setToolTip("Ask for a change or a new feature: your text, a screenshot, the model and the log are sent to the owner on GitHub")
+        act_request.triggered.connect(self.on_request_change)
+        menu_help.addAction(act_request)
         menu_help.addAction("About Omacad", self.on_about)
 
         # Icons for the menu entries (drawn from emoji at a size the menu font can't give)
@@ -631,7 +636,7 @@ class MainWindow(QMainWindow):
         if self.doc.active_sketch:
             self.on_finish_sketch()
         self.viewport.begin_plane_pick("offset_base")
-        self.status_label.setText("Offset Plane: Klicka på ett plan (XY, XZ, YZ, konstruktionsplan) eller en plan yta att utgå ifrån (Esc avbryter).")
+        self.status_label.setText("Offset Plane: click a plane (XY, XZ, YZ, construction plane) or a flat face to start from (Esc cancels).")
 
     def on_offset_base_picked(self, base):
         from omacad.model.sketch import SketchPlane
@@ -641,7 +646,7 @@ class MainWindow(QMainWindow):
 
         dlg = OffsetPlaneDialog(base.name, self)
         self.dock(dlg)
-        self.status_label.setText(f"Offset Plane: Ange avstånd i mm (eller dra i 3D-pilen). Klicka 'To surface…' för att tangera en yta.")
+        self.status_label.setText("Offset Plane: type the distance in mm (or drag the 3D arrow). Click 'To surface…' to touch a surface.")
 
         def update_preview():
             dist = dlg.spn_dist.value()
@@ -668,7 +673,7 @@ class MainWindow(QMainWindow):
             dist = plane_at(hit)
             dlg.spn_dist.setValue(round(dist, 3))
             self.viewport.end_plane_pick()
-            self.status_label.setText(f"Offset satt till {dist:.3f} mm mot ytan. Justera eller klicka OK.")
+            self.status_label.setText(f"Offset set to {dist:.3f} mm from the surface. Adjust it or click OK.")
 
         def start_surface_pick():
             self.viewport.begin_plane_pick("offset_surface")
@@ -677,7 +682,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             self.viewport.surface_picked.connect(on_surface_picked)
-            self.status_label.setText("Klicka på en yta (plan eller krökt) för att sätta planet tangerande mot den.")
+            self.status_label.setText("Click a surface (flat or curved) to place the plane tangent to it.")
 
         dlg.surface_requested.connect(start_surface_pick)
 
@@ -698,7 +703,7 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             dist = dlg.spn_dist.value()
             pid = self.doc.add_construction_plane(base, dist)
-            self.status_label.setText(f"{self.doc.construction_planes[pid]['name']} skapad på {dist:.3f} mm från {base.name}.")
+            self.status_label.setText(f"{self.doc.construction_planes[pid]['name']} created {dist:.3f} mm from {base.name}.")
         cleanup()
 
     def prompt_section(self):
@@ -1134,7 +1139,7 @@ class MainWindow(QMainWindow):
 
         self.viewport.plane_picked.connect(on_face_picked)
         self.viewport.begin_plane_pick("shell_face")
-        self.status_label.setText("Shell: Välj kropp och väggtjocklek. Klicka på ytor i 3D för att lämna dem öppna.")
+        self.status_label.setText("Shell: choose the body and the wall thickness. Click faces in 3D to leave them open.")
 
         def cleanup():
             try:
@@ -1154,10 +1159,10 @@ class MainWindow(QMainWindow):
                     body = self.doc.bodies.get(b_id)
                     b_name = body.name if body else b_id
                     n_open = len(open_faces)
-                    self.status_label.setText(f"Shell skapad på {b_name}: tjocklek {thickness:g} mm ({n_open} öppna ytor).")
+                    self.status_label.setText(f"Shell created on {b_name}: thickness {thickness:g} mm ({n_open} open faces).")
                     self.viewport.update()
             else:
-                self.status_label.setText("Shell avbröts.")
+                self.status_label.setText("Shell cancelled.")
                 self.viewport.update()
 
         dlg.finished.connect(on_finished)
@@ -1166,7 +1171,7 @@ class MainWindow(QMainWindow):
     def prompt_move_body(self, target_body_id: str = ""):
         """Move / Rotate: Translates and rotates a 3D solid body parametrically with interactive 3D gizmo."""
         if not self.doc.bodies:
-            QMessageBox.information(self, "Move Body", "Inga kroppar hittades att flytta. Skapa en 3D-kropp först!")
+            QMessageBox.information(self, "Move Body", "There are no bodies to move. Create a 3D body first!")
             return
 
         selected_id = target_body_id or (next(iter(self.doc.selected_body_ids)) if self.doc.selected_body_ids else "")
@@ -1305,10 +1310,10 @@ class MainWindow(QMainWindow):
                 feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs)
                 if feat:
                     b_name = self.doc.bodies[bid].name if bid in self.doc.bodies else bid
-                    self.status_label.setText(f"Flyttade {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
+                    self.status_label.setText(f"Moved {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
                     self.viewport.update()
             else:
-                self.status_label.setText("Flytt avbröts.")
+                self.status_label.setText("Move cancelled.")
                 self.viewport.update()
 
         dlg.changed.connect(refresh_preview)
@@ -1318,7 +1323,7 @@ class MainWindow(QMainWindow):
         self.viewport.extrude_handle_drag_finished.connect(on_drag_finished)
         self.viewport.plane_picked.connect(on_face_picked)
         self.viewport.begin_plane_pick("move_body")
-        self.status_label.setText("Move: Dra i 3D-pilen eller ange mm/grader. Klicka på en annan kropp i 3D för att välja den.")
+        self.status_label.setText("Move: drag the 3D arrow or type mm/degrees. Click another body in 3D to choose it.")
 
         refresh_preview()
         dlg.show()
@@ -1331,7 +1336,7 @@ class MainWindow(QMainWindow):
             if data and data.get("image_data"):
                 cid = self.doc.add_canvas(**data)
                 self.viewport.update()
-                self.status_label.setText(f"Infogade bildreferens: {data['name']} ({data['width_mm']:.1f} × {data['height_mm']:.1f} mm).")
+                self.status_label.setText(f"Inserted image reference: {data['name']} ({data['width_mm']:.1f} × {data['height_mm']:.1f} mm).")
 
     def on_delete_selected(self):
         # In sketch mode Delete removes the selected sketch elements
@@ -1611,6 +1616,44 @@ class MainWindow(QMainWindow):
             self.status_label.setText(f"Report sent to the AI agent (a terminal opened). Saved in {folder}")
         else:
             self.status_label.setText(f"Report saved in {folder}")
+
+    def on_request_change(self):
+        """Like Report problem, but the result is a request for change that goes to GitHub for the owner to review."""
+        from PySide6.QtWidgets import QApplication
+        from omacad import rfc
+        from omacad.ui.feedback_dialog import FeedbackDialog
+        from omacad.ui.settings import get_settings
+        view_shot = self.viewport.grabFramebuffer()
+        window_shot = self.grab_with_overlay(view_shot)
+        dlg = FeedbackDialog(self, window_shot, mode="request")
+        if not dlg.exec():
+            return
+        if not dlg.text():
+            self.status_label.setText("Request not sent: write what you would like first.")
+            return
+        get_settings().set("rfc_name", dlg.name())
+        images = {"screenshot_window.png": self._png(window_shot.toImage()), "screenshot_view.png": self._png(view_shot)}
+        marked = dlg.marked_image()
+        if marked is not None:
+            images["screenshot_marked.png"] = self._png(marked)
+        v = self.viewport
+        extra = {"kind": "request for change", "camera": {"azimuth": v.azimuth, "elevation": v.elevation, "distance": v.distance},
+                 "window_size": [self.width(), self.height()]}
+        folder = rfc.build_request(self.doc, dlg.text(), dlg.name(), images, extra)
+        self.status_label.setText("Sending your request…")
+        QApplication.processEvents()
+        ok, message = rfc.send(folder)
+        self.status_label.setText(message)
+        QMessageBox.information(self, "Request a change", message)
+
+    @staticmethod
+    def _png(image) -> bytes:
+        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+        data, buf = QByteArray(), QBuffer()
+        buf.setBuffer(data)
+        buf.open(QIODevice.OpenModeFlag.WriteOnly)
+        image.save(buf, "PNG")
+        return bytes(data)
 
     def on_about(self):
         QMessageBox.about(

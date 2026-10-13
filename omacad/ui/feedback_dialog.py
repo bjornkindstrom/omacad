@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QPolygonF
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QPlainTextEdit,
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 MARK_COLOUR = QColor(255, 45, 45)
@@ -152,13 +152,20 @@ class MarkableImage(QWidget):
 
 
 class FeedbackDialog(QDialog):
-    def __init__(self, parent=None, screenshot: QPixmap = None):
+    def __init__(self, parent=None, screenshot: QPixmap = None, mode: str = "report"):
+        """mode "report": a problem, handed to the AI agent. mode "request": a wish for a change, sent to GitHub for review."""
         super().__init__(parent)
-        self.setWindowTitle("Report problem")
+        self.mode = mode
+        self.setWindowTitle("Request a change" if mode == "request" else "Report problem")
         self.resize(1000, 760)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("What is wrong? A sentence is enough. The screenshot, the model and the log are sent along. "
-                             "Zoom with the mouse wheel and draw where the problem is."))
+        if mode == "request":
+            lay.addWidget(QLabel("What would you like to change or add? Describe it in a few sentences. The screenshot, the model "
+                                 "and the log are sent along so it is easy to understand. Zoom with the mouse wheel and draw "
+                                 "what you mean."))
+        else:
+            lay.addWidget(QLabel("What is wrong? A sentence is enough. The screenshot, the model and the log are sent along. "
+                                 "Zoom with the mouse wheel and draw where the problem is."))
         self.image: Optional[MarkableImage] = None
         if screenshot is not None and not screenshot.isNull():
             tools = QHBoxLayout()
@@ -182,15 +189,25 @@ class FeedbackDialog(QDialog):
             lay.addLayout(tools)
             lay.addWidget(self.image, 1)
         self.note = QPlainTextEdit()
-        self.note.setPlaceholderText("e.g. the corner of the offset is not rounded like the original")
+        self.note.setPlaceholderText("e.g. I would like to be able to ..." if mode == "request"
+                                     else "e.g. the corner of the offset is not rounded like the original")
         self.note.setFixedHeight(80)
         lay.addWidget(self.note)
         self.chk_fix = QCheckBox("Let the AI (Omarchy's default agent) fix it now")
         self.chk_fix.setChecked(True)
         self.chk_fix.setToolTip("Opens the default coding agent in a terminal with the report. Untick to only save the report.")
-        lay.addWidget(self.chk_fix)
+        self.edt_name = QLineEdit()
+        if mode == "request":
+            self.chk_fix.setVisible(False)
+            from omacad.ui.settings import get_settings
+            self.edt_name.setPlaceholderText("Your name (so the owner knows who asked)")
+            self.edt_name.setText(str(get_settings().get("rfc_name") or ""))
+            lay.addWidget(self.edt_name)
+            lay.addWidget(QLabel("Sent to the owner of Omacad on GitHub: your text, the screenshot, the model and the log of this session."))
+        else:
+            lay.addWidget(self.chk_fix)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Report")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Send request" if mode == "request" else "Report")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         lay.addWidget(buttons)
@@ -198,6 +215,9 @@ class FeedbackDialog(QDialog):
 
     def text(self) -> str:
         return self.note.toPlainText().strip()
+
+    def name(self) -> str:
+        return self.edt_name.text().strip()
 
     def fix_now(self) -> bool:
         return self.chk_fix.isChecked()

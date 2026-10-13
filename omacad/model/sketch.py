@@ -1320,7 +1320,7 @@ class Sketch:
                       corner_pt: Optional[Tuple[float, float]] = None) -> Tuple[Optional[SketchArc], str]:
         """Rounds the corner where line_a and line_b meet with a circular arc of given radius."""
         if radius <= 0.001:
-            return None, "Radien måste vara större än 0."
+            return None, "The radius must be larger than 0."
 
         tol = 1e-3
         end_a, end_b = None, None
@@ -1348,7 +1348,7 @@ class Sketch:
                     break
 
         if end_a is None or V is None:
-            return None, "Linjerna möts inte i ett gemensamt hörn."
+            return None, "The lines do not meet in a common corner."
 
         Pa = line_a.p2 if end_a == "p1" else line_a.p1
         Pb = line_b.p2 if end_b == "p1" else line_b.p1
@@ -1357,12 +1357,12 @@ class Sketch:
         vb = np.array([Pb[0] - V[0], Pb[1] - V[1]], dtype=float)
         la, lb = float(np.linalg.norm(va)), float(np.linalg.norm(vb))
         if la < 1e-5 or lb < 1e-5:
-            return None, "En av linjerna är för kort."
+            return None, "One of the lines is too short."
 
         ua, ub = va / la, vb / lb
         cos_th = float(np.dot(ua, ub))
         if abs(cos_th) > 0.9999:
-            return None, "Linjerna är parallella eller i linje med varandra."
+            return None, "The lines are parallel or collinear."
 
         half_ang = math.acos(max(-1.0, min(1.0, cos_th))) * 0.5
         tan_half = math.tan(half_ang)
@@ -1372,7 +1372,7 @@ class Sketch:
         max_d = min(la, lb) * 0.995
         if d > max_d:
             max_r = max_d * tan_half
-            return None, f"Radien är för stor för detta hörn (max {max_r:.1f} mm)."
+            return None, f"The radius is too large for this corner (max {max_r:.1f} mm)."
 
         Ta = tuple(np.array(V) + d * ua)
         Tb = tuple(np.array(V) + d * ub)

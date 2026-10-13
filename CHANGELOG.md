@@ -3,6 +3,13 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.6.34 - 2026-10-13
+
+### Added
+- Help > Request a change (F8): send a change request with screenshot and note; it is stored in a private GitHub repo for review. Unsent requests are kept locally and retried at startup.
+- Whole UI in English.
+- Windows build runs `Omacad.exe --selftest` before publishing.
+
 ## 0.6.33 - 2026-10-13
 
 ### Added

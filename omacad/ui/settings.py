@@ -32,6 +32,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "arrow_gap": 2.0,                   # mm the arrow is drawn off the surface, in its direction
     "view_projection": "perspective",    # perspective or orthographic
     "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
+    "rfc_name": "",                     # your name on requests for change (Help > Request a change)
+    "rfc_token": "",                    # GitHub token for sending requests (normally built into the release; empty = use that)
     "theme_mode": "omarchy",            # "omarchy" = follow the Omarchy theme live, "fixed" = the theme chosen below
     "theme_name": "tokyo-night",        # bundled theme used when theme_mode is "fixed" (or "builtin")
     "auto_restart": True,               # restart the app (work saved and restored) when a new version is committed
