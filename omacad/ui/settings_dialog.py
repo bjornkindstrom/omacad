@@ -71,7 +71,7 @@ class ColorRow(QWidget):
                     font-size: 10px;
                 }}
             """)
-            self.btn_swatch.setText("Tema")
+            self.btn_swatch.setText("Theme")
 
     def choose_color(self):
         initial = QColor(self.current_hex) if self.current_hex else QColor(*[int(c * 255) for c in theme.palette().highlight01()])
@@ -109,7 +109,7 @@ class SettingsDialog(QDialog):
 
         # Theme: follow Omarchy live, or keep a chosen one
         theme_row = QHBoxLayout()
-        lbl_theme = QLabel("Tema (Theme):")
+        lbl_theme = QLabel("Theme:")
         lbl_theme.setMinimumWidth(200)
         self.cmb_theme = QComboBox()
         self.cmb_theme.addItem("Follow the Omarchy theme (live)", "omarchy")
@@ -129,25 +129,25 @@ class SettingsDialog(QDialog):
         info_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px;")
         lay_colors.addWidget(info_lbl)
 
-        self.row_arrow = ColorRow("Extrude-pil / Dragger:", self.settings.get("arrow_color"), default_hex=None)
+        self.row_arrow = ColorRow("Extrude arrow / dragger:", self.settings.get("arrow_color"), default_hex=None)
         lay_colors.addWidget(self.row_arrow)
 
         self.row_measure = ColorRow("Measure tool (overlay):", self.settings.get("measure_color"), default_hex="#FFAA3C")
         lay_colors.addWidget(self.row_measure)
 
-        self.row_sketch = ColorRow("Aktiva sketchlinjer:", self.settings.get("sketch_line_color"), default_hex="#4CE0FF")
+        self.row_sketch = ColorRow("Active sketch lines:", self.settings.get("sketch_line_color"), default_hex="#4CE0FF")
         lay_colors.addWidget(self.row_sketch)
 
-        self.row_construct = ColorRow("Konstruktionslinjer:", self.settings.get("sketch_construction_color"), default_hex="#FFCC4D")
+        self.row_construct = ColorRow("Construction lines:", self.settings.get("sketch_construction_color"), default_hex="#FFCC4D")
         lay_colors.addWidget(self.row_construct)
 
-        self.row_highlight = ColorRow("Markering / Highlight:", self.settings.get("highlight_color"), default_hex=None)
+        self.row_highlight = ColorRow("Highlight:", self.settings.get("highlight_color"), default_hex=None)
         lay_colors.addWidget(self.row_highlight)
 
         lay_colors.addStretch()
         self.tabs.addTab(tab_colors, "🎨 Colours")
 
-        # Tab 2: Sketch & Visning
+        # Tab 2: Sketch & View
         tab_sketch = QWidget()
         lay_sketch = QVBoxLayout(tab_sketch)
         lay_sketch.setContentsMargins(12, 12, 12, 12)
@@ -155,7 +155,7 @@ class SettingsDialog(QDialog):
 
         # Palette position
         pos_row = QHBoxLayout()
-        lbl_pos = QLabel("Sketch-palett placering:")
+        lbl_pos = QLabel("Sketch palette position:")
         lbl_pos.setMinimumWidth(200)
         self.cmb_pos = QComboBox()
         self.cmb_pos.addItem("Bottom right (recommended)", "bottom_right")
@@ -210,7 +210,7 @@ class SettingsDialog(QDialog):
 
         # The extrude arrow
         arrow_row = QHBoxLayout()
-        lbl_arrow = QLabel("Pilens storlek (Arrow size):")
+        lbl_arrow = QLabel("Arrow size:")
         lbl_arrow.setMinimumWidth(200)
         self.spn_arrow_size = QDoubleSpinBox()
         self.spn_arrow_size.setRange(0.3, 4.0)
@@ -279,11 +279,11 @@ class SettingsDialog(QDialog):
 
         # Camera: projection type and perspective field of view
         proj_row = QHBoxLayout()
-        lbl_proj = QLabel("Kameratyp (3D-vy):")
+        lbl_proj = QLabel("Camera type (3D view):")
         lbl_proj.setMinimumWidth(200)
         self.cmb_projection = QComboBox()
-        self.cmb_projection.addItem("Perspektiv", "perspective")
-        self.cmb_projection.addItem("Ortografisk (inget perspektiv)", "orthographic")
+        self.cmb_projection.addItem("Perspective", "perspective")
+        self.cmb_projection.addItem("Orthographic (no perspective)", "orthographic")
         self.cmb_projection.setCurrentIndex(max(0, self.cmb_projection.findData(self.settings.get("view_projection", "perspective"))))
         proj_row.addWidget(lbl_proj)
         proj_row.addWidget(self.cmb_projection)
@@ -311,7 +311,7 @@ class SettingsDialog(QDialog):
         lay_sketch.addWidget(self.chk_auto_restart)
 
         lay_sketch.addStretch()
-        self.tabs.addTab(tab_sketch, "📐 Sketch & Visning")
+        self.tabs.addTab(tab_sketch, "📐 Sketch & View")
 
         # Bottom buttons
         btn_row = QHBoxLayout()
