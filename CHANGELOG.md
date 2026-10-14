@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.6.4 - 2026-10-14
+
+### Fixed
+- The rotation gizmo rings crashed `paintGL` (a polyline was passed where line segments are expected); they are now drawn as segment pairs.
+- Technical Blueprint icons for Offset Plane, Canvas, Parameters, Polygon, Rectangle and Slot were blank: the SVGs had duplicate `stroke` attributes and would not parse. `tests/test_icon_svgs.py` checks that every icon is valid XML.
+
 ## 0.7.6.3 - 2026-10-14
 
 ### Added
