@@ -26,12 +26,12 @@ The user pressed "Report problem" in the running app and wrote:
 > {note}
 
 Everything about the moment is in this folder ({folder}):
-- `screenshot_marked.png` (only if the user drew on the picture): the window screenshot with red marks showing WHERE the problem is. Look at it first.
-- `screenshot_window.png` and `screenshot_view.png`: what the user saw (LOOK AT THEM FIRST)
-- `document.json`: the whole document state (`Exporter.document_to_dict`) incl. the sketch being edited and the replay marker
-- `document.omacad`: the same as a project file (open with `Exporter.load_project`)
-- `report.json`: version, platform, camera, selection, the undo history labels
-- `log.txt`: the last status messages, printed output and errors
+- `screenshot_marked.png` (only if the user drew on the picture): the window screenshot with red marks showing WHERE the problem is. Look at it first. When it exists, `screenshot_window.png` is left out.
+- `screenshot_window.png` and `screenshot_view.png`: what the user saw (downscaled to 1280 px wide)
+- `report.json`: version, camera, selection, bodies, features, the undo history labels (small, read it)
+- `errors.txt`: only the errors and tracebacks (read it next; it is often empty)
+- `document.omacad`: the document as a project file. Load it in a script (`Exporter.load_project`) and print only what you need. Do NOT open `document.json` (same data, large) unless a script cannot load the project.
+- `log.txt`: the last 80 status lines. Read it only if the screenshots, report and errors are not enough.
 
 ## What to do
 1. Read `{root}/omacad.md` first (architecture, rules, past solutions).
@@ -59,7 +59,7 @@ def build_bundle(doc, note: str, images: Optional[Dict[str, bytes]] = None, extr
     for name, data in (images or {}).items():
         (folder / name).write_bytes(data)
     snapshot = Exporter.document_to_dict(doc)
-    (folder / "document.json").write_text(json.dumps(snapshot, indent=1), encoding="utf-8")
+    (folder / "document.json").write_text(json.dumps(snapshot, separators=(",", ":")), encoding="utf-8")
     try:
         Exporter.save_project(doc, str(folder / "document.omacad"))
     except Exception as e:                       # the report must work even when the document is in a bad state
@@ -74,10 +74,12 @@ def build_bundle(doc, note: str, images: Optional[Dict[str, bytes]] = None, extr
         "undo_history": [doc._entry_label(e) for e in doc.undo_stack[-30:]],
         "active_sketch": doc.active_sketch.sketch_id if doc.active_sketch else None,
         "selected_bodies": list(doc.selected_body_ids),
+        "active_tool": (extra or {}).get("sketch_tool"),
     }
     report.update(extra or {})
     (folder / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
-    (folder / "log.txt").write_text(applog.tail(300), encoding="utf-8")
+    (folder / "log.txt").write_text(applog.tail(80), encoding="utf-8")
+    (folder / "errors.txt").write_text(applog.errors(), encoding="utf-8")
     (folder / "PROMPT.md").write_text(PROMPT.format(note=note.strip() or "(no text)", folder=folder, root=repo_root()), encoding="utf-8")
     return folder
 

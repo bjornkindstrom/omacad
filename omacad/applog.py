@@ -23,6 +23,13 @@ def tail(n: int = 150) -> str:
         return "\n".join(list(_LINES)[-n:])
 
 
+def errors(n: int = 20) -> str:
+    """Only the error entries (ERROR and stderr), whole tracebacks included, newest last."""
+    with _LOCK:
+        hits = [l for l in _LINES if " [ERROR] " in l[:20] or " [err] " in l[:20]]
+    return "\n".join(hits[-n:])
+
+
 class _Tee:
     """Copies what is printed into the log, then passes it on."""
 
