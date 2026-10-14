@@ -34,3 +34,18 @@ def test_agent_command_points_at_the_prompt_file(tmp_path, monkeypatch):
     assert cmd[:3] == ["omarchy", "agent", "prompt"] and f"{tmp_path}/PROMPT.md" in cmd[3]
     monkeypatch.setattr(feedback.shutil, "which", lambda name: None)
     assert feedback.agent_command(tmp_path) is None
+
+
+def test_bundle_is_small_for_the_agent(tmp_path):
+    d = Document()
+    d.add_box(10, 20, 30)
+    for i in range(200):
+        applog.log("test", f"line {i}")
+    applog.log("ERROR", "Traceback (most recent call last):\n  boom")
+    folder = feedback.build_bundle(d, "x", base_dir=tmp_path)
+    assert len((folder / "log.txt").read_text().splitlines()) <= 80
+    errors = (folder / "errors.txt").read_text()
+    assert "boom" in errors and "line 1" not in errors
+    assert "\n " not in (folder / "document.json").read_text()      # compact, not indented
+    prompt = (folder / "PROMPT.md").read_text()
+    assert "errors.txt" in prompt and "Do NOT open `document.json`" in prompt

@@ -786,17 +786,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
 
     def on_report_problem(self):
         """Screenshot first (before any dialog covers the problem), then the note, then the report goes to the AI agent."""
-        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-        from PySide6.QtGui import QPixmap
         from omacad import feedback
         from omacad.ui.feedback_dialog import FeedbackDialog
-
-        def png(image):
-            data, buf = QByteArray(), QBuffer()
-            buf.setBuffer(data)
-            buf.open(QIODevice.OpenModeFlag.WriteOnly)
-            image.save(buf, "PNG")
-            return bytes(data)
 
         view_shot = self.viewport.grabFramebuffer()
         window_shot = self.grab_with_overlay(view_shot)
@@ -808,10 +799,12 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
                             "target": [float(x) for x in v.target]},
                  "sketch_tool": v.sketch_tool, "selected_sketch_entities": sorted(v.selected_entities),
                  "window_size": [self.width(), self.height()]}
-        images = {"screenshot_window.png": png(window_shot.toImage()), "screenshot_view.png": png(view_shot)}
+        images = {"screenshot_view.png": self._png(view_shot)}
         marked = dlg.marked_image()
         if marked is not None:
-            images["screenshot_marked.png"] = png(marked)   # the user's drawing on the window screenshot
+            images["screenshot_marked.png"] = self._png(marked)   # the user's drawing on the window screenshot
+        else:
+            images["screenshot_window.png"] = self._png(window_shot.toImage())
         folder = feedback.build_bundle(self.doc, dlg.text(), images, extra)
         if dlg.fix_now() and feedback.launch_agent(folder):
             self.status_label.setText(f"Report sent to the AI agent (a terminal opened). Saved in {folder}")
@@ -848,8 +841,11 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         QMessageBox.information(self, "Request a change", message)
 
     @staticmethod
-    def _png(image) -> bytes:
-        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    def _png(image, max_width: int = 1280) -> bytes:
+        """PNG bytes, downscaled to `max_width` (report pictures cost tokens per pixel)."""
+        from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
+        if image.width() > max_width:
+            image = image.scaledToWidth(max_width, Qt.TransformationMode.SmoothTransformation)
         data, buf = QByteArray(), QBuffer()
         buf.setBuffer(data)
         buf.open(QIODevice.OpenModeFlag.WriteOnly)
