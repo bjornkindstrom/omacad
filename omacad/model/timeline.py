@@ -35,6 +35,7 @@ from omacad.model.features import (
     _best_pattern,
     MoveFeature,
     ImportMeshFeature,
+    ThreadFeature,
 )
 
 

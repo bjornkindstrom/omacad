@@ -422,3 +422,141 @@ class CadKernel:
             bounds_max=b_max,
             center=center
         )
+
+    @staticmethod
+    def create_thread(
+        diameter: float,
+        pitch: float,
+        length: float,
+        is_female: bool = False,
+        clearance: float = 0.25,
+        profile: str = "trapezoidal_45",
+        taper_lead_in: bool = True,
+        taper_turns: float = 0.75,
+        segments_per_turn: Optional[int] = None,
+        include_core: bool = True,
+    ) -> m3d.Manifold:
+        """Create a 3D-print optimized helical thread (male bolt or female cutter/nut core).
+
+        Parameters:
+        - diameter: nominal thread diameter (mm)
+        - pitch: thread pitch (distance per turn, mm)
+        - length: total threaded length along Z axis (mm)
+        - is_female: True for female thread (internal nut/hole), False for male (bolt)
+        - clearance: diametral/radial clearance compensation for FDM 3D printing
+        - profile: 'trapezoidal_45' (45° overhang safe) or 'iso_60' (standard 60° metric V)
+        - taper_lead_in: whether to smoothly fade the tooth in/out for easy screwing
+        - taper_turns: how many helical turns over which to fade (e.g. 0.75 turn)
+        - include_core: whether to include the inner core cylinder (for male thread)
+        """
+        dia = float(diameter)
+        p = max(0.2, float(pitch))
+        l = max(p, float(length))
+        clr = max(0.0, float(clearance))
+        seg = int(segments_per_turn or quality.circle_segments())
+
+        turns = l / p
+        n_pts = max(16, int(round(turns * seg)))
+
+        # Tooth profile geometry
+        if profile == "iso_60":
+            # 60 degree metric thread profile:
+            # flank angle 30 deg to normal, tooth height ~ 0.54 * pitch
+            flank_dz = 0.35 * p
+            crest_flat_z = 0.125 * p
+            dr_full = flank_dz / math.tan(math.radians(30)) * 0.5  # ~ 0.54 * p
+        else:
+            # 45 degree overhang-safe trapezoidal profile:
+            # 45 deg flanks (safe to 3D print without supports at any layer height)
+            crest_flat_z = 0.18 * p
+            flank_dz = 0.28 * p
+            dr_full = flank_dz  # tan(45°) = 1.0
+
+        half_crest = crest_flat_z * 0.5
+        half_slot = half_crest + flank_dz
+
+        if not is_female:
+            # Male bolt thread:
+            # Outer crest radius = (D / 2) - (clearance * 0.5)
+            r_outer = (dia * 0.5) - (clr * 0.5)
+            r_root = r_outer - dr_full
+            r_in = r_root - (0.2 * dr_full)  # slight overlap inside core for watertight boolean
+        else:
+            # Female cutter thread:
+            # Enlarge outer radius by clearance to cut wider female slot
+            r_outer = (dia * 0.5) + (clr * 0.5)
+            r_root = (dia * 0.5) - dr_full
+            r_in = r_root - (0.2 * dr_full)
+
+        theta = np.linspace(0, turns * 2.0 * math.pi, n_pts + 1)
+        z_base = (theta / (2.0 * math.pi)) * p
+
+        # Lead-in / runout taper envelope
+        if taper_lead_in:
+            taper_n = max(1, int(round(taper_turns * seg)))
+            f_taper = np.ones(n_pts + 1, dtype=np.float32)
+            for i in range(min(taper_n, (n_pts + 1) // 2)):
+                frac = i / float(taper_n)
+                smooth_val = float(math.sin(0.5 * math.pi * frac) ** 2)
+                f_taper[i] = smooth_val
+                f_taper[-(i + 1)] = smooth_val
+        else:
+            f_taper = np.ones(n_pts + 1, dtype=np.float32)
+
+        verts = []
+        for i in range(n_pts + 1):
+            th = theta[i]
+            c, s = float(math.cos(th)), float(math.sin(th))
+            zb = float(z_base[i])
+            eff_dr = dr_full * float(f_taper[i])
+            r_out = r_root + eff_dr
+
+            # 4 profile cross-section vertices:
+            # 0: inner root lower (inside core)
+            v0 = [r_in * c, r_in * s, zb - half_slot]
+            # 1: outer lower crest edge
+            v1 = [r_out * c, r_out * s, zb - half_crest]
+            # 2: outer upper crest edge
+            v2 = [r_out * c, r_out * s, zb + half_crest]
+            # 3: inner root upper (inside core)
+            v3 = [r_in * c, r_in * s, zb + half_slot]
+            verts.extend([v0, v1, v2, v3])
+
+        verts = np.array(verts, dtype=np.float32)
+        tris = []
+
+        # Connect consecutive slices with watertight quads (positive outward normals):
+        for i in range(n_pts):
+            b0 = i * 4
+            b1 = (i + 1) * 4
+            # Lower flank (downward):
+            tris.append([b0 + 0, b1 + 1, b0 + 1])
+            tris.append([b0 + 0, b1 + 0, b1 + 1])
+            # Crest flat (radially outward):
+            tris.append([b0 + 1, b1 + 2, b0 + 2])
+            tris.append([b0 + 1, b1 + 1, b1 + 2])
+            # Upper flank (upward):
+            tris.append([b0 + 2, b1 + 3, b0 + 3])
+            tris.append([b0 + 2, b1 + 2, b1 + 3])
+            # Inner root wall (radially inward):
+            tris.append([b0 + 3, b1 + 0, b0 + 0])
+            tris.append([b0 + 3, b1 + 3, b1 + 0])
+
+        # Start cap at i=0:
+        tris.append([0, 1, 2])
+        tris.append([0, 2, 3])
+
+        # End cap at i=n_pts:
+        end_b = n_pts * 4
+        tris.append([end_b + 0, end_b + 2, end_b + 1])
+        tris.append([end_b + 0, end_b + 3, end_b + 2])
+
+        tris = np.array(tris, dtype=np.int32)
+        coil_mesh = m3d.Mesh(vert_properties=verts, tri_verts=tris)
+        coil = m3d.Manifold(coil_mesh)
+
+        if include_core:
+            cyl_core = m3d.Manifold.cylinder(l, r_root, r_root, circular_segments=seg)
+            return cyl_core + coil
+        return coil
+

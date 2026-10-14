@@ -34,6 +34,7 @@ class FeatureNodeWidget(QFrame):
         "combine": "🔗",
         "fillet": "🔘",
         "pattern": "🔁",
+        "thread": "🔩",
     }
 
     def __init__(self, index: int, feature: Feature, is_active: bool, parent: Optional[QWidget] = None):

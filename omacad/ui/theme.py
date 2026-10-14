@@ -289,6 +289,7 @@ EMOJI_TO_TOOL = {
     "🥫": "cylinder",
     "⚽": "sphere",
     "🧮": "parameters",
+    "🔩": "thread",
     "🔗": "combine",
     "🪚": "split_body",
     "🐚": "shell",

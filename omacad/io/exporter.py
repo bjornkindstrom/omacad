@@ -13,7 +13,7 @@ import trimesh
 from omacad.model.document import Document, Parameter
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
                                     ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature,
-                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature)
+                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature)
 from omacad.model.sketch import Sketch
 from omacad.model.timeline import ProfileRefs
 from omacad.model import quality
@@ -499,6 +499,9 @@ class Exporter:
                     source_file=f_data.get("source_file", ""),
                     created_body_id=f_data.get("created_body_id"),
                 )
+                doc.timeline.add_feature(feat)
+            elif ft == "thread":
+                feat = ThreadFeature.from_dict(f_data)
                 doc.timeline.add_feature(feat)
             else:
                 continue

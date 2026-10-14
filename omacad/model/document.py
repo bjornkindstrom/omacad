@@ -12,7 +12,7 @@ import manifold3d as m3d
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
     SphereFeature, ExtrudeFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
-    ImportMeshFeature
+    ImportMeshFeature, ThreadFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
 from omacad.model.sketch_solver import solve_sketch, SolveResult
@@ -271,7 +271,52 @@ class Document:
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
-        return self.bodies[f"body_{feat_id}"]
+    @undoable("Thread")
+    def add_thread(
+        self,
+        diameter: float,
+        pitch: float,
+        length: float,
+        is_female: bool = False,
+        clearance: float = 0.25,
+        profile: str = "trapezoidal_45",
+        taper_lead_in: bool = True,
+        taper_turns: float = 0.75,
+        target_body_id: Optional[str] = None,
+        operation: str = "new_body",
+        name: Optional[str] = None,
+        plane_origin: Any = None,
+        plane_normal: Any = None,
+        plane_u: Any = None,
+        plane_v: Any = None,
+    ) -> Optional[Body]:
+        feat_id = f"thread_{len(self.timeline.features) + 1}"
+        feat_name = name or f"Thread {len([f for f in self.timeline.features if f.feature_type == 'thread']) + 1}"
+        feat = ThreadFeature(
+            feat_id,
+            feat_name,
+            diameter=diameter,
+            pitch=pitch,
+            length=length,
+            is_female=is_female,
+            clearance=clearance,
+            profile=profile,
+            taper_lead_in=taper_lead_in,
+            taper_turns=taper_turns,
+            target_body_id=target_body_id,
+            operation=operation,
+            plane_origin=plane_origin,
+            plane_normal=plane_normal,
+            plane_u=plane_u,
+            plane_v=plane_v,
+        )
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        if target_body_id and target_body_id in self.bodies and operation != "new_body":
+            return self.bodies[target_body_id]
+        body_id = f"body_{feat_id}"
+        return self.bodies.get(body_id)
 
     def refresh_sketch_references(self, sketch: Sketch) -> None:
         """Face outlines of the bodies that exist now, so regions bounded by them can be profiles."""
@@ -597,6 +642,7 @@ class Document:
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
         "combine": ("operation",),
         "fillet": ("size", "kind"),
+        "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),

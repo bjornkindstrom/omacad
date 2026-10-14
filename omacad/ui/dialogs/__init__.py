@@ -41,6 +41,9 @@ from omacad.ui.dialogs.shell_dlg import (
 from omacad.ui.dialogs.transform_dlg import (
     MoveBodyDialog,
 )
+from omacad.ui.dialogs.thread_dlg import (
+    ThreadDialog,
+)
 
 
 class _DialogsModule(ModuleType):
@@ -73,4 +76,5 @@ __all__ = [
     "PatternDialog",
     "ShellDialog",
     "MoveBodyDialog",
+    "ThreadDialog",
 ]

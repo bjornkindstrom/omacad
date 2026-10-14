@@ -14,7 +14,8 @@ from omacad.model.timeline import (
 from omacad.ui.dialogs import (
     RoundEdgesDialog, PatternDialog, OffsetPlaneDialog,
     SketchPlaneDialog, ExtrudeDialog, BoxDialog, CylinderDialog,
-    SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog, MoveBodyDialog
+    SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog, MoveBodyDialog,
+    ThreadDialog
 )
 from omacad.ui.canvas_dialog import CanvasEditorDialog
 
@@ -713,6 +714,66 @@ class ToolPromptsMixin:
             self.doc.timeline.features[-1].exprs = dlg.get_expressions()
             self.viewport.zoom_fit()
             self.status_label.setText(f"Created {body.name} (R={r} mm).")
+
+    def prompt_thread(self):
+        from omacad.model.features.thread import ThreadFeature
+        selected_id = self.doc.selected_body_ids[0] if self.doc.selected_body_ids else None
+        dlg = ThreadDialog(self.doc, self, preselected_body_id=selected_id)
+
+        def refresh_preview():
+            vals = dlg.get_values()
+            feat = ThreadFeature("preview_thread", "Preview", **vals)
+            try:
+                solid = feat.build_solid()
+            except Exception:
+                solid = None
+            op = "cut" if vals.get("operation") == "cut" else "new_body"
+            self.viewport.set_preview(solid, op)
+            self.viewport.update()
+
+        def on_pick_face():
+            self.viewport.begin_plane_pick("primitive_face")
+            self.status_label.setText("Thread / Coil: Klicka på ytan eller planet där gängan ska börja (Esc avbryter).")
+
+        def on_face_picked(plane):
+            dlg.set_plane(plane)
+            dlg.activateWindow()
+
+        def on_finished(result):
+            try:
+                dlg.changed.disconnect(refresh_preview)
+            except Exception:
+                pass
+            try:
+                dlg.pick_face_requested.disconnect(on_pick_face)
+            except Exception:
+                pass
+            try:
+                self.viewport.primitive_face_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            try:
+                self.viewport.body_clicked.disconnect(dlg.select_body)
+            except Exception:
+                pass
+            if self.viewport.plane_pick_mode:
+                self.viewport.end_plane_pick()
+            self.viewport.set_preview(None)
+            self.viewport.update()
+            if result:
+                vals = dlg.get_values()
+                body = self.doc.add_thread(**vals)
+                self.viewport.zoom_fit()
+                if body:
+                    self.status_label.setText(f"Created {body.name} (D={vals['diameter']}, P={vals['pitch']} mm).")
+
+        dlg.changed.connect(refresh_preview)
+        dlg.pick_face_requested.connect(on_pick_face)
+        self.viewport.primitive_face_picked.connect(on_face_picked)
+        self.viewport.body_clicked.connect(dlg.select_body)
+        dlg.finished.connect(on_finished)
+        self.dock(dlg)
+        refresh_preview()
 
     def prompt_combine(self):
         if len(self.doc.bodies) < 2:

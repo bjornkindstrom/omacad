@@ -98,6 +98,7 @@ class Ribbon(QWidget):
     split_body_clicked = Signal()
     shell_clicked = Signal()
     move_clicked = Signal()
+    thread_clicked = Signal()
     canvas_clicked = Signal()
     inspect_clicked = Signal()
     settings_clicked = Signal()
@@ -227,6 +228,11 @@ class Ribbon(QWidget):
         btn_sph = RibbonButton("Sphere", "⚽")
         btn_sph.clicked.connect(self.sphere_clicked)
         h_layout.addWidget(btn_sph)
+
+        btn_thread = RibbonButton("Thread\nCoil", "🔩")
+        btn_thread.setToolTip("3D-printable threads and helical coils (trapezoidal 45°, clearance, lead-in taper)")
+        btn_thread.clicked.connect(self.thread_clicked)
+        h_layout.addWidget(btn_thread)
 
         btn_params = RibbonButton("Parameters", "🧮")
         btn_params.setToolTip("Named values usable in any number field (Ctrl+P)")

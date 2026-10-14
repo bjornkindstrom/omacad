@@ -3,6 +3,18 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.7 - 2026-10-14
+
+### Added
+- **3D-Print-optimerat gäng- och coilverktyg (*Thread / Coil*):**
+  - **45° Trapezoidal-profil:** Eliminerar branta överhäng som säckar ihop i FDM-print. Kan skrivas rent oavsett munstycksstorlek eller lagerhöjd utan supportmaterial. (ISO 60° metrisk profil finns som valbart alternativ).
+  - **Automatisk 3D-print tolerans/frigång (*Fit Clearance*):** Justerbar toleranskompensation (0.10–0.40 mm, standard 0.25 mm) anpassad för 0.4 mm munstycken så att bultar och muttrar inte nyper fast.
+  - **Smooth Lead-in & Runout Taper:** Mjuk övergång och infasning under gängans första och sista varv för att förhindra snedgängning (cross-threading) och göra det enkelt att starta skruven.
+  - **Snabbval / Presets:** Förinställda gängstandarder anpassade för 3D-print med lite grövre stigning (M6x1.25, M8x1.5, M10x2.0, M12x2.0, M16x2.5, M20x2.5, M24x3.0, M30x3.5) samt helt valfria anpassade dimensioner.
+  - **Ytter- och innergänga:** Skapa antingen fristående bultar/kärnor eller applicera direkt på befintlig cylinder/hål i modellen (Join / Cut) med live 3D-förhandsgranskning.
+  - **Full integration:** Registreras i parametriska tidslinjen (`ThreadFeature`), fullt redigerbar med dubbelklick och serialiseras i `.omacad`-filer.
+  - **Ikoner för alla tre teman:** Nya handgjorda SVG-vektorikoner för *Modern Solid Fill*, *Technical Blueprint* och *Semantic Color-Coded CAD*.
+
 ## 0.7.6.4 - 2026-10-14
 
 ### Fixed

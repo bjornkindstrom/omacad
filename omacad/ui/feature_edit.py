@@ -7,14 +7,17 @@ Accepting rebuilds everything after the step.
 
 from PySide6.QtWidgets import QMessageBox
 
-from omacad.ui.dialogs import BoxDialog, CylinderDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog, MoveBodyDialog
+from omacad.ui.dialogs import (
+    BoxDialog, CylinderDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog, MoveBodyDialog,
+    ThreadDialog
+)
 
 DIRECTIONS = ["one_side", "symmetric", "two_sides"]
 OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as the Extrude dialog
 
 
 def can_edit(feature) -> bool:
-    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern", "move")
+    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern", "move", "thread")
 
 
 def edit_feature(win, doc, index: int) -> bool:
@@ -152,6 +155,26 @@ def edit_feature(win, doc, index: int) -> bool:
             return False
         bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
         return doc.edit_feature(index, target_body_id=bid, dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz, pivot=pivot, exprs=exprs)
+    if t == "thread":
+        dlg = ThreadDialog(doc, win, preselected_body_id=feat.target_body_id)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        dlg.spn_dia.setValue(feat.diameter)
+        dlg.spn_pitch.setValue(feat.pitch)
+        dlg.spn_length.setValue(feat.length)
+        dlg.spn_clearance.setValue(feat.clearance)
+        dlg.chk_profile.setChecked(feat.profile == "trapezoidal_45")
+        dlg.chk_taper.setChecked(feat.taper_lead_in)
+        idx_type = 1 if feat.is_female else 0
+        dlg.cmb_type.setCurrentIndex(idx_type)
+        if getattr(feat, "plane_origin", None) is not None:
+            dlg.plane_origin = feat.plane_origin
+            dlg.plane_normal = feat.plane_normal
+            dlg.plane_u = feat.plane_u
+            dlg.plane_v = feat.plane_v
+        if not dlg.exec():
+            return False
+        vals = dlg.get_values()
+        return doc.edit_feature(index, **vals)
     QMessageBox.information(win, "Edit", f"{feat.name} can't be edited here yet.")
     return False
 

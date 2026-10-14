@@ -137,6 +137,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         self.ribbon.box_clicked.connect(self.prompt_box)
         self.ribbon.cylinder_clicked.connect(self.prompt_cylinder)
         self.ribbon.sphere_clicked.connect(self.prompt_sphere)
+        self.ribbon.thread_clicked.connect(self.prompt_thread)
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
         self.ribbon.shell_clicked.connect(self.prompt_shell)
@@ -261,6 +262,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         menu_create.addAction("Box", self.prompt_box)
         menu_create.addAction("Cylinder", self.prompt_cylinder)
         menu_create.addAction("Sphere", self.prompt_sphere)
+        menu_create.addAction("Thread / Coil…", self.prompt_thread)
 
         # Modify Menu
         menu_modify = menubar.addMenu("Modify")

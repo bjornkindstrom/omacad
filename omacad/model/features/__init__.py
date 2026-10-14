@@ -38,6 +38,7 @@ from omacad.model.features.transform import (
     MoveFeature,
     ImportMeshFeature,
 )
+from omacad.model.features.thread import ThreadFeature
 
 __all__ = [
     "Body",
@@ -68,4 +69,5 @@ __all__ = [
     "PatternFeature",
     "MoveFeature",
     "ImportMeshFeature",
+    "ThreadFeature",
 ]
