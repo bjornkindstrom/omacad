@@ -369,7 +369,10 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
 
     def on_theme_changed(self):
         """The Omarchy theme was switched: stylesheets were already re-applied by theme.refresh()."""
+        theme.clear_icon_cache()
         self.apply_theme_font()
+        if hasattr(self, "ribbon") and self.ribbon:
+            self.ribbon.update_button_scale()
         self.viewport.update()
         self.status_label.setText("Theme updated.")
 

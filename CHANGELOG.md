@@ -3,6 +3,29 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.6 - 2026-10-14
+
+### Added
+- **Tre teman och konsoliderad Theme-flik:** Lagt till tre tydliga lägen i Inställningar under en samlad flik "Theme":
+  1. *Follow Omarchy system theme*
+  2. *Light Mode: Clean Studio Latte*
+  3. *Dark Mode: Tokyo Slate / Nord Frost*
+  - "Start from" i temaeditorn har renodlats till de tre valda bas-teman.
+- **Tre kompletta vektor-ikonteman:**
+  - *Modern Solid Fill* (standard med fyllda stilrena former)
+  - *Technical Blueprint* (tekniska konturlinjer och CAD-grafik)
+  - *Semantic Color-Coded CAD* (färgkodade efter CAD-operationer)
+  - Skarp rendering i alla upplösningar med dynamisk färganpassning efter ljust/mörkt tema.
+- **Tydligare och taktila knappar i alla teman:**
+  - Standardiserat QPushButton och Primary/Success/OK-knappar med förhöjd kontrast, distinkta ramar och bottenkanter för tydlig knappkänsla i både ljusa och mörka teman.
+  - Ribbon-knappar har fått en subtil bakgrund och tydliga kantlinjer för ökad synlighet.
+- **Flexibel placering av Box och Cylinder (Primitives):**
+  - Stöd för att placera undersidan direkt i origo (`bottom_center`), hörn (`corner`), eller solid mittpunkt (`center`).
+  - Stöd för placering direkt på godtycklig plan yta (*On face*) med orientering (horisontell/vertikal) och interaktiv val av yta i 3D-vyn samt live preview.
+
+### Improved
+- **Dockade verktygsdialoger i högerpanelen:** Verktygsrutor som Box, Cylinder, Fillet, Chamfer m.fl. dockas stabilt i högerpanelen (Inspector) så att de aldrig flyter iväg, försvinner eller skymmer 3D-modellen.
+
 ## 0.7.5.1 - 2026-10-14
 
 ### Added

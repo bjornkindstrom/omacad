@@ -33,10 +33,11 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "view_projection": "perspective",    # perspective or orthographic
     "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
     "rfc_name": "",                     # your name on requests for change (Help > Request a change)
-    "rfc_token": "",                    # GitHub token for sending requests (normally built into the release; empty = use that)
     "button_scale": 1.0,                # size of the ribbon buttons (0.75 = compact, 1.0 = standard, 1.25 = large)
-    "theme_mode": "omarchy",            # "omarchy" = follow the Omarchy theme live, "fixed" = the theme chosen below
-    "theme_name": "tokyo-night",        # bundled theme used when theme_mode is "fixed" (or "builtin")
+    "theme_mode": "omarchy",            # "omarchy" = follow the Omarchy theme live, "dark" = dark theme, "light" = light theme
+    "dark_theme_name": "tokyo-night",   # "tokyo-night" or "nord"
+    "theme_name": "tokyo-night",        # bundled theme used when theme_mode is "fixed" / "dark"
+    "icon_theme": "solid",              # "solid", "blueprint", "semantic"
     "auto_restart": True,               # restart the app (work saved and restored) when a new version is committed
 }
 

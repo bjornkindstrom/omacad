@@ -112,25 +112,94 @@ class SettingsDialog(QDialog):
         lay_colors.setContentsMargins(12, 12, 12, 12)
         lay_colors.setSpacing(10)
 
-        # Theme: follow Omarchy live, or keep a chosen one
+        # Theme mode: Följ Omarchy, Ljust tema, Mörkt tema
         theme_row = QHBoxLayout()
-        lbl_theme = QLabel("Theme:")
+        lbl_theme = QLabel("Theme Mode:")
         lbl_theme.setMinimumWidth(200)
-        self.cmb_theme = QComboBox()
-        self.cmb_theme.addItem("Follow the Omarchy theme (live)", "omarchy")
-        self.cmb_theme.addItem("Omacad default (dark)", theme.BUILTIN)
-        for name in theme.available_themes():
-            self.cmb_theme.addItem(name.replace("-", " ").title(), name)
-        for name in theme.custom_themes():
-            self.cmb_theme.addItem(f"★ {name}", theme.CUSTOM_PREFIX + name)
-        cur = "omarchy" if self.settings.get("theme_mode") != "fixed" else self.settings.get("theme_name")
-        self.cmb_theme.setCurrentIndex(max(0, self.cmb_theme.findData(cur)))
-        self.cmb_theme.setToolTip("Follow Omarchy: the app changes colours when you switch theme in Omarchy.\n"
-                                  "Any other choice: the app keeps that theme, whatever Omarchy does.")
+        self.cmb_theme_mode = QComboBox()
+        self.cmb_theme_mode.addItem("Follow Omarchy (live desktop sync)", "omarchy")
+        self.cmb_theme_mode.addItem("Light Theme (Clean Studio Latte)", "light")
+        self.cmb_theme_mode.addItem("Dark Theme (Tokyo Slate)", "dark_tokyo")
+        self.cmb_theme_mode.addItem("Dark Theme (Nord Frost)", "dark_nord")
+
+        cur_mode = self.settings.get("theme_mode", "omarchy")
+        cur_dark = self.settings.get("dark_theme_name", "tokyo-night")
+        cur_tname = self.settings.get("theme_name", "tokyo-night")
+
+        if cur_mode == "omarchy":
+            select_key = "omarchy"
+        elif cur_mode == "light":
+            select_key = "light"
+        elif cur_dark == "nord" or cur_tname == "nord":
+            select_key = "dark_nord"
+        else:
+            select_key = "dark_tokyo"
+
+        idx = self.cmb_theme_mode.findData(select_key)
+        self.cmb_theme_mode.setCurrentIndex(max(0, idx))
+        self.cmb_theme_mode.setToolTip("Follow Omarchy: syncs live with Omarchy.\n"
+                                       "Light Theme: Clean Studio Latte.\n"
+                                       "Dark Theme: Tokyo Slate or Nord Frost.")
         theme_row.addWidget(lbl_theme)
-        theme_row.addWidget(self.cmb_theme)
+        theme_row.addWidget(self.cmb_theme_mode)
         theme_row.addStretch()
         lay_colors.addLayout(theme_row)
+
+        # Icon Theme selector: Modern Solid Fill, Technical Blueprint, Semantic Color-Coded CAD
+        icon_row = QHBoxLayout()
+        lbl_icon = QLabel("Icon Theme:")
+        lbl_icon.setMinimumWidth(200)
+        self.cmb_icon_theme = QComboBox()
+        self.cmb_icon_theme.addItem("Modern Solid Fill (High-contrast silhouette)", "solid")
+        self.cmb_icon_theme.addItem("Technical Blueprint (Precision CAD outline)", "blueprint")
+        self.cmb_icon_theme.addItem("Semantic Color-Coded CAD (Color by tool type)", "semantic")
+        cur_icon = self.settings.get("icon_theme", "solid")
+        idx_icon = self.cmb_icon_theme.findData(cur_icon)
+        self.cmb_icon_theme.setCurrentIndex(max(0, idx_icon))
+        self.cmb_icon_theme.setToolTip("Choose the icon style for ribbon and sketch toolbar buttons.")
+        icon_row.addWidget(lbl_icon)
+        icon_row.addWidget(self.cmb_icon_theme)
+        icon_row.addStretch()
+        lay_colors.addLayout(icon_row)
+
+        # Toolbar button size
+        btn_size_row = QHBoxLayout()
+        lbl_btn_size = QLabel("Toolbar button size:")
+        lbl_btn_size.setMinimumWidth(200)
+        self.cmb_btn_size = QComboBox()
+        self.cmb_btn_size.addItem("Compact (75%)", 0.75)
+        self.cmb_btn_size.addItem("Medium (default, 100%)", 1.0)
+        self.cmb_btn_size.addItem("Large (125%)", 1.25)
+        self.cmb_btn_size.addItem("Extra large (150%)", 1.5)
+        cur_scale = float(self.settings.get("button_scale", 1.0))
+        idx_scale = self.cmb_btn_size.findData(cur_scale)
+        if idx_scale < 0:
+            self.cmb_btn_size.addItem(f"Custom ({int(round(cur_scale * 100))}%)", cur_scale)
+            idx_scale = self.cmb_btn_size.count() - 1
+        self.cmb_btn_size.setCurrentIndex(max(0, idx_scale))
+        self.cmb_btn_size.setToolTip("Adjusts the height and icon sizes of buttons in the top toolbar ribbon.")
+        btn_size_row.addWidget(lbl_btn_size)
+        btn_size_row.addWidget(self.cmb_btn_size)
+        btn_size_row.addStretch()
+        lay_colors.addLayout(btn_size_row)
+
+        # Palette position
+        pos_row = QHBoxLayout()
+        lbl_pos = QLabel("Sketch palette position:")
+        lbl_pos.setMinimumWidth(200)
+        self.cmb_pos = QComboBox()
+        self.cmb_pos.addItem("Bottom right (recommended)", "bottom_right")
+        self.cmb_pos.addItem("Top left", "top_left")
+        self.cmb_pos.addItem("Bottom left", "bottom_left")
+        self.cmb_pos.addItem("Top right", "top_right")
+        cur_pos = self.settings.get("palette_position", "bottom_right")
+        idx = self.cmb_pos.findData(cur_pos)
+        if idx >= 0:
+            self.cmb_pos.setCurrentIndex(idx)
+        pos_row.addWidget(lbl_pos)
+        pos_row.addWidget(self.cmb_pos)
+        pos_row.addStretch()
+        lay_colors.addLayout(pos_row)
 
         info_lbl = QLabel("Customise colours for 3D arrows, highlights and tools in the view:")
         info_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px;")
@@ -152,7 +221,7 @@ class SettingsDialog(QDialog):
         lay_colors.addWidget(self.row_highlight)
 
         lay_colors.addStretch()
-        self.tabs.addTab(tab_colors, "🎨 Colours")
+        self.tabs.addTab(tab_colors, "🎨 Theme")
 
         # Tab: theme editor (every colour by hand, saved under a name)
         from omacad.ui.theme_editor import ThemeEditorTab
@@ -165,24 +234,6 @@ class SettingsDialog(QDialog):
         lay_sketch = QVBoxLayout(tab_sketch)
         lay_sketch.setContentsMargins(12, 12, 12, 12)
         lay_sketch.setSpacing(12)
-
-        # Palette position
-        pos_row = QHBoxLayout()
-        lbl_pos = QLabel("Sketch palette position:")
-        lbl_pos.setMinimumWidth(200)
-        self.cmb_pos = QComboBox()
-        self.cmb_pos.addItem("Bottom right (recommended)", "bottom_right")
-        self.cmb_pos.addItem("Top left", "top_left")
-        self.cmb_pos.addItem("Bottom left", "bottom_left")
-        self.cmb_pos.addItem("Top right", "top_right")
-        cur_pos = self.settings.get("palette_position", "bottom_right")
-        idx = self.cmb_pos.findData(cur_pos)
-        if idx >= 0:
-            self.cmb_pos.setCurrentIndex(idx)
-        pos_row.addWidget(lbl_pos)
-        pos_row.addWidget(self.cmb_pos)
-        pos_row.addStretch()
-        lay_sketch.addLayout(pos_row)
 
         # Autohide on measure
         self.chk_autohide = QCheckBox("Hide the sketch palette automatically while measuring (M)")
@@ -366,15 +417,8 @@ class SettingsDialog(QDialog):
         main_lay.addLayout(btn_row)
 
     def _theme_saved(self, key: str):
-        """A theme was saved (or deleted) in the editor: update the list and pick it."""
+        """A theme was saved (or deleted) in the editor."""
         self._just_saved = key
-        cur = self.cmb_theme.currentData()
-        for i in reversed(range(self.cmb_theme.count())):
-            if str(self.cmb_theme.itemData(i)).startswith(theme.CUSTOM_PREFIX):
-                self.cmb_theme.removeItem(i)
-        for name in theme.custom_themes():
-            self.cmb_theme.addItem(f"★ {name}", theme.CUSTOM_PREFIX + name)
-        self.cmb_theme.setCurrentIndex(max(0, self.cmb_theme.findData(key or cur)))
 
     def reject(self):
         theme.set_preview(None)
@@ -394,7 +438,8 @@ class SettingsDialog(QDialog):
         self.spn_grid.setValue(5.0)
         self.spn_fillet.setValue(2.0)
         self.chk_auto_restart.setChecked(True)
-        self.cmb_theme.setCurrentIndex(0)
+        self.cmb_theme_mode.setCurrentIndex(0)
+        self.cmb_icon_theme.setCurrentIndex(0)
         self.cmb_curves.setCurrentIndex(max(0, self.cmb_curves.findData(96)))
         self.spn_arrow_size.setValue(1.0)
         self.spn_arrow_gap.setValue(2.0)
@@ -424,18 +469,31 @@ class SettingsDialog(QDialog):
             "auto_restart": self.chk_auto_restart.isChecked(),
             "rfc_name": self.edt_rfc_name.text().strip(),
             "rfc_token": self.edt_rfc_token.text().strip(),
-            "theme_mode": "omarchy" if self.cmb_theme.currentData() == "omarchy" else "fixed",
-            "theme_name": self.settings.get("theme_name") if self.cmb_theme.currentData() == "omarchy" else self.cmb_theme.currentData(),
+            "icon_theme": self.cmb_icon_theme.currentData(),
         }
-        key = new_data["theme_name"] if new_data["theme_mode"] == "fixed" else ""
-        if key.startswith(theme.CUSTOM_PREFIX):
-            # a saved theme carries its tool colours
-            tdata = theme.load_theme_data(key) or {}
-            from omacad.ui.theme_editor import TOOL_ROLES
-            for tkey, setting, _label in TOOL_ROLES:
-                if tkey in tdata and (key != self.settings.get("theme_name") or key == self._just_saved):
-                    new_data[setting] = tdata.get(tkey)
+
+        # Resolve theme mode choice
+        mode_val = self.cmb_theme_mode.currentData()
+        if mode_val == "omarchy":
+            new_data["theme_mode"] = "omarchy"
+            fixed_name = None
+        elif mode_val == "light":
+            new_data["theme_mode"] = "light"
+            new_data["theme_name"] = "catppuccin-latte"
+            fixed_name = "catppuccin-latte"
+        elif mode_val == "dark_nord":
+            new_data["theme_mode"] = "dark"
+            new_data["dark_theme_name"] = "nord"
+            new_data["theme_name"] = "nord"
+            fixed_name = "nord"
+        else: # dark_tokyo
+            new_data["theme_mode"] = "dark"
+            new_data["dark_theme_name"] = "tokyo-night"
+            new_data["theme_name"] = "tokyo-night"
+            fixed_name = "tokyo-night"
+
         theme.PREVIEW = None
         self.settings.update(new_data)
-        theme.set_fixed_theme(new_data["theme_name"] if new_data["theme_mode"] == "fixed" else None)
+        theme.clear_icon_cache()
+        theme.set_fixed_theme(fixed_name)
         super().accept()

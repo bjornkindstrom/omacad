@@ -42,13 +42,13 @@ class RibbonButton(QToolButton):
         icon_px = max(18, int(round(30 * scale)))
         font_px = max(8, int(round(10 * scale)))
         min_h = max(50, int(round(76 * scale)))
-        self.setIcon(theme.emoji_icon(self.icon_symbol, icon_px))
+        self.setIcon(theme.tool_icon(self.icon_symbol, icon_px))
         self.setIconSize(QSize(icon_px, icon_px))
         self.setMinimumHeight(min_h)
         style(self, f"""
             QToolButton {{
-                background-color: transparent;
-                border: 1px solid transparent;
+                background-color: rgba(45, 49, 54, 0.4);
+                border: 1px solid #3E434B;
                 border-radius: 4px;
                 color: #D2D6DC;
                 font-size: {font_px}px;
@@ -58,12 +58,12 @@ class RibbonButton(QToolButton):
             }}
             QToolButton:hover {{
                 background-color: #353A42;
-                border: 1px solid #484F5A;
+                border: 1px solid #5A6270;
                 color: #FFFFFF;
             }}
             QToolButton:pressed, QToolButton:checked {{
                 background-color: #E26D28;
-                border: 1px solid #E26D28;
+                border: 1px solid #FF7E36;
                 color: #FFFFFF;
             }}
         """)

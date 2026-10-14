@@ -50,27 +50,65 @@ def edit_feature(win, doc, index: int) -> bool:
         dlg.spn_length.setValue(feat.length)
         dlg.spn_width.setValue(feat.width)
         dlg.spn_height.setValue(feat.height)
-        dlg.chk_center.setChecked(feat.center)
+        if getattr(feat, "plane_origin", None) is not None:
+            dlg.plane_origin = feat.plane_origin
+            dlg.plane_normal = feat.plane_normal
+            dlg.plane_u = feat.plane_u
+            dlg.plane_v = feat.plane_v
+            idx = dlg.cmb_placement.findData("on_face")
+            if idx >= 0:
+                dlg.cmb_placement.setCurrentIndex(idx)
+        elif feat.center is True or feat.center == "center":
+            idx = dlg.cmb_placement.findData("center")
+            if idx >= 0:
+                dlg.cmb_placement.setCurrentIndex(idx)
+        elif feat.center is False or feat.center == "corner":
+            idx = dlg.cmb_placement.findData("corner")
+            if idx >= 0:
+                dlg.cmb_placement.setCurrentIndex(idx)
+        else:
+            idx = dlg.cmb_placement.findData("bottom_center")
+            if idx >= 0:
+                dlg.cmb_placement.setCurrentIndex(idx)
         for key, spin in (("length", dlg.spn_length), ("width", dlg.spn_width), ("height", dlg.spn_height)):
             if feat.exprs.get(key):
                 spin.set_expression(feat.exprs[key])
         if not dlg.exec():
             return False
-        l, w, h, center = dlg.get_values()
-        return doc.edit_feature(index, length=l, width=w, height=h, center=center, exprs=dlg.get_expressions())
+        l, w, h, center, po, pn, pu, pv = dlg.get_values()
+        return doc.edit_feature(index, length=l, width=w, height=h, center=center,
+                                plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                                exprs=dlg.get_expressions())
     if t == "cylinder":
         dlg = CylinderDialog(win)
         dlg.setWindowTitle(f"Edit {feat.name}")
         dlg.spn_radius.setValue(feat.radius)
         dlg.spn_height.setValue(feat.height)
-        dlg.chk_center.setChecked(feat.center)
+        if getattr(feat, "plane_origin", None) is not None:
+            dlg.plane_origin = feat.plane_origin
+            dlg.plane_normal = feat.plane_normal
+            dlg.plane_u = feat.plane_u
+            dlg.plane_v = feat.plane_v
+            idx = dlg.cmb_placement.findData("on_face")
+            if idx >= 0:
+                dlg.cmb_placement.setCurrentIndex(idx)
+        elif feat.center is True or feat.center == "center":
+            idx = dlg.cmb_placement.findData("center")
+            if idx >= 0:
+                dlg.cmb_placement.setCurrentIndex(idx)
+        else:
+            idx = dlg.cmb_placement.findData("bottom_center")
+            if idx >= 0:
+                dlg.cmb_placement.setCurrentIndex(idx)
         for key, spin in (("radius", dlg.spn_radius), ("height", dlg.spn_height)):
             if feat.exprs.get(key):
                 spin.set_expression(feat.exprs[key])
         if not dlg.exec():
             return False
-        r, h, center = dlg.get_values()
-        return doc.edit_feature(index, radius=r, height=h, center=center, exprs=dlg.get_expressions())
+        r, h, center, po, pn, pu, pv = dlg.get_values()
+        return doc.edit_feature(index, radius=r, height=h, center=center,
+                                plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                                exprs=dlg.get_expressions())
     if t == "sphere":
         dlg = SphereDialog(win)
         dlg.setWindowTitle(f"Edit {feat.name}")

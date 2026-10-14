@@ -56,9 +56,9 @@ class ThemeEditorTab(QWidget):
         top.addWidget(QLabel("Start from:"))
         self.cmb_base = QComboBox()
         self.cmb_base.addItem("Current look", "@current")
-        self.cmb_base.addItem("Omacad default (dark)", theme.BUILTIN)
-        for name in theme.available_themes():
-            self.cmb_base.addItem(name.replace("-", " ").title(), name)
+        self.cmb_base.addItem("Clean Studio Latte (Light)", "catppuccin-latte")
+        self.cmb_base.addItem("Tokyo Slate (Dark)", "tokyo-night")
+        self.cmb_base.addItem("Nord Frost (Dark)", "nord")
         self._fill_custom()
         self.cmb_base.activated.connect(self._load_base)
         top.addWidget(self.cmb_base, 1)

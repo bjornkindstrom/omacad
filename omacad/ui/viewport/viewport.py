@@ -69,6 +69,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     surface_hover = Signal(object)        # same, while the mouse moves (None = no surface)
     surface_picked = Signal(object)       # dict(point, patch) of any body surface (planar or curved)
     target_plane_picked = Signal(object)  # plane chosen as an extrude target (distance to face)
+    primitive_face_picked = Signal(object)  # plane chosen as origin/face for box or cylinder
     shell_face_picked = Signal(object)   # plane/face chosen for hollow shell open face
     move_body_picked = Signal(object)    # plane/face chosen for move body selection
     status_message = Signal(str)
@@ -2322,6 +2323,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     self.section_base_picked.emit(plane)
                 elif purpose == "extrude_target":
                     self.target_plane_picked.emit(plane)
+                elif purpose == "primitive_face":
+                    self.primitive_face_picked.emit(plane)
                 elif purpose == "shell_face":
                     self.shell_face_picked.emit(plane)
                 elif purpose == "move_body":
@@ -2540,3 +2543,41 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             return None
 
         return plane.world_to_uv(pt_world)
+
+    def model_screen_bounds(self) -> Optional[Tuple[float, float, float, float]]:
+        """Returns (min_x, min_y, max_x, max_y) in screen pixels of visible bodies, or None."""
+        corners = []
+        for b in self.doc.bodies.values():
+            if b.visible and b.render_mesh and len(b.render_mesh.vertices) > 0:
+                bmin = b.render_mesh.bounds_min
+                bmax = b.render_mesh.bounds_max
+                # 8 corners of the 3D bounding box
+                for x in (bmin[0], bmax[0]):
+                    for y in (bmin[1], bmax[1]):
+                        for z in (bmin[2], bmax[2]):
+                            corners.append(np.array([x, y, z], dtype=np.float32))
+
+        # Also include preview_mesh if present
+        if hasattr(self, "preview_mesh") and self.preview_mesh is not None and len(self.preview_mesh.vertices) > 0:
+            bmin = self.preview_mesh.bounds_min
+            bmax = self.preview_mesh.bounds_max
+            for x in (bmin[0], bmax[0]):
+                for y in (bmin[1], bmax[1]):
+                    for z in (bmin[2], bmax[2]):
+                        corners.append(np.array([x, y, z], dtype=np.float32))
+
+        if not corners:
+            return None
+
+        screen_pts = []
+        for c in corners:
+            s = self.world_to_screen(c)
+            if s is not None:
+                screen_pts.append(s)
+
+        if not screen_pts:
+            return None
+
+        xs = [p[0] for p in screen_pts]
+        ys = [p[1] for p in screen_pts]
+        return (min(xs), min(ys), max(xs), max(ys))

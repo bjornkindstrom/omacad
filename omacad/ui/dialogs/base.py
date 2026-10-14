@@ -12,7 +12,7 @@ SIDE_HOST = None
 
 
 def run_docked(dlg) -> int:
-    """Like dlg.exec(), but the dialog sits in the side panel and a local event loop waits for it."""
+    """Like dlg.exec(), but the dialog sits cleanly in the right-hand side panel."""
     if SIDE_HOST is None:
         return QDialog.exec(dlg)
     SIDE_HOST.dock(dlg)
@@ -23,65 +23,77 @@ def run_docked(dlg) -> int:
 
 
 class BaseFeatureDialog(QDialog):
-    """Base modal dialog with Fusion 360 styling."""
+    """Base modal dialog with Fusion 360 styling, docked in the right side panel."""
 
     def __init__(self, title: str, parent=None, embedded: bool = False):
         super().__init__(parent)
         self.setWindowTitle(title)
         self._embedded = embedded
-        self._drag_offset = None
-        self.user_moved = False
-        if embedded:
-            # a panel inside the 3D view instead of a separate window: it can be dragged out of the way
-            self.setWindowFlags(Qt.WindowType.Widget)
-            self.setFixedWidth(290)
-            self.setCursor(Qt.CursorShape.SizeAllCursor)
-        else:
-            self.setFixedWidth(320)
-            self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setFixedWidth(338)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+
         style(self, """
             QDialog {
                 background-color: #25282C;
                 border: 1px solid #3E444D;
                 border-radius: 6px;
             }
+            QPushButton {
+                background-color: #33373E;
+                color: #E0E3E7;
+                border: 1px solid #4D535E;
+                border-bottom: 2px solid #25282D;
+                border-radius: 5px;
+                padding: 7px 18px;
+                font-weight: 600;
+                font-size: 13px;
+                min-height: 18px;
+            }
+            QPushButton:hover {
+                background-color: #3E434C;
+                border-color: #5C6370;
+                color: #FFFFFF;
+            }
+            QPushButton:pressed {
+                background-color: #E26D28;
+                border: 1px solid #E26D28;
+                border-top: 2px solid #B85317;
+                color: #FFFFFF;
+                padding-top: 8px;
+            }
+            QPushButton#PrimaryButton, QPushButton:default {
+                background-color: #E26D28;
+                border: 1px solid #FF7E36;
+                border-bottom: 2px solid #B85317;
+                color: #FFFFFF;
+                font-weight: bold;
+                padding: 7px 22px;
+            }
+            QPushButton#PrimaryButton:hover, QPushButton:default:hover {
+                background-color: #FF7E36;
+                border-color: #FFA566;
+                color: #FFFFFF;
+            }
+            QPushButton#PrimaryButton:pressed, QPushButton:default:pressed {
+                background-color: #C45B1C;
+                border: 1px solid #B85317;
+                border-top: 2px solid #8C3A0A;
+                color: #FFFFFF;
+                padding-top: 8px;
+            }
         """)
+
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(16, 16, 16, 16)
+        self.main_layout.setContentsMargins(14, 14, 14, 14)
         self.main_layout.setSpacing(12)
 
-    # ---- embedded panel: placement and dragging ------------------------------------
     def exec(self):
         return run_docked(self)
 
-    def place(self, parent_size, left: bool = False):
-        """Dock into the side panel (or, without one, the right side of the view until dragged)."""
+    def place(self, parent_size=None, left: bool = False):
+        """Docks the dialog in the right-hand side panel."""
         if SIDE_HOST is not None:
             SIDE_HOST.dock(self)
-            return
-        self.adjustSize()
-        if not self.user_moved:
-            x = 24 if left else max(0, parent_size.width() - self.width() - 24)
-            self.move(x, 150)
-
-    def mousePressEvent(self, event):
-        if self._embedded and event.button() == Qt.MouseButton.LeftButton:
-            self._drag_offset = event.position().toPoint()
-            event.accept()
-        else:
-            super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._embedded and self._drag_offset is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(self.mapToParent(event.position().toPoint() - self._drag_offset))
-            self.user_moved = True
-            event.accept()
-        else:
-            super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        self._drag_offset = None
-        super().mouseReleaseEvent(event)
 
     def add_buttons(self):
         btn_layout = QHBoxLayout()

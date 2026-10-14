@@ -555,22 +555,114 @@ class ToolPromptsMixin:
         refresh_preview()
 
     def prompt_box(self):
+        from omacad.model.features.primitives import BoxFeature
         dlg = BoxDialog(self)
-        if dlg.exec():
-            l, w, h, center = dlg.get_values()
-            body = self.doc.add_box(l, w, h, center)
-            self.doc.timeline.features[-1].exprs = dlg.get_expressions()
-            self.viewport.zoom_fit()
-            self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
+
+        def refresh_preview():
+            l, w, h, center, po, pn, pu, pv = dlg.get_values()
+            feat = BoxFeature("preview_box", "Preview", l, w, h, center,
+                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+            try:
+                solid = feat.build_solid()
+            except Exception:
+                solid = None
+            self.viewport.set_preview(solid, "new_body")
+            self.viewport.update()
+
+        def on_pick_face():
+            self.viewport.begin_plane_pick("primitive_face")
+            self.status_label.setText("Box: Klicka på ytan eller planet där undersidan ska starta (Esc avbryter).")
+
+        def on_face_picked(plane):
+            dlg.set_target_plane(plane)
+            dlg.activateWindow()
+
+        def on_finished(result):
+            try:
+                dlg.changed.disconnect(refresh_preview)
+            except Exception:
+                pass
+            try:
+                dlg.pick_face_requested.disconnect(on_pick_face)
+            except Exception:
+                pass
+            try:
+                self.viewport.primitive_face_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            if self.viewport.plane_pick_mode:
+                self.viewport.end_plane_pick()
+            self.viewport.set_preview(None)
+            self.viewport.update()
+            if result:
+                l, w, h, center, po, pn, pu, pv = dlg.get_values()
+                body = self.doc.add_box(l, w, h, center=center,
+                                        plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.viewport.zoom_fit()
+                self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
+
+        dlg.changed.connect(refresh_preview)
+        dlg.pick_face_requested.connect(on_pick_face)
+        self.viewport.primitive_face_picked.connect(on_face_picked)
+        dlg.finished.connect(on_finished)
+        self.dock(dlg)
+        refresh_preview()
 
     def prompt_cylinder(self):
+        from omacad.model.features.primitives import CylinderFeature
         dlg = CylinderDialog(self)
-        if dlg.exec():
-            r, h, center = dlg.get_values()
-            body = self.doc.add_cylinder(r, h, center)
-            self.doc.timeline.features[-1].exprs = dlg.get_expressions()
-            self.viewport.zoom_fit()
-            self.status_label.setText(f"Created {body.name} (R={r}, H={h} mm).")
+
+        def refresh_preview():
+            r, h, center, po, pn, pu, pv = dlg.get_values()
+            feat = CylinderFeature("preview_cyl", "Preview", r, h, center,
+                                   plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+            try:
+                solid = feat.build_solid()
+            except Exception:
+                solid = None
+            self.viewport.set_preview(solid, "new_body")
+            self.viewport.update()
+
+        def on_pick_face():
+            self.viewport.begin_plane_pick("primitive_face")
+            self.status_label.setText("Cylinder: Klicka på ytan eller planet där undersidan ska starta (Esc avbryter).")
+
+        def on_face_picked(plane):
+            dlg.set_target_plane(plane)
+            dlg.activateWindow()
+
+        def on_finished(result):
+            try:
+                dlg.changed.disconnect(refresh_preview)
+            except Exception:
+                pass
+            try:
+                dlg.pick_face_requested.disconnect(on_pick_face)
+            except Exception:
+                pass
+            try:
+                self.viewport.primitive_face_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            if self.viewport.plane_pick_mode:
+                self.viewport.end_plane_pick()
+            self.viewport.set_preview(None)
+            self.viewport.update()
+            if result:
+                r, h, center, po, pn, pu, pv = dlg.get_values()
+                body = self.doc.add_cylinder(r, h, center=center,
+                                            plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.viewport.zoom_fit()
+                self.status_label.setText(f"Created {body.name} (R={r}, H={h} mm).")
+
+        dlg.changed.connect(refresh_preview)
+        dlg.pick_face_requested.connect(on_pick_face)
+        self.viewport.primitive_face_picked.connect(on_face_picked)
+        dlg.finished.connect(on_finished)
+        self.dock(dlg)
+        refresh_preview()
 
     def prompt_sphere(self):
         dlg = SphereDialog(self)

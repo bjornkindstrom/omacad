@@ -412,12 +412,16 @@ class Exporter:
             fname = f_data.get("name")
             if ft == "box":
                 feat = BoxFeature(
-                    fid, fname, f_data["length"], f_data["width"], f_data["height"], f_data["center"]
+                    fid, fname, f_data["length"], f_data["width"], f_data["height"], f_data["center"],
+                    plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
+                    plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v")
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "cylinder":
                 feat = CylinderFeature(
-                    fid, fname, f_data["radius"], f_data["height"], f_data["center"]
+                    fid, fname, f_data["radius"], f_data["height"], f_data["center"],
+                    plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
+                    plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v")
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "sphere":

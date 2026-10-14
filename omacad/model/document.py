@@ -4,7 +4,7 @@ Holds active bodies, sketches, origin reference geometry, and timeline.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional, List, Callable, Tuple
+from typing import Dict, Optional, List, Callable, Tuple, Any
 import copy
 import functools
 import numpy as np
@@ -240,20 +240,24 @@ class Document:
         return self._entry_label(self.redo_stack[-1]) if self.redo_stack else None
 
     @undoable("Box")
-    def add_box(self, length: float, width: float, height: float, center: bool = False, name: Optional[str] = None) -> Body:
+    def add_box(self, length: float, width: float, height: float, center: Any = False, name: Optional[str] = None,
+                plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None) -> Body:
         feat_id = f"box_{len(self.timeline.features) + 1}"
         feat_name = name or f"Box {len([f for f in self.timeline.features if f.feature_type == 'box']) + 1}"
-        feat = BoxFeature(feat_id, feat_name, length, width, height, center)
+        feat = BoxFeature(feat_id, feat_name, length, width, height, center,
+                          plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
         return self.bodies[f"body_{feat_id}"]
 
     @undoable("Cylinder")
-    def add_cylinder(self, radius: float, height: float, center: bool = False, name: Optional[str] = None) -> Body:
+    def add_cylinder(self, radius: float, height: float, center: Any = False, name: Optional[str] = None,
+                     plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None) -> Body:
         feat_id = f"cylinder_{len(self.timeline.features) + 1}"
         feat_name = name or f"Cylinder {len([f for f in self.timeline.features if f.feature_type == 'cylinder']) + 1}"
-        feat = CylinderFeature(feat_id, feat_name, radius, height, center)
+        feat = CylinderFeature(feat_id, feat_name, radius, height, center,
+                               plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
@@ -586,8 +590,8 @@ class Document:
 
     # ---- Editing the history (timeline) ----------------------------------------------
     EDITABLE = {
-        "box": ("length", "width", "height", "center"),
-        "cylinder": ("radius", "height", "center"),
+        "box": ("length", "width", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v"),
+        "cylinder": ("radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v"),
         "sphere": ("radius",),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "operation"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),

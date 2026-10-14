@@ -21,8 +21,9 @@ import weakref
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from PySide6.QtCore import QFileSystemWatcher, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QFileSystemWatcher, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QProxyStyle, QStyle
 
 STATE_DIR = Path.home() / ".local/state/omarchy/current"
@@ -214,7 +215,18 @@ def apply_saved_choice() -> None:
     try:
         from omacad.ui.settings import get_settings
         st = get_settings()
-        FIXED_THEME = st.get("theme_name") if st.get("theme_mode") == "fixed" else None
+        mode = st.get("theme_mode", "omarchy")
+        if mode == "omarchy":
+            FIXED_THEME = None
+        elif mode == "light":
+            FIXED_THEME = "catppuccin-latte"
+        elif mode == "dark":
+            dark_name = st.get("dark_theme_name", "tokyo-night")
+            FIXED_THEME = dark_name if dark_name in ("tokyo-night", "nord") else "tokyo-night"
+        elif mode == "fixed":
+            FIXED_THEME = st.get("theme_name") or "tokyo-night"
+        else:
+            FIXED_THEME = None
     except Exception:
         FIXED_THEME = None
     _palette = load_palette()
@@ -260,11 +272,91 @@ def font_family() -> str:
 
 # ---- Icons --------------------------------------------------------------------
 _icon_cache = {}
+ICONS_DIR = Path(__file__).resolve().parents[2] / "assets" / "icons"
 
+EMOJI_TO_TOOL = {
+    "✏️": "sketch",
+    "📐": "offset_plane",
+    "🖼️": "canvas",
+    "📏": "measure",
+    "✂️": "trim",
+    "⬆️": "extrude",
+    "🔄": "revolve",
+    "🔘": "fillet",
+    "◢": "chamfer",
+    "🔁": "pattern",
+    "📦": "box",
+    "🥫": "cylinder",
+    "⚽": "sphere",
+    "🧮": "parameters",
+    "🔗": "combine",
+    "🪚": "split_body",
+    "🐚": "shell",
+    "↔️": "move",
+    "✥": "move",
+    "🗑️": "delete",
+    "⚙️": "settings",
+    "⭕": "circle",
+    "⬡": "polygon",
+    "⌒": "arc",
+    "💊": "slot",
+    "╭": "fillet_sk",
+    "🪞": "mirror",
+    "⧉": "offset_sk",
+    "🟣": "project",
+    "⚡": "construct",
+    "🔲": "rect",
+    "⛶": "rect",
+    "▢": "rect",
+    "▣": "rect",
+}
+
+def clear_icon_cache():
+    _icon_cache.clear()
+
+def tool_icon(symbol_or_name: str, px: int = 24) -> QIcon:
+    """Returns a themed SVG vector QIcon (solid, blueprint, semantic) or falls back to emoji_icon."""
+    from omacad.ui.settings import get_settings
+    icon_theme = get_settings().get("icon_theme", "solid")
+    tool_key = EMOJI_TO_TOOL.get(symbol_or_name, symbol_or_name)
+    svg_path = ICONS_DIR / icon_theme / f"{tool_key}.svg"
+    
+    if not svg_path.exists():
+        return emoji_icon(symbol_or_name, px)
+
+    # Color adaptation for current theme
+    is_light = (_palette.mode == "light")
+    cur_color = "#1D2939" if is_light else "#E0E3E7"
+    accent_color = _palette.map_hex("#E26D28")
+
+    cache_key = (icon_theme, tool_key, px, is_light, cur_color, accent_color)
+    if cache_key in _icon_cache:
+        return _icon_cache[cache_key]
+
+    try:
+        svg_text = svg_path.read_text(encoding="utf-8")
+        # Replace currentColor with theme text color
+        svg_text = svg_text.replace("currentColor", cur_color)
+        if icon_theme != "semantic":
+            svg_text = svg_text.replace("#E26D28", accent_color)
+
+        scale = 2
+        pm = QPixmap(px * scale, px * scale)
+        pm.fill(Qt.GlobalColor.transparent)
+        renderer = QSvgRenderer(QByteArray(svg_text.encode("utf-8")))
+        painter = QPainter(pm)
+        renderer.render(painter)
+        painter.end()
+        pm.setDevicePixelRatio(scale)
+        icon = QIcon(pm)
+        _icon_cache[cache_key] = icon
+        return icon
+    except Exception:
+        return emoji_icon(symbol_or_name, px)
 
 def emoji_icon(ch: str, px: int = 24) -> QIcon:
     """The emoji drawn as a real QIcon of a chosen size (emoji in text would stay at the font size)."""
-    key = (ch, px)
+    key = ("emoji", ch, px)
     if key not in _icon_cache:
         scale = 2  # crisp on HiDPI
         pm = QPixmap(px * scale, px * scale)
@@ -610,42 +702,63 @@ QTreeView::branch:closed:has-children:has-siblings {
 QPushButton {
     background-color: #33373E;
     color: #E0E3E7;
-    border: 1px solid #434852;
-    border-radius: 4px;
-    padding: 6px 14px;
-    font-weight: 500;
+    border: 1px solid #4D535E;
+    border-bottom: 2px solid #25282D;
+    border-radius: 5px;
+    padding: 7px 18px;
+    font-weight: 600;
+    font-size: 13px;
+    min-height: 18px;
 }
 QPushButton:hover {
-    background-color: #3E434B;
-    border-color: #555C68;
+    background-color: #3E434C;
+    border-color: #5C6370;
     color: #FFFFFF;
 }
 QPushButton:pressed {
     background-color: #E26D28;
-    border-color: #E26D28;
+    border: 1px solid #E26D28;
+    border-top: 2px solid #B85317;
     color: #FFFFFF;
+    padding-top: 8px;
 }
-QPushButton#PrimaryButton {
+QPushButton#PrimaryButton, QPushButton:default {
     background-color: #E26D28;
     border: 1px solid #FF7E36;
+    border-bottom: 2px solid #B85317;
     color: #FFFFFF;
     font-weight: bold;
+    padding: 7px 22px;
 }
-QPushButton#PrimaryButton:hover {
+QPushButton#PrimaryButton:hover, QPushButton:default:hover {
     background-color: #FF7E36;
+    border-color: #FFA566;
+    color: #FFFFFF;
 }
-QPushButton#PrimaryButton:pressed {
+QPushButton#PrimaryButton:pressed, QPushButton:default:pressed {
     background-color: #C45B1C;
+    border: 1px solid #B85317;
+    border-top: 2px solid #8C3A0A;
+    color: #FFFFFF;
+    padding-top: 8px;
 }
 
 QPushButton#SuccessButton {
     background-color: #2E7D32;
     border: 1px solid #388E3C;
+    border-bottom: 2px solid #1B5E20;
     color: #FFFFFF;
     font-weight: bold;
+    padding: 7px 18px;
 }
 QPushButton#SuccessButton:hover {
     background-color: #388E3C;
+    border-color: #4CAF50;
+}
+QPushButton#SuccessButton:pressed {
+    background-color: #1B5E20;
+    border: 1px solid #1B5E20;
+    padding-top: 8px;
 }
 
 /* Input Fields & Spinners */
