@@ -489,6 +489,45 @@ def move_lay(W):
 
 
 @scene
+def rotate_gizmo(W):
+    d = plate_with_holes(W)
+    W.cam((30, 20, 4), 105, 30, 40)
+    W.with_dialog(lambda: W.win.prompt_move_body(), lambda: W.save_view_panel("rotate_gizmo"), 1800)
+
+
+@scene
+def place_primitive(W):
+    d = plate_with_holes(W)
+    W.cam((30, 20, 4), 105, 30, 40)
+    W.with_dialog(lambda: W.win.prompt_box(), lambda: W.save_view_panel("place_primitive"), 1800)
+
+
+@scene
+def icon_sets(W):
+    from omacad.ui.settings import get_settings
+    st = get_settings()
+    old = st.get("icon_theme", "solid")
+    imgs = []
+    try:
+        plate_with_holes(W)
+        W.cam((30, 20, 4), 105, 30, 40)
+        for name in ("solid", "blueprint", "semantic"):
+            st.set("icon_theme", name)
+            W.win.on_theme_changed(); W.pump(8)
+            imgs.append(W.win.ribbon.grab().toImage())
+    finally:
+        st.set("icon_theme", old)
+        W.win.on_theme_changed(); W.pump(4)
+    w, h = max(i.width() for i in imgs), imgs[0].height()
+    out = QImage(w, h * 3, QImage.Format.Format_RGB32)
+    p = QPainter(out)
+    for i, im in enumerate(imgs):
+        p.drawImage(0, i * h, im)
+    p.end()
+    W.save("icon_sets", out)
+
+
+@scene
 def face_edges(W):
     d = W.fresh(edges=True)
     d.add_box(60, 40, 12)
@@ -532,7 +571,7 @@ def themes(W):
         for name in ("tokyo-night", "catppuccin-latte", "gruvbox", "osaka-jade"):
             theme.COLORS_FILE = THEME_DIR / name / "colors.toml"
             theme.refresh(); W.pump(6)
-            imgs.append(W.img())
+            imgs.append(W.win.grab().toImage())
     finally:
         theme.COLORS_FILE = old
         theme.refresh()

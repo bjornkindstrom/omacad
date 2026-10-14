@@ -432,7 +432,10 @@ class GizmoMixin:
             col = (*(min(1.0, c + (0.35 if lit else 0.0)) for c in base_col), 0.95 if lit else 0.70)
             angles = np.linspace(0, 2 * math.pi, 49)
             ring_pts = [origin + ring_r * (math.cos(a) * u + math.sin(a) * v_) for a in angles]
-            self.draw_thick_lines(mvp, ring_pts, col, 4.0 if lit else 2.5, halo=True)
+            ring_segs = []
+            for p0, p1 in zip(ring_pts[:-1], ring_pts[1:]):
+                ring_segs.extend([*p0, *p1])
+            self.draw_thick_lines(mvp, ring_segs, col, 4.0 if lit else 2.5, halo=True)
 
             # Small grab ticks on the ring
             if lit:

@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.6.3 - 2026-10-14
+
+### Added
+- **Combine: Behåll verktygskroppar (*Keep tool bodies*):**
+  - Lagt till kryssrutan "Keep tool bodies" i Combine-dialogen (Fusion 360-stil). När denna är ikryssad förbrukas inte verktygskroppen (`tool body`) utan behålls i modellen efter Cut/Join/Intersect.
+- **Interaktivt 3D-klick för att välja bodies i sidopanelens dialoger:**
+  - När verktyg som **Combine**, **Split Body**, **Move / Rotate**, **Shell** eller **Pattern / Mirror** är öppna kan du nu klicka direkt på önskad solid i 3D-vyn för att välja eller ändra aktiv body i listorna till höger.
+
 ## 0.7.6.2 - 2026-10-14
 
 ### Improved

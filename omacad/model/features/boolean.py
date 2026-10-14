@@ -29,11 +29,12 @@ class DeleteBodyFeature(Feature):
 
 
 class CombineFeature(Feature):
-    def __init__(self, feature_id: str, name: str, target_body_id: str, tool_body_id: str, operation: str = "join"):
+    def __init__(self, feature_id: str, name: str, target_body_id: str, tool_body_id: str, operation: str = "join", keep_tool: bool = False):
         super().__init__(feature_id, "combine", name)
         self.target_body_id = target_body_id
         self.tool_body_id = tool_body_id
         self.operation = operation  # join, cut, intersect
+        self.keep_tool = keep_tool
 
     def execute(self, doc: Any) -> None:
         target = doc.bodies.get(self.target_body_id)
@@ -49,8 +50,9 @@ class CombineFeature(Feature):
             target.manifold = CadKernel.boolean_intersection(target.manifold, tool.manifold)
 
         target.update_render_mesh()
-        # Remove tool body after combine
-        doc.bodies.pop(self.tool_body_id, None)
+        # Remove tool body after combine unless keep_tool is True
+        if not self.keep_tool:
+            doc.bodies.pop(self.tool_body_id, None)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -61,6 +63,7 @@ class CombineFeature(Feature):
             "target_body_id": self.target_body_id,
             "tool_body_id": self.tool_body_id,
             "operation": self.operation,
+            "keep_tool": self.keep_tool,
         }
 
 

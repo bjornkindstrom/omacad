@@ -468,7 +468,7 @@ class Exporter:
                 doc.timeline.add_feature(feat)
             elif ft == "combine":
                 feat = CombineFeature(fid, fname, f_data["target_body_id"], f_data["tool_body_id"],
-                                      f_data.get("operation", "join"))
+                                      f_data.get("operation", "join"), keep_tool=f_data.get("keep_tool", False))
                 doc.timeline.add_feature(feat)
             elif ft == "split_body":
                 feat = SplitBodyFeature(

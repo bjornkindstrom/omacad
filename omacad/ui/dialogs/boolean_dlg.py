@@ -10,7 +10,7 @@ from omacad.ui.dialogs.base import BaseFeatureDialog
 class CombineDialog(BaseFeatureDialog):
     """Dialog for boolean combine operations (Join, Cut, Intersect)."""
 
-    def __init__(self, doc: Document, parent=None):
+    def __init__(self, doc: Document, parent=None, preselected_target_id: Optional[str] = None):
         super().__init__("Combine Bodies", parent)
         self.doc = doc
         form = QFormLayout()
@@ -20,32 +20,61 @@ class CombineDialog(BaseFeatureDialog):
 
         self.cmb_target = QComboBox()
         self.cmb_target.addItems(names)
+        if preselected_target_id and preselected_target_id in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(preselected_target_id))
+        elif doc.selected_body_ids and doc.selected_body_ids[0] in self.body_ids:
+            self.cmb_target.setCurrentIndex(self.body_ids.index(doc.selected_body_ids[0]))
         form.addRow("Target Body:", self.cmb_target)
 
         self.cmb_tool = QComboBox()
         self.cmb_tool.addItems(names)
+        t_idx = self.cmb_target.currentIndex()
         if len(names) > 1:
-            self.cmb_tool.setCurrentIndex(1)
+            tool_idx = 1 if t_idx == 0 else 0
+            self.cmb_tool.setCurrentIndex(tool_idx)
         form.addRow("Tool Body:", self.cmb_tool)
 
         self.cmb_op = QComboBox()
         self.cmb_op.addItems(["Join (Union)", "Cut (Difference)", "Intersect"])
         form.addRow("Operation:", self.cmb_op)
 
+        # Keep Tool Bodies checkbox (Fusion 360 style)
+        from PySide6.QtWidgets import QCheckBox
+        self.chk_keep_tool = QCheckBox("Keep tool bodies (Behåll verktygskropp)")
+        self.chk_keep_tool.setChecked(False)
+        form.addRow("", self.chk_keep_tool)
+
         self.main_layout.addLayout(form)
         self.add_buttons()
+
+        self._active_field = "tool"  # clicking 3D body updates tool unless user focused target
+
+    def select_body(self, body_id: str):
+        if body_id not in self.body_ids:
+            return
+        # If clicked body is target, set target; otherwise set tool
+        cur_target = self.body_ids[self.cmb_target.currentIndex()] if self.body_ids else None
+        if cur_target == body_id:
+            # User clicked target again or wants to change target
+            pass
+        elif self._active_field == "target":
+            self.cmb_target.setCurrentIndex(self.body_ids.index(body_id))
+            self._active_field = "tool"
+        else:
+            self.cmb_tool.setCurrentIndex(self.body_ids.index(body_id))
 
     def get_values(self):
         t_idx = self.cmb_target.currentIndex()
         tool_idx = self.cmb_tool.currentIndex()
         if not self.body_ids or t_idx < 0 or tool_idx < 0 or t_idx == tool_idx:
-            return None, None, "join"
+            return None, None, "join", False
 
         target_id = self.body_ids[t_idx]
         tool_id = self.body_ids[tool_idx]
         op_map = {0: "join", 1: "cut", 2: "intersect"}
         op = op_map.get(self.cmb_op.currentIndex(), "join")
-        return target_id, tool_id, op
+        keep = self.chk_keep_tool.isChecked()
+        return target_id, tool_id, op, keep
 
 
 class SplitBodyDialog(BaseFeatureDialog):
