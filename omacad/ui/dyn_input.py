@@ -20,7 +20,7 @@ FIELDS: Dict[str, List[str]] = {
     "CENTER_ROUNDED_RECT": ["Width", "Height", "Radius"],
     "CIRCLE": ["Diameter"],
     "POLYGON": ["Side", "Sides"],
-    "MOVE": ["X", "Y"],
+    "MOVE": ["X", "Y", "Angle"],
 }
 
 def supports(tool: str) -> bool:
@@ -125,7 +125,9 @@ class DynInput:
         if self.tool == "MOVE":
             mx = lk.get("X", dx)
             my = lk.get("Y", dy)
-            return (u1 + mx, v1 + my), {"X": mx, "Y": my}
+            raw_ang = math.degrees(math.atan2(dy, dx)) if (abs(dx) > 1e-6 or abs(dy) > 1e-6) else 0.0
+            ang = lk.get("Angle", raw_ang)
+            return (u1 + mx, v1 + my), {"X": mx, "Y": my, "Angle": ang}
 
         if self.tool == "POLYGON":
             n = max(3, min(200, int(round(lk["Sides"])))) if "Sides" in lk else int(self.default_sides)

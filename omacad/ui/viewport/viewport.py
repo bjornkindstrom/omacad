@@ -36,7 +36,7 @@ import manifold3d as m3d
 from omacad.model.sketch_solver import solve_sketch
 from omacad.model.sketch import (
     Sketch, SketchPlane, SketchLine, SketchRect, SketchCircle,
-    SketchCenterRect, SketchArc, SketchSlot, move_entity, entity_key_points,
+    SketchCenterRect, SketchArc, SketchSlot, move_entity, rotate_entity, rotate_point, entity_key_points,
     point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex, ref_id, ref_segment, EDGE_PTS
 )
 from omacad.model.sketch_snap import SketchSnapper, SnapResult
@@ -438,31 +438,47 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.CONSTRAINT_GLYPHS.get(c.ctype, "?"))
             self.constraint_badges.append((rect, c.cid))
 
-    # ---- Moving sketch elements --------------------------------------------
+    # ---- Moving and Rotating sketch elements ---------------------------------
     def _begin_move(self, ids):
         sk = self.doc.active_sketch
         ids = {i for i in ids if not getattr(sk.get_entity(i), "projected", False)}
+        orig_ents = {e.entity_id: copy.deepcopy(e) for e in sk.entities if e.entity_id in ids}
+        # Compute bounding center as rotation pivot
+        all_kps = [kp for ent in orig_ents.values() for kp in entity_key_points(ent)]
+        if all_kps:
+            center_u = sum(p[0] for p in all_kps) / len(all_kps)
+            center_v = sum(p[1] for p in all_kps) / len(all_kps)
+        else:
+            center_u, center_v = 0.0, 0.0
+
         self._move = {
             "ids": set(ids),
-            "orig": {e.entity_id: copy.deepcopy(e) for e in sk.entities if e.entity_id in ids},
+            "orig": orig_ents,
             "before": sk.to_dict(),
             "delta": (0.0, 0.0),
+            "angle": 0.0,
+            "pivot": (center_u, center_v),
         }
 
-    def _apply_move(self, du: float, dv: float):
-        """Positions the moving entities at original + (du, dv)."""
+    def _apply_move(self, du: float, dv: float, angle_deg: float = 0.0):
+        """Positions the moving entities at original + (du, dv) rotated by angle_deg around pivot."""
         m = self._move
         if not m:
             return
         sk = self.doc.active_sketch
+        pivot = m.get("pivot", (0.0, 0.0))
         for i, ent in enumerate(sk.entities):
             orig = m["orig"].get(ent.entity_id)
             if orig is not None:
                 moved = copy.deepcopy(orig)
-                move_entity(moved, du, dv)
+                if abs(angle_deg) > 1e-4:
+                    rotate_entity(moved, angle_deg, pivot)
+                if abs(du) > 1e-9 or abs(dv) > 1e-9:
+                    move_entity(moved, du, dv)
                 sk.entities[i] = moved
         sk.solve_profiles()
         m["delta"] = (du, dv)
+        m["angle"] = angle_deg
         self.update()
 
     def _end_move(self, commit: bool):
@@ -476,7 +492,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         if sk is None:
             return
         du, dv = m["delta"]
-        if commit and (abs(du) > 1e-9 or abs(dv) > 1e-9) and sk.constraints:
+        ang = m.get("angle", 0.0)
+        has_change = (abs(du) > 1e-9 or abs(dv) > 1e-9 or abs(ang) > 1e-4)
+        if commit and has_change and sk.constraints:
             res = solve_sketch(sk, fixed_ids=m["ids"])
             if not res.ok:
                 sk.restore_from_dict(m["before"])
@@ -484,7 +502,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 self.doc.notify_changed()
                 self.update()
                 return
-        if commit and (abs(du) > 1e-9 or abs(dv) > 1e-9):
+        if commit and has_change:
             self.doc.record_sketch_change(sk, m["before"])
             self.doc.timeline.recompute(self.doc)
             self.doc.notify_changed()
@@ -752,7 +770,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         p1 = self.sketch_start_uv
         if self.sketch_tool == "MOVE":
             if self._move:
-                self._apply_move(p2[0] - p1[0], p2[1] - p1[1])
+                ang = self.dyn_live.get("Angle", 0.0) if hasattr(self, "dyn_live") else 0.0
+                self._apply_move(p2[0] - p1[0], p2[1] - p1[1], angle_deg=ang)
                 self._end_move(True)
             self.sketch_start_uv = None
             self.dyn.reset()
@@ -894,7 +913,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.sketch_current_uv = end
         self.dyn_live = live
         if self.sketch_tool == "MOVE" and self._move:
-            self._apply_move(end[0] - self.sketch_start_uv[0], end[1] - self.sketch_start_uv[1])
+            ang = live.get("Angle", 0.0)
+            self._apply_move(end[0] - self.sketch_start_uv[0], end[1] - self.sketch_start_uv[1], angle_deg=ang)
         self.update()
 
     def _handle_dyn_key(self, event) -> bool:
@@ -1193,6 +1213,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         elif tool == "MOVE":
             anchors["X"] = QPointF((sa.x() + sb.x()) / 2, (sa.y() + sb.y()) / 2 + 24)
             anchors["Y"] = QPointF(sb.x() + 52, sb.y())
+            anchors["Angle"] = QPointF(sa.x() - 40, sa.y() - 24)
         elif tool == "CIRCLE":
             anchors["Diameter"] = QPointF(sb.x() + 46, sb.y() - 16)
         elif tool == "POLYGON":

@@ -3,6 +3,21 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.6.1 - 2026-10-14
+
+### Added
+- **Fusion 360-stil på 3D Body Rotation Gizmo:**
+  - Utökat Move-gizmon med 3 färgkodade cirkulära rotationsringar runt X (röd), Y (grön) och Z (blå).
+  - Interaktiv vinkelrotering genom att klicka och dra direkt i ringarna med ren 5°/1° snäppning och direkt koppling till `rx`, `ry`, `rz`.
+  - Uppdaterat Move / Rotate Body dialogen med aktiva knappar för både translationsaxlar (X, Y, Z) och rotationsaxlar (Rx, Ry, Rz).
+- **Rotation av sketchelement:**
+  - Implementerat `rotate_entity` och vinkelstöd i Move-verktyget för markerade sketchelement runt elementens geometriska mittpunkt / pivot.
+  - Dynamisk inmatning (Tab) stöder nu `X`, `Y` och `Angle` för precis flytt och rotation av skisser.
+
+### Fixed
+- **Riktning på Fillet och Chamfer hjälppilar:**
+  - Hjälppilen för fasning och avrundning pekar nu korrekt inåt mot materialet/avfasningen längs hörnbisektrisen (`d1 + d2` inåt mot kroppen på konvexa kanter) precis som i Fusion 360, istället för rakt ut i tomma luften.
+
 ## 0.7.6 - 2026-10-14
 
 ### Added

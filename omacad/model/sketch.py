@@ -524,6 +524,15 @@ def _shift(pt, du, dv):
     return (pt[0] + du, pt[1] + dv)
 
 
+def rotate_point(pt: Tuple[float, float], angle_deg: float, origin: Tuple[float, float] = (0.0, 0.0)) -> Tuple[float, float]:
+    """Rotates a 2D point around an origin by angle_deg degrees."""
+    rad = math.radians(angle_deg)
+    cos_a, sin_a = math.cos(rad), math.sin(rad)
+    ox, oy = origin
+    x, y = pt[0] - ox, pt[1] - oy
+    return (ox + x * cos_a - y * sin_a, oy + x * sin_a + y * cos_a)
+
+
 def move_entity(ent: "SketchEntity", du: float, dv: float) -> None:
     """Translates an entity in place."""
     if isinstance(ent, (SketchLine, SketchRect)):
@@ -537,6 +546,29 @@ def move_entity(ent: "SketchEntity", du: float, dv: float) -> None:
                                              _shift(ent.p_end, du, dv))
     elif isinstance(ent, SketchSlot):
         ent.center1, ent.center2 = _shift(ent.center1, du, dv), _shift(ent.center2, du, dv)
+
+
+def rotate_entity(ent: "SketchEntity", angle_deg: float, origin: Tuple[float, float]) -> None:
+    """Rotates an entity in place around origin by angle_deg degrees."""
+    if isinstance(ent, SketchLine):
+        ent.p1 = rotate_point(ent.p1, angle_deg, origin)
+        ent.p2 = rotate_point(ent.p2, angle_deg, origin)
+    elif isinstance(ent, SketchRect):
+        # Rotating an axis-aligned rect turns its corner coords; rotate both corners
+        ent.p1 = rotate_point(ent.p1, angle_deg, origin)
+        ent.p2 = rotate_point(ent.p2, angle_deg, origin)
+    elif isinstance(ent, SketchCenterRect):
+        ent.center = rotate_point(ent.center, angle_deg, origin)
+        ent.corner = rotate_point(ent.corner, angle_deg, origin)
+    elif isinstance(ent, SketchCircle):
+        ent.center = rotate_point(ent.center, angle_deg, origin)
+    elif isinstance(ent, SketchArc):
+        ent.p_start = rotate_point(ent.p_start, angle_deg, origin)
+        ent.p_mid = rotate_point(ent.p_mid, angle_deg, origin)
+        ent.p_end = rotate_point(ent.p_end, angle_deg, origin)
+    elif isinstance(ent, SketchSlot):
+        ent.center1 = rotate_point(ent.center1, angle_deg, origin)
+        ent.center2 = rotate_point(ent.center2, angle_deg, origin)
 
 
 def entity_key_points(ent: "SketchEntity") -> List[Tuple[float, float]]:

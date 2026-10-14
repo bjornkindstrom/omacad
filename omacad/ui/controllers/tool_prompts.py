@@ -46,11 +46,24 @@ class ToolPromptsMixin:
                     d1 = getattr(e0, "d1", None)
                     d2 = getattr(e0, "d2", None)
                     if d1 is not None and d2 is not None:
+                        # For a convex edge, d1 + d2 points into the material (cutting direction)
                         axis = np.asarray(d1) + np.asarray(d2)
+                        if not getattr(e0, "convex", True):
+                            axis = -axis  # for inside corner, cut/fill bisector
                         n_axis = np.linalg.norm(axis)
                         axis = axis / n_axis if n_axis > 1e-6 else np.array([0.0, 0.0, 1.0])
                     else:
                         axis = np.array([0.0, 0.0, 1.0])
+                elif hasattr(e0, "center") and hasattr(e0, "radius"):
+                    # Circular edge: pick a point on the circle towards the camera or top
+                    u, v_ = e0._basis() if hasattr(e0, "_basis") else (np.array([1., 0., 0.]), np.array([0., 1., 0.]))
+                    mid = np.asarray(e0.center) + u * float(e0.radius)
+                    # Bisector into the cut: radial inward plus wall inward
+                    rad_inward = -u if e0.s1 < 0 else u
+                    wall_inward = -np.asarray(e0.axis) * e0.s2
+                    axis = rad_inward + wall_inward
+                    n_axis = np.linalg.norm(axis)
+                    axis = axis / n_axis if n_axis > 1e-6 else np.array([0.0, 0.0, 1.0])
                 elif hasattr(e0, "c"):
                     mid = np.asarray(e0.c)
                     axis = np.asarray(getattr(e0, "n", [0.0, 0.0, 1.0]))
@@ -836,22 +849,15 @@ class ToolPromptsMixin:
         def update_handle():
             bid, dx, dy, dz, rx, ry, rz, pivot, _ = dlg.get_values()
             if not bid or bid not in self.doc.bodies:
-                self.viewport.clear_extrude_handle()
+                self.viewport.clear_move_gizmo()
                 return
 
             body = self.doc.bodies[bid]
             center = get_body_center(body)
-            moved_center = center + np.array([dx, dy, dz])
-
-            active_ax = dlg.active_axis
-            axis_map = {
-                "X": ([1.0, 0.0, 0.0], (1.0, 0.25, 0.25)),
-                "Y": ([0.0, 1.0, 0.0], (0.25, 0.9, 0.25)),
-                "Z": ([0.0, 0.0, 1.0], (0.25, 0.6, 1.0)),
-            }
-            ax, col = axis_map.get(active_ax, ([1.0, 0.0, 0.0], (1.0, 0.25, 0.25)))
-            arrow_len = max(25.0, min(80.0, self.viewport.distance * 0.18))
-            self.viewport.set_extrude_handle(moved_center, ax, arrow_len, color=col)
+            moved_center = center + np.array([dx, dy, dz]) if pivot == "center" else np.array([dx, dy, dz])
+            self.viewport.set_move_gizmo(moved_center)
+            if self.viewport.move_gizmo:
+                self.viewport.move_gizmo["active_axis"] = dlg.active_axis
 
         def refresh_preview():
             bid, dx, dy, dz, rx, ry, rz, pivot, _ = dlg.get_values()
@@ -860,7 +866,7 @@ class ToolPromptsMixin:
                     self.doc.bodies[current_hidden_id[0]].visible = True
                     current_hidden_id[0] = None
                 self.viewport.set_preview(None)
-                self.viewport.clear_extrude_handle()
+                self.viewport.clear_move_gizmo()
                 return
 
             if current_hidden_id[0] and current_hidden_id[0] != bid and current_hidden_id[0] in self.doc.bodies:
@@ -886,25 +892,38 @@ class ToolPromptsMixin:
             if not drag_state["dragging"]:
                 update_handle()
 
-        def on_handle_drag(val: float):
-            active_ax = dlg.active_axis
+        def on_gizmo_drag(axis: str, delta: float):
             if not drag_state["dragging"]:
                 drag_state["dragging"] = True
-                drag_state["start_val"] = val
-                cur_v = dlg.spn_dx.value() if active_ax == "X" else (dlg.spn_dy.value() if active_ax == "Y" else dlg.spn_dz.value())
-                drag_state["start_axis_val"] = cur_v
+                spn_map = {
+                    "X": dlg.spn_dx, "Y": dlg.spn_dy, "Z": dlg.spn_dz,
+                    "RX": dlg.spn_rx, "RY": dlg.spn_ry, "RZ": dlg.spn_rz
+                }
+                spn = spn_map.get(axis, dlg.spn_dx)
+                drag_state["start_axis_val"] = spn.value()
 
-            delta = val - drag_state["start_val"]
-            new_val = round(drag_state["start_axis_val"] + delta, 2)
+            is_rot = axis in ("RX", "RY", "RZ")
+            new_val = drag_state["start_axis_val"] + delta
+            if is_rot:
+                # Snap to 5° increments if Shift is held or by default 5 deg clean steps
+                step = 5.0 if abs(delta) > 5.0 else 1.0
+                new_val = round(new_val / step) * step
+            else:
+                new_val = round(new_val, 2)
             dlg.set_active_axis_value(new_val)
 
         def on_drag_finished():
             drag_state["dragging"] = False
             update_handle()
 
-        def on_axis_changed(_axis: str):
+        def on_axis_changed(axis: str):
             drag_state["dragging"] = False
-            update_handle()
+            if self.viewport.move_gizmo:
+                self.viewport.move_gizmo["active_axis"] = axis
+                self.viewport.update()
+
+        def on_gizmo_axis_selected(axis: str):
+            dlg.set_active_axis(axis)
 
         def on_face_picked(plane):
             face = getattr(plane, "face", None)
@@ -929,15 +948,19 @@ class ToolPromptsMixin:
             except Exception:
                 pass
             try:
-                self.viewport.extrude_handle_dragged.disconnect(on_handle_drag)
+                self.viewport.move_gizmo_dragged.disconnect(on_gizmo_drag)
             except Exception:
                 pass
             try:
-                self.viewport.extrude_handle_drag_finished.disconnect(on_drag_finished)
+                self.viewport.move_gizmo_finished.disconnect(on_drag_finished)
+            except Exception:
+                pass
+            try:
+                self.viewport.move_gizmo_axis_selected.disconnect(on_gizmo_axis_selected)
             except Exception:
                 pass
             self.viewport.end_plane_pick()
-            self.viewport.clear_extrude_handle()
+            self.viewport.clear_move_gizmo()
             self.viewport.set_preview(None)
             if current_hidden_id[0] and current_hidden_id[0] in self.doc.bodies:
                 self.doc.bodies[current_hidden_id[0]].visible = True
@@ -960,12 +983,13 @@ class ToolPromptsMixin:
         dlg.changed.connect(refresh_preview)
         dlg.axis_changed.connect(on_axis_changed)
         dlg.finished.connect(on_finished)
-        self.viewport.extrude_handle_dragged.connect(on_handle_drag)
-        self.viewport.extrude_handle_drag_finished.connect(on_drag_finished)
+        self.viewport.move_gizmo_dragged.connect(on_gizmo_drag)
+        self.viewport.move_gizmo_finished.connect(on_drag_finished)
+        self.viewport.move_gizmo_axis_selected.connect(on_gizmo_axis_selected)
         self.viewport.move_body_picked.connect(on_face_picked)
         self.viewport.body_clicked.connect(dlg.select_body)
         self.viewport.begin_plane_pick("move_body")
-        self.status_label.setText("Move: drag the 3D arrow or type mm/degrees. Click another body in 3D to choose it.")
+        self.status_label.setText("Move / Rotate: drag the 3D arrows to move, or drag the circular rings to rotate (Fusion 360 style).")
 
         refresh_preview()
         dlg.show()

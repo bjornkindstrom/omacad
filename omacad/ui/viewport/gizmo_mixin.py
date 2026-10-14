@@ -240,9 +240,9 @@ class GizmoMixin:
         self.draw_thick_lines(mvp, ring, (1.0, 1.0, 1.0, 0.9 if lit else 0.55), 2.0)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
-    # ---- 3D Translation Gizmo (Move Body) -------------------------------------------
+    # ---- 3D Translation & Rotation Gizmo (Move / Rotate Body) --------------------
     def set_move_gizmo(self, origin, length=None):
-        """Sets the 3D translation triad gizmo at the given body/pivot origin."""
+        """Sets the 3D translation & rotation gizmo at the given body/pivot origin."""
         if length is None:
             length = max(25.0, min(75.0, self.distance * 0.18))
         self.move_gizmo = {
@@ -252,6 +252,7 @@ class GizmoMixin:
             "active_axis": "X",
             "dragging": False,
             "start_proj": 0.0,
+            "start_mouse_screen": (0.0, 0.0),
         }
         self.update()
 
@@ -274,10 +275,33 @@ class GizmoMixin:
         st = self.world_to_screen(tip)
         return so, st
 
+    def _gizmo_ring_screen_points(self, rot_axis: str, n_samples: int = 36):
+        """Returns sampled 2D screen points along the circular rotation ring for rot_axis (RX, RY, RZ)."""
+        if not self.move_gizmo:
+            return []
+        g = self.move_gizmo
+        orig = g["origin"]
+        ring_r = g["length"] * 0.72
+        basis = {
+            "RX": (np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])),
+            "RY": (np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])),
+            "RZ": (np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+        }
+        u, v_ = basis[rot_axis]
+        pts = []
+        for a in np.linspace(0, 2 * math.pi, n_samples, endpoint=False):
+            w_pt = orig + ring_r * (math.cos(a) * u + math.sin(a) * v_)
+            s_pt = self.world_to_screen(w_pt)
+            if s_pt is not None:
+                pts.append(s_pt)
+        return pts
+
     def _gizmo_hit(self, x: float, y: float) -> Optional[str]:
         if not self.move_gizmo:
             return None
-        best_ax, best_dist = None, 20.0
+        best_ax, best_dist = None, 18.0
+
+        # 1. Linear translation axes (X, Y, Z)
         for ax in ("X", "Y", "Z"):
             so, st = self._gizmo_axis_screen(ax)
             if so is None or st is None:
@@ -287,9 +311,23 @@ class GizmoMixin:
                 best_dist = d_tip
                 best_ax = ax
             d_shaft = self._point_to_segment_dist((x, y), so, st)
-            if d_shaft < 10.0 and d_shaft < best_dist:
+            if d_shaft < 9.0 and d_shaft < best_dist:
                 best_dist = d_shaft
                 best_ax = ax
+
+        # 2. Rotation rings (RX, RY, RZ)
+        for rot_ax in ("RX", "RY", "RZ"):
+            s_pts = self._gizmo_ring_screen_points(rot_ax, n_samples=36)
+            if len(s_pts) < 4:
+                continue
+            for i in range(len(s_pts)):
+                p1 = s_pts[i]
+                p2 = s_pts[(i + 1) % len(s_pts)]
+                d_seg = self._point_to_segment_dist((x, y), p1, p2)
+                if d_seg < 10.0 and d_seg < best_dist:
+                    best_dist = d_seg
+                    best_ax = rot_ax
+
         return best_ax
 
     def _gizmo_project_mouse(self, x: float, y: float, axis_name: str) -> float:
@@ -299,12 +337,37 @@ class GizmoMixin:
         proj, view, _ = self.get_matrices()
         r0, rd = ray_from_screen(x, y, self.width(), self.height(), view, proj)
         r0, rd = np.asarray(r0, dtype=float), np.asarray(rd, dtype=float)
+
+        if axis_name in ("RX", "RY", "RZ"):
+            # Angular rotation projection around normal axis plane
+            norm_map = {
+                "RX": (np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])),
+                "RY": (np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])),
+                "RZ": (np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+            }
+            n, u, v_ = norm_map[axis_name]
+            orig = g["origin"]
+            denom = float(rd @ n)
+            if abs(denom) > 1e-6:
+                t = float((orig - r0) @ n) / denom
+                if t > 0:
+                    hit = r0 + rd * t - orig
+                    ang = math.degrees(math.atan2(float(hit @ v_), float(hit @ u)))
+                    return ang
+
+            # Fallback to screen-space angle from gizmo center
+            so = self.world_to_screen(orig)
+            if so is not None:
+                return math.degrees(math.atan2(y - so[1], x - so[0]))
+            return 0.0
+
+        # Linear axis projection
         dirs = {
             "X": np.array([1.0, 0.0, 0.0]),
             "Y": np.array([0.0, 1.0, 0.0]),
             "Z": np.array([0.0, 0.0, 1.0])
         }
-        a = dirs[axis_name]
+        a = dirs.get(axis_name, np.array([1.0, 0.0, 0.0]))
         w = g["origin"] - r0
         b, d1, e = float(a @ rd), float(a @ w), float(rd @ w)
         denom = 1.0 - b * b
@@ -327,6 +390,8 @@ class GizmoMixin:
             "Z": (np.array([0.0, 0.0, 1.0]), (0.25, 0.55, 0.95)),
         }
         GL.glDisable(GL.GL_DEPTH_TEST)
+
+        # 1. Linear Translation Arrows (X, Y, Z)
         for ax, (axis_vec, base_col) in dirs.items():
             is_hover = (g.get("hover_axis") == ax)
             is_active = (g.get("active_axis") == ax and g.get("dragging"))
@@ -352,6 +417,31 @@ class GizmoMixin:
             GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
             GL.glUniform4f(GL.glGetUniformLocation(self.prog_flat, "u_color"), *col)
             self.draw_buffer_arrays(GL.GL_TRIANGLES, GL.glGetAttribLocation(self.prog_flat, "in_pos"), np.array(tris, dtype=np.float32))
+
+        # 2. Circular Rotation Rings (RX, RY, RZ) - Fusion 360 Style
+        ring_r = length * 0.72
+        rot_configs = {
+            "RX": ((np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])), (0.95, 0.25, 0.25)),
+            "RY": ((np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])), (0.25, 0.85, 0.35)),
+            "RZ": ((np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])), (0.25, 0.55, 0.95)),
+        }
+        for rot_ax, ((u, v_), base_col) in rot_configs.items():
+            is_hover = (g.get("hover_axis") == rot_ax)
+            is_active = (g.get("active_axis") == rot_ax and g.get("dragging"))
+            lit = is_hover or is_active
+            col = (*(min(1.0, c + (0.35 if lit else 0.0)) for c in base_col), 0.95 if lit else 0.70)
+            angles = np.linspace(0, 2 * math.pi, 49)
+            ring_pts = [origin + ring_r * (math.cos(a) * u + math.sin(a) * v_) for a in angles]
+            self.draw_thick_lines(mvp, ring_pts, col, 4.0 if lit else 2.5, halo=True)
+
+            # Small grab ticks on the ring
+            if lit:
+                tick_pts = []
+                for a in np.linspace(0, 2 * math.pi, 9)[:-1]:
+                    p_inner = origin + (ring_r - size * 0.3) * (math.cos(a) * u + math.sin(a) * v_)
+                    p_outer = origin + (ring_r + size * 0.3) * (math.cos(a) * u + math.sin(a) * v_)
+                    tick_pts.extend([*p_inner, *p_outer])
+                self.draw_thick_lines(mvp, tick_pts, col, 2.0, halo=False)
 
         GL.glUseProgram(0)
         GL.glEnable(GL.GL_DEPTH_TEST)
