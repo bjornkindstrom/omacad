@@ -1,7 +1,8 @@
 """
 Omacad - Canvas / Reference Image Editor & Calibration Dialog
 Allows importing an image onto a sketch plane, pre-editing (brightness, contrast, crop, rotate, flip),
-and calibrating with a virtual tape measure for tracing blueprints and sketches.
+calibrating with a virtual tape measure for tracing blueprints and sketches,
+and setting an exact origin point (0, 0) on the reference image.
 """
 
 import base64
@@ -23,21 +24,26 @@ from omacad.ui.theme import style
 
 
 class ImageCanvasWidget(QWidget):
-    """Interactive canvas widget displaying the image with crop box and calibration tape measure."""
+    """Interactive canvas widget displaying the image with crop box, calibration tape measure, and origin point."""
 
     point_picked = Signal(float, float)
+    origin_picked = Signal(float, float)
     zoom_changed = Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.raw_image: Optional[QImage] = None
         self.processed_pixmap: Optional[QPixmap] = None
-        self.crop_rect: Optional[QRectF] = None  # in normalized (0..1) coords
+        self.crop_rect: Optional[QRectF] = None  # in image coords
 
         # Calibration state
         self.calibrate_mode: bool = False
         self.calib_pt1: Optional[QPointF] = None  # in pixel coords
         self.calib_pt2: Optional[QPointF] = None
+
+        # Origin picking state
+        self.origin_mode: bool = False
+        self.origin_pt: Optional[QPointF] = None  # in pixel coords (ix, iy)
 
         # Crop drag state
         self.crop_mode: bool = False
@@ -57,7 +63,9 @@ class ImageCanvasWidget(QWidget):
         self.update_cursor()
 
     def update_cursor(self):
-        if self.calibrate_mode or self.crop_mode:
+        if self.origin_mode:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif self.calibrate_mode or self.crop_mode:
             self.setCursor(Qt.CursorShape.CrossCursor)
         elif self.processed_pixmap and not self.processed_pixmap.isNull():
             self.setCursor(Qt.CursorShape.OpenHandCursor)
@@ -165,9 +173,9 @@ class ImageCanvasWidget(QWidget):
                     p.choose_image()
             return
 
-        # Panning with middle button or right button or left button (when not in calibrate/crop mode)
+        # Panning with middle button or right button or left button (when not in calibrate/crop/origin mode)
         if event.button() in (Qt.MouseButton.MiddleButton, Qt.MouseButton.RightButton) or (
-            event.button() == Qt.MouseButton.LeftButton and not self.calibrate_mode and not self.crop_mode
+            event.button() == Qt.MouseButton.LeftButton and not self.calibrate_mode and not self.crop_mode and not self.origin_mode
         ):
             self.is_panning = True
             self.last_pan_pos = event.position()
@@ -178,7 +186,13 @@ class ImageCanvasWidget(QWidget):
             pt = self.widget_to_image_coords(event.position().x(), event.position().y())
             if not pt:
                 return
-            if self.calibrate_mode:
+            if self.origin_mode:
+                self.origin_pt = pt
+                self.origin_mode = False
+                self.update_cursor()
+                self.update()
+                self.origin_picked.emit(pt.x(), pt.y())
+            elif self.calibrate_mode:
                 if self.calib_pt1 is None or self.calib_pt2 is not None:
                     self.calib_pt1 = pt
                     self.calib_pt2 = None
@@ -277,15 +291,39 @@ class ImageCanvasWidget(QWidget):
                     p.setFont(QFont("sans-serif", 10, QFont.Weight.Bold))
                     p.drawText(mid, f"📏 {raw_dist:.1f} px")
 
+        # Draw Origin Crosshair Target
+        if self.origin_pt:
+            ow = self.image_to_widget_coords(self.origin_pt.x(), self.origin_pt.y())
+            p.setPen(QPen(QColor(255, 60, 60), 2))
+            p.setBrush(QBrush(QColor(255, 60, 60, 60)))
+            p.drawEllipse(ow, 7, 7)
+            # Cross lines
+            p.setPen(QPen(QColor(255, 60, 60), 2, Qt.PenStyle.SolidLine))
+            p.drawLine(QPointF(ow.x() - 14, ow.y()), QPointF(ow.x() + 14, ow.y()))
+            p.drawLine(QPointF(ow.x(), ow.y() - 14), QPointF(ow.x(), ow.y() + 14))
+            # Text label
+            p.setPen(QColor(255, 100, 100))
+            p.setFont(QFont("sans-serif", 9, QFont.Weight.Bold))
+            p.drawText(QPointF(ow.x() + 10, ow.y() - 8), "📍 Origo (0, 0)")
+
 
 class CanvasEditorDialog(QDialog):
-    """Full-featured editor dialog for importing, pre-processing, and calibrating reference canvases."""
+    """Full-featured editor dialog for importing, pre-processing, calibrating, and positioning reference canvases."""
 
-    def __init__(self, doc: Document, parent=None, initial_image_path: Optional[str] = None, preselected_plane_id: Optional[str] = None):
+    def __init__(
+        self,
+        doc: Document,
+        parent=None,
+        initial_image_path: Optional[str] = None,
+        preselected_plane_id: Optional[str] = None,
+        existing_canvas_id: Optional[str] = None,
+    ):
         super().__init__(parent)
         self.doc = doc
-        self.setWindowTitle("Insert Canvas (Reference Image)")
-        self.resize(880, 620)
+        self.existing_canvas_id = existing_canvas_id
+        is_edit = bool(existing_canvas_id and existing_canvas_id in doc.canvases)
+        self.setWindowTitle("Edit Canvas (Reference Image)" if is_edit else "Insert Canvas (Reference Image)")
+        self.resize(920, 660)
         style(self, "background-color: #22252A; color: #D0D5DD;")
 
         self.original_image: Optional[QImage] = None
@@ -294,6 +332,7 @@ class CanvasEditorDialog(QDialog):
         self.rotation_quarter: int = 0  # 0, 1, 2, 3 (90-deg steps)
         self.flip_h: bool = False
         self.flip_v: bool = False
+        self._updating_spins: bool = False
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -351,7 +390,7 @@ class CanvasEditorDialog(QDialog):
 
         # Right: Tool Panel
         tools_widget = QWidget()
-        tools_widget.setFixedWidth(340)
+        tools_widget.setFixedWidth(360)
         tools_layout = QVBoxLayout(tools_widget)
         tools_layout.setContentsMargins(0, 0, 0, 0)
         tools_layout.setSpacing(10)
@@ -374,7 +413,7 @@ class CanvasEditorDialog(QDialog):
         tools_layout.addWidget(grp_file)
 
         # 2. Calibration Group (measuring tape)
-        grp_calib = QGroupBox("Calibrate with a known distance")
+        grp_calib = QGroupBox("Kalibrera storlek (känd distans)")
         form_calib = QFormLayout(grp_calib)
         self.btn_calib = QPushButton("📏 Starta kalibrering")
         self.btn_calib.setCheckable(True)
@@ -387,39 +426,88 @@ class CanvasEditorDialog(QDialog):
         self.spn_calib_dist.setSuffix(" mm")
         self.spn_calib_dist.setDecimals(2)
         self.spn_calib_dist.valueChanged.connect(self.apply_calibration)
-        form_calib.addRow("Real length:", self.spn_calib_dist)
+        form_calib.addRow("Verklig längd:", self.spn_calib_dist)
 
-        self.lbl_calib_status = QLabel("Click 2 points on the image whose distance you know.")
+        self.lbl_calib_status = QLabel("Klicka 2 punkter i bilden vars avstånd du känner till.")
         self.lbl_calib_status.setWordWrap(True)
         style(self.lbl_calib_status, "color: #9AA2B0; font-size: 11px;")
         form_calib.addRow(self.lbl_calib_status)
         tools_layout.addWidget(grp_calib)
 
-        # 3. Light & Color Adjustments (Light & Colour)
-        grp_adj = QGroupBox("Light, Colour & Crop")
+        # 3. Origin Point Group (📍 Origo i bilden)
+        grp_origin = QGroupBox("Origo (0, 0)")
+        form_origin = QFormLayout(grp_origin)
+
+        h_origin_btns = QHBoxLayout()
+        self.btn_set_origin = QPushButton("📍 Sätt origo i bild")
+        self.btn_set_origin.setCheckable(True)
+        self.btn_set_origin.setToolTip("Klicka på en punkt i bilden som ska motsvara origo (0, 0)")
+        self.btn_set_origin.clicked.connect(self.toggle_pick_origin)
+        h_origin_btns.addWidget(self.btn_set_origin)
+
+        self.btn_center_origin = QPushButton("🎯 Centrera")
+        self.btn_center_origin.setToolTip("Återställ origo till bildens mittpunkt")
+        self.btn_center_origin.clicked.connect(self.reset_origin_to_center)
+        h_origin_btns.addWidget(self.btn_center_origin)
+        form_origin.addRow(h_origin_btns)
+
+        # Numerical Offset X / Y in mm
+        h_offset = QHBoxLayout()
+        self.spn_offset_x = QDoubleSpinBox()
+        self.spn_offset_x.setRange(-100000.0, 100000.0)
+        self.spn_offset_x.setValue(0.0)
+        self.spn_offset_x.setSuffix(" mm")
+        self.spn_offset_x.setDecimals(2)
+        self.spn_offset_x.setToolTip("Horisontell position för bildens origo")
+        self.spn_offset_x.valueChanged.connect(self.on_offset_spins_changed)
+
+        self.spn_offset_y = QDoubleSpinBox()
+        self.spn_offset_y.setRange(-100000.0, 100000.0)
+        self.spn_offset_y.setValue(0.0)
+        self.spn_offset_y.setSuffix(" mm")
+        self.spn_offset_y.setDecimals(2)
+        self.spn_offset_y.setToolTip("Vertikal position för bildens origo")
+        self.spn_offset_y.valueChanged.connect(self.on_offset_spins_changed)
+
+        h_offset.addWidget(QLabel("X:"))
+        h_offset.addWidget(self.spn_offset_x)
+        h_offset.addWidget(QLabel("Y:"))
+        h_offset.addWidget(self.spn_offset_y)
+        form_origin.addRow("Placering:", h_offset)
+
+        self.lbl_origin_status = QLabel("Klicka 'Sätt origo' och klicka sedan på den punkt i bilden som ska hamna i origo.")
+        self.lbl_origin_status.setWordWrap(True)
+        style(self.lbl_origin_status, "color: #9AA2B0; font-size: 11px;")
+        form_origin.addRow(self.lbl_origin_status)
+        tools_layout.addWidget(grp_origin)
+
+        # 4. Light & Color Adjustments (Light & Colour & Crop)
+        grp_adj = QGroupBox("Ljus, Färg & Beskärning")
         form_adj = QFormLayout(grp_adj)
 
         self.sld_bright = QSlider(Qt.Orientation.Horizontal)
-        self.sld_bright.setRange(-100, 100); self.sld_bright.setValue(0)
+        self.sld_bright.setRange(-100, 100)
+        self.sld_bright.setValue(0)
         self.sld_bright.valueChanged.connect(self.refresh_image_processing)
         form_adj.addRow("Ljusstyrka:", self.sld_bright)
 
         self.sld_contrast = QSlider(Qt.Orientation.Horizontal)
-        self.sld_contrast.setRange(-100, 100); self.sld_contrast.setValue(0)
+        self.sld_contrast.setRange(-100, 100)
+        self.sld_contrast.setValue(0)
         self.sld_contrast.valueChanged.connect(self.refresh_image_processing)
         form_adj.addRow("Kontrast:", self.sld_contrast)
 
-        self.chk_gray = QCheckBox("Black and white (greyscale)")
+        self.chk_gray = QCheckBox("Svartvitt (gråskala)")
         self.chk_gray.toggled.connect(self.refresh_image_processing)
         form_adj.addRow(self.chk_gray)
 
-        self.chk_invert = QCheckBox("Invert colours (negative)")
+        self.chk_invert = QCheckBox("Invertera färger (negativ)")
         self.chk_invert.toggled.connect(self.refresh_image_processing)
         form_adj.addRow(self.chk_invert)
 
         # Rotate & Flip buttons
         h_rot = QHBoxLayout()
-        btn_rot = QPushButton("🔄 Rotate 90°")
+        btn_rot = QPushButton("🔄 Rotera 90°")
         btn_rot.clicked.connect(self.rotate_image)
         btn_fliph = QPushButton("↔ Spegla H")
         btn_fliph.clicked.connect(self.flip_horizontal)
@@ -429,10 +517,10 @@ class CanvasEditorDialog(QDialog):
 
         # Crop tool
         h_crop = QHBoxLayout()
-        self.btn_crop_tool = QPushButton("✂ Mark crop")
+        self.btn_crop_tool = QPushButton("✂ Markera beskärning")
         self.btn_crop_tool.setCheckable(True)
         self.btn_crop_tool.clicked.connect(self.toggle_crop)
-        self.btn_apply_crop = QPushButton("Crop now")
+        self.btn_apply_crop = QPushButton("Beskär nu")
         self.btn_apply_crop.clicked.connect(self.apply_crop)
         h_crop.addWidget(self.btn_crop_tool)
         h_crop.addWidget(self.btn_apply_crop)
@@ -440,8 +528,8 @@ class CanvasEditorDialog(QDialog):
 
         tools_layout.addWidget(grp_adj)
 
-        # 4. Placement & Opacity Group
-        grp_place = QGroupBox("Placering & Opacitet")
+        # 5. Placement & Opacity Group
+        grp_place = QGroupBox("Plan & Opacitet")
         form_place = QFormLayout(grp_place)
 
         self.cmb_plane = QComboBox()
@@ -455,13 +543,14 @@ class CanvasEditorDialog(QDialog):
             idx = self.cmb_plane.findData(preselected_plane_id)
             if idx >= 0:
                 self.cmb_plane.setCurrentIndex(idx)
-        form_place.addRow("Plane:", self.cmb_plane)
+        form_place.addRow("Plan:", self.cmb_plane)
 
         self.sld_opacity = QSlider(Qt.Orientation.Horizontal)
-        self.sld_opacity.setRange(5, 100); self.sld_opacity.setValue(50)
+        self.sld_opacity.setRange(5, 100)
+        self.sld_opacity.setValue(50)
         form_place.addRow("Opacitet:", self.sld_opacity)
 
-        self.lbl_dims = QLabel("Size: - x - mm")
+        self.lbl_dims = QLabel("Storlek: - x - mm")
         form_place.addRow(self.lbl_dims)
         tools_layout.addWidget(grp_place)
 
@@ -469,11 +558,11 @@ class CanvasEditorDialog(QDialog):
 
         # OK / Cancel
         btn_box = QHBoxLayout()
-        btn_cancel = QPushButton("Cancel")
+        btn_cancel = QPushButton("Avbryt")
         btn_cancel.clicked.connect(self.reject)
         btn_box.addWidget(btn_cancel)
 
-        self.btn_ok = QPushButton("Infoga Canvas")
+        self.btn_ok = QPushButton("Spara ändringar" if is_edit else "Infoga Canvas")
         self.btn_ok.setObjectName("PrimaryButton")
         self.btn_ok.setEnabled(False)
         self.btn_ok.clicked.connect(self.accept)
@@ -483,13 +572,55 @@ class CanvasEditorDialog(QDialog):
         layout.addWidget(tools_widget)
 
         self.canvas_view.point_picked.connect(self.on_points_picked)
+        self.canvas_view.origin_picked.connect(self.on_origin_picked)
 
-        if initial_image_path:
+        if is_edit:
+            self._load_existing_canvas(existing_canvas_id)
+        elif initial_image_path:
             self.load_image_file(initial_image_path)
+
+    def _load_existing_canvas(self, cid: str):
+        c = self.doc.canvases.get(cid)
+        if not c:
+            return
+        b64_data = c.get("image_data", "")
+        if b64_data:
+            raw_bytes = base64.b64decode(b64_data.encode("ascii"))
+            img = QImage()
+            if img.loadFromData(raw_bytes, "PNG"):
+                self.original_image = img
+                self.current_image = img.copy()
+                self.lbl_file_info.setText(f"{c.get('name', 'Canvas')} ({img.width()}x{img.height()} px)")
+                self.btn_ok.setEnabled(True)
+
+                w_mm = float(c.get("width_mm", img.width()))
+                if w_mm > 0 and img.width() > 0:
+                    self.px_per_mm = img.width() / w_mm
+
+                plane_id = c.get("plane_id", "XY")
+                idx = self.cmb_plane.findData(plane_id)
+                if idx >= 0:
+                    self.cmb_plane.setCurrentIndex(idx)
+
+                op = float(c.get("opacity", 0.5))
+                self.sld_opacity.setValue(int(round(op * 100)))
+
+                ox, oy = c.get("origin_uv", [-w_mm / 2.0, -float(c.get("height_mm", img.height())) / 2.0])
+                # ox = -x_orig_mm  =>  x_orig_mm = -ox
+                # oy = -y_orig_mm  =>  y_orig_mm = -oy
+                # In pixel coords:
+                # x_orig_px = x_orig_mm * px_per_mm
+                # y_orig_px = img.height() - y_orig_mm * px_per_mm
+                x_orig_px = (-ox) * self.px_per_mm
+                y_orig_px = img.height() - (-oy) * self.px_per_mm
+                self.canvas_view.origin_pt = QPointF(x_orig_px, y_orig_px)
+                self.update_origin_display()
+
+                self.refresh_image_processing()
 
     def choose_image(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Choose reference image", "", "Images (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff);;All files (*.*)"
+            self, "Välj referensbild", "", "Bilder (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff);;Alla filer (*.*)"
         )
         if path:
             self.load_image_file(path)
@@ -507,14 +638,16 @@ class CanvasEditorDialog(QDialog):
             self.flip_v = False
             self.px_per_mm = 1.0
             self.btn_ok.setEnabled(True)
+            self.canvas_view.origin_pt = QPointF(img.width() / 2.0, img.height() / 2.0)
             self.refresh_image_processing()
+            self.update_origin_display()
         else:
-            QMessageBox.information(self, "Clipboard", "No image found on the clipboard. Copy an image or a screenshot first.")
+            QMessageBox.information(self, "Urklipp", "Ingen bild hittades i urklipp. Kopiera en bild eller ta en skärmdump först.")
 
     def load_image_file(self, path: str):
         img = QImage(path)
         if img.isNull():
-            QMessageBox.warning(self, "Error", f"Could not load the image:\n{path}")
+            QMessageBox.warning(self, "Fel", f"Kunde inte ladda bilden:\n{path}")
             return
         self.original_image = img
         self.current_image = img.copy()
@@ -525,14 +658,18 @@ class CanvasEditorDialog(QDialog):
         self.flip_v = False
         self.px_per_mm = 1.0  # default 1 px = 1 mm until calibrated
         self.btn_ok.setEnabled(True)
+        self.canvas_view.origin_pt = QPointF(img.width() / 2.0, img.height() / 2.0)
         self.refresh_image_processing()
+        self.update_origin_display()
 
     def toggle_calibrate(self, checked: bool):
         self.canvas_view.calibrate_mode = checked
         if checked:
             self.canvas_view.crop_mode = False
+            self.canvas_view.origin_mode = False
             self.btn_crop_tool.setChecked(False)
-            self.lbl_calib_status.setText("Click point 1 and point 2 on the image.")
+            self.btn_set_origin.setChecked(False)
+            self.lbl_calib_status.setText("Klicka punkt 1 och punkt 2 i bilden.")
         else:
             self.lbl_calib_status.setText("Kalibrering avslutad.")
         self.canvas_view.update_cursor()
@@ -542,7 +679,7 @@ class CanvasEditorDialog(QDialog):
         p2 = self.canvas_view.calib_pt2
         if p1 and p2:
             dist_px = math.hypot(p2.x() - p1.x(), p2.y() - p1.y())
-            self.lbl_calib_status.setText(f"Measured: {dist_px:.1f} pixels. Enter the real length in the field above.")
+            self.lbl_calib_status.setText(f"Mätt: {dist_px:.1f} px. Ange verklig längd i fältet ovan.")
             self.apply_calibration()
 
     def apply_calibration(self):
@@ -554,27 +691,82 @@ class CanvasEditorDialog(QDialog):
             if dist_px > 1.0 and mm > 0.01:
                 self.px_per_mm = dist_px / mm
                 self.update_dimension_labels()
+                self.update_origin_display()
+
+    def toggle_pick_origin(self, checked: bool):
+        self.canvas_view.origin_mode = checked
+        if checked:
+            self.canvas_view.calibrate_mode = False
+            self.canvas_view.crop_mode = False
+            self.btn_calib.setChecked(False)
+            self.btn_crop_tool.setChecked(False)
+            self.lbl_origin_status.setText("📍 Klicka på den punkt i bilden som ska vara i origo (0, 0).")
+        else:
+            self.lbl_origin_status.setText("Origo-val avbrutet.")
+        self.canvas_view.update_cursor()
+
+    def on_origin_picked(self, x: float, y: float):
+        self.btn_set_origin.setChecked(False)
+        self.lbl_origin_status.setText(f"Origo satt till punkt ({x:.1f}, {y:.1f}) px.")
+        self.update_origin_display()
+
+    def reset_origin_to_center(self):
+        if not self.current_image:
+            return
+        self.canvas_view.origin_pt = QPointF(self.current_image.width() / 2.0, self.current_image.height() / 2.0)
+        self.canvas_view.update()
+        self.lbl_origin_status.setText("Origo centrerat till mitten av bilden.")
+        self.update_origin_display()
+
+    def update_origin_display(self):
+        if not self.current_image:
+            return
+        orig = self.canvas_view.origin_pt or QPointF(self.current_image.width() / 2.0, self.current_image.height() / 2.0)
+        # Origin offset from bottom-left corner in mm
+        x_orig_mm = orig.x() / max(self.px_per_mm, 1e-4)
+        y_orig_mm = (self.current_image.height() - orig.y()) / max(self.px_per_mm, 1e-4)
+
+        self._updating_spins = True
+        self.spn_offset_x.setValue(x_orig_mm)
+        self.spn_offset_y.setValue(y_orig_mm)
+        self._updating_spins = False
+
+    def on_offset_spins_changed(self):
+        if self._updating_spins or not self.current_image:
+            return
+        x_mm = self.spn_offset_x.value()
+        y_mm = self.spn_offset_y.value()
+        px = x_mm * self.px_per_mm
+        py = self.current_image.height() - y_mm * self.px_per_mm
+        self.canvas_view.origin_pt = QPointF(px, py)
+        self.canvas_view.update()
 
     def update_dimension_labels(self):
         if not self.current_image:
             return
         w_mm = self.current_image.width() / max(self.px_per_mm, 1e-4)
         h_mm = self.current_image.height() / max(self.px_per_mm, 1e-4)
-        self.lbl_dims.setText(f"Size: {w_mm:.1f} x {h_mm:.1f} mm\n({self.px_per_mm:.2f} px/mm)")
+        self.lbl_dims.setText(f"Storlek: {w_mm:.1f} x {h_mm:.1f} mm\n({self.px_per_mm:.2f} px/mm)")
 
     def rotate_image(self):
         self.rotation_quarter = (self.rotation_quarter + 1) % 4
+        self.canvas_view.origin_pt = None
         self.refresh_image_processing()
+        self.update_origin_display()
 
     def flip_horizontal(self):
         self.flip_h = not self.flip_h
+        self.canvas_view.origin_pt = None
         self.refresh_image_processing()
+        self.update_origin_display()
 
     def toggle_crop(self, checked: bool):
         self.canvas_view.crop_mode = checked
         if checked:
             self.canvas_view.calibrate_mode = False
+            self.canvas_view.origin_mode = False
             self.btn_calib.setChecked(False)
+            self.btn_set_origin.setChecked(False)
         self.canvas_view.update_cursor()
 
     def apply_crop(self):
@@ -592,9 +784,11 @@ class CanvasEditorDialog(QDialog):
         self.canvas_view.crop_rect = None
         self.btn_crop_tool.setChecked(False)
         self.canvas_view.crop_mode = False
+        self.canvas_view.origin_pt = None
         self.canvas_view.update_cursor()
         self.canvas_view.zoom_fit()
         self.refresh_image_processing()
+        self.update_origin_display()
 
     def refresh_image_processing(self):
         if not self.original_image:
@@ -624,12 +818,10 @@ class CanvasEditorDialog(QDialog):
         invert = self.chk_invert.isChecked()
 
         if bright != 0 or contrast != 0 or invert:
-            # Contrast factor: -100..100 -> 0.0..3.0
             cf = (contrast + 100.0) / 100.0 if contrast >= 0 else (100.0 + contrast) / 100.0
             cf = cf * cf if contrast >= 0 else cf
             b_offset = bright * 2.55
 
-            # LUT for speed
             lut = bytearray(256)
             for i in range(256):
                 val = i
@@ -638,12 +830,9 @@ class CanvasEditorDialog(QDialog):
                 val = (val - 128) * cf + 128 + b_offset
                 lut[i] = max(0, min(255, int(val)))
 
-            # Apply LUT to image pixels
             bits = img.bits()
-            # Fast in-place byte manipulation
             import numpy as np
             arr = np.frombuffer(bits, dtype=np.uint8).reshape((img.height(), img.bytesPerLine()))
-            # ARGB: bytes 0,1,2 are B,G,R
             lut_arr = np.array(lut, dtype=np.uint8)
             arr[:, 0:img.width()*4:4] = lut_arr[arr[:, 0:img.width()*4:4]]
             arr[:, 1:img.width()*4:4] = lut_arr[arr[:, 1:img.width()*4:4]]
@@ -655,13 +844,25 @@ class CanvasEditorDialog(QDialog):
         self.update_dimension_labels()
 
     def get_canvas_data(self) -> dict:
-        """Returns the finalized canvas properties to be added to Document."""
+        """Returns the finalized canvas properties to be added or updated in Document."""
         if not self.current_image:
             return {}
 
         w_mm = self.current_image.width() / max(self.px_per_mm, 1e-4)
         h_mm = self.current_image.height() / max(self.px_per_mm, 1e-4)
         plane_id = self.cmb_plane.currentData()
+
+        # Origin UV coordinates so that the picked origin point is at (0, 0)
+        orig = self.canvas_view.origin_pt
+        if orig is not None:
+            # Distance from bottom-left corner of the image in mm
+            x_orig_mm = orig.x() / max(self.px_per_mm, 1e-4)
+            y_orig_mm = (self.current_image.height() - orig.y()) / max(self.px_per_mm, 1e-4)
+            origin_u = -float(x_orig_mm)
+            origin_v = -float(y_orig_mm)
+        else:
+            origin_u = -float(w_mm / 2.0)
+            origin_v = -float(h_mm / 2.0)
 
         # Convert image to Base64 PNG
         from PySide6.QtCore import QByteArray, QBuffer, QIODevice
@@ -677,7 +878,7 @@ class CanvasEditorDialog(QDialog):
             "image_data": b64,
             "width_mm": float(w_mm),
             "height_mm": float(h_mm),
-            "origin_uv": [-w_mm / 2.0, -h_mm / 2.0],  # centered at plane origin
+            "origin_uv": [origin_u, origin_v],
             "rotation_deg": 0.0,
             "opacity": self.sld_opacity.value() / 100.0,
             "visible": True,

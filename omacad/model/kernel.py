@@ -111,11 +111,16 @@ class CadKernel:
         cos_th = float(np.clip(edge.d1 @ edge.d2, -1.0, 1.0))
         theta = math.acos(cos_th)         # angle between the faces, as seen from the edge
         half = theta / 2.0
+        convex = getattr(edge, "convex", True)
+        m = 1e-3 * max(1.0, float(size)) if convex else 0.0
         if kind == "chamfer":
             s = float(size)
             A = np.array([s, 0.0])
             B = s * np.array([math.cos(theta), math.sin(theta)])
-            poly = [(0.0, 0.0), tuple(A), tuple(B)]
+            if m > 0:
+                poly = [(-m, -m), (s, -m), tuple(A), tuple(B), (-m, s)]
+            else:
+                poly = [(0.0, 0.0), tuple(A), tuple(B)]
         else:
             r = float(size)
             s = r / math.tan(half)
@@ -127,7 +132,10 @@ class CadKernel:
             sweep = (pb - pa + math.pi) % (2 * math.pi) - math.pi   # the short way round: faces the corner
             arc = [(c[0] + r * math.cos(pa + sweep * k / arc_segments), c[1] + r * math.sin(pa + sweep * k / arc_segments))
                    for k in range(1, arc_segments)]
-            poly = [(0.0, 0.0), tuple(A)] + arc + [tuple(B)]
+            if m > 0:
+                poly = [(-m, -m), (s, -m), tuple(A)] + arc + [tuple(B), (-m, s)]
+            else:
+                poly = [(0.0, 0.0), tuple(A)] + arc + [tuple(B)]
         area = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
                    for i in range(len(poly)))
         if area < 0:

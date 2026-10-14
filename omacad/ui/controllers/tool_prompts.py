@@ -888,3 +888,19 @@ class ToolPromptsMixin:
                 self.viewport.update()
                 self.status_label.setText(f"Inserted image reference: {data['name']} ({data['width_mm']:.1f} × {data['height_mm']:.1f} mm).")
 
+    def prompt_edit_canvas(self, cid: str):
+        """Edit / calibrate an existing canvas reference image."""
+        c = self.doc.canvases.get(cid)
+        if not c:
+            return
+        dlg = CanvasEditorDialog(self.doc, self, existing_canvas_id=cid)
+        if dlg.exec():
+            data = dlg.get_canvas_data()
+            if data:
+                # Invalidate cached texture in viewport if image data or dimensions changed
+                if hasattr(self.viewport, "_canvas_textures") and cid in self.viewport._canvas_textures:
+                    del self.viewport._canvas_textures[cid]
+                self.doc.update_canvas(cid, **data)
+                self.viewport.update()
+                self.status_label.setText(f"Updated image reference: {data.get('name', c.get('name'))}.")
+

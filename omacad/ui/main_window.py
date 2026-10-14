@@ -177,6 +177,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         self.browser.split_body_requested.connect(self.prompt_split_body)
         self.browser.shell_body_requested.connect(self.prompt_shell)
         self.browser.insert_canvas_requested.connect(self.prompt_insert_canvas)
+        self.browser.edit_canvas_requested.connect(self.prompt_edit_canvas)
 
     def setup_menu_bar(self):
         menubar = self.menuBar()

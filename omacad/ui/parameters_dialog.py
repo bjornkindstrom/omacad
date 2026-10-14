@@ -53,6 +53,16 @@ class ParametersDialog(QDialog):
         btn_del.clicked.connect(self.remove_selected)
         row.addWidget(btn_add)
         row.addWidget(btn_del)
+
+        btn_save_set = QPushButton("💾 Save Set…")
+        btn_save_set.setAutoDefault(False)
+        btn_save_set.clicked.connect(self.save_parameter_set)
+        btn_load_set = QPushButton("📂 Load Set…")
+        btn_load_set.setAutoDefault(False)
+        btn_load_set.clicked.connect(self.load_parameter_set)
+        row.addWidget(btn_save_set)
+        row.addWidget(btn_load_set)
+
         row.addStretch()
         btn_cancel = QPushButton("Cancel")
         btn_cancel.setAutoDefault(False)
@@ -134,3 +144,79 @@ class ParametersDialog(QDialog):
             QMessageBox.warning(self, "Parameters", "\n".join(problems))
             return
         self.accept()
+
+    def _sets_dir(self):
+        import os
+        from pathlib import Path
+        d = Path.home() / ".config" / "omacad" / "parameter_sets"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def save_parameter_set(self):
+        import json
+        from PySide6.QtWidgets import QInputDialog
+        params = self.collect()
+        if not params:
+            QMessageBox.information(self, "Save Parameter Set", "Add at least one parameter before saving a set.")
+            return
+        name, ok = QInputDialog.getText(self, "Save Parameter Set", "Name for this parameter set:")
+        if not ok or not name.strip():
+            return
+        filename = f"{name.strip()}.json"
+        path = self._sets_dir() / filename
+        data = {
+            "name": name.strip(),
+            "parameters": [{"name": p.name, "expr": p.expr, "comment": p.comment} for p in params]
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            QMessageBox.information(self, "Save Parameter Set", f"Saved parameter set '{name.strip()}'.")
+        except Exception as e:
+            QMessageBox.critical(self, "Save Parameter Set", f"Failed to save set: {e}")
+
+    def load_parameter_set(self):
+        import json
+        from PySide6.QtWidgets import QFileDialog
+        d = self._sets_dir()
+        path, _ = QFileDialog.getOpenFileName(self, "Load Parameter Set", str(d), "Parameter Sets (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            params = data.get("parameters", [])
+            if not params:
+                QMessageBox.warning(self, "Load Parameter Set", "No parameters found in this file.")
+                return
+            # Ask user whether to replace or merge
+            reply = QMessageBox.question(
+                self, "Load Parameter Set",
+                f"Replace existing parameters with the {len(params)} parameter(s) from this set?\n"
+                "(Choose 'No' to merge/append them to the existing list.)",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                return
+            if reply == QMessageBox.StandardButton.Yes:
+                self.table.setRowCount(0)
+            existing_names = {self.table.item(r, COL_NAME).text().strip() for r in range(self.table.rowCount())}
+            for p in params:
+                p_name = p.get("name", "").strip()
+                p_expr = str(p.get("expr", "")).strip()
+                p_comment = str(p.get("comment", ""))
+                if not p_name:
+                    continue
+                if p_name in existing_names:
+                    # update existing row
+                    for r in range(self.table.rowCount()):
+                        if self.table.item(r, COL_NAME).text().strip() == p_name:
+                            self.table.item(r, COL_EXPR).setText(p_expr)
+                            self.table.item(r, COL_COMMENT).setText(p_comment)
+                            break
+                else:
+                    self._append(p_name, p_expr, p_comment)
+                    existing_names.add(p_name)
+            self.recalculate()
+        except Exception as e:
+            QMessageBox.critical(self, "Load Parameter Set", f"Failed to load parameter set: {e}")

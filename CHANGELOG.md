@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.5.1 - 2026-10-14
+
+### Added
+- **Parameter auto-complete & parameter sets:** Typing in numeric fields now auto-completes parameter names with matching names and current values. Added "Save Set" and "Load Set" to the Change Parameters dialog to save and reuse parameter sets across projects.
+
+### Fixed
+- Extrude cut starting on a planar face no longer leaves an uncut zero-thickness coplanar skin/cap over the opening.
+- Straight-edge chamfers and fillets now extend a tiny margin into the empty side of convex edges (just like circular loops already do), eliminating zero-thickness fins ("fnas") left in hole walls and inside polygon corners.
+
 ## 0.7.5 - 2026-10-13
 
 ### Fixed

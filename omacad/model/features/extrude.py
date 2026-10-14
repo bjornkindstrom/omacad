@@ -118,7 +118,16 @@ class ExtrudeFeature(ProfileRefs, Feature):
             return -h, h
         if self.direction == "two_sides":
             return -abs(self.distance2), abs(d)
-        return (0.0, d) if d >= 0 else (d, 0.0)
+        z0, z1 = (0.0, d) if d >= 0 else (d, 0.0)
+        # For cuts starting on a body face, extend slightly into empty air past the sketch
+        # plane to prevent CSG from leaving a zero-thickness coplanar skin/cap over the opening.
+        if getattr(self, "operation", "") == "cut":
+            eps = 0.02
+            if d >= 0:
+                z0 = -eps
+            else:
+                z1 = eps
+        return z0, z1
 
     def build_solid(self, doc: Any) -> Optional[m3d.Manifold]:
         sketch = doc.sketches.get(self.sketch_id)

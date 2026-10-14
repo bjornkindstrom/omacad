@@ -29,6 +29,7 @@ class BrowserTree(QWidget):
     edit_sketch_requested = Signal(str)
     split_body_requested = Signal(str, str)
     insert_canvas_requested = Signal(str)
+    edit_canvas_requested = Signal(str)
     shell_body_requested = Signal(str)
     move_body_requested = Signal(str)
 
@@ -239,6 +240,8 @@ class BrowserTree(QWidget):
             self.doc.toggle_body_visibility(item_id)
         elif item_type == "sketch":
             self.edit_sketch_requested.emit(item_id)
+        elif item_type == "canvas":
+            self.edit_canvas_requested.emit(item_id)
         elif item_type == "section":
             self.doc.set_section_active(item_id, not self.doc.sections[item_id].get("active"))
 
@@ -302,6 +305,10 @@ class BrowserTree(QWidget):
             act_del.triggered.connect(lambda: self.doc.delete_body(item_id))
 
         elif item_type == "canvas":
+            act_edit = theme.action_with_icon(menu, "✏️ Edit Canvas (Calibrate / Set Origin)…")
+            act_edit.triggered.connect(lambda: self.edit_canvas_requested.emit(item_id))
+            act_rename = theme.action_with_icon(menu, "🏷️ Rename (F2)")
+            act_rename.triggered.connect(lambda: self.tree.editItem(item, 0))
             act_vis = theme.action_with_icon(menu, "👁️ Show / Hide")
             act_vis.triggered.connect(lambda: self.doc.toggle_canvas_visibility(item_id))
             menu.addSeparator()

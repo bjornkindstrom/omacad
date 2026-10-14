@@ -1,7 +1,8 @@
 """A QDoubleSpinBox that accepts arithmetic such as 10-1 or 2x(3+5) (see omacad.model.expr)."""
 
+from PySide6.QtCore import Qt, QStringListModel
 from PySide6.QtGui import QValidator
-from PySide6.QtWidgets import QDoubleSpinBox
+from PySide6.QtWidgets import QDoubleSpinBox, QCompleter
 
 from omacad.model import expr
 
@@ -11,8 +12,25 @@ class ExprDoubleSpinBox(QDoubleSpinBox):
         super().__init__(parent)
         self.setKeyboardTracking(True)  # live preview once the formula is complete
         self._expr = None  # the formula behind the current value, when it is not a plain number
+        self._completer_model = QStringListModel(self)
+        self._completer = QCompleter(self._completer_model, self)
+        self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._completer.setFilterMode(Qt.MatchFlag.MatchStartsWith)
+        self.lineEdit().setCompleter(self._completer)
+        self._completer.activated.connect(self._on_completer_activated)
+
+    def _on_completer_activated(self, text: str):
+        var_name = text.split(" (", 1)[0].strip()
+        self.lineEdit().setText(var_name)
+        self.interpretText()
+
+    def _update_completer(self):
+        vars_dict = expr.get_variables()
+        items = [f"{k} ({v:g})" for k, v in sorted(vars_dict.items())]
+        self._completer_model.setStringList(items)
 
     def focusInEvent(self, event):
+        self._update_completer()
         names = sorted(expr.get_variables())
         base = "Type a value, a formula (10-1, 2x(3+5)) or a parameter name."
         self.setToolTip(base + (f"\nParameters: {', '.join(names)}" if names else "\nNo parameters defined yet (Modify > Change Parameters)."))
