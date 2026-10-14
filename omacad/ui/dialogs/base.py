@@ -29,7 +29,7 @@ class BaseFeatureDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self._embedded = embedded
-        self.setFixedWidth(338)
+        self.setFixedWidth(358)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         style(self, """

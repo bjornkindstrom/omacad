@@ -25,7 +25,7 @@ class InspectorPanel(QWidget):
     def __init__(self, doc: Document, parent=None):
         super().__init__(parent)
         self.doc = doc
-        self.setFixedWidth(360)
+        self.setFixedWidth(380)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -100,7 +100,7 @@ class InspectorPanel(QWidget):
         dlg.setParent(self.tool_container)
         dlg.setWindowFlags(Qt.WindowType.Widget)
         dlg.setMinimumWidth(0)
-        dlg.setFixedWidth(338)
+        dlg.setFixedWidth(358)
         dlg.unsetCursor()
 
         self.tool_layout.addWidget(dlg)

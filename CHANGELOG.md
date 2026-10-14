@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.6.2 - 2026-10-14
+
+### Improved
+- **Tydlig styling och synlighet för rullgardinsmenyer (QComboBox):**
+  - Rullgardinsrutor har nu en distinkt knappram med kontrastrik bakgrund (`#2D3138`), tydliga gränslinjer och en markerad drop-down-knapp med pil (`QComboBox::down-arrow`).
+  - Förbättrad hover- och focus-återkoppling med CAD-accentfärg när menyn är aktiv.
+  - Optimerade och förtydligade etiketter i dialoger (t.ex. Pattern/Mirror och Move) så att texter inte klipps eller försvinner bakom pilen.
+  - Utökad bredd i sidopanelen till 380px (dialoger 358px) så att alla rullgardinsmenyer och etiketter ryms luftigt utan textavklippning.
+
 ## 0.7.6.1 - 2026-10-14
 
 ### Added

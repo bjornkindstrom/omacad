@@ -444,7 +444,9 @@ def _arrow_png(direction: str) -> str:
 def themeify(css: str) -> str:
     """Maps the colours (and font) of a stylesheet onto the active Omarchy theme."""
     if "@ARROW_UP@" in css:
-        css = css.replace("@ARROW_UP@", _arrow_png("up").replace("\\", "/")).replace("@ARROW_DOWN@", _arrow_png("down").replace("\\", "/"))
+        css = css.replace("@ARROW_UP@", _arrow_png("up").replace("\\", "/"))
+    if "@ARROW_DOWN@" in css:
+        css = css.replace("@ARROW_DOWN@", _arrow_png("down").replace("\\", "/"))
     css = _HEX.sub(lambda m: _palette.map_hex(m.group(0)), css)
 
     def rgba(m):
@@ -762,15 +764,15 @@ QPushButton#SuccessButton:pressed {
 }
 
 /* Input Fields & Spinners */
-QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
+QLineEdit, QDoubleSpinBox, QSpinBox {
     background-color: #1A1C1E;
-    border: 1px solid #3A3F46;
+    border: 1px solid #4D535E;
     border-radius: 4px;
     color: #E0E3E7;
-    padding: 4px 8px;
+    padding: 5px 8px;
     selection-background-color: #E26D28;
 }
-QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus {
+QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus {
     border: 1px solid #E26D28;
 }
 QSpinBox, QDoubleSpinBox {
@@ -811,9 +813,52 @@ QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
     width: 9px;
     height: 9px;
 }
+
+/* Dropdown ComboBox: distinct button box with drop-down arrow */
+QComboBox {
+    background-color: #2D3138;
+    border: 1px solid #555C68;
+    border-bottom: 2px solid #20242A;
+    border-radius: 5px;
+    color: #E0E3E7;
+    padding: 5px 28px 5px 10px;
+    font-weight: 500;
+    min-height: 20px;
+}
+QComboBox:hover {
+    background-color: #383D46;
+    border-color: #6C7482;
+    color: #FFFFFF;
+}
+QComboBox:focus, QComboBox:on {
+    border: 1px solid #E26D28;
+    border-bottom: 2px solid #B85317;
+}
 QComboBox::drop-down {
-    border: none;
-    width: 20px;
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 22px;
+    border-left: 1px solid #4D535E;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    background-color: #282C32;
+}
+QComboBox::drop-down:hover {
+    background-color: #3E434C;
+}
+QComboBox::down-arrow {
+    image: url(@ARROW_DOWN@);
+    width: 10px;
+    height: 10px;
+}
+QComboBox QAbstractItemView {
+    background-color: #25282D;
+    border: 1px solid #4D535E;
+    border-radius: 4px;
+    color: #E0E3E7;
+    selection-background-color: #E26D28;
+    selection-color: #FFFFFF;
+    padding: 4px;
 }
 
 /* Sliders */

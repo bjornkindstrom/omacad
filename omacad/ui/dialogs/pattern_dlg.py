@@ -21,12 +21,12 @@ class PatternDialog(BaseFeatureDialog):
 
     def __init__(self, doc: Document, parent=None, feature=None):
         super().__init__("Pattern / Mirror", parent)
-        self.setFixedWidth(380)
+        self.setFixedWidth(358)
         self.doc = doc
         form = QFormLayout()
 
         self.cmb_kind = QComboBox()
-        self.cmb_kind.addItems(["Evenly spaced copies (linear)", "Mirror around the body", "Around an axis (circular)", "Fill the face (even gaps)"])
+        self.cmb_kind.addItems(["Linear pattern", "Mirror body", "Circular pattern", "Fill face pattern"])
         form.addRow("Type:", self.cmb_kind)
 
         self.lst = QListWidget()
