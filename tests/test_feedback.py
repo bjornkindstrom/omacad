@@ -29,8 +29,16 @@ def test_bundle_survives_a_document_that_cannot_be_saved(tmp_path, monkeypatch):
 
 
 def test_agent_command_points_at_the_prompt_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(feedback.shutil, "which", lambda name: "/usr/bin/omarchy")
-    cmd = feedback.agent_command(tmp_path)
+    monkeypatch.setattr(feedback.shutil, "which", lambda name: "/usr/bin/omarchy" if name == "omarchy" else None)
+    cmd = feedback.agent_command(tmp_path, agent_choice="omarchy")
     assert cmd[:3] == ["omarchy", "agent", "prompt"] and f"{tmp_path}/PROMPT.md" in cmd[3]
+
+    # Test agy agent choice
+    monkeypatch.setattr(feedback.shutil, "which", lambda name: "/usr/bin/" + name if name in ("agy", "xdg-terminal-exec") else None)
+    cmd_agy = feedback.agent_command(tmp_path, agent_choice="agy")
+    assert "agy" in cmd_agy and "-i" in cmd_agy and f"{tmp_path}/PROMPT.md" in cmd_agy[-1]
+
+    # Test when nothing is found
     monkeypatch.setattr(feedback.shutil, "which", lambda name: None)
-    assert feedback.agent_command(tmp_path) is None
+    assert feedback.agent_command(tmp_path, agent_choice="unknown_tool") is None
+

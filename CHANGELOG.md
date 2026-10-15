@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.4 - 2026-10-15
+
+### Added
+- **Valbar AI-agent för felrättning (agy / Claude / Gemini / Omarchy):**
+  - Stöd för att köra **Antigravity CLI (`agy`)** direkt när fel rapporteras (F9).
+  - Möjlighet att välja standard-AI i Inställningar (`Ctrl+,` -> *Sketch & View* -> *AI agent for fixing errors*).
+  - Val av AI direkt i felrapporteringsdialogen med sparad standard.
+
 ## 0.7.8.3 - 2026-10-15
 
 ### Fixed
