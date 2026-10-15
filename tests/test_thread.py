@@ -205,3 +205,21 @@ def test_bottle_jar_round_thread_engagement():
     clash = neck ^ cap
     assert clash.volume() < 1e-4, f"Clash volume {clash.volume()} between bottle neck and cap must be 0!"
 
+
+def test_thread_does_not_protrude_past_length():
+    """Verify thread coils do not leave burrs/fnas protruding beyond [0, length] along Z."""
+    length = 40.0
+    for prof in ["trapezoidal_45", "iso_60", "round"]:
+        coil = CadKernel.create_thread(
+            diameter=40.0,
+            pitch=3.5,
+            length=length,
+            is_female=False,
+            profile=prof,
+            include_core=False,
+            attached_to_cylinder=True,
+        )
+        z = coil.to_mesh().vert_properties[:, 2]
+        assert np.max(z) <= length + 1e-5, f"Profile {prof} protrudes above top face: max z={np.max(z)}"
+        assert np.min(z) >= -1e-5, f"Profile {prof} protrudes below bottom face: min z={np.min(z)}"
+

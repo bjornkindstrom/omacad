@@ -541,6 +541,10 @@ class CadKernel:
             coil_mesh = m3d.Mesh(vert_properties=verts, tri_verts=tris)
             coil = m3d.Manifold(coil_mesh)
 
+            # Trim coils to the exact thread length [0, length] along Z to prevent
+            # thread profile overhangs/burrs ("fnas") past the cylinder ends.
+            coil = coil.trim_by_plane((0.0, 0.0, 1.0), 0.0).trim_by_plane((0.0, 0.0, -1.0), -l)
+
             if include_core and not is_female:
                 cyl_core = m3d.Manifold.cylinder(l, r_root, r_root, circular_segments=seg)
                 return cyl_core + coil
@@ -649,6 +653,10 @@ class CadKernel:
         tris = np.array(tris, dtype=np.int32)
         coil_mesh = m3d.Mesh(vert_properties=verts, tri_verts=tris)
         coil = m3d.Manifold(coil_mesh)
+
+        # Trim coils to the exact thread length [0, length] along Z to prevent
+        # thread profile overhangs/burrs ("fnas") past the cylinder ends.
+        coil = coil.trim_by_plane((0.0, 0.0, 1.0), 0.0).trim_by_plane((0.0, 0.0, -1.0), -l)
 
         if include_core and not is_female:
             cyl_core = m3d.Manifold.cylinder(l, r_root, r_root, circular_segments=seg)

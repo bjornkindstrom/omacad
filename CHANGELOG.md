@@ -3,6 +3,13 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.5 - 2026-10-15
+
+### Fixed
+- **Automatisk kapning av fnas och överhäng på gängändar (Thread / Coil end trimming):**
+  - Gängor och coils kapas nu automatiskt exakt längs ändplanen `z=0` och `z=length` med `trim_by_plane`.
+  - Detta eliminerar fnas och profiler som sticker ut förbi cylinderns ändytor vid både trapetsformade, metriska och runda profiler.
+
 ## 0.7.8.4 - 2026-10-15
 
 ### Added
