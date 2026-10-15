@@ -20,6 +20,7 @@ Nuvarande version: **0.6.10** (global ångra, testsvit, offset av bågar, rappor
 | **0.6.2–0.6.10** ✔ | Sidospår | Rounded Rect och Center Rounded Rect, rektangelknapp med rullgardin och valbar standard, **automatisk omstart** när en ny version committats (sparar och återställer dokument, öppen skiss och kamera), skisspaletten i inspektören, ytskisser med origo i ytans mitt, vyn ovanifrån rullar inte längre 90°, fotfillet krymper så den vilar på kroppen (0.6.7, bara slingor), tidslinjeklick färgar vad steget lade till/tog bort (0.6.8), **kamerainställningar**: synfält 10–60° (standard 30°) och ortografisk vy (0.6.9), värdet på extrudepilen när man drar och fler högerklicksmenyer i 3D och skiss (0.6.10) |
 | **0.7** | Säkerhetsnät + AI-återkoppling | **Autosave-historik**, krasch-återställning, versionshistorik med miniatyrer, säker laddning, **"Starta om med ny version"** (klart i 0.6.3: sparar allt och fortsätter där du slutade; kvar är bara en knapp för att välja själv), **"Det blev fel"-knappen** (se Del C) |
 | **0.8** | Lean, clean, unbreakable | Kodhälsa (se Del D): dela upp `viewport.py`, `main_window.py`, `timeline.py`, `dialogs.py`, lint och död kod bort, felgränser, CI-grindar |
+| **0.8.5** | Fusion-lik B-Rep Topologi | **Enhetlig B-Rep-modell (se Del F):** strikta Vertices, Edges, Loops och Faces utan konkurrerande kantobjekt. `Tangent Chain` i Fillet/Chamfer, Face-picking för perimeterval, stabila topologiska referenser. |
 | **0.9** | AI i appen | Inbyggd AI-konsol med levande utdata, layoutvakt som skärmdumpar och granskar automatiskt (se Del E) |
 | **0.10** | Modellera | Hole-dialog, Extrude: Taper + Start + All/To object, Press/Pull (Q), **Text i skiss + extrudera/emboss/deboss**. Smart: **S1 Markera liknande** |
 | **0.11** | Smart I | **S2 Stämpla**, **S3 Klicka-till-källa**, **S4 Print-verktygslåda**, **S5 Runda allt med regler** |
@@ -104,6 +105,20 @@ Så att vi kan fixa allt inifrån programmet, med "dig" körandes i appen och en
 - **Layoutvakt**: efter ändringar i gränssnittet och vid inaktivitet tar programmet **skärmdumpar automatiskt** (flera fönsterstorlekar och teman) och kör först billiga automatiska kontroller via Qt:s geometri: överlappande eller avklippta widgetar, element utanför fönstret, för små träffytor, text som inte får plats. Hittar den något (eller på begäran) skickas bilderna och mätvärdena till AI:n, som granskar layouten *innan användaren hunnit be om det*, rättar och visar före/efter. Samma metod för 3D-vyn: kända testmodeller renderas och jämförs mot referensbilder.
 - **Säkerhet för "inget får gå sönder"**: AI-ändringar görs i en git-gren/arbetsträd (`ai/<id>`), aldrig direkt på användarens fungerande version. Testerna måste vara gröna, annars återställs allt automatiskt. Knappen *Använd och starta om* slår ihop och startar om med den nya versionen (se 0.7); *Ångra* tar tillbaka den förra versionen. Autonominivå väljs i inställningarna: av, *föreslå*, *rätta med godkännande* (standard), *rätta småsaker automatiskt* (layout och stavning, aldrig geometri).
 - **Minnet** är `omacad.md`: agenten läser den först och lägger till en rad i lösningsloggen efter varje rättning, så att samma fel inte görs om.
+
+## Del F – Fusion-lik B-Rep Topologi (0.8.5)
+
+För att garantera långsiktig stabilitet och förhindra tvetydigheter i kant- och yturval:
+- **Ren B-Rep-topologi:**
+  - En fast topologihierarki: `Body -> Faces -> Loops -> Edges -> Vertices`.
+  - **Inga parallella/konkurrerande kantobjekt**: Varje kurva/segment på en solid representeras av exakt en unik topologisk Edge som delas mellan angränsande ytor.
+  - Sammansatta slingor (`LoopEdge`) är inte längre separata kantobjekt som krockar med linjer och bågar, utan ytans `outer_loop` / `inner_loops` av ordnade Edges.
+- **Urval i paritet med Fusion 360:**
+  - **Tangent Chain (aktiv som standard i Fillet/Chamfer):** Klick på en linje eller båge plockar automatiskt alla sammanhängande tangentiella kanter ($G^1$).
+  - **Face Selection:** Klick på en plan eller cylindrisk yta i Fillet/Chamfer väljer alla dess avgränsande kanter.
+  - **Tangent propagation i 3D:** Automatisk spårning av kurvkedjor och $G^1$-skarvar utan tröskelproblem.
+- **Topologisk stabilitet (Persistent Naming):**
+  - Entiteter får deterministiska ID:n baserade på sin geometriska historik så att funktioner som Fillet och Chamfer inte tappar referenser vid uppströmsändringar.
 
 ## Arbetsregler
 
