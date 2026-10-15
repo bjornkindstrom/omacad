@@ -83,8 +83,11 @@ class PickerMixin:
                 direction = direction / dist if dist > 1e-9 else direction
                 blocked = (not xray) and any((t := ray_hit_face(f, origin, direction)) is not None and t < dist - 1e-3
                                              for bd in self.doc.bodies.values() if bd.visible for f in bd.faces)
-                if not blocked and (d < best_d - 1.0 or (d <= best_d + 1.0 and dist < best_eye)):
-                    best, best_d, best_eye = e, min(d, best_d), dist   # near-ties (edges on top of each other): the closer one
+                if not blocked:
+                    loop_beats_circ = getattr(e, "kind", "") == "loop" and getattr(best, "kind", "") == "circle"
+                    circ_beats_loop = getattr(best, "kind", "") == "loop" and getattr(e, "kind", "") == "circle"
+                    if d < best_d - 1.0 or (d <= best_d + 1.0 and (loop_beats_circ or (not circ_beats_loop and dist < best_eye))):
+                        best, best_d, best_eye = e, min(d, best_d), dist   # near-ties: prefer composite loop, otherwise closer
         return best
 
     def _edge_loop(self, e, other_face: bool = False):

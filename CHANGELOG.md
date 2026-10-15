@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.9 - 2026-10-15
+
+### Fixed
+- **Markering av LoopEdge vid överlappande cirkelbågar (Fillet/Chamfer):**
+  - På plana ytor med sammansatta konturer (raka sidor och hörnradier, t.ex. avrundade plattor) fanns både en övergripande `LoopEdge` och enskilda `CircularEdge`-bågar för hörnen. Vid klick för kantmarkering prioriterades cirkelbågen om den låg marginellt närmare skärmklicket, vilket hindrade användaren från att markera och fasa/runda hela ytterkonturen. Nu prioriteras `LoopEdge` vid sammanfallande kanter (near-ties inom 1 px) i `_pick_edge`.
+
 ## 0.7.8.8 - 2026-10-15
 
 ### Performance & Fixed (Shell Feature)
