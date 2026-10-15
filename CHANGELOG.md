@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.0 - 2026-10-15
+
+### Added & Fixed (Fusion 360 Parity)
+- **Markering av plana ytor i Fillet och Chamfer (Fusion 360-paritet):**
+  - I Fillet/Chamfer-kantmarkeringsläge kan användaren nu klicka direkt på en plan yta (eller hovra över den) för att markera alla dess yttre gränskonturer och inre hål/slitsöglor på en gång, precis som i Fusion 360.
+  - Hovring över en plan yta i kantläget ger en genomskinlig färgmarkering för tydlig feedback.
+  - Klick på en plan yta markerar alla tillhörande loopar/kanter; om de redan är markerade avmarkeras de (eller avmarkeras selektivt med Ctrl+klick).
+  - Löser problemet där användare vänt en modell upp och ner och försökt fasa/runda undersidan och dess konturer.
+
 ## 0.7.8.9 - 2026-10-15
 
 ### Fixed

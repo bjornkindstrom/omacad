@@ -1802,6 +1802,16 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                         self.selected_edges.append(c)
                 self.edges_selection_changed.emit()
                 self.update()
+            else:
+                hit = self._pick_face(x, y)
+                if hit is not None:
+                    body, face = hit
+                    face_edges = self._edges_of_face(face, body)
+                    for fe in face_edges:
+                        if not any(self._same_edge(fe, k) for k in self.selected_edges):
+                            self.selected_edges.append(fe)
+                    self.edges_selection_changed.emit()
+                    self.update()
             return
         if event.button() == Qt.MouseButton.LeftButton and self._can_select_sketch_entities():
             ent = self._pick_entity(x, y)
@@ -2340,6 +2350,26 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     self.update()
                 else:
                     self._toggle_edge(e)
+            else:
+                hit = self._pick_face(event.position().x(), event.position().y())
+                if hit is not None:
+                    body, face = hit
+                    face_edges = self._edges_of_face(face, body)
+                    if face_edges:
+                        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                            # Ctrl+click removes all edges of this face
+                            self.selected_edges = [k for k in self.selected_edges if not any(self._same_edge(k, fe) for fe in face_edges)]
+                        else:
+                            # If all edges of this face are already selected, toggle them off; otherwise select all
+                            all_selected = all(any(self._same_edge(k, fe) for k in self.selected_edges) for fe in face_edges)
+                            if all_selected:
+                                self.selected_edges = [k for k in self.selected_edges if not any(self._same_edge(k, fe) for fe in face_edges)]
+                            else:
+                                for fe in face_edges:
+                                    if not any(self._same_edge(k, fe) for k in self.selected_edges):
+                                        self.selected_edges.append(fe)
+                        self.edges_selection_changed.emit()
+                        self.update()
             return
         if was_click and self.plane_pick_mode:
             self._press_pos = None

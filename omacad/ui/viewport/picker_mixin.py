@@ -39,6 +39,7 @@ class PickerMixin:
         self.edge_pick_mode = True
         self.edge_xray = False
         self.hover_edge = None
+        self.hover_face = None
         self.selected_edges = []
         self.setFocus()
         self.update()
@@ -46,6 +47,7 @@ class PickerMixin:
     def end_edge_pick(self, cancelled: bool = False):
         self.edge_pick_mode = False
         self.hover_edge = None
+        self.hover_face = None
         self.selected_edges = []
         if cancelled:
             self.edge_pick_cancelled.emit()
@@ -116,10 +118,53 @@ class PickerMixin:
                     frontier.append(c)
         return chain
 
+    def _pick_face(self, x: float, y: float):
+        """Ray-pick the nearest visible planar body face under the cursor."""
+        proj, view, _ = self.get_matrices()
+        origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        best, best_t = None, float("inf")
+        for body in self.doc.bodies.values():
+            if not body.visible:
+                continue
+            for face in body.faces:
+                t = ray_hit_face(face, origin, ray_dir)
+                if t is not None and t < best_t:
+                    best, best_t = (body, face), t
+        return best
+
+    def _edges_of_face(self, face, body) -> list:
+        """All edges forming the boundary and holes of a planar face."""
+        n = np.asarray(face.normal, dtype=float)
+        orig = np.asarray(face.origin, dtype=float)
+        loops = [e for e in body.edges if getattr(e, "kind", "") == "loop"
+                 and abs(float(e.n @ n) - 1.0) < 1e-2
+                 and abs(float((e.centroid - orig) @ n)) < 1e-3]
+        if loops:
+            return loops
+        res = []
+        for e in body.edges:
+            if getattr(e, "kind", "") == "line":
+                if abs(float((e.p0 - orig) @ n)) < 1e-3 and abs(float((e.p1 - orig) @ n)) < 1e-3:
+                    if abs(float(e.n1 @ n) - 1.0) < 1e-2 or abs(float(e.n2 @ n) - 1.0) < 1e-2:
+                        res.append(e)
+            elif getattr(e, "kind", "") == "circle":
+                if abs(float((e.center - orig) @ n)) < 1e-3:
+                    if abs(float(e.axis @ n) - 1.0) < 1e-2 or abs(float(e.axis @ n) + 1.0) < 1e-2:
+                        res.append(e)
+        return res
+
     def _update_edge_hover(self, x: float, y: float):
         e = self._pick_edge(x, y)
-        if (e is None) != (self.hover_edge is None) or (e is not None and not self._same_edge(e, self.hover_edge)):
+        face = None
+        if e is None:
+            hit = self._pick_face(x, y)
+            if hit is not None:
+                face = hit[1]
+        edge_changed = (e is None) != (self.hover_edge is None) or (e is not None and not self._same_edge(e, self.hover_edge))
+        face_changed = (face is None) != (self.hover_face is None) or (face is not None and (self.hover_face is None or face.body_id != self.hover_face.body_id or face.index != self.hover_face.index))
+        if edge_changed or face_changed:
             self.hover_edge = e
+            self.hover_face = face
             self.update()
 
     def _visible_edges(self):
@@ -136,7 +181,25 @@ class PickerMixin:
         self.update()
 
     def render_edge_pick(self, mvp: np.ndarray):
-        if not self.edge_pick_mode or self.prog_thick is None:
+        if not self.edge_pick_mode:
+            return
+        # If hovering a face, highlight it with translucent flat shading
+        if self.hover_face is not None and self.hover_edge is None and self.prog_flat is not None:
+            GL.glUseProgram(self.prog_flat)
+            loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
+            loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
+            loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
+            GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
+            GL.glDepthMask(GL.GL_FALSE)
+            GL.glDisable(GL.GL_DEPTH_TEST)
+            lift = self.hover_face.normal * 0.05
+            tris = (self.hover_face.tris + lift).reshape(-1, 3).astype(np.float32)
+            GL.glUniform4f(loc_col, *theme.palette().highlight01(0.1), 0.35)
+            self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, tris)
+            GL.glDepthMask(GL.GL_TRUE)
+            GL.glEnable(GL.GL_DEPTH_TEST)
+
+        if self.prog_thick is None:
             return
         GL.glDisable(GL.GL_DEPTH_TEST)
         def flat(edges):
