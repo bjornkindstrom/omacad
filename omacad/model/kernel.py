@@ -459,7 +459,70 @@ class CadKernel:
         n_pts = max(16, int(round(turns * seg)))
 
         # Tooth profile geometry
-        if profile == "iso_60":
+        if profile == "round" or profile == "circular":
+            r_wire = 0.22 * p
+            if not is_female:
+                r_center = (dia * 0.5) - r_wire - (clr * 0.5)
+                r_root = r_center - r_wire
+            else:
+                r_center = (dia * 0.5) - r_wire + (clr * 0.5)
+                r_root = (dia * 0.5) - (2.0 * r_wire)
+            
+            n_circ = 16
+            circ_angles = np.linspace(0.0, 2.0 * math.pi, n_circ, endpoint=False)
+
+            theta = np.linspace(0, turns * 2.0 * math.pi, n_pts + 1)
+            z_base = (theta / (2.0 * math.pi)) * p
+
+            if taper_lead_in:
+                taper_n = max(1, int(round(taper_turns * seg)))
+                f_taper = np.ones(n_pts + 1, dtype=np.float32)
+                for i in range(min(taper_n, (n_pts + 1) // 2)):
+                    frac = i / float(taper_n)
+                    smooth_val = float(math.sin(0.5 * math.pi * frac) ** 2)
+                    f_taper[i] = smooth_val
+                    f_taper[-(i + 1)] = smooth_val
+            else:
+                f_taper = np.ones(n_pts + 1, dtype=np.float32)
+
+            verts = []
+            for i in range(n_pts + 1):
+                th = float(theta[i])
+                c, s = float(math.cos(th)), float(math.sin(th))
+                zb = float(z_base[i])
+                rw = max(0.02 * r_wire, r_wire * float(f_taper[i]))
+                for phi in circ_angles:
+                    r = r_center + rw * float(math.cos(phi))
+                    z = zb + rw * float(math.sin(phi))
+                    verts.append([r * c, r * s, z])
+
+            verts = np.array(verts, dtype=np.float32)
+            tris = []
+            for i in range(n_pts):
+                b0 = i * n_circ
+                b1 = (i + 1) * n_circ
+                for j in range(n_circ):
+                    j_next = (j + 1) % n_circ
+                    tris.append([b0 + j, b1 + j, b1 + j_next])
+                    tris.append([b0 + j, b1 + j_next, b0 + j_next])
+
+            # Watertight end caps with consistent normal orientation:
+            for j in range(1, n_circ - 1):
+                tris.append([0, j, j + 1])
+            end_b = n_pts * n_circ
+            for j in range(1, n_circ - 1):
+                tris.append([end_b + 0, end_b + j + 1, end_b + j])
+
+            tris = np.array(tris, dtype=np.int32)
+            coil_mesh = m3d.Mesh(vert_properties=verts, tri_verts=tris)
+            coil = m3d.Manifold(coil_mesh)
+
+            if include_core:
+                cyl_core = m3d.Manifold.cylinder(l, r_root, r_root, circular_segments=seg)
+                return cyl_core + coil
+            return coil
+
+        elif profile == "iso_60":
             # 60 degree metric thread profile:
             # flank angle 30 deg to normal, tooth height ~ 0.54 * pitch
             flank_dz = 0.35 * p

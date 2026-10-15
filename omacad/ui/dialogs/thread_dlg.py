@@ -98,15 +98,20 @@ class ThreadDialog(BaseFeatureDialog):
         self.cmb_target.currentIndexChanged.connect(self._on_target_changed)
         form.addRow("Target:", self.cmb_target)
 
-        # 3D Printing Optimizations Group
-        grp_3d = QGroupBox("3D Print Optimeringar")
+        # 3D Printing & Profile Group
+        grp_3d = QGroupBox("Gängprofil & Optimeringar")
         grp_lay = QVBoxLayout(grp_3d)
 
-        self.chk_profile = QCheckBox("45° Trapezoidal (Printbar utan support)")
-        self.chk_profile.setChecked(True)
-        self.chk_profile.setToolTip("45° vinkel på gängflankerna eliminerar överhäng som säckar ihop i FDM-print.")
-        self.chk_profile.toggled.connect(lambda _: self.changed.emit())
-        grp_lay.addWidget(self.chk_profile)
+        # Profile type selector
+        prof_row = QHBoxLayout()
+        prof_row.addWidget(QLabel("Profil:"))
+        self.cmb_profile = QComboBox()
+        self.cmb_profile.addItem("45° Trapezoidal (3D-Print säker, utan support)", "trapezoidal_45")
+        self.cmb_profile.addItem("Round / Circular Coil (Rundad fjäder / gänga)", "round")
+        self.cmb_profile.addItem("ISO 60° (Standard metrisk)", "iso_60")
+        self.cmb_profile.currentIndexChanged.connect(lambda _: self.changed.emit())
+        prof_row.addWidget(self.cmb_profile, 1)
+        grp_lay.addLayout(prof_row)
 
         # Clearance row
         clr_layout = QHBoxLayout()
@@ -131,8 +136,8 @@ class ThreadDialog(BaseFeatureDialog):
         form.addRow(grp_3d)
 
         # Placement Face button & label
-        self.btn_face = QPushButton("Välj yta (Start face…)")
-        self.btn_face.setToolTip("Klicka på en yta eller plan i 3D-vyn där gängan ska börja.")
+        self.btn_face = QPushButton("Välj yta / cylinder (Attach…)")
+        self.btn_face.setToolTip("Klicka på en yta, plan eller direkt på utsidan/insidan av en cylinder i 3D-vyn.")
         self.btn_face.setAutoDefault(False)
         self.btn_face.clicked.connect(self.pick_face_requested)
         self.lbl_face = QLabel("Default: XY ground plane")
@@ -210,10 +215,50 @@ class ThreadDialog(BaseFeatureDialog):
         self.lbl_face.setText(f"{p_name}")
         self.changed.emit()
 
+    def apply_cylinder_info(self, info: dict, body_id: Optional[str] = None):
+        """Automatically configure thread settings from a clicked cylindrical surface (inside or outside)."""
+        dia = float(info["diameter"])
+        length = float(info["length"])
+        is_internal = bool(info["is_internal"])
+
+        self.spn_dia.blockSignals(True)
+        self.spn_length.blockSignals(True)
+        self.cmb_type.blockSignals(True)
+        self.cmb_target.blockSignals(True)
+
+        self.spn_dia.setValue(dia)
+        self.spn_length.setValue(length)
+
+        # Thread Type: Female if inside hole, Male if outside cylinder
+        self.cmb_type.setCurrentIndex(1 if is_internal else 0)
+
+        # Select target body if given
+        if body_id and body_id in self.body_ids:
+            idx = self.cmb_target.findData(body_id)
+            if idx >= 0:
+                self.cmb_target.setCurrentIndex(idx)
+
+        # Plane placement along cylinder axis and bottom origin
+        self.plane_origin = list(map(float, info["origin"]))
+        self.plane_normal = list(map(float, info["axis"]))
+        self.plane_u = list(map(float, info.get("u_axis", [1, 0, 0])))
+        self.plane_v = list(map(float, info.get("v_axis", [0, 1, 0])))
+
+        kind_desc = "Insida hål" if is_internal else "Utsida cylinder"
+        self.lbl_face.setText(f"{kind_desc} (Ø{dia:g} mm, L={length:g} mm)")
+
+        self.spn_dia.blockSignals(False)
+        self.spn_length.blockSignals(False)
+        self.cmb_type.blockSignals(False)
+        self.cmb_target.blockSignals(False)
+
+        self._on_dim_changed()
+        self.changed.emit()
+
     def get_values(self):
         is_female = bool(self.cmb_type.currentData())
         target_bid = self.cmb_target.currentData()
-        profile_type = "trapezoidal_45" if self.chk_profile.isChecked() else "iso_60"
+        profile_type = str(self.cmb_profile.currentData() or "trapezoidal_45")
         op = "cut" if (target_bid and is_female) else ("join" if target_bid else "new_body")
 
         return {

@@ -80,3 +80,51 @@ def test_document_add_thread_feature_and_timeline():
     assert feat.pitch == 1.5
     assert feat.clearance == 0.2
     assert len(doc2.bodies) == 1
+
+
+def test_cad_kernel_create_thread_round_coil():
+    """Verify round/circular profile coil generation is watertight with positive volume."""
+    coil = CadKernel.create_thread(
+        diameter=14.0,
+        pitch=3.0,
+        length=24.0,
+        is_female=False,
+        clearance=0.25,
+        profile="round",
+        taper_lead_in=True,
+        taper_turns=0.75,
+        include_core=False,
+    )
+    assert not coil.is_empty()
+    assert str(coil.status()) == "Error.NoError"
+    assert coil.volume() > 0.0
+
+
+def test_detect_cylinder_surface_external_and_internal():
+    """Verify automatic detection of external cylinder (male) vs internal hole (female)."""
+    from omacad.model.faces import detect_cylinder_surface, ray_mesh_hit
+
+    # 1. External cylinder
+    cyl = CadKernel.create_cylinder(radius=10.0, height=35.0, center=False)
+    mesh_cyl = CadKernel.extract_render_mesh(cyl)
+    hit1 = ray_mesh_hit(mesh_cyl, [0.0, -40.0, 15.0], [0.0, 1.0, 0.0])
+    assert hit1 is not None
+    info1 = detect_cylinder_surface(mesh_cyl, hit1[1])
+    assert info1 is not None
+    assert abs(info1["radius"] - 10.0) < 0.1
+    assert abs(info1["length"] - 35.0) < 0.1
+    assert info1["is_internal"] is False
+
+    # 2. Internal hole in a box
+    box = CadKernel.create_box(40.0, 40.0, 30.0, center=False)
+    hole = CadKernel.create_cylinder(radius=6.0, height=50.0, center=False).translate([20.0, 20.0, -10.0])
+    nut = box - hole
+    mesh_nut = CadKernel.extract_render_mesh(nut)
+    hit2 = ray_mesh_hit(mesh_nut, [20.0, 20.0, 15.0], [1.0, 0.0, 0.0])
+    assert hit2 is not None
+    info2 = detect_cylinder_surface(mesh_nut, hit2[1])
+    assert info2 is not None
+    assert abs(info2["radius"] - 6.0) < 0.1
+    assert abs(info2["length"] - 30.0) < 0.1
+    assert info2["is_internal"] is True
+

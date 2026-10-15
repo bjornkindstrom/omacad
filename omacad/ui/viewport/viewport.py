@@ -70,6 +70,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     surface_picked = Signal(object)       # dict(point, patch) of any body surface (planar or curved)
     target_plane_picked = Signal(object)  # plane chosen as an extrude target (distance to face)
     primitive_face_picked = Signal(object)  # plane chosen as origin/face for box or cylinder
+    cylinder_picked = Signal(object)        # dict with cylinder parameters (radius, length, axis, origin, is_internal)
     shell_face_picked = Signal(object)   # plane/face chosen for hollow shell open face
     move_body_picked = Signal(object)    # plane/face chosen for move body selection
     status_message = Signal(str)
@@ -2332,6 +2333,12 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     self.end_plane_pick()
                     self.surface_picked.emit(hit)
                 return
+            if self.plane_pick_purpose == "thread_surface":
+                cyl = self._pick_cylinder_surface(event.position().x(), event.position().y())
+                if cyl is not None:
+                    self.end_plane_pick()
+                    self.cylinder_picked.emit(cyl)
+                    return
             target = self._pick_plane_target(event.position().x(), event.position().y())
             if target is not None:
                 plane = self.plane_from_target(target)

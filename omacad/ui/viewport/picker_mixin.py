@@ -230,6 +230,28 @@ class PickerMixin:
         self.preview_plane = plane
         self.update()
 
+    def _pick_cylinder_surface(self, x: float, y: float) -> Optional[dict]:
+        """Detect if clicked/hovered surface is a cylindrical face (bolt or hole) or return hit info."""
+        from omacad.model.faces import ray_mesh_hit, detect_cylinder_surface
+        proj, view, _ = self.get_matrices()
+        origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        best = None
+        for body in self.doc.bodies.values():
+            mesh = body.render_mesh
+            if not body.visible or mesh is None or len(mesh.vertices) == 0:
+                continue
+            hit = ray_mesh_hit(mesh, origin, ray_dir)
+            if hit is not None and (best is None or hit[0] < best[0]):
+                best = (hit[0], body.body_id, mesh, hit[1])
+        if best is None:
+            return None
+        t, body_id, mesh, tri = best
+        cyl_info = detect_cylinder_surface(mesh, tri)
+        if cyl_info is not None:
+            cyl_info["body_id"] = body_id
+            return cyl_info
+        return None
+
     def _pick_surface(self, x: float, y: float):
         """Any body surface under the cursor (curved ones too): the hit point and its smooth patch of vertices."""
         from omacad.model.faces import ray_mesh_hit, smooth_patch_vertices

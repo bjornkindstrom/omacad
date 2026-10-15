@@ -781,3 +781,111 @@ def smooth_patch_vertices(mesh, tri_idx: int, max_angle_deg: float = 35.0):
                     seen.add(nb)
                     stack.append(nb)
     return tri[sorted(seen)].reshape(-1, 3)
+
+
+def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
+    """Detect if the smooth patch around tri_idx is a cylindrical surface (pin/bolt or internal hole).
+
+    Returns a dict with:
+      radius: cylinder radius (mm)
+      diameter: cylinder diameter (mm)
+      length: cylinder length along axis (mm)
+      axis: normalized 3D axis vector
+      origin: 3D point at the bottom/start of cylinder on the axis
+      is_internal: True for internal hole / female, False for external pin / male
+      u_axis, v_axis: orthogonal vectors perpendicular to axis
+    or None if the patch is planar, spherical, or irregular.
+    """
+    patch = smooth_patch_vertices(mesh, tri_idx, max_angle_deg=35.0)
+    if len(patch) < 24:
+        return None
+
+    tri = patch.reshape(-1, 3, 3)
+    nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    ln = np.linalg.norm(nrm, axis=1)
+    if np.any(ln == 0):
+        return None
+    nrm = nrm / ln[:, None]
+
+    # If all normals are almost identical, it's a planar face, not a cylinder
+    if float(np.ptp(nrm, axis=0).max()) < 0.15:
+        return None
+
+    # For a cylindrical surface, face normals are perpendicular to the cylinder axis: nrm @ axis ~ 0
+    # SVD on face normals: the singular vector with smallest singular value is the axis
+    try:
+        _, s, vh = np.linalg.svd(nrm)
+        if s[2] / max(s[0], 1e-9) > 0.35:
+            # Normals vary in all 3 directions (e.g. sphere or torus), not cylinder
+            return None
+        axis = vh[2].copy()
+    except Exception:
+        return None
+
+    axis_len = float(np.linalg.norm(axis))
+    if axis_len < 1e-6:
+        return None
+    axis /= axis_len
+
+    # Standardize axis direction: prefer positive Z, then positive Y, then positive X
+    if axis[2] < -1e-4 or (abs(axis[2]) <= 1e-4 and (axis[1] < -1e-4 or (abs(axis[1]) <= 1e-4 and axis[0] < 0))):
+        axis = -axis
+
+    # Create perpendicular basis u_vec, v_vec
+    if abs(axis[0]) < 0.9:
+        u_vec = np.cross(axis, [1.0, 0.0, 0.0])
+    else:
+        u_vec = np.cross(axis, [0.0, 1.0, 0.0])
+    u_vec /= float(np.linalg.norm(u_vec))
+    v_vec = np.cross(axis, u_vec)
+
+    p_mean = patch.mean(axis=0)
+    diff = patch - p_mean
+    u_coords = diff @ u_vec
+    v_coords = diff @ v_vec
+
+    # 2D circle fit via linear least squares
+    A = np.column_stack([2.0 * u_coords, 2.0 * v_coords, np.ones(len(patch))])
+    b = u_coords**2 + v_coords**2
+    try:
+        sol, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+        du, dv, c_const = sol
+        rad_sq = c_const + du**2 + dv**2
+        if rad_sq <= 0:
+            return None
+        radius = float(np.sqrt(rad_sq))
+    except Exception:
+        return None
+
+    if radius < 0.1 or radius > 5000.0:
+        return None
+
+    center_on_axis = p_mean + du * u_vec + dv * v_vec
+
+    # Verify fit quality: points should be at distance ~ radius from axis
+    dists_to_axis = np.linalg.norm(diff - np.outer(diff @ axis, axis) - (du * u_vec + dv * v_vec), axis=1)
+    if float(np.std(dists_to_axis)) > 0.15 * radius:
+        return None
+
+    z_coords = (patch - center_on_axis) @ axis
+    z_min, z_max = float(z_coords.min()), float(z_coords.max())
+    length = max(0.5, z_max - z_min)
+    origin_pt = center_on_axis + z_min * axis
+
+    # Determine internal (hole) vs external (pin):
+    sample_pt = patch[0]
+    sample_norm = nrm[0]
+    radial_vec = sample_pt - (center_on_axis + ((sample_pt - center_on_axis) @ axis) * axis)
+    is_internal = bool(float(sample_norm @ radial_vec) < 0.0)
+
+    return {
+        "radius": radius,
+        "diameter": round(2.0 * radius, 3),
+        "length": round(length, 3),
+        "axis": axis,
+        "origin": origin_pt,
+        "is_internal": is_internal,
+        "u_axis": u_vec,
+        "v_axis": v_vec,
+        "patch": patch,
+    }

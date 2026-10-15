@@ -162,7 +162,9 @@ def edit_feature(win, doc, index: int) -> bool:
         dlg.spn_pitch.setValue(feat.pitch)
         dlg.spn_length.setValue(feat.length)
         dlg.spn_clearance.setValue(feat.clearance)
-        dlg.chk_profile.setChecked(feat.profile == "trapezoidal_45")
+        prof_idx = dlg.cmb_profile.findData(getattr(feat, "profile", "trapezoidal_45"))
+        if prof_idx >= 0:
+            dlg.cmb_profile.setCurrentIndex(prof_idx)
         dlg.chk_taper.setChecked(feat.taper_lead_in)
         idx_type = 1 if feat.is_female else 0
         dlg.cmb_type.setCurrentIndex(idx_type)

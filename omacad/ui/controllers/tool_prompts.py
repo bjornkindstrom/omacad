@@ -732,11 +732,15 @@ class ToolPromptsMixin:
             self.viewport.update()
 
         def on_pick_face():
-            self.viewport.begin_plane_pick("primitive_face")
-            self.status_label.setText("Thread / Coil: Klicka på ytan eller planet där gängan ska börja (Esc avbryter).")
+            self.viewport.begin_plane_pick("thread_surface")
+            self.status_label.setText("Thread / Coil: Klicka på en plan yta eller direkt på utsidan/insidan av en cylinder (Esc avbryter).")
 
         def on_face_picked(plane):
             dlg.set_plane(plane)
+            dlg.activateWindow()
+
+        def on_cylinder_picked(cyl_info):
+            dlg.apply_cylinder_info(cyl_info, body_id=cyl_info.get("body_id"))
             dlg.activateWindow()
 
         def on_finished(result):
@@ -750,6 +754,10 @@ class ToolPromptsMixin:
                 pass
             try:
                 self.viewport.primitive_face_picked.disconnect(on_face_picked)
+            except Exception:
+                pass
+            try:
+                self.viewport.cylinder_picked.disconnect(on_cylinder_picked)
             except Exception:
                 pass
             try:
@@ -770,6 +778,7 @@ class ToolPromptsMixin:
         dlg.changed.connect(refresh_preview)
         dlg.pick_face_requested.connect(on_pick_face)
         self.viewport.primitive_face_picked.connect(on_face_picked)
+        self.viewport.cylinder_picked.connect(on_cylinder_picked)
         self.viewport.body_clicked.connect(dlg.select_body)
         dlg.finished.connect(on_finished)
         self.dock(dlg)

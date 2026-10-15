@@ -3,6 +3,16 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.7.1 - 2026-10-15
+
+### Added
+- **Automatisk attach till cylinder (utsida eller hål):**
+  - Klicka på mantelytan på en cylinder eller insidan av ett cylindriskt hål för att automatiskt fästa gängan eller coilen.
+  - Omacad analyserar automatiskt geometrin och fyller i cylinderns mittaxel, diameter och längd.
+  - Normalanalys känner av om du klickat på **utsidan** (Male / yttergänga) och ställer in `Join`, eller **insidan** (Female / innergänga) och ställer in `Cut`.
+- **Rundad coil-profil (*Round / Circular Coil*):**
+  - Lagt till profilen "Round / Circular Coil" för fjädrar, rundgängor, rörcoils och runda spiralspår med jämn och vattentät geometri samt konsekvent triangelorientering.
+
 ## 0.7.7 - 2026-10-14
 
 ### Added
