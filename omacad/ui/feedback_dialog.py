@@ -210,27 +210,51 @@ class FeedbackDialog(QDialog):
         self.note.setMaximumHeight(140)
         lay.addWidget(self._note_label)
         lay.addWidget(self.note)
-        self.chk_fix = QCheckBox("Let the AI (Omarchy's default agent) fix it now")
+
+        from omacad.ui.settings import get_settings
+        from omacad import feedback
+        self.settings = get_settings()
+
+        self.chk_fix = QCheckBox("Let the AI fix it now:")
         self.chk_fix.setChecked(True)
-        self.chk_fix.setToolTip("Opens the default coding agent in a terminal with the report. Untick to only save the report.")
+        self.chk_fix.setToolTip("Opens the coding agent in a terminal with the report. Untick to only save the report.")
+
+        from PySide6.QtWidgets import QComboBox
+        self.cmb_agent = QComboBox()
+        cur_agent = self.settings.get("ai_agent", "omarchy")
+        for key, name in feedback.available_agents():
+            self.cmb_agent.addItem(name, key)
+        idx = self.cmb_agent.findData(cur_agent)
+        if idx >= 0:
+            self.cmb_agent.setCurrentIndex(idx)
+        self.chk_fix.toggled.connect(self.cmb_agent.setEnabled)
+
+        fix_row = QHBoxLayout()
+        fix_row.addWidget(self.chk_fix)
+        fix_row.addWidget(self.cmb_agent)
+        fix_row.addStretch()
+
         self.edt_name = QLineEdit()
         if mode == "request":
             self.chk_fix.setVisible(False)
-            from omacad.ui.settings import get_settings
+            self.cmb_agent.setVisible(False)
             self.edt_name.setPlaceholderText("Your name (so the owner knows who asked)")
-            self.edt_name.setText(str(get_settings().get("rfc_name") or ""))
+            self.edt_name.setText(str(self.settings.get("rfc_name") or ""))
             lay.addWidget(self.edt_name)
             sent = QLabel("Sent to the owner of Omacad on GitHub: your text, the screenshot, the model and the log of this session.")
             sent.setWordWrap(True)
             lay.addWidget(sent)
         else:
-            lay.addWidget(self.chk_fix)
+            lay.addLayout(fix_row)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Send request" if mode == "request" else "Report")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         lay.addWidget(buttons)
         self.note.setFocus()
+
+    def selected_agent(self) -> str:
+        return str(self.cmb_agent.currentData() or "omarchy")
 
     def text(self) -> str:
         return self.note.toPlainText().strip()

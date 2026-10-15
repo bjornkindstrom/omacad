@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.3 - 2026-10-15
+
+### Fixed
+- A flat face is no longer split by 1e-9 float noise in tiny triangle normals, so the rim circle of a tilted cylinder top can be selected for Fillet/Chamfer.
+
 ## 0.7.8.2 - 2026-10-15
 
 ### Fixed

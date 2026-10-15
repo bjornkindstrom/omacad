@@ -363,6 +363,24 @@ class SettingsDialog(QDialog):
         tok_row.addWidget(self.edt_rfc_token)
         lay_sketch.addLayout(tok_row)
 
+        # AI Agent for fixing errors / reporting problems
+        from omacad import feedback
+        agent_row = QHBoxLayout()
+        lbl_agent = QLabel("AI agent for fixing errors (F9):")
+        lbl_agent.setMinimumWidth(200)
+        self.cmb_ai_agent = QComboBox()
+        cur_agent = self.settings.get("ai_agent", "omarchy")
+        for key, name in feedback.available_agents():
+            self.cmb_ai_agent.addItem(name, key)
+        idx_agent = self.cmb_ai_agent.findData(cur_agent)
+        if idx_agent >= 0:
+            self.cmb_ai_agent.setCurrentIndex(idx_agent)
+        self.cmb_ai_agent.setToolTip("Choose which coding agent to open when reporting a problem (F9) to fix it.")
+        agent_row.addWidget(lbl_agent)
+        agent_row.addWidget(self.cmb_ai_agent)
+        agent_row.addStretch()
+        lay_sketch.addLayout(agent_row)
+
         # Smoothness of round shapes
         q_row = QHBoxLayout()
         lbl_q = QLabel("Curve smoothness:")
@@ -469,6 +487,9 @@ class SettingsDialog(QDialog):
         self.chk_group_modify.setChecked(False)
         self.chk_group_inspect.setChecked(True)
         self.chk_group_constraints.setChecked(True)
+        idx_ai = self.cmb_ai_agent.findData("omarchy")
+        if idx_ai >= 0:
+            self.cmb_ai_agent.setCurrentIndex(idx_ai)
 
     def accept(self):
         self.save_and_close()
@@ -492,6 +513,7 @@ class SettingsDialog(QDialog):
             "group_modify": self.chk_group_modify.isChecked(),
             "group_inspect": self.chk_group_inspect.isChecked(),
             "group_constraints": self.chk_group_constraints.isChecked(),
+            "ai_agent": str(self.cmb_ai_agent.currentData() or "omarchy"),
             "curve_segments": self.cmb_curves.currentData(),
             "view_projection": self.cmb_projection.currentData(),
             "view_fov": self.spn_fov.value(),

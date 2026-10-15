@@ -43,6 +43,12 @@ def _coplanar(a_idx, b_idx, normals, v, f, areas, tol) -> bool:
     off = abs(float(np.dot(normals[a_idx], v[f[a_idx, 0]])) - float(np.dot(normals[a_idx], v[f[b_idx, 0]])))
     if d > 1.0 - 1e-9 and off < tol:
         return True
+    # float noise in a small triangle's normal (1e-9 off) must not split a face: judge by how far
+    # every corner of the neighbour sits from this triangle's plane
+    if d > 1.0 - 1e-7:
+        n = normals[a_idx]
+        if float(np.abs((v[f[b_idx]] - v[f[a_idx, 0]]) @ n).max()) < tol:
+            return True
     small = min(areas[a_idx], areas[b_idx]) < 0.01
     return small and d > 1.0 - 1e-4 and off < 1e-3
 

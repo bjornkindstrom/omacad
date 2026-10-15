@@ -834,8 +834,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         if marked is not None:
             images["screenshot_marked.png"] = png(marked)   # the user's drawing on the window screenshot
         folder = feedback.build_bundle(self.doc, dlg.text(), images, extra)
-        if dlg.fix_now() and feedback.launch_agent(folder):
-            self.status_label.setText(f"Report sent to the AI agent (a terminal opened). Saved in {folder}")
+        if dlg.fix_now() and feedback.launch_agent(folder, dlg.selected_agent()):
+            self.status_label.setText(f"Report sent to {dlg.selected_agent()} (a terminal opened). Saved in {folder}")
         else:
             self.status_label.setText(f"Report saved in {folder}")
 
