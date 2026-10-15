@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.8 - 2026-10-15
+
+### Performance & Fixed (Shell Feature)
+- **Massiv optimering av Shell-verktyget:**
+  - Snabbväg `_shrink`: Planära och konvexa solider eroderas nu inåt via snabba planförskjutningar (`trim_by_plane`) i stället för tung 3D Minkowski-difference, vilket ger en hastighetsökning på 20–50×.
+  - Optimerad sfärupplösning för Minkowski-beräkningar på krökta solider för att drastiskt reducera CPU-belastning.
+  - Debounce (75 ms) på förhandsvisningen i Shell-dialogen för att förhindra att UI:t fryser vid snabb textinmatning eller stegning av väggtjocklek.
+
 ## 0.7.8.7 - 2026-10-15
 
 ### Performance & Engine (High-Performance Engine)

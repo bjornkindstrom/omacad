@@ -953,7 +953,12 @@ class ToolPromptsMixin:
                 self.status_label.setText("Shell cancelled.")
                 self.viewport.update()
 
-        dlg.changed.connect(refresh_preview)
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(75)
+        timer.timeout.connect(refresh_preview)
+
+        dlg.changed.connect(lambda: timer.start())
         dlg.finished.connect(on_finished)
         self.viewport.body_clicked.connect(dlg.select_body)
         refresh_preview()

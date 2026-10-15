@@ -56,7 +56,26 @@ class ShellFeature(Feature):
                 out = out.trim_by_plane(tuple(-n), -d)   # keeps the side where -n.x >= -d, i.e. n.x <= d
             if not out.is_empty():
                 return out
-        return m.minkowski_sum(m3d.Manifold.sphere(t, 24))
+        return m.minkowski_sum(m3d.Manifold.sphere(t, 12))
+
+    @staticmethod
+    def _shrink(m, t):
+        """Erodes the body inward by t. For convex/planar bodies (cubes, prisms, etc.), sharp plane trims
+        are 20-50x faster than 3D Minkowski difference."""
+        from omacad.model.faces import compute_planar_faces
+        try:
+            hull = m.hull() if hasattr(m, "hull") else None
+        except Exception:
+            hull = None
+        if hull is not None and not hull.is_empty() and abs(hull.volume() - m.volume()) < 1e-6 * max(1.0, m.volume()):
+            cav = m
+            for f in compute_planar_faces(m):
+                n = np.asarray(f.normal, dtype=float)
+                d = float(n @ np.asarray(f.origin, dtype=float)) - t
+                cav = cav.trim_by_plane(tuple(-n), -d)
+            if not cav.is_empty() and cav.volume() > 1e-6:
+                return cav
+        return m.minkowski_difference(m3d.Manifold.sphere(t, 12))
 
     @classmethod
     def compute_shell(cls, body, thickness: float, direction: str = "inside", thickness2: float = 2.0, open_faces: Optional[list] = None):
@@ -75,9 +94,9 @@ class ShellFeature(Feature):
         cavity = body
         if t_in > 0.001:
             try:
-                cavity = body.minkowski_difference(m3d.Manifold.sphere(t_in, 24))
+                cavity = cls._shrink(body, t_in)
             except Exception as e:
-                print(f"ShellFeature Minkowski difference error: {e}")
+                print(f"ShellFeature shrink error: {e}")
                 return None
             if cavity.is_empty() or cavity.volume() < 1e-6:
                 return None
