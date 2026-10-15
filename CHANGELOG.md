@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.1 - 2026-10-15
+
+### Fixed
+- Rounded thread/coil left bare cylinder between the turns (wire radius was 0.22 x pitch). The ridge is now an ellipse almost as wide as the pitch.
+
 ## 0.7.7.3 - 2026-10-15
 
 ### Fixed

@@ -462,16 +462,19 @@ class CadKernel:
 
         # Tooth profile geometry
         if profile == "round" or profile == "circular":
-            r_wire = 0.22 * p
+            # Rounded ridge: elliptical section nearly as wide as the pitch so
+            # neighbouring turns leave no bare cylinder between them (a sliver of
+            # 2 % of the pitch is kept so the turns never touch and self-intersect).
+            a_z = 0.49 * p
+            a_r = 0.4 * p
             if not is_female:
-                # Round wire wrapped on cylinder of diameter D:
-                # Wire touches D/2 with slight 0.05 mm overlap for seamless watertight union
-                r_center = (dia * 0.5) + r_wire - 0.05
+                # Ridge centred on the cylinder wall of diameter D, half sunk into it
+                r_center = dia * 0.5
                 r_root = dia * 0.5
             else:
                 # Female cutter cutting groove into hole of diameter D:
                 r_center = (dia * 0.5) + (clr * 0.5)
-                r_root = (dia * 0.5) - (0.2 * r_wire)
+                r_root = (dia * 0.5) - (0.2 * a_r)
             
             n_circ = 16
             circ_angles = np.linspace(0.0, 2.0 * math.pi, n_circ, endpoint=False)
@@ -495,10 +498,10 @@ class CadKernel:
                 th = float(theta[i])
                 c, s = float(math.cos(th)), float(math.sin(th))
                 zb = float(z_base[i])
-                rw = max(0.02 * r_wire, r_wire * float(f_taper[i]))
+                fw = max(0.02, float(f_taper[i]))
                 for phi in circ_angles:
-                    r = r_center + rw * float(math.cos(phi))
-                    z = zb + rw * float(math.sin(phi))
+                    r = r_center + a_r * fw * float(math.cos(phi))
+                    z = zb + a_z * fw * float(math.sin(phi))
                     verts.append([r * c, r * s, z])
 
             verts = np.array(verts, dtype=np.float32)

@@ -2,6 +2,7 @@
 Tests for 3D-printable thread and coil generation.
 """
 
+import numpy as np
 import pytest
 import manifold3d as m3d
 from omacad.model.kernel import CadKernel
@@ -165,3 +166,18 @@ def test_cylinder_coil_seamless_attachment_no_gap():
     assert str(union_trap.status()) == "Error.NoError"
     assert union_trap.volume() > v_cyl + 50.0
 
+
+
+def test_round_thread_leaves_no_bare_gap_between_turns():
+    """Rounded thread on a cylinder: a ring just outside the wall is cut at every height."""
+    R, p = 20.0, 3.5
+    cyl = CadKernel.create_cylinder(radius=R, height=40.0, center=False)
+    coil = CadKernel.create_thread(2 * R, p, 40.0, profile="round", include_core=False,
+                                   attached_to_cylinder=True)
+    body = cyl + coil
+    assert str(body.status()) == "Error.NoError"
+    ring = (CadKernel.create_cylinder(radius=R + 0.3, height=40.0, center=False)
+            - CadKernel.create_cylinder(radius=R + 0.02, height=40.0, center=False))
+    shell = body ^ ring
+    for z in np.arange(8.0, 32.0, 0.1):
+        assert shell.slice(float(z)).area() > 0.0, f"bare cylinder at z={z:.1f}"
