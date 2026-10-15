@@ -462,19 +462,35 @@ class CadKernel:
 
         # Tooth profile geometry
         if profile == "round" or profile == "circular":
-            # Rounded ridge: elliptical section nearly as wide as the pitch so
-            # neighbouring turns leave no bare cylinder between them (a sliver of
-            # 2 % of the pitch is kept so the turns never touch and self-intersect).
-            a_z = 0.49 * p
-            a_r = 0.4 * p
+            # Round bottle / container thread (DIN 168 / glass & jar standard round thread):
+            # The bead has a smooth semi-circular/elliptical ridge with proportions:
+            # - Radial bead height dr_full ~ 0.22 * pitch (~0.77 mm for pitch 3.5 mm)
+            # - Axial half-width a_z ~ 0.28 * pitch (leaving adequate space between turns for mating thread)
+            dr_full = 0.22 * p
+            a_z = 0.28 * p
+            overlap = 0.06  # slight overlap into cylinder wall to prevent coplanar facets and gaps
+
             if not is_female:
-                # Ridge centred on the cylinder wall of diameter D, half sunk into it
-                r_center = dia * 0.5
-                r_root = dia * 0.5
+                if attached_to_cylinder:
+                    # Thread wrapped directly around existing cylinder of diameter D:
+                    # Crest stands out by dr_eff = dr_full - (clearance * 0.5)
+                    dr_eff = dr_full - (clr * 0.5)
+                    r_center = (dia * 0.5) - overlap
+                    a_r = dr_eff + overlap
+                    r_root = dia * 0.5
+                else:
+                    # Standalone bolt: outer crest diameter is D - clearance
+                    r_outer = (dia * 0.5) - (clr * 0.5)
+                    r_root = r_outer - dr_full
+                    r_center = r_root
+                    a_r = dr_full
             else:
-                # Female cutter cutting groove into hole of diameter D:
-                r_center = (dia * 0.5) + (clr * 0.5)
-                r_root = (dia * 0.5) - (0.2 * a_r)
+                # Female cutter cutting internal groove into hole of diameter D:
+                # Sinks into the hole wall to depth dr_eff = dr_full + (clearance * 0.5)
+                dr_eff = dr_full + (clr * 0.5)
+                r_center = (dia * 0.5) - overlap
+                a_r = dr_eff + overlap
+                r_root = dia * 0.5
             
             n_circ = 16
             circ_angles = np.linspace(0.0, 2.0 * math.pi, n_circ, endpoint=False)

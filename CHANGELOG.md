@@ -3,6 +3,13 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.2 - 2026-10-15
+
+### Fixed
+- **Rund gängprofil för burkar och behållare (DIN 168 / bottle round thread):**
+  - Justerade rundprofilens radie och flankbredd till korrekta behållarproportioner (radial höjd ~0.22·pitch och axiell halvvidd ~0.28·pitch).
+  - Integrerade exakt FDM-tolerans/clearance mellan utvändig gänga (burkhals) och invändig gängskärare (lock) så att lock glider på mjukt utan att kärva eller kollidera.
+
 ## 0.7.8.1 - 2026-10-15
 
 ### Fixed

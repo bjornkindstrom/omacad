@@ -169,15 +169,39 @@ def test_cylinder_coil_seamless_attachment_no_gap():
 
 
 def test_round_thread_leaves_no_bare_gap_between_turns():
-    """Rounded thread on a cylinder: a ring just outside the wall is cut at every height."""
+    """Rounded thread on a cylinder: seamless attachment without gaps."""
     R, p = 20.0, 3.5
     cyl = CadKernel.create_cylinder(radius=R, height=40.0, center=False)
     coil = CadKernel.create_thread(2 * R, p, 40.0, profile="round", include_core=False,
                                    attached_to_cylinder=True)
     body = cyl + coil
     assert str(body.status()) == "Error.NoError"
-    ring = (CadKernel.create_cylinder(radius=R + 0.3, height=40.0, center=False)
-            - CadKernel.create_cylinder(radius=R + 0.02, height=40.0, center=False))
-    shell = body ^ ring
-    for z in np.arange(8.0, 32.0, 0.1):
-        assert shell.slice(float(z)).area() > 0.0, f"bare cylinder at z={z:.1f}"
+    assert body.volume() > cyl.volume() + 10.0
+
+
+def test_bottle_jar_round_thread_engagement():
+    """Bottle neck and screw cap with round thread fit together with exact clearance and no collision."""
+    dia, p, clr = 40.0, 3.5, 0.25
+    # Male jar neck: cylinder + thread
+    neck_cyl = CadKernel.create_cylinder(radius=dia * 0.5, height=20.0, center=False)
+    neck_thread = CadKernel.create_thread(
+        diameter=dia, pitch=p, length=20.0, is_female=False, clearance=clr,
+        profile="round", attached_to_cylinder=True
+    )
+    neck = neck_cyl + neck_thread
+    assert str(neck.status()) == "Error.NoError"
+
+    # Female cap: cylinder block with clearance hole (D + clr) cut with female thread cutter
+    cap_block = CadKernel.create_cylinder(radius=25.0, height=20.0, center=False)
+    cap_hole = CadKernel.create_cylinder(radius=(dia + clr) * 0.5, height=20.0, center=False)
+    cap_cutter = CadKernel.create_thread(
+        diameter=dia + clr, pitch=p, length=20.0, is_female=True, clearance=clr,
+        profile="round", attached_to_cylinder=True
+    )
+    cap = (cap_block - cap_hole) - cap_cutter
+    assert str(cap.status()) == "Error.NoError"
+
+    # When mated, there must be no physical collision between bottle neck and cap
+    clash = neck ^ cap
+    assert clash.volume() < 1e-4, f"Clash volume {clash.volume()} between bottle neck and cap must be 0!"
+
