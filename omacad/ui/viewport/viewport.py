@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (QWidget, QMenu, QInputDialog, QDialog, QVBoxLayou
                                QPushButton)
 import omacad.ui.viewport as _vp_module
 from omacad.ui.expr_spin import ExprDoubleSpinBox
+from omacad.model import quality
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtGui import QGuiApplication, QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QFontMetrics
 from OpenGL import GL
@@ -1354,6 +1355,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.vao = GL.glGenVertexArrays(1)
         self.vbo_pos = GL.glGenBuffers(1)
         self.vbo_norm = GL.glGenBuffers(1)
+        self._body_gpu_cache = {}  # (body_id, mesh_id) -> {"vao_solid", "vbo_pos", "vbo_norm", "vert_count", "vao_lines", "vbo_lines", "line_count"}
 
         # Compile solid shader
         try:
@@ -1536,6 +1538,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 return
         if event.button() == Qt.MouseButton.LeftButton and self.extrude_handle and self._handle_hit(x, y):
             self._handle_drag = True
+            quality.set_interactive_mode(True)
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
             return
 
@@ -2271,6 +2274,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             return
         if self._handle_drag and event.button() == Qt.MouseButton.LeftButton:
             self._handle_drag = False
+            quality.set_interactive_mode(False)
             self.setCursor(Qt.CursorShape.OpenHandCursor if self._handle_hover else Qt.CursorShape.ArrowCursor)
             self.extrude_handle_drag_finished.emit()
             self.update()

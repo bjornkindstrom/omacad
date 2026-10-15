@@ -7,12 +7,33 @@ Connects Ribbon, Viewport, Browser, Timeline, and Menu Bar.
 from pathlib import Path
 from typing import Optional
 import numpy as np
-from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtCore import Qt, QSize, QTimer, QThreadPool, QRunnable, Signal, QObject
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QDockWidget,
-    QFileDialog, QMessageBox, QLabel, QMenu, QPushButton
+    QFileDialog, QMessageBox, QLabel, QMenu, QPushButton, QProgressBar
 )
 from PySide6.QtGui import QAction, QKeySequence, QIcon, QShortcut
+
+
+class _WorkerSignals(QObject):
+    finished = Signal(object)
+    error = Signal(str)
+
+
+class _BackgroundWorker(QRunnable):
+    def __init__(self, fn, *args, **kwargs):
+        super().__init__()
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = _WorkerSignals()
+
+    def run(self):
+        try:
+            res = self.fn(*self.args, **self.kwargs)
+            self.signals.finished.emit(res)
+        except Exception as e:
+            self.signals.error.emit(str(e))
 
 from omacad.model.document import Document
 from omacad.model.timeline import ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature, MoveFeature
@@ -108,6 +129,15 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         # 5. Status Bar
         self.status_label = _LoggedLabel("Ready")
         self.statusBar().addWidget(self.status_label)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # Indeterminate spinner
+        self.progress_bar.setMaximumWidth(120)
+        self.progress_bar.setMaximumHeight(14)
+        self.progress_bar.setVisible(False)
+        self.statusBar().addWidget(self.progress_bar)
+
+        self.thread_pool = QThreadPool.globalInstance()
+
         btn_report = QPushButton("🐞 Report problem (F9)")
         btn_report.setFlat(True)
         btn_report.setToolTip("Something wrong? Describe it: the AI gets a screenshot, the model and the log and fixes it")
@@ -397,6 +427,30 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
     def dock(self, dlg):
         """Put a tool dialog into the right-hand inspector panel."""
         self.inspector.dock_tool(dlg)
+
+    def run_async(self, fn, on_success=None, on_error=None, status_msg: str = ""):
+        """Runs a heavy function in the thread pool without freezing the GUI."""
+        if status_msg:
+            self.status_label.setText(status_msg)
+        self.progress_bar.setVisible(True)
+
+        worker = _BackgroundWorker(fn)
+
+        def _handle_done(result):
+            self.progress_bar.setVisible(False)
+            if on_success:
+                on_success(result)
+
+        def _handle_err(err):
+            self.progress_bar.setVisible(False)
+            if on_error:
+                on_error(err)
+            else:
+                self.status_label.setText(f"Error: {err}")
+
+        worker.signals.finished.connect(_handle_done)
+        worker.signals.error.connect(_handle_err)
+        self.thread_pool.start(worker)
 
     def on_change_parameters(self):
         from omacad.ui.parameters_dialog import ParametersDialog

@@ -188,8 +188,50 @@ def compute_planar_faces(manifold: m3d.Manifold, body_id: str = "") -> List[Plan
     return faces
 
 
+_TOPOLOGY_CACHE: dict = {}
+_TOPOLOGY_CACHE_MAX = 512
+
+
+def clear_topology_cache():
+    """Clears the global topology analysis cache."""
+    _TOPOLOGY_CACHE.clear()
+
+
 def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") -> Tuple[List[PlanarFace], list]:
-    """Computes both planar faces and edges in a single shared topological pass (2x faster than separate calls)."""
+    """Computes both planar faces and edges in a single shared topological pass (2x faster than separate calls).
+    Cached by manifold geometric fingerprint to avoid redundant trimesh topology analysis."""
+    if manifold.is_empty():
+        return [], []
+
+    # Fast fingerprint from manifold geometric invariants (avoids full mesh hashing)
+    try:
+        cache_key = (
+            manifold.num_vert(),
+            manifold.num_edge(),
+            manifold.num_tri(),
+            manifold.genus(),
+            round(manifold.volume(), 5),
+            round(manifold.surface_area(), 5),
+            tuple(round(x, 5) for x in manifold.bounding_box())
+        )
+    except Exception:
+        cache_key = None
+
+    if cache_key is not None and cache_key in _TOPOLOGY_CACHE:
+        cached_faces, cached_edges = _TOPOLOGY_CACHE[cache_key]
+        # Fast rebinding of body_id on cached faces without deep copy
+        faces = [
+            PlanarFace(
+                body_id=body_id,
+                index=f.index,
+                normal=f.normal,
+                origin=f.origin,
+                area=f.area,
+                tris=f.tris,
+            ) for f in cached_faces
+        ]
+        return faces, cached_edges
+
     mesh = manifold.to_mesh()
     v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
     f = np.asarray(mesh.tri_verts, dtype=np.int64)
@@ -291,6 +333,12 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
             return False
         lines = [e for e in lines if not on_loop(e)]
     all_edges = lines + loops + _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals)
+
+    if cache_key is not None:
+        if len(_TOPOLOGY_CACHE) >= _TOPOLOGY_CACHE_MAX:
+            _TOPOLOGY_CACHE.clear()
+        _TOPOLOGY_CACHE[cache_key] = (faces, all_edges)
+
     return faces, all_edges
 
 

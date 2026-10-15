@@ -1464,7 +1464,18 @@ class Sketch:
 
         if not all_lines:
             self.profiles = []
+            self._profiles_cache_key = None
             return self.profiles
+
+        # Fingerprint check to skip shapely unary_union + polygonize if geometry hasn't changed
+        try:
+            line_fp = tuple((round(p1[0], 5), round(p1[1], 5), round(p2[0], 5), round(p2[1], 5)) for p1, p2 in all_lines)
+            ref_fp = tuple((round(a[0], 5), round(a[1], 5), round(b[0], 5), round(b[1], 5)) for a, b in self.reference_segments) if self.reference_segments else ()
+            cache_key = (line_fp, ref_fp)
+            if getattr(self, "_profiles_cache_key", None) == cache_key and self.profiles:
+                return self.profiles
+        except Exception:
+            cache_key = None
 
         shapely_lines = []
         for p1, p2 in all_lines:
@@ -1525,8 +1536,10 @@ class Sketch:
                     profiles.append(prof)
 
             self.profiles = profiles
+            self._profiles_cache_key = cache_key
         except Exception:
             self.profiles = []
+            self._profiles_cache_key = None
 
         return self.profiles
 

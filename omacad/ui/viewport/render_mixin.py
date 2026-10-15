@@ -712,13 +712,83 @@ class RenderGLMixin:
 
             is_selected = body.selected
 
+            # Fetch or build GPU VAO/VBO for this body mesh
+            gpu_cache = getattr(self, "_body_gpu_cache", None)
+            cache_entry = None
+            mesh_key = (body.body_id, id(mesh))
+            if gpu_cache is not None:
+                cache_entry = gpu_cache.get(mesh_key)
+                if cache_entry is None:
+                    # Clean up old entries for this body
+                    for k in list(gpu_cache.keys()):
+                        if k[0] == body.body_id:
+                            old = gpu_cache.pop(k)
+                            try:
+                                GL.glDeleteVertexArrays(1, [old["vao_solid"]])
+                                GL.glDeleteBuffers(2, [old["vbo_pos"], old["vbo_norm"]])
+                                if "vao_lines" in old:
+                                    GL.glDeleteVertexArrays(1, [old["vao_lines"]])
+                                    GL.glDeleteBuffers(1, [old["vbo_lines"]])
+                            except Exception:
+                                pass
+
+                    # Build solid VAO/VBO
+                    vao_solid = GL.glGenVertexArrays(1)
+                    vbo_pos = GL.glGenBuffers(1)
+                    vbo_norm = GL.glGenBuffers(1)
+                    GL.glBindVertexArray(vao_solid)
+
+                    pos_data = np.ascontiguousarray(mesh.vertices, dtype=np.float32)
+                    GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_pos)
+                    GL.glBufferData(GL.GL_ARRAY_BUFFER, pos_data.nbytes, pos_data, GL.GL_STATIC_DRAW)
+                    loc_pos_solid = GL.glGetAttribLocation(self.prog_solid, "in_pos")
+                    GL.glEnableVertexAttribArray(loc_pos_solid)
+                    GL.glVertexAttribPointer(loc_pos_solid, 3, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+
+                    norm_data = np.ascontiguousarray(mesh.normals, dtype=np.float32)
+                    GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_norm)
+                    GL.glBufferData(GL.GL_ARRAY_BUFFER, norm_data.nbytes, norm_data, GL.GL_STATIC_DRAW)
+                    loc_norm_solid = GL.glGetAttribLocation(self.prog_solid, "in_normal")
+                    GL.glEnableVertexAttribArray(loc_norm_solid)
+                    GL.glVertexAttribPointer(loc_norm_solid, 3, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+
+                    GL.glBindVertexArray(0)
+                    GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+
+                    # Build sharp lines VAO/VBO
+                    vao_lines = None
+                    vbo_lines = None
+                    line_count = 0
+                    if len(mesh.sharp_lines) > 0 and self.prog_flat:
+                        vao_lines = GL.glGenVertexArrays(1)
+                        vbo_lines = GL.glGenBuffers(1)
+                        GL.glBindVertexArray(vao_lines)
+                        lines_data = np.ascontiguousarray(mesh.sharp_lines, dtype=np.float32)
+                        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_lines)
+                        GL.glBufferData(GL.GL_ARRAY_BUFFER, lines_data.nbytes, lines_data, GL.GL_STATIC_DRAW)
+                        loc_pos_flat = GL.glGetAttribLocation(self.prog_flat, "in_pos")
+                        GL.glEnableVertexAttribArray(loc_pos_flat)
+                        GL.glVertexAttribPointer(loc_pos_flat, 3, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+                        GL.glBindVertexArray(0)
+                        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+                        line_count = lines_data.size // 3
+
+                    cache_entry = {
+                        "vao_solid": vao_solid,
+                        "vbo_pos": vbo_pos,
+                        "vbo_norm": vbo_norm,
+                        "vert_count": pos_data.size // 3,
+                        "vao_lines": vao_lines,
+                        "vbo_lines": vbo_lines,
+                        "line_count": line_count,
+                    }
+                    gpu_cache[mesh_key] = cache_entry
+
             # 1. Shaded Surfaces
             if not self.wireframe_only:
                 GL.glUseProgram(self.prog_solid)
                 loc_mvp = GL.glGetUniformLocation(self.prog_solid, "u_mvp")
                 loc_col = GL.glGetUniformLocation(self.prog_solid, "u_color")
-                loc_pos = GL.glGetAttribLocation(self.prog_solid, "in_pos")
-                loc_norm = GL.glGetAttribLocation(self.prog_solid, "in_normal")
 
                 GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
 
@@ -733,7 +803,14 @@ class RenderGLMixin:
                 GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
                 GL.glPolygonOffset(1.0, 1.0)
 
-                self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, mesh.vertices, loc_norm, mesh.normals)
+                if cache_entry and cache_entry.get("vao_solid"):
+                    GL.glBindVertexArray(cache_entry["vao_solid"])
+                    GL.glDrawArrays(GL.GL_TRIANGLES, 0, cache_entry["vert_count"])
+                    GL.glBindVertexArray(0)
+                else:
+                    loc_pos = GL.glGetAttribLocation(self.prog_solid, "in_pos")
+                    loc_norm = GL.glGetAttribLocation(self.prog_solid, "in_normal")
+                    self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, mesh.vertices, loc_norm, mesh.normals)
 
                 GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
                 GL.glUseProgram(0)
@@ -743,7 +820,6 @@ class RenderGLMixin:
                 GL.glUseProgram(self.prog_flat)
                 loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
                 loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
-                loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
 
                 GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
 
@@ -754,7 +830,13 @@ class RenderGLMixin:
                     GL.glUniform4f(loc_col, 0.12, 0.13, 0.15, 1.0)  # Dark CAD Edge
                     self.set_line_width(1.6)
 
-                self.draw_buffer_arrays(GL.GL_LINES, loc_pos, mesh.sharp_lines)
+                if cache_entry and cache_entry.get("vao_lines"):
+                    GL.glBindVertexArray(cache_entry["vao_lines"])
+                    GL.glDrawArrays(GL.GL_LINES, 0, cache_entry["line_count"])
+                    GL.glBindVertexArray(0)
+                else:
+                    loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
+                    self.draw_buffer_arrays(GL.GL_LINES, loc_pos, mesh.sharp_lines)
                 GL.glUseProgram(0)
 
     def draw_thick_lines(self, mvp: np.ndarray, flat_segments, rgba, width_px: float, halo: bool = True):

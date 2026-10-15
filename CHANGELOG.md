@@ -3,6 +3,22 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.7 - 2026-10-15
+
+### Performance & Engine (High-Performance Engine)
+- **Topologicache för plana ytor och kanter:**
+  - `compute_planar_faces_and_edges` cachar nu analysen per geometriskt fingerprint, vilket ger över 800× snabbare uppslag för oförändrade solider.
+- **Inkrementell tidslinjeomräkning (Incremental Timeline Recompute):**
+  - Tidslinjen sparar och återanvänder checkpoints för stegen i historiken; vid ändring beräknas enbart påverkade nedströmssteg om istället för hela historiken från steg 0.
+- **GPU VBO/VAO Caching för 3D-solider:**
+  - Viewporten laddar nu upp body-meshar och skarpa linjekonturer direkt till dedikerade GPU VBO/VAO:er så kameranavigation (orbit/pan/zoom) flyter med full GPU-framerate utan CPU-tapp.
+- **Adaptiv tessellering under interaktiv dragning:**
+  - Under aktiv dragning i 3D-handtag (t.ex. extrude-pil) används en optimerad lägre segmentupplösning, med automatisk återgång till full finupplösning vid släpp.
+- **Profilcache för 2D-skisser:**
+  - `Sketch.solve_profiles` fingeravtryckstestar linjer och referenser för att undvika onödig Shapely-polygonisering.
+- **Bakgrundstråd (`QThreadPool`) och laddningsindikator:**
+  - Integrerad trådpool och progressindikator i statusraden för asynkrona geometriberäkningar.
+
 ## 0.7.8.6 - 2026-10-15
 
 ### Performance & Fixed

@@ -4,6 +4,8 @@ Tracks the sequential history of modeling operations and enables parametric reco
 All feature classes are modularized in `omacad.model.features.*` and re-exported here for compatibility.
 """
 
+import copy
+import json
 from typing import List, Any
 from omacad.model.features import (
     Body,
@@ -45,6 +47,11 @@ class Timeline:
     def __init__(self):
         self.features: List[Feature] = []
         self.marker_index: int = 0  # Replay index (points to after the active feature)
+        self._state_cache: dict = {}  # step_index -> {"hash": str, "bodies": dict, "sketches": dict, "step_state": dict}
+
+    def clear_cache(self) -> None:
+        """Clears the incremental recompute cache."""
+        self._state_cache.clear()
 
     def add_feature(self, feature: Feature) -> None:
         # If marker is in the middle of history, truncate forward history (like Fusion 360)
@@ -53,17 +60,56 @@ class Timeline:
         self.features.append(feature)
         self.marker_index = len(self.features)
 
+    def _feature_fingerprint(self, feat: Feature) -> str:
+        """Generates a stable cache key for a feature and its evaluation expressions."""
+        try:
+            d = dict(feat.to_dict(), exprs=dict(getattr(feat, "exprs", {})), suppressed=feat.suppressed)
+            return json.dumps(d, sort_keys=True, default=str)
+        except Exception:
+            return repr(feat)
+
     def recompute(self, doc: Any) -> None:
-        """Clears bodies and sketches and executes all unsuppressed features up to marker."""
+        """Executes all unsuppressed features up to marker incrementally, reusing cached states."""
         if hasattr(doc, "refresh_parameters"):
             doc.refresh_parameters()  # formulas pick up the current parameter values first
         active = getattr(doc, "active_sketch", None)
-        doc.bodies.clear()
-        doc.sketches.clear()
 
         limit = min(self.marker_index, len(self.features))
-        doc.step_states = {}  # step index -> {body id: manifold} as it was before that step (patterns diff these)
+
+        # Invalidate any cache entries beyond current marker or length
+        for k in list(self._state_cache.keys()):
+            if k > limit:
+                del self._state_cache[k]
+
+        # Find the latest valid checkpoint in cache
+        start_step = 0
         for i in range(limit):
+            if i in self._state_cache:
+                feat = self.features[i]
+                expected_hash = self._feature_fingerprint(feat)
+                if self._state_cache[i].get("hash") == expected_hash:
+                    start_step = i + 1
+                    continue
+            # Cache miss or invalidated feature: clear this and all downstream checkpoints
+            for k in list(self._state_cache.keys()):
+                if k >= i:
+                    del self._state_cache[k]
+            break
+
+        # Restore state from latest valid checkpoint or start fresh
+        if start_step > 0 and (start_step - 1) in self._state_cache:
+            cp = self._state_cache[start_step - 1]
+            doc.bodies = {bid: copy.copy(b) for bid, b in cp["bodies"].items()}
+            doc.sketches = {sid: copy.deepcopy(s) for sid, s in cp["sketches"].items()}
+            doc.step_states = dict(cp["step_states"])
+        else:
+            doc.bodies.clear()
+            doc.sketches.clear()
+            doc.step_states = {}
+            start_step = 0
+
+        # Execute only the changed / downstream features from start_step to limit
+        for i in range(start_step, limit):
             doc.step_states[i] = {bid: b.manifold for bid, b in doc.bodies.items()}
             feat = self.features[i]
             if not feat.suppressed:
@@ -71,6 +117,14 @@ class Timeline:
                     feat.execute(doc)
                 except Exception as e:
                     print(f"Error executing feature {feat.name}: {e}")
+
+            # Save checkpoint after executing feature i
+            self._state_cache[i] = {
+                "hash": self._feature_fingerprint(feat),
+                "bodies": {bid: copy.copy(b) for bid, b in doc.bodies.items()},
+                "sketches": {sid: copy.deepcopy(s) for sid, s in doc.sketches.items()},
+                "step_states": dict(doc.step_states),
+            }
 
         doc.step_states[limit] = {bid: b.manifold for bid, b in doc.bodies.items()}
         if active and active.sketch_id not in doc.sketches:
