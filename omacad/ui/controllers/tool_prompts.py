@@ -720,7 +720,11 @@ class ToolPromptsMixin:
         selected_id = self.doc.selected_body_ids[0] if self.doc.selected_body_ids else None
         dlg = ThreadDialog(self.doc, self, preselected_body_id=selected_id)
 
-        def refresh_preview():
+        preview_timer = QTimer(self)
+        preview_timer.setSingleShot(True)
+        preview_timer.setInterval(60)
+
+        def do_refresh_preview():
             vals = dlg.get_values()
             feat = ThreadFeature("preview_thread", "Preview", **vals)
             try:
@@ -730,6 +734,11 @@ class ToolPromptsMixin:
             op = "cut" if vals.get("operation") == "cut" else "new_body"
             self.viewport.set_preview(solid, op)
             self.viewport.update()
+
+        def refresh_preview():
+            preview_timer.start()
+
+        preview_timer.timeout.connect(do_refresh_preview)
 
         def on_pick_face():
             self.viewport.begin_plane_pick("thread_surface")

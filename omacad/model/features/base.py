@@ -11,7 +11,9 @@ import manifold3d as m3d
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from omacad.model.kernel import CadKernel, RenderMesh
-from omacad.model.faces import PlanarFace, compute_planar_faces, PlanarEdge, compute_planar_edges
+from omacad.model.faces import (
+    PlanarFace, compute_planar_faces, PlanarEdge, compute_planar_edges, compute_planar_faces_and_edges
+)
 
 
 @dataclass
@@ -30,13 +32,16 @@ class Body:
     def update_render_mesh(self):
         self.render_mesh = CadKernel.extract_render_mesh(self.manifold)
         try:
-            self.faces = compute_planar_faces(self.manifold, self.body_id)
+            self.faces, self.edges = compute_planar_faces_and_edges(self.manifold, self.body_id)
         except Exception:
-            self.faces = []
-        try:
-            self.edges = compute_planar_edges(self.manifold)
-        except Exception:
-            self.edges = []
+            try:
+                self.faces = compute_planar_faces(self.manifold, self.body_id)
+            except Exception:
+                self.faces = []
+            try:
+                self.edges = compute_planar_edges(self.manifold)
+            except Exception:
+                self.edges = []
 
 
 def profile_cross_section(profile: Any) -> m3d.CrossSection:

@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.8.6 - 2026-10-15
+
+### Performance & Fixed
+- **Prestandalyft för solider och omräkning av tidslinjen:**
+  - `compute_planar_faces_and_edges`: delar topologisk analys mellan ytor och kanter i en enda genomgång istället för dubbla körningar.
+  - Snabbväg för enkla trianglar i `_group_min_width` och tidig exit i `_curved_roots` gör igenkänning av plana ytor och kanter upp till 6× snabbare.
+  - Live-preview i Thread & Coil har fått 60 ms debounce vilket förhindrar att UI:t fryser vid snabb textinmatning eller stegning i spinnboxar.
+  - Tidslinjeomräkning på modeller med coils och gängor går nu över 70 % snabbare, och hela testsviten exekverar på halva tiden.
+
 ## 0.7.8.5 - 2026-10-15
 
 ### Fixed
