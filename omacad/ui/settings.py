@@ -34,6 +34,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
     "rfc_name": "",                     # your name on requests for change (Help > Request a change)
     "button_scale": 1.0,                # size of the ribbon buttons (0.75 = compact, 1.0 = standard, 1.25 = large)
+    "group_primitives": True,           # group Box/Cylinder/Sphere/Thread into Primitives dropdown
+    "group_modify": False,              # group Combine/Split/Shell/Move into Modify dropdown
+    "group_inspect": True,              # group Measure/Section/Params into Inspect dropdown
+    "group_constraints": True,          # compact 2-row grid or dropdown for sketch constraints
     "theme_mode": "omarchy",            # "omarchy" = follow the Omarchy theme live, "dark" = dark theme, "light" = light theme
     "dark_theme_name": "tokyo-night",   # "tokyo-night" or "nord"
     "theme_name": "tokyo-night",        # bundled theme used when theme_mode is "fixed" / "dark"

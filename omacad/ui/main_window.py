@@ -150,7 +150,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         self.ribbon.sketch_tool_selected.connect(self.on_sketch_tool_selected)
         self.viewport.sketch_tool_changed.connect(self.sync_sketch_tool_from_viewport)
         self.ribbon.toggle_construction_clicked.connect(self.viewport.toggle_construction_mode)
-        self.viewport.construction_mode_changed.connect(self.ribbon.btn_construct.setChecked)
+        self.viewport.construction_mode_changed.connect(
+            lambda val: getattr(self.ribbon, "btn_construct", None) and self.ribbon.btn_construct.setChecked(val)
+        )
         self.ribbon.finish_sketch_clicked.connect(self.on_finish_sketch)
         self.viewport.finish_sketch_requested.connect(self.on_finish_sketch)
         self.viewport.menu_command.connect(self.on_menu_command)
@@ -335,11 +337,25 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         from omacad.ui.settings import get_settings
         before_curves = get_settings().get("curve_segments")
         before_scale = get_settings().get("button_scale")
+        before_group_prim = get_settings().get("group_primitives")
+        before_group_mod = get_settings().get("group_modify")
+        before_group_insp = get_settings().get("group_inspect")
+        before_group_cons = get_settings().get("group_constraints")
+
         dlg = SettingsDialog(self)
         dlg.exec()
         self.on_theme_changed()   # the theme choice may have changed (colours were re-applied by theme.set_fixed_theme)
-        if get_settings().get("button_scale") != before_scale:
-            self.ribbon.update_button_scale()
+
+        grouping_changed = (
+            get_settings().get("group_primitives") != before_group_prim or
+            get_settings().get("group_modify") != before_group_mod or
+            get_settings().get("group_inspect") != before_group_insp or
+            get_settings().get("group_constraints") != before_group_cons
+        )
+        scale_changed = (get_settings().get("button_scale") != before_scale)
+
+        if grouping_changed or scale_changed:
+            self.ribbon.rebuild_ribbon()
         if get_settings().get("curve_segments") != before_curves:
             self.rebuild_for_curve_quality()
 

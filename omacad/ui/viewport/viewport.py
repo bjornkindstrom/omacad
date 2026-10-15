@@ -696,7 +696,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
     def _offset_status(self):
         n = len(self.selected_entities)
-        self.status_message.emit(f"Offset: click a curve to take its whole connected chain, click more to add (Alt+click = one element, click again to drop). "
+        self.status_message.emit(f"Offset: click a curve for its whole chain (Shift/Ctrl/Alt+click = add or drop single line). "
                                  f"{n} selected. Press Enter or right-click to set the distance. Esc cancels.")
 
     def _offset_go(self):
@@ -1584,12 +1584,19 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 ent = self._pick_entity(x, y)
                 if ent is not None:
                     mods = event.modifiers()
-                    single = bool(mods & Qt.KeyboardModifier.AltModifier)       # Alt+click: just this element
-                    ids = {ent.entity_id} if single else self.doc.active_sketch.connected_entities(ent.entity_id)
-                    if ids <= self.selected_entities:
-                        self.selected_entities -= ids
+                    single = bool(mods & (Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier))
+                    if single:
+                        # Toggle or deselect just this single entity
+                        if ent.entity_id in self.selected_entities:
+                            self.selected_entities.remove(ent.entity_id)
+                        else:
+                            self.selected_entities.add(ent.entity_id)
                     else:
-                        self.selected_entities |= ids   # clicks add; click a picked chain again to drop it
+                        ids = self.doc.active_sketch.connected_entities(ent.entity_id)
+                        if ids <= self.selected_entities:
+                            self.selected_entities -= ids
+                        else:
+                            self.selected_entities |= ids   # clicks add; click a picked chain again to drop it
                     self.selection_changed.emit()
                     self._offset_status()
                     self.update()
@@ -1614,10 +1621,17 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             if event.button() == Qt.MouseButton.LeftButton:
                 if self._mirror_phase == "pick":
                     ent = self._pick_entity(x, y)
-                    if ent is not None:   # click = whole connected shape, Ctrl+click = just this element
-                        ids = {ent.entity_id} if event.modifiers() & Qt.KeyboardModifier.ControlModifier \
-                            else self.doc.active_sketch.connected_entities(ent.entity_id)
-                        self.selected_entities = (self.selected_entities - ids) if ids <= self.selected_entities else (self.selected_entities | ids)
+                    if ent is not None:
+                        mods = event.modifiers()
+                        single = bool(mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.AltModifier))
+                        if single:
+                            if ent.entity_id in self.selected_entities:
+                                self.selected_entities.remove(ent.entity_id)
+                            else:
+                                self.selected_entities.add(ent.entity_id)
+                        else:
+                            ids = self.doc.active_sketch.connected_entities(ent.entity_id)
+                            self.selected_entities = (self.selected_entities - ids) if ids <= self.selected_entities else (self.selected_entities | ids)
                         self.selection_changed.emit()
                         self._mirror_status()
                         self.update()

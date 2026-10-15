@@ -164,13 +164,40 @@ class Ribbon(QWidget):
         """)
         return area
 
+    def rebuild_ribbon(self):
+        """Reconstruct both tabs to reflect updated button scale, grouping, or tool preferences."""
+        # Clean up existing children in solid_tab and sketch_tab
+        for tab in (self.solid_tab, self.sketch_tab):
+            layout = tab.layout()
+            if layout is not None:
+                while layout.count():
+                    item = layout.takeAt(0)
+                    widget = item.widget()
+                    if widget is not None:
+                        widget.deleteLater()
+                QWidget().setLayout(layout)
+
+        scale = ribbon_button_scale()
+        self.tabs.setFixedHeight(max(80, int(round(122 * scale))))
+        self.setup_solid_tab()
+        self.setup_sketch_tab()
+        self.sync_active_tab()
+
     def setup_solid_tab(self):
+        from omacad.ui.settings import get_settings
+        from PySide6.QtWidgets import QMenu
+        settings = get_settings()
+        group_primitives = bool(settings.get("group_primitives", True))
+        group_modify = bool(settings.get("group_modify", False))
+        group_inspect = bool(settings.get("group_inspect", True))
+
         h_layout = QHBoxLayout(self.solid_tab)
         h_layout.setContentsMargins(8, 4, 8, 4)
         h_layout.setSpacing(6)
 
         # CREATE Group
         btn_sketch = RibbonButton("Create\nSketch", "✏️")
+        btn_sketch.setToolTip("Create a new sketch on a plane or face (L, C, R)")
         btn_sketch.clicked.connect(self.create_sketch_clicked)
         h_layout.addWidget(btn_sketch)
 
@@ -184,21 +211,13 @@ class Ribbon(QWidget):
         btn_canvas.clicked.connect(self.canvas_clicked)
         h_layout.addWidget(btn_canvas)
 
-        btn_measure = RibbonButton("Measure\n(I)", "📏")
-        btn_measure.setToolTip("Click a line, circle or edge for its size; click a second one for the distance or angle between them")
-        btn_measure.clicked.connect(self.measure_clicked)
-        h_layout.addWidget(btn_measure)
-
-        btn_section = RibbonButton("Section\nView", "✂️")
-        btn_section.setToolTip("Cut through the model at a plane or face and slide the cut until you see what you want")
-        btn_section.clicked.connect(self.section_clicked)
-        h_layout.addWidget(btn_section)
-
         btn_extrude = RibbonButton("Extrude\n(E)", "⬆️")
+        btn_extrude.setToolTip("Extrude closed sketch profiles or faces into 3D bodies or cuts (E)")
         btn_extrude.clicked.connect(self.extrude_clicked)
         h_layout.addWidget(btn_extrude)
 
         btn_revolve = RibbonButton("Revolve", "🔄")
+        btn_revolve.setToolTip("Revolve a sketch profile around an axis or edge to create a solid body")
         btn_revolve.clicked.connect(self.revolve_clicked)
         h_layout.addWidget(btn_revolve)
 
@@ -217,27 +236,42 @@ class Ribbon(QWidget):
         btn_pattern.clicked.connect(self.pattern_clicked)
         h_layout.addWidget(btn_pattern)
 
-        btn_box = RibbonButton("Box", "📦")
-        btn_box.clicked.connect(self.box_clicked)
-        h_layout.addWidget(btn_box)
+        # Primitives: Box, Cylinder, Sphere, Thread/Coil
+        if group_primitives:
+            btn_primitives = RibbonButton("Primitives\n▾", "📦")
+            btn_primitives.setToolTip("Create basic 3D solids: Box, Cylinder, Sphere, Thread & Coil")
+            btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            prim_menu = QMenu(btn_primitives)
+            act_box = prim_menu.addAction(theme.tool_icon("📦", 18), "Box")
+            act_box.triggered.connect(self.box_clicked)
+            act_cyl = prim_menu.addAction(theme.tool_icon("🥫", 18), "Cylinder")
+            act_cyl.triggered.connect(self.cylinder_clicked)
+            act_sph = prim_menu.addAction(theme.tool_icon("⚽", 18), "Sphere")
+            act_sph.triggered.connect(self.sphere_clicked)
+            act_thr = prim_menu.addAction(theme.tool_icon("🔩", 18), "Thread / Coil")
+            act_thr.triggered.connect(self.thread_clicked)
+            btn_primitives.setMenu(prim_menu)
+            h_layout.addWidget(btn_primitives)
+        else:
+            btn_box = RibbonButton("Box", "📦")
+            btn_box.setToolTip("Create a rectangular 3D box solid")
+            btn_box.clicked.connect(self.box_clicked)
+            h_layout.addWidget(btn_box)
 
-        btn_cyl = RibbonButton("Cylinder", "🥫")
-        btn_cyl.clicked.connect(self.cylinder_clicked)
-        h_layout.addWidget(btn_cyl)
+            btn_cyl = RibbonButton("Cylinder", "🥫")
+            btn_cyl.setToolTip("Create a 3D cylinder solid")
+            btn_cyl.clicked.connect(self.cylinder_clicked)
+            h_layout.addWidget(btn_cyl)
 
-        btn_sph = RibbonButton("Sphere", "⚽")
-        btn_sph.clicked.connect(self.sphere_clicked)
-        h_layout.addWidget(btn_sph)
+            btn_sph = RibbonButton("Sphere", "⚽")
+            btn_sph.setToolTip("Create a spherical 3D solid")
+            btn_sph.clicked.connect(self.sphere_clicked)
+            h_layout.addWidget(btn_sph)
 
-        btn_thread = RibbonButton("Thread\nCoil", "🔩")
-        btn_thread.setToolTip("3D-printable threads and helical coils (trapezoidal 45°, clearance, lead-in taper)")
-        btn_thread.clicked.connect(self.thread_clicked)
-        h_layout.addWidget(btn_thread)
-
-        btn_params = RibbonButton("Parameters", "🧮")
-        btn_params.setToolTip("Named values usable in any number field (Ctrl+P)")
-        btn_params.clicked.connect(self.parameters_clicked)
-        h_layout.addWidget(btn_params)
+            btn_thread = RibbonButton("Thread\nCoil", "🔩")
+            btn_thread.setToolTip("3D-printable threads and helical coils (trapezoidal 45°, clearance, lead-in taper)")
+            btn_thread.clicked.connect(self.thread_clicked)
+            h_layout.addWidget(btn_thread)
 
         # Separator
         sep1 = QFrame()
@@ -246,28 +280,48 @@ class Ribbon(QWidget):
         h_layout.addWidget(sep1)
 
         # MODIFY Group
-        btn_combine = RibbonButton("Combine", "🔗")
-        btn_combine.clicked.connect(self.combine_clicked)
-        h_layout.addWidget(btn_combine)
+        if group_modify:
+            btn_mod = RibbonButton("Modify\n▾", "🔗")
+            btn_mod.setToolTip("Solid modifications: Combine, Split Body, Shell, Move, Delete")
+            btn_mod.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            mod_menu = QMenu(btn_mod)
+            act_comb = mod_menu.addAction(theme.tool_icon("🔗", 18), "Combine (Boolean Join/Cut/Intersect)")
+            act_comb.triggered.connect(self.combine_clicked)
+            act_split = mod_menu.addAction(theme.tool_icon("🪚", 18), "Split Body (Split with plane)")
+            act_split.triggered.connect(self.split_body_clicked)
+            act_shell = mod_menu.addAction(theme.tool_icon("🐚", 18), "Shell (Hollow body)")
+            act_shell.triggered.connect(self.shell_clicked)
+            act_move = mod_menu.addAction(theme.tool_icon("↔️", 18), "Move Body (M)")
+            act_move.triggered.connect(self.move_clicked)
+            act_del = mod_menu.addAction(theme.tool_icon("🗑️", 18), "Delete Selected (Del)")
+            act_del.triggered.connect(self.delete_clicked)
+            btn_mod.setMenu(mod_menu)
+            h_layout.addWidget(btn_mod)
+        else:
+            btn_combine = RibbonButton("Combine", "🔗")
+            btn_combine.setToolTip("Join, cut, or intersect solid bodies (Boolean operations)")
+            btn_combine.clicked.connect(self.combine_clicked)
+            h_layout.addWidget(btn_combine)
 
-        btn_split = RibbonButton("Split\nBody", "🪚")
-        btn_split.setToolTip("Split a solid body into two using an offset plane or origin plane")
-        btn_split.clicked.connect(self.split_body_clicked)
-        h_layout.addWidget(btn_split)
+            btn_split = RibbonButton("Split\nBody", "🪚")
+            btn_split.setToolTip("Split a solid body into two using an offset plane or origin plane")
+            btn_split.clicked.connect(self.split_body_clicked)
+            h_layout.addWidget(btn_split)
 
-        btn_shell = RibbonButton("Shell", "🐚")
-        btn_shell.setToolTip("Hollow out a solid body with a specified wall thickness, opening selected faces")
-        btn_shell.clicked.connect(self.shell_clicked)
-        h_layout.addWidget(btn_shell)
+            btn_shell = RibbonButton("Shell", "🐚")
+            btn_shell.setToolTip("Hollow out a solid body with a specified wall thickness, opening selected faces")
+            btn_shell.clicked.connect(self.shell_clicked)
+            h_layout.addWidget(btn_shell)
 
-        btn_move = RibbonButton("Move\n(M)", "↔️")
-        btn_move.setToolTip("Translate or rotate a 3D solid body parametrically")
-        btn_move.clicked.connect(self.move_clicked)
-        h_layout.addWidget(btn_move)
+            btn_move = RibbonButton("Move\n(M)", "↔️")
+            btn_move.setToolTip("Translate or rotate a 3D solid body parametrically (M)")
+            btn_move.clicked.connect(self.move_clicked)
+            h_layout.addWidget(btn_move)
 
-        btn_del = RibbonButton("Delete", "🗑️")
-        btn_del.clicked.connect(self.delete_clicked)
-        h_layout.addWidget(btn_del)
+            btn_del = RibbonButton("Delete", "🗑️")
+            btn_del.setToolTip("Delete selected bodies or features (Del)")
+            btn_del.clicked.connect(self.delete_clicked)
+            h_layout.addWidget(btn_del)
 
         # Separator
         sep2 = QFrame()
@@ -275,35 +329,67 @@ class Ribbon(QWidget):
         style(sep2, "color: #353940;")
         h_layout.addWidget(sep2)
 
-        # INSPECT Group
-        btn_inspect = RibbonButton("Measure", "📏")
-        btn_inspect.clicked.connect(self.inspect_clicked)
-        h_layout.addWidget(btn_inspect)
+        # INSPECT & UTILS Group
+        if group_inspect:
+            btn_insp = RibbonButton("Inspect\n▾", "📏")
+            btn_insp.setToolTip("Inspection and parameters: Measure, Section View, Parameters")
+            btn_insp.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            insp_menu = QMenu(btn_insp)
+            act_meas = insp_menu.addAction(theme.tool_icon("📏", 18), "Measure (I)")
+            act_meas.triggered.connect(self.measure_clicked)
+            act_sec = insp_menu.addAction(theme.tool_icon("✂️", 18), "Section View")
+            act_sec.triggered.connect(self.section_clicked)
+            act_par = insp_menu.addAction(theme.tool_icon("🧮", 18), "Parameters (Ctrl+P)")
+            act_par.triggered.connect(self.parameters_clicked)
+            btn_insp.setMenu(insp_menu)
+            h_layout.addWidget(btn_insp)
+        else:
+            btn_measure = RibbonButton("Measure\n(I)", "📏")
+            btn_measure.setToolTip("Click a line, circle or edge for its size; click a second one for distance/angle (I)")
+            btn_measure.clicked.connect(self.measure_clicked)
+            h_layout.addWidget(btn_measure)
+
+            btn_section = RibbonButton("Section\nView", "✂️")
+            btn_section.setToolTip("Cut through the model at a plane or face and slide the cut until you see what you want")
+            btn_section.clicked.connect(self.section_clicked)
+            h_layout.addWidget(btn_section)
+
+            btn_params = RibbonButton("Parameters", "🧮")
+            btn_params.setToolTip("Named values usable in any number field (Ctrl+P)")
+            btn_params.clicked.connect(self.parameters_clicked)
+            h_layout.addWidget(btn_params)
 
         # SETTINGS
         btn_settings = RibbonButton("Settings", "⚙️")
-        btn_settings.setToolTip("Colors and app preferences (Ctrl+,)")
+        btn_settings.setToolTip("Colors, ribbon layout and app preferences (Ctrl+,)")
         btn_settings.clicked.connect(self.settings_clicked)
         h_layout.addWidget(btn_settings)
 
         h_layout.addStretch()
 
     def setup_sketch_tab(self):
+        from omacad.ui.settings import get_settings
+        settings = get_settings()
+        group_constraints = bool(settings.get("group_constraints", True))
+
         h_layout = QHBoxLayout(self.sketch_tab)
         h_layout.setContentsMargins(8, 4, 8, 4)
-        h_layout.setSpacing(8)
+        h_layout.setSpacing(6)
 
         # Sketch Creation Tools
         self.btn_line = RibbonButton("Line\n(L)", "✏️")
         self.btn_line.setCheckable(True)
+        self.btn_line.setToolTip("Draw connected straight lines (L)")
         self.btn_line.clicked.connect(lambda: self.select_sketch_tool("LINE"))
         h_layout.addWidget(self.btn_line)
 
         self._build_rect_button()
+        self.btn_rect.setToolTip("Draw rectangles: 2-Point, Center, or 3-Point (R)")
         h_layout.addWidget(self.btn_rect)
 
         self.btn_circle = RibbonButton("Center\nCircle (C)", "⭕")
         self.btn_circle.setCheckable(True)
+        self.btn_circle.setToolTip("Center Circle (C) / Smart Circle (Shift+C)")
         self.btn_circle.clicked.connect(lambda: self.select_sketch_tool("CIRCLE"))
         from PySide6.QtWidgets import QMenu, QToolButton
         self.btn_circle.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
@@ -315,17 +401,19 @@ class Ribbon(QWidget):
 
         self.btn_polygon = RibbonButton("Polygon\n(P)", "⬡")
         self.btn_polygon.setCheckable(True)
-        self.btn_polygon.setToolTip("Regular polygon: click the centre, move out, Tab to type the side length and the number of sides")
+        self.btn_polygon.setToolTip("Regular polygon: click centre, move out, Tab to type side length & number of sides (P)")
         self.btn_polygon.clicked.connect(lambda: self.select_sketch_tool("POLYGON"))
         h_layout.addWidget(self.btn_polygon)
 
         self.btn_arc = RibbonButton("3-Point\nArc (A)", "⌒")
         self.btn_arc.setCheckable(True)
+        self.btn_arc.setToolTip("Create a 3-point circular arc (A)")
         self.btn_arc.clicked.connect(lambda: self.select_sketch_tool("ARC"))
         h_layout.addWidget(self.btn_arc)
 
         self.btn_slot = RibbonButton("Center\nSlot", "💊")
         self.btn_slot.setCheckable(True)
+        self.btn_slot.setToolTip("Create a slot shape defined by center-to-center line and diameter")
         self.btn_slot.clicked.connect(lambda: self.select_sketch_tool("SLOT"))
         h_layout.addWidget(self.btn_slot)
 
@@ -337,24 +425,24 @@ class Ribbon(QWidget):
 
         self.btn_trim_sk = RibbonButton("Trim\n(T)", "✂️")
         self.btn_trim_sk.setCheckable(True)
-        self.btn_trim_sk.setToolTip("Trim (T): remove the piece of a line, circle or arc up to the nearest crossings, or dangling stubs")
+        self.btn_trim_sk.setToolTip("Trim (T): remove the piece of a curve up to nearest crossings, or dangling stubs")
         self.btn_trim_sk.clicked.connect(lambda: self.select_sketch_tool("TRIM"))
         h_layout.addWidget(self.btn_trim_sk)
 
         self.btn_mirror_sk = RibbonButton("Mirror\n(Shift+M)", "🪞")
         self.btn_mirror_sk.setCheckable(True)
-        self.btn_mirror_sk.setToolTip("Mirror (Shift+M): select elements first, then click a line or an origin axis to mirror across")
+        self.btn_mirror_sk.setToolTip("Mirror (Shift+M): select curves to mirror, then pick mirror line/axis")
         self.btn_mirror_sk.clicked.connect(lambda: self.select_sketch_tool("MIRROR"))
         h_layout.addWidget(self.btn_mirror_sk)
 
         self.btn_offset_sk = RibbonButton("Offset\n(O)", "⧉")
         self.btn_offset_sk.setCheckable(True)
-        self.btn_offset_sk.setToolTip("Offset (O): click curves (a click takes the whole connected chain, click more to add), then Enter and type the distance")
+        self.btn_offset_sk.setToolTip("Offset (O): click curves to offset (Shift/Ctrl+click toggles individual curves), Enter distance")
         self.btn_offset_sk.clicked.connect(lambda: self.select_sketch_tool("OFFSET"))
         h_layout.addWidget(self.btn_offset_sk)
 
         self.btn_project_sk = RibbonButton("Project\n(edges)", "🟣")
-        self.btn_project_sk.setToolTip("Include / Project: turn the body edges lying in this sketch plane into sketch lines")
+        self.btn_project_sk.setToolTip("Project: turn solid body edges lying in sketch plane into sketch geometry")
         self.btn_project_sk.clicked.connect(self.project_clicked)
         h_layout.addWidget(self.btn_project_sk)
 
@@ -365,25 +453,26 @@ class Ribbon(QWidget):
         h_layout.addWidget(sep_dim)
 
         btn_measure_s = RibbonButton("Measure\n(I)", "📏")
-        btn_measure_s.setToolTip("Click a line or circle for its size; click a second one for the distance or angle between them")
+        btn_measure_s.setToolTip("Click a line or circle for its size; click a second one for distance/angle (I)")
         btn_measure_s.clicked.connect(self.measure_clicked)
         h_layout.addWidget(btn_measure_s)
 
-        # Construction Toggle & Dimension Tool
+        # Construction Toggle & Dimension Tool & Move
         self.btn_construct = RibbonButton("Construct\n(X)", "⚡")
         self.btn_construct.setCheckable(True)
-        self.btn_construct.setToolTip("Toggle Construction Geometry (X)")
+        self.btn_construct.setToolTip("Toggle Construction Geometry mode (X)")
         self.btn_construct.clicked.connect(self.toggle_construction_clicked)
         h_layout.addWidget(self.btn_construct)
 
         self.btn_dim = RibbonButton("Dimension\n(D)", "📏")
         self.btn_dim.setCheckable(True)
+        self.btn_dim.setToolTip("Add dimension constraint or drive geometry length/angle/radius (D)")
         self.btn_dim.clicked.connect(lambda: self.select_sketch_tool("DIMENSION"))
         h_layout.addWidget(self.btn_dim)
 
         self.btn_move = RibbonButton("Move\n(M)", "✥")
         self.btn_move.setCheckable(True)
-        self.btn_move.setToolTip("Move selected sketch elements (M). Drag elements with the mouse to move them directly.")
+        self.btn_move.setToolTip("Move selected sketch elements (M). Drag elements with mouse to move directly.")
         self.btn_move.clicked.connect(lambda: self.select_sketch_tool("MOVE"))
         h_layout.addWidget(self.btn_move)
 
@@ -392,32 +481,79 @@ class Ribbon(QWidget):
         style(sep_con, "color: #353940;")
         h_layout.addWidget(sep_con)
 
-        # Constraints act on the selected sketch elements
-        for ctype, label, icon, tip in (
+        # Constraints
+        constraints_def = (
             ("HORIZONTAL", "Horizontal", "━", "Make selected lines horizontal"),
             ("VERTICAL", "Vertical", "┃", "Make selected lines vertical"),
-            ("COINCIDENT", "Coincident", "•", "Join the nearest end points of two selected lines"),
+            ("COINCIDENT", "Coincident", "•", "Join nearest end points of two selected curves"),
             ("PARALLEL", "Parallel", "∥", "Make selected lines parallel"),
             ("PERPENDICULAR", "Perpendic.", "⟂", "Make selected lines perpendicular"),
             ("EQUAL", "Equal", "＝", "Equal length (lines) or radius (circles)"),
-            ("TANGENT", "Tangent", "◠", "Tangent: line + circle, or two circles"),
-            ("CONCENTRIC", "Concentric", "◎", "Same centre for two circles"),
-            ("FIX", "Fix", "🔒", "Lock selected lines/circles in place"),
-        ):
-            btn = RibbonButton(label, icon)
-            btn.setToolTip(tip + "  (select elements first)")
-            btn.clicked.connect(lambda _=False, c=ctype: self.constraint_clicked.emit(c))
-            h_layout.addWidget(btn)
+            ("TANGENT", "Tangent", "◠", "Tangent constraint between line and circle, or two curves"),
+            ("CONCENTRIC", "Concentric", "◎", "Share same centre point for two circles/arcs"),
+            ("FIX", "Fix", "🔒", "Lock selected lines/circles/points in place"),
+        )
+
+        scale = ribbon_button_scale()
+        if group_constraints:
+            from PySide6.QtWidgets import QGridLayout
+            grid_widget = QWidget()
+            grid_layout = QGridLayout(grid_widget)
+            grid_layout.setContentsMargins(0, 0, 0, 0)
+            grid_layout.setSpacing(max(2, int(round(3 * scale))))
+            
+            c_btn_size = max(24, int(round(34 * scale)))
+            c_icon_size = max(14, int(round(18 * scale)))
+            c_font_size = max(8, int(round(10 * scale)))
+
+            for i, (ctype, label, icon, tip) in enumerate(constraints_def):
+                row = i % 2
+                col = i // 2
+                c_btn = QToolButton()
+                c_btn.setFixedSize(c_btn_size, c_btn_size)
+                c_btn.setIcon(theme.tool_icon(icon, c_icon_size))
+                c_btn.setIconSize(QSize(c_icon_size, c_icon_size))
+                c_btn.setToolTip(f"{label}: {tip} (select elements first)")
+                style(c_btn, f"""
+                    QToolButton {{
+                        background-color: rgba(45, 49, 54, 0.4);
+                        border: 1px solid #3E434B;
+                        border-radius: 3px;
+                        color: #D2D6DC;
+                        font-size: {c_font_size}px;
+                        padding: 1px;
+                    }}
+                    QToolButton:hover {{
+                        background-color: #353A42;
+                        border: 1px solid #5A6270;
+                        color: #FFFFFF;
+                    }}
+                    QToolButton:pressed {{
+                        background-color: #E26D28;
+                        border: 1px solid #FF7E36;
+                        color: #FFFFFF;
+                    }}
+                """)
+                c_btn.clicked.connect(lambda _=False, c=ctype: self.constraint_clicked.emit(c))
+                grid_layout.addWidget(c_btn, row, col)
+
+            h_layout.addWidget(grid_widget)
+        else:
+            for ctype, label, icon, tip in constraints_def:
+                btn = RibbonButton(label, icon)
+                btn.setToolTip(tip + "  (select elements first)")
+                btn.clicked.connect(lambda _=False, c=ctype: self.constraint_clicked.emit(c))
+                h_layout.addWidget(btn)
 
         h_layout.addStretch()
 
         # Big Green Finish Sketch Button (Fusion 360 hallmark)
-        scale = ribbon_button_scale()
         self.btn_finish = QToolButton()
         self.btn_finish.setText("✅  Finish Sketch")
+        self.btn_finish.setToolTip("Finish editing sketch and return to 3D solid modeling mode")
         self.btn_finish.setMinimumSize(max(100, int(round(140 * scale))), max(34, int(round(48 * scale))))
         style(self.btn_finish, """
-            QToolButton {
+            QToolButton {{
                 background-color: #2E7D32;
                 border: 1px solid #388E3C;
                 border-radius: 4px;
@@ -425,13 +561,13 @@ class Ribbon(QWidget):
                 font-weight: bold;
                 font-size: 13px;
                 padding: 4px 8px;
-            }
-            QToolButton:hover {
+            }}
+            QToolButton:hover {{
                 background-color: #388E3C;
-            }
-            QToolButton:pressed {
+            }}
+            QToolButton:pressed {{
                 background-color: #1B5E20;
-            }
+            }}
         """)
         self.btn_finish.clicked.connect(self.finish_sketch_clicked)
         h_layout.addWidget(self.btn_finish)

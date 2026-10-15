@@ -323,6 +323,27 @@ class SettingsDialog(QDialog):
         btn_size_row.addStretch()
         lay_sketch.addLayout(btn_size_row)
 
+        # Toolbar Ribbon Grouping
+        self.chk_group_primitives = QCheckBox("Group Primitives into dropdown (Box, Cylinder, Sphere, Thread)")
+        self.chk_group_primitives.setChecked(bool(self.settings.get("group_primitives", True)))
+        self.chk_group_primitives.setToolTip("Puts 3D primitive tools into a compact Primitives ▾ dropdown menu.")
+        lay_sketch.addWidget(self.chk_group_primitives)
+
+        self.chk_group_modify = QCheckBox("Group Modify into dropdown (Combine, Split Body, Shell, Move, Delete)")
+        self.chk_group_modify.setChecked(bool(self.settings.get("group_modify", False)))
+        self.chk_group_modify.setToolTip("Puts solid modification tools into a compact Modify ▾ dropdown menu.")
+        lay_sketch.addWidget(self.chk_group_modify)
+
+        self.chk_group_inspect = QCheckBox("Group Inspect into dropdown (Measure, Section View, Parameters)")
+        self.chk_group_inspect.setChecked(bool(self.settings.get("group_inspect", True)))
+        self.chk_group_inspect.setToolTip("Puts measurement, sectioning and parameters into an Inspect ▾ dropdown menu.")
+        lay_sketch.addWidget(self.chk_group_inspect)
+
+        self.chk_group_constraints = QCheckBox("Compact 2-row layout for Sketch Constraints")
+        self.chk_group_constraints.setChecked(bool(self.settings.get("group_constraints", True)))
+        self.chk_group_constraints.setToolTip("Arranges sketch constraints into a compact 2-row grid to save horizontal ribbon space.")
+        lay_sketch.addWidget(self.chk_group_constraints)
+
         # Request for change
         rfc_row = QHBoxLayout()
         lbl_rfc = QLabel("Your name on change requests:")
@@ -444,6 +465,10 @@ class SettingsDialog(QDialog):
         self.spn_arrow_size.setValue(1.0)
         self.spn_arrow_gap.setValue(2.0)
         self.cmb_btn_size.setCurrentIndex(max(0, self.cmb_btn_size.findData(1.0)))
+        self.chk_group_primitives.setChecked(True)
+        self.chk_group_modify.setChecked(False)
+        self.chk_group_inspect.setChecked(True)
+        self.chk_group_constraints.setChecked(True)
 
     def accept(self):
         self.save_and_close()
@@ -463,6 +488,10 @@ class SettingsDialog(QDialog):
             "arrow_size": self.spn_arrow_size.value(),
             "arrow_gap": self.spn_arrow_gap.value(),
             "button_scale": float(self.cmb_btn_size.currentData() or 1.0),
+            "group_primitives": self.chk_group_primitives.isChecked(),
+            "group_modify": self.chk_group_modify.isChecked(),
+            "group_inspect": self.chk_group_inspect.isChecked(),
+            "group_constraints": self.chk_group_constraints.isChecked(),
             "curve_segments": self.cmb_curves.currentData(),
             "view_projection": self.cmb_projection.currentData(),
             "view_fov": self.spn_fov.value(),
