@@ -238,6 +238,42 @@ class ThreadDialog(BaseFeatureDialog):
             if idx >= 0:
                 self.cmb_target.setCurrentIndex(idx)
 
+        # Automatically select recommended pitch for measured diameter
+        # First check standard presets (e.g. M6, M8, M10, M12, M14, M16, M20, M24, M30)
+        found_preset = False
+        for p_idx in range(1, self.cmb_preset.count()):
+            pd, pp = self.cmb_preset.itemData(p_idx)
+            if abs(dia - pd) < 0.2:
+                self.spn_pitch.blockSignals(True)
+                self.spn_pitch.setValue(pp)
+                self.spn_pitch.blockSignals(False)
+                self.cmb_preset.blockSignals(True)
+                self.cmb_preset.setCurrentIndex(p_idx)
+                self.cmb_preset.blockSignals(False)
+                found_preset = True
+                break
+        if not found_preset:
+            # Automatic recommended pitch for 3D printing based on diameter
+            if dia <= 3.5:
+                rec_pitch = 0.7
+            elif dia <= 5.5:
+                rec_pitch = 1.0
+            elif dia <= 7.0:
+                rec_pitch = 1.25
+            elif dia <= 9.0:
+                rec_pitch = 1.5
+            elif dia <= 15.0:
+                rec_pitch = 2.0
+            elif dia <= 22.0:
+                rec_pitch = 2.5
+            elif dia <= 28.0:
+                rec_pitch = 3.0
+            else:
+                rec_pitch = 3.5
+            self.spn_pitch.blockSignals(True)
+            self.spn_pitch.setValue(rec_pitch)
+            self.spn_pitch.blockSignals(False)
+
         # Plane placement along cylinder axis and bottom origin
         self.plane_origin = list(map(float, info["origin"]))
         self.plane_normal = list(map(float, info["axis"]))

@@ -435,6 +435,7 @@ class CadKernel:
         taper_turns: float = 0.75,
         segments_per_turn: Optional[int] = None,
         include_core: bool = True,
+        attached_to_cylinder: bool = False,
     ) -> m3d.Manifold:
         """Create a 3D-print optimized helical thread (male bolt or female cutter/nut core).
 
@@ -444,10 +445,11 @@ class CadKernel:
         - length: total threaded length along Z axis (mm)
         - is_female: True for female thread (internal nut/hole), False for male (bolt)
         - clearance: diametral/radial clearance compensation for FDM 3D printing
-        - profile: 'trapezoidal_45' (45° overhang safe) or 'iso_60' (standard 60° metric V)
+        - profile: 'trapezoidal_45' (45° overhang safe), 'iso_60', or 'round' (circular coil/thread)
         - taper_lead_in: whether to smoothly fade the tooth in/out for easy screwing
         - taper_turns: how many helical turns over which to fade (e.g. 0.75 turn)
         - include_core: whether to include the inner core cylinder (for male thread)
+        - attached_to_cylinder: whether thread is wrapped directly on an existing cylinder of diameter D
         """
         dia = float(diameter)
         p = max(0.2, float(pitch))
@@ -462,11 +464,14 @@ class CadKernel:
         if profile == "round" or profile == "circular":
             r_wire = 0.22 * p
             if not is_female:
-                r_center = (dia * 0.5) - r_wire - (clr * 0.5)
-                r_root = r_center - r_wire
+                # Round wire wrapped on cylinder of diameter D:
+                # Wire touches D/2 with slight 0.05 mm overlap for seamless watertight union
+                r_center = (dia * 0.5) + r_wire - 0.05
+                r_root = dia * 0.5
             else:
-                r_center = (dia * 0.5) - r_wire + (clr * 0.5)
-                r_root = (dia * 0.5) - (2.0 * r_wire)
+                # Female cutter cutting groove into hole of diameter D:
+                r_center = (dia * 0.5) + (clr * 0.5)
+                r_root = (dia * 0.5) - (0.2 * r_wire)
             
             n_circ = 16
             circ_angles = np.linspace(0.0, 2.0 * math.pi, n_circ, endpoint=False)
@@ -517,7 +522,7 @@ class CadKernel:
             coil_mesh = m3d.Mesh(vert_properties=verts, tri_verts=tris)
             coil = m3d.Manifold(coil_mesh)
 
-            if include_core:
+            if include_core and not is_female:
                 cyl_core = m3d.Manifold.cylinder(l, r_root, r_root, circular_segments=seg)
                 return cyl_core + coil
             return coil
@@ -539,17 +544,25 @@ class CadKernel:
         half_slot = half_crest + flank_dz
 
         if not is_female:
-            # Male bolt thread:
-            # Outer crest radius = (D / 2) - (clearance * 0.5)
-            r_outer = (dia * 0.5) - (clr * 0.5)
-            r_root = r_outer - dr_full
-            r_in = r_root - (0.2 * dr_full)  # slight overlap inside core for watertight boolean
+            if attached_to_cylinder:
+                # Wrapped directly on existing cylinder body of diameter D:
+                # Root is at cylinder boundary (with slight penetration into cylinder for watertight union),
+                # crest extends outward from cylinder surface.
+                r_root = dia * 0.5
+                r_in = r_root - 0.1
+                dr_eff = dr_full - (clr * 0.5)
+            else:
+                # Standalone male bolt: outer crest is at (dia * 0.5) - (clr * 0.5)
+                r_outer = (dia * 0.5) - (clr * 0.5)
+                r_root = r_outer - dr_full
+                r_in = r_root - (0.2 * dr_full)  # slight overlap inside core for watertight boolean
+                dr_eff = dr_full
         else:
             # Female cutter thread:
-            # Enlarge outer radius by clearance to cut wider female slot
-            r_outer = (dia * 0.5) + (clr * 0.5)
-            r_root = (dia * 0.5) - dr_full
+            # Cuts outward into hole wall of diameter D from r_root to r_root + dr_eff
+            r_root = dia * 0.5
             r_in = r_root - (0.2 * dr_full)
+            dr_eff = dr_full + (clr * 0.5)
 
         theta = np.linspace(0, turns * 2.0 * math.pi, n_pts + 1)
         z_base = (theta / (2.0 * math.pi)) * p
@@ -571,17 +584,17 @@ class CadKernel:
             th = theta[i]
             c, s = float(math.cos(th)), float(math.sin(th))
             zb = float(z_base[i])
-            eff_dr = dr_full * float(f_taper[i])
+            eff_dr = dr_eff * float(f_taper[i])
             r_out = r_root + eff_dr
 
             # 4 profile cross-section vertices:
-            # 0: inner root lower (inside core)
+            # 0: inner root lower (inside core / hole)
             v0 = [r_in * c, r_in * s, zb - half_slot]
             # 1: outer lower crest edge
             v1 = [r_out * c, r_out * s, zb - half_crest]
             # 2: outer upper crest edge
             v2 = [r_out * c, r_out * s, zb + half_crest]
-            # 3: inner root upper (inside core)
+            # 3: inner root upper (inside core / hole)
             v3 = [r_in * c, r_in * s, zb + half_slot]
             verts.extend([v0, v1, v2, v3])
 
@@ -618,7 +631,7 @@ class CadKernel:
         coil_mesh = m3d.Mesh(vert_properties=verts, tri_verts=tris)
         coil = m3d.Manifold(coil_mesh)
 
-        if include_core:
+        if include_core and not is_female:
             cyl_core = m3d.Manifold.cylinder(l, r_root, r_root, circular_segments=seg)
             return cyl_core + coil
         return coil

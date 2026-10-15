@@ -3,6 +3,17 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.7.2 - 2026-10-15
+
+### Fixed
+- **Mått & Passning utan glapp (*Zero-Gap Seamless Attachment*):**
+  - Åtgärdat beräkningen för spiralradier vid applicering på befintliga cylindrar. Coils och gängor lägger sig nu direkt på cylinderns ytteryta ($R = D/2$) med sömlös överlappning så att boolesk sammanfogning (`Join`) blir 100% vattentät utan något synligt glapp eller nedsänkning.
+  - Korrigerat skärradien för invändig gängning i hål (`Cut`) så att gängspåret skär rent och med rätt djup in i hålväggen.
+- **Helautomatisk aktivering & måttsättning (*Auto-Measure on Click*):**
+  - När verktyget öppnas aktiveras ytplockning direkt – du behöver inte trycka på "Välj yta / cylinder", utan kan direkt klicka på valfri cylinder eller hål i 3D-vyn.
+  - Cylindern mäts automatiskt och sätter in exakt diameter, längd samt rekommenderad stigning/preset anpassad för 3D-print.
+  - Ytplockningen förblir aktiv så du enkelt kan klicka på andra cylindrar eller ytor för att direkt uppdatera måtten.
+
 ## 0.7.7.1 - 2026-10-15
 
 ### Added

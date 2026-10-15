@@ -51,6 +51,7 @@ class ThreadFeature(Feature):
 
     def build_solid(self) -> m3d.Manifold:
         include_core = (self.operation == "new_body" or not self.target_body_id) and not self.is_female
+        attached = bool(self.target_body_id and self.operation == "join" and not self.is_female)
         solid = CadKernel.create_thread(
             diameter=self.diameter,
             pitch=self.pitch,
@@ -61,6 +62,7 @@ class ThreadFeature(Feature):
             taper_lead_in=self.taper_lead_in,
             taper_turns=self.taper_turns,
             include_core=include_core,
+            attached_to_cylinder=attached,
         )
 
         if self.plane_origin is not None and self.plane_normal is not None:

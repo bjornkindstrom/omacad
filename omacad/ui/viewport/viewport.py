@@ -2336,14 +2336,13 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             if self.plane_pick_purpose == "thread_surface":
                 cyl = self._pick_cylinder_surface(event.position().x(), event.position().y())
                 if cyl is not None:
-                    self.end_plane_pick()
                     self.cylinder_picked.emit(cyl)
                     return
             target = self._pick_plane_target(event.position().x(), event.position().y())
             if target is not None:
                 plane = self.plane_from_target(target)
                 purpose = self.plane_pick_purpose
-                if purpose not in ("move_body", "shell_face"):
+                if purpose not in ("move_body", "shell_face", "thread_surface"):
                     self.end_plane_pick()
                 if purpose == "offset_base":
                     self.offset_base_picked.emit(plane)

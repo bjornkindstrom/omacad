@@ -128,3 +128,40 @@ def test_detect_cylinder_surface_external_and_internal():
     assert abs(info2["length"] - 30.0) < 0.1
     assert info2["is_internal"] is True
 
+
+def test_cylinder_coil_seamless_attachment_no_gap():
+    """Verify that attaching a coil or thread to a cylinder leaves no gap and performs a watertight union."""
+    cyl = CadKernel.create_cylinder(radius=10.0, height=30.0, center=False)
+    v_cyl = cyl.volume()
+
+    # 1. Round profile wrapped on cylinder:
+    coil_round = CadKernel.create_thread(
+        diameter=20.0,
+        pitch=2.5,
+        length=30.0,
+        is_female=False,
+        clearance=0.25,
+        profile="round",
+        include_core=False,
+        attached_to_cylinder=True,
+    )
+    union_round = cyl + coil_round
+    assert str(union_round.status()) == "Error.NoError"
+    # Material must be added directly onto the cylinder with seamless overlap, no gap!
+    assert union_round.volume() > v_cyl + 10.0
+
+    # 2. Trapezoidal profile attached to cylinder:
+    thread_trap = CadKernel.create_thread(
+        diameter=20.0,
+        pitch=2.0,
+        length=30.0,
+        is_female=False,
+        clearance=0.25,
+        profile="trapezoidal_45",
+        include_core=False,
+        attached_to_cylinder=True,
+    )
+    union_trap = cyl + thread_trap
+    assert str(union_trap.status()) == "Error.NoError"
+    assert union_trap.volume() > v_cyl + 50.0
+

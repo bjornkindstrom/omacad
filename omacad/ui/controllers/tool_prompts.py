@@ -783,6 +783,7 @@ class ToolPromptsMixin:
         dlg.finished.connect(on_finished)
         self.dock(dlg)
         refresh_preview()
+        on_pick_face()
 
     def prompt_combine(self):
         if len(self.doc.bodies) < 2:
