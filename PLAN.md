@@ -85,6 +85,12 @@ Fusion: *Sketch > Text* öppnar en dialog (text, font, höjd, teckenavstånd, ju
 
 Koden ska vara liten, tydlig och tålig. Mätbara mål, som CI kontrollerar:
 - **Dela upp de stora filerna** (idag `viewport.py` ~4700 rader, `timeline.py` ~1550, `sketch.py` ~1480, `main_window.py` ~1430, `dialogs.py` ~1260): `ui/viewport/` blir ett paket (kamera, plockning, rendering, och ett litet verktyg per fil för Line/Rect/Circle/Fillet/Trim/Offset/Mirror med ett gemensamt `Tool`-gränssnitt i stället för de långa `if self.sketch_tool == ...`-blocken), `timeline.py` en fil per funktionstyp, `main_window.py` uppdelad i kontrollers (`prompt_*`). Ingen fil över ~800 rader.
+- **Prestanda och effektivitet (High-Performance Engine)**:
+  1. *Inkrementell Timeline Recompute*: cacha kropparnas `Manifold`-tillstånd vid varje steg, så att ändringar i steg $K$ bara räknar om från steg $K \to N$ i stället för från steg 0.
+  2. *Topologicache för ytor och kanter*: cacha `compute_planar_faces_and_edges`-analysen på `Manifold`-hash/id så oförändrade kroppar i en scen inte analyseras om i onödan.
+  3. *OpenGL VBO / VAO Caching*: ladda mesh och linjer direkt till GPU VBO:er så navigation (orbit/pan/zoom) flyter i full GPU-skärmhastighet (144+ FPS) utan CPU-tapp.
+  4. *Bakgrundstråd för tunga beräkningar*: kör tunga booleska operationer och preview-beräkningar i `QThreadPool` så GUI:t förblir silkeslent utan mikrofrysningar.
+  5. *Adaptiv tessellering*: snabbare förhandsvisning i viewport med färre segment under interaktiv redigering, full finkornighet vid slutförande och export.
 - **Lint och död kod bort**: `ruff` (stil, oanvända importer, buggmönster) och `vulture`; formatering med `ruff format`; CI avvisar nya varningar.
 - **Felgränser**: alla Qt-slots och musåtgärder går genom en dekoratör som fångar fel, loggar (`applog`), visar ett meddelande och erbjuder *Report problem*, så ett fel i ett verktyg aldrig fäller programmet eller lämnar ett halvt tillstånd. `print` ersätts av loggning.
 - **Inga tysta `except: pass`**: varje `except` loggar eller har en kommentar varför det är säkert.

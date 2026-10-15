@@ -37,6 +37,9 @@ THEMES = ["tokyo-night", "catppuccin-latte", "gruvbox", "osaka-jade", "rose-pine
 TOP = SketchPlane.from_face(np.array([0.0, 0, 1]), np.array([0.0, 0, 8.0]))
 PLATE_C = (30.0, 20.0, 4.0)
 
+FEMALE_NARRATOR = ("A calm, clear female narrator in her twenties with a warm, friendly tone. Natural pace, "
+                   "relaxed and confident, like a software tutorial on YouTube.")
+
 # Spoken text: names are respelled so the voice says them right (Omacad, CAD, Omarchy).
 LINES = {
     "intro": "This is Oh-mah-cad: a native, parametric 3D C A D for Oh-mar-key Linux. Here is a quick tour.",
@@ -51,10 +54,11 @@ LINES = {
     "fill": "Fill pattern covers a whole face. Draw one polygon, and Oh-mah-cad packs the surface with exact gaps, steering around anything that stands on it.",
     "polygons": "It works for any polygon from three to eight sides, and everything is parametric. Change the sketch, and the pattern packs itself again.",
     "revolve": "Revolve turns a profile into a turned part, around any axis you choose.",
-    "section": "Section View lets you slide a plane through the model, to look inside.",
+    "thread": "Thread and coil wrap 3D printable threads or bottle spirals directly onto any cylinder, with automatic end trimming.",
+    "section": "Shell hollows out any body with open faces, and Section View slides through to inspect inside.",
     "undo": "Undo and redo cover every single step, so nothing you try can be lost.",
     "theme": "Oh-mah-cad follows your Oh-mar-key theme live: colours, fonts, everything.",
-    "report": "Found a bug? Press F9. Oh-mah-cad sends a screenshot and your model to an AI agent that fixes it, and restarts with your work intact.",
+    "report": "Found a bug? Press F9. Oh-mah-cad sends a screenshot and your model to your choice of AI agent, fixing it while you work.",
     "end": "Oh-mah-cad is open source and free. Thanks for watching.",
 }
 
@@ -87,7 +91,7 @@ def main():
     # speak every sentence first, so the scenes can be as long as the speech
     durations = {}
     for k, line in LINES.items():
-        durations[line] = narrate.clip(line)[1]
+        durations[line] = narrate.clip(line, voice=FEMALE_NARRATOR)[1]
     print("narration seconds:", round(sum(durations.values()), 1), flush=True)
 
     fmt = QSurfaceFormat()
@@ -352,20 +356,49 @@ def main():
 
         t.scene("Revolve", L["revolve"], revolve_scene)
 
-        # ---- 10. section view ----
+        # ---- 9b. thread and coil ----
+        def thread_scene():
+            fresh()
+            d, v = doc(), vp()
+            cyl = d.add_cylinder(radius=15.0, height=40.0, center=False)
+            d.add_thread(
+                diameter=30.0,
+                pitch=3.5,
+                length=30.0,
+                is_female=False,
+                profile="trapezoidal_45",
+                target_body_id=cyl.body_id,
+                operation="join",
+                plane_origin=[0.0, 0.0, 5.0],
+                plane_normal=[0.0, 0.0, 1.0],
+            )
+            cam((0.0, 0.0, 20.0), 90.0, 35.0, 25.0)
+            t.shoot(20)
+            orbit(int(durations[L["thread"]] * 30), 120, 4)
+
+        t.scene("Thread & Coil: 3D printable threads", L["thread"], thread_scene)
+
+        # ---- 10. section view & shell ----
         def section_scene():
-            sid = d.add_section((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), -24.0)
-            t.fly((0.0, 0.0, 22.0), 120.0, 20.0, 18.0, 25)
-            n = 150
+            fresh()
+            d, v = doc(), vp()
+            box = d.add_box(50.0, 40.0, 30.0, center=False)
+            open_faces = [{"normal": [0.0, 0.0, 1.0], "origin": [0.0, 0.0, 30.0]}]
+            d.add_shell(box.body_id, 3.0, open_faces=open_faces)
+            sid = d.add_section((25.0, 20.0, 15.0), (0.0, -1.0, 0.0), -18.0)
+            cam((25.0, 20.0, 15.0), 105.0, 25.0, 28.0)
+            t.shoot(20)
+            n = int(durations[L["section"]] * 30)
             for i in range(n + 1):
                 k = i / n
-                d.sections[sid]["offset"] = -24.0 + 48.0 * (0.5 - 0.5 * math.cos(math.pi * k))
+                # Slide plane through the front to reveal the hollow interior and opening
+                d.sections[sid]["offset"] = -18.0 + 36.0 * (0.5 - 0.5 * math.cos(math.pi * k))
                 d.notify_changed()
-                v.azimuth = 20.0 + 25.0 * math.sin(math.pi * k)
+                v.azimuth = 25.0 + 30.0 * math.sin(math.pi * k)
                 v.update()
                 t.shoot()
 
-        t.scene("Section View", L["section"], section_scene)
+        t.scene("Shell & Section View", L["section"], section_scene)
 
         # ---- 11. undo / redo ----
         def undo_scene():
