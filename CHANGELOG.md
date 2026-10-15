@@ -3,6 +3,13 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.7.3 - 2026-10-15
+
+### Fixed
+- **Dölj origin-plan vid cylinderplockning (*Hide Origin Planes in Thread/Coil Pick*):**
+  - Stora origin-plan (XY, XZ, YZ) ritas inte längre ut och blockerar inte klick när du väljer cylindrar eller ytor för Thread / Coil.
+  - Klick i 3D-vyn träffar nu garanterat cylinderytan eller modellens ytor utan att origin-planen kommer i vägen.
+
 ## 0.7.7.2 - 2026-10-15
 
 ### Fixed

@@ -184,14 +184,16 @@ class PickerMixin:
         origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
         best, best_t = None, float("inf")
         half = self._origin_plane_half_size()
-        candidates = [(("origin", n), pl) for n, pl in self.doc.origin_planes.items()]
         only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_origin_only"
         shell_pick = self.plane_pick_mode and self.plane_pick_purpose == "shell_face"
-        if shell_pick:
+        thread_pick = self.plane_pick_mode and self.plane_pick_purpose == "thread_surface"
+        if shell_pick or thread_pick:
             candidates = []
-        elif not only_origin:
-            candidates += [(("cplane", pid), self.doc.construction_plane(pid))
-                           for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
+        else:
+            candidates = [(("origin", n), pl) for n, pl in self.doc.origin_planes.items()]
+            if not only_origin:
+                candidates += [(("cplane", pid), self.doc.construction_plane(pid))
+                               for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
         for key, plane in candidates:
             hit = ray_plane_intersect(origin, ray_dir, plane.origin, plane.normal)
             if hit is None:
@@ -298,7 +300,7 @@ class PickerMixin:
         GL.glDisable(GL.GL_DEPTH_TEST)
         half = self._origin_plane_half_size()
         base = {"XY": (0.30, 0.55, 1.0), "XZ": (0.35, 0.85, 0.40), "YZ": (1.0, 0.40, 0.35)}
-        for name, plane in (self.doc.origin_planes.items() if self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face") else ()):
+        for name, plane in (self.doc.origin_planes.items() if self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface") else ()):
             hovered = self.hover_plane == ("origin", name)
             corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
                        plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]
