@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.1 - 2026-10-16
+
+### Fixed
+- **Fill face pattern on edge-based features without sketches (e.g. chamfers/fillets on bottom face):**
+  - When patterning a fillet or chamfer with "Fill face pattern" (such as chamfering holes on the bottom face of a model), the pattern failed because `_source_plane` assumed the source feature was created from a sketch (`sk.plane`).
+  - Now `PatternFeature._source_plane` determines the target face plane from the feature's edges and planar face matches on the body, or from the coplanar faces of the modified region.
+  - Regression test added in `tests/test_fill_face_chamfer.py`.
+
 ## 0.7.9.0 - 2026-10-15
 
 ### Added & Fixed (Fusion 360 Parity)

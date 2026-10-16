@@ -185,12 +185,42 @@ class PatternFeature(Feature):
                 out.append(lambda m, deg=deg: m.translate(tuple(-c)).rotate((0.0, 0.0, deg)).translate(tuple(c)))
         return out
 
-    def _source_plane(self, doc):
+    def _source_plane(self, doc, before=None, removed=None, added=None):
         for f in doc.timeline.features:
             if f.feature_id in self.source_ids:
                 sk = getattr(f, "sketch", None) or doc.sketches.get(getattr(f, "sketch_id", None))
                 if sk is not None:
                     return sk.plane
+                edges = getattr(f, "edges", None)
+                if edges and before is not None:
+                    from omacad.model.faces import compute_planar_faces
+                    from omacad.model.sketch import SketchPlane
+                    pts = []
+                    for e in edges:
+                        if e and isinstance(e, (list, tuple)) and len(e) == 2 and isinstance(e[0], (list, tuple)) and isinstance(e[1], (list, tuple)):
+                            pts.extend([e[0], e[1]])
+                    if len(pts) >= 3:
+                        for face in compute_planar_faces(before):
+                            dists = [abs(float((np.array(p) - face.origin) @ face.normal)) for p in pts]
+                            if max(dists) < 1e-3:
+                                return SketchPlane.from_face(face.normal, face.origin).centered_on(face.tris)
+        if before is not None and (removed is not None or added is not None):
+            from omacad.model.faces import compute_planar_faces
+            from omacad.model.sketch import SketchPlane
+            bf_faces = compute_planar_faces(before)
+            best_face = None
+            best_area = -1.0
+            for m in (removed, added):
+                if m is None or m.is_empty():
+                    continue
+                for rf in compute_planar_faces(m):
+                    for bf in bf_faces:
+                        if abs(abs(float(rf.normal @ bf.normal)) - 1.0) < 1e-3 and abs(float((rf.origin - bf.origin) @ bf.normal)) < 1e-3:
+                            if rf.area > best_area:
+                                best_area = rf.area
+                                best_face = bf
+            if best_face is not None:
+                return SketchPlane.from_face(best_face.normal, best_face.origin).centered_on(best_face.tris)
         return None
 
     @staticmethod
@@ -221,7 +251,7 @@ class PatternFeature(Feature):
         from shapely.ops import unary_union
         from shapely import affinity
         from omacad.model.faces import compute_planar_faces
-        plane = self._source_plane(doc)
+        plane = self._source_plane(doc, before=before, removed=removed, added=added)
         if plane is None:
             return []
         gap, margin = max(self.spacing1, 0.0), max(self.spacing2, 0.0)
