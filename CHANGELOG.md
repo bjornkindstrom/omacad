@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.37 - 2026-10-16
+
+### Fixed
+- Offset Face on a thread gave no clearance: it changed the Thread step, and the jar is cut by the lid, so the lid's thread grew with the groove and the fit stayed exact. Now it is an Offset Face step that changes only the body you click: the threaded zone (coil and bore/pin) is rebuilt bigger or smaller and cut from or added to that body. -0.2 on the jar gives ~0.2 mm of air all round the lid's thread; the lid keeps its size.
+- The thread offset is now the same along the whole coil, also in the lead-in taper.
+
 ## 0.7.9.36 - 2026-10-16
 
 ### Fixed

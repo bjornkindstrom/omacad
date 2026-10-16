@@ -495,8 +495,8 @@ class CadKernel:
                 a_r = dr_eff + overlap
                 r_root = dia * 0.5
             
-            a_r = max(0.02, a_r + grow)
-            a_z = min(max(0.02, a_z + grow), 0.49 * p)     # 0.49: the turns never touch
+            # `grow` is added after the lead-in taper, so the offset is the same all along the coil
+            a_z_max = 0.49 * p                               # 0.49: the turns never touch
             n_circ = 16
             circ_angles = np.linspace(0.0, 2.0 * math.pi, n_circ, endpoint=False)
 
@@ -521,8 +521,10 @@ class CadKernel:
                 zb = float(z_base[i])
                 fw = max(0.02, float(f_taper[i]))
                 for phi in circ_angles:
-                    r = r_center + a_r * fw * float(math.cos(phi))
-                    z = zb + a_z * fw * float(math.sin(phi))
+                    rr = max(0.005, a_r * fw + grow)
+                    rz = min(max(0.005, a_z * fw + grow), a_z_max)
+                    r = r_center + rr * float(math.cos(phi))
+                    z = zb + rz * float(math.sin(phi))
                     verts.append([r * c, r * s, z])
 
             verts = np.array(verts, dtype=np.float32)
@@ -596,7 +598,6 @@ class CadKernel:
             r_in = r_root - (0.2 * dr_full)
             dr_eff = dr_full + (clr * 0.5)
 
-        dr_eff = max(0.02, dr_eff + grow)
         theta = np.linspace(0, turns * 2.0 * math.pi, n_pts + 1)
         z_base = (theta / (2.0 * math.pi)) * p
 
@@ -617,7 +618,7 @@ class CadKernel:
             th = theta[i]
             c, s = float(math.cos(th)), float(math.sin(th))
             zb = float(z_base[i])
-            eff_dr = dr_eff * float(f_taper[i])
+            eff_dr = max(0.005, dr_eff * float(f_taper[i]) + grow)    # grow after the taper: the same all along
             r_out = r_root + eff_dr
 
             # 4 profile cross-section vertices:

@@ -831,8 +831,8 @@ class Document:
         return feat
 
     def _thread_offset(self, faces):
-        """(thread feature, sign) when every picked face belongs to the same thread: its coil, or the wall between the
-        turns (a coaxial cylinder inside the threaded length). Else None."""
+        """(thread feature, sign, shift) when every picked face belongs to the same thread: its coil, or the wall between
+        the turns (a coaxial cylinder inside the threaded length). Else None."""
         if not faces or any(r.get("kind") not in ("surface", "cylinder") for r in faces):
             return None
         feats = self.timeline.features
@@ -846,42 +846,28 @@ class Document:
                         break
                     here = here + (g.dx, g.dy, g.dz)
                     shifts.append(tuple(here))
-            signs = {f.surface_sign(r["point"], r["normal"], shifts) if r["kind"] == "surface" else f.cylinder_sign(r, shifts)
-                     for r in faces}
-            if len(signs) == 1 and 0 not in signs:
-                return f, signs.pop()
+            hits = [f.surface_sign(r["point"], r["normal"], shifts) if r["kind"] == "surface" else f.cylinder_sign(r, shifts)
+                    for r in faces]
+            keys = {(sign, tuple(shift) if shift is not None else None) for sign, shift in hits}
+            if len(keys) == 1 and hits[0][0] != 0:
+                return f, hits[0][0], hits[0][1]
         return None
 
-    def thread_offset_result(self, faces, distance: float, body_id: str):
-        """The body (manifold) that Offset Face would give through its thread, for the live preview; the document
-        is left as it was. None when the faces are not a thread's."""
+    def thread_faces(self, faces):
+        """The picked faces as one thread reference when they all belong to the same thread (see `_thread_offset`):
+        Offset Face then cuts or adds a grown/shrunk copy of the threaded zone on this body only; else None."""
         hit = self._thread_offset(faces)
         if hit is None:
             return None
-        feat, sign = hit
-        old = feat.grow
-        feat.grow = old + sign * float(distance)
-        try:
-            self.timeline.recompute(self)
-            body = self.bodies.get(body_id)
-            result = body.manifold if body is not None else None
-        finally:
-            feat.grow = old
-            self.timeline.recompute(self)
-        return result
+        feat, sign, shift = hit
+        return [{"kind": "thread", "thread_id": feat.feature_id, "sign": int(sign), "shift": [float(x) for x in shift]}]
 
     @undoable("Offset Face")
     def add_offset_face(self, body_id: str, faces, distance: float, exprs=None) -> Optional[OffsetFaceFeature]:
         """Moves the given faces of a body by `distance` (+ adds material, - removes it)."""
         if body_id not in self.bodies or not faces:
             return None
-        hit = self._thread_offset(faces)
-        if hit is not None:      # the surface is a thread's: grow/shrink the coil itself and rebuild
-            feat, sign = hit
-            feat.grow += sign * float(distance)
-            self.timeline.recompute(self)
-            self.notify_changed()
-            return feat
+        faces = self.thread_faces(faces) or faces    # a thread: only this body changes, the other part keeps its size
         n = len([f for f in self.timeline.features if f.feature_type == "offset_face"]) + 1
         feat = OffsetFaceFeature(f"offset_face_{len(self.timeline.features) + 1}", f"Offset Face {n}", body_id, faces, distance)
         feat.exprs = dict(exprs or {})

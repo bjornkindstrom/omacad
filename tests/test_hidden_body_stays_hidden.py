@@ -23,7 +23,5 @@ def test_offset_face_on_thread_keeps_the_lid_hidden():
     last.suppressed = True
     doc.timeline.recompute(doc)
     doc.bodies["body_cylinder_1"].visible = False
-    doc.thread_offset_result(last.faces, -0.2, "body_split_2")      # the live preview rebuilds twice
-    assert not doc.bodies["body_cylinder_1"].visible
     doc.add_offset_face("body_split_2", last.faces, -0.2)
     assert not doc.bodies["body_cylinder_1"].visible

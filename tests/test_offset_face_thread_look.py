@@ -1,6 +1,6 @@
 """Looks at the result: the jar's inner thread is rendered in the real viewport (needs the real display) and the
 picture must stay as clean as before the offset. Hairy ("fnas") walls show up as many vertical light/dark stripes:
-the ratio of horizontal to vertical brightness change in the thread picture jumps from ~0.4 to ~0.65."""
+the ratio of horizontal to vertical brightness change in the thread picture jumps from ~0.19 to ~0.46."""
 import time
 from pathlib import Path
 
@@ -17,14 +17,13 @@ DOC = str(Path(__file__).parent / "data" / "offset_face_coil_stuck.omacad")
 
 def _picture(win, app, doc):
     win.attach_document(doc)
-    win.resize(1400, 900)
-    win.show()
+    win.showFullScreen()            # the same picture size on every run (a tiling window manager resizes others)
     t = time.time()
     while time.time() - t < 1.5:
         app.processEvents()
     vp = win.viewport
-    vp.azimuth, vp.elevation, vp.distance = 193.3, 17.6, 21.0
-    vp.target = np.array([0.0, 0.0, 16.0])
+    vp.azimuth, vp.elevation, vp.distance = 193.3, 22.0, 16.0
+    vp.target = np.array([0.0, 0.0, 15.0])
     doc.bodies["body_cylinder_1"].visible = False
     for sid in doc.sections:
         doc.set_section_active(sid, True)
@@ -36,8 +35,7 @@ def _picture(win, app, doc):
     img = vp.grabFramebuffer().convertToFormat(QImage.Format.Format_Grayscale8)
     w, h = img.width(), img.height()
     a = np.frombuffer(img.constBits(), np.uint8).reshape(h, img.bytesPerLine())[:, :w].astype(float)
-    cx = w // 2
-    return a[90:260, cx - 200:cx + 200]
+    return a[int(h * 0.1):int(h * 0.5), int(w * 0.3):int(w * 0.7)]      # the inside of the thread
 
 
 def _stripes(c) -> float:

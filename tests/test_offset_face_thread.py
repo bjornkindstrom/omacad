@@ -1,50 +1,66 @@
-"""Offset Face on a thread surface edits the thread (its `grow`) instead of deforming the finished mesh: exact, no
-folds, and the Move that came after the thread is followed."""
+"""Offset Face on a thread changes only the body you click: the threaded zone (coil + bore/pin) is rebuilt bigger or
+smaller and cut from / added to that body, so a jar gets real clearance against its lid (whose shape stays). Before,
+the Thread step itself was changed, so the lid grew with the groove and the fit stayed exact."""
 from pathlib import Path
 
 from omacad.io.exporter import Exporter
 from omacad.model.features.thread import ThreadFeature
 
 DOC = str(Path(__file__).parent / "data" / "offset_face_coil_stuck.omacad")
+LID, JAR = "body_cylinder_1", "body_split_2"
 
 
-def _doc():
-    doc = Exporter.load_project(DOC)
+def _doc(path=DOC):
+    doc = Exporter.load_project(path)
     last = doc.timeline.features[-1]
     last.suppressed = True
     doc.timeline.recompute(doc)
     return doc, last
 
 
+def _gap_in_thread(doc) -> float:
+    """Smallest distance between lid and jar inside the threaded zone (z 10..20; the lid rests on the floor and rim)."""
+    lid = doc.bodies[LID].manifold.trim_by_plane((0, 0, -1), -19.7).trim_by_plane((0, 0, 1), 10.3)
+    return doc.bodies[JAR].manifold.min_gap(lid, 1.0)
+
+
 def test_surface_of_the_coil_is_recognised_and_signed():
     doc, last = _doc()
-    thread, sign = doc._thread_offset(last.faces)
-    assert isinstance(thread, ThreadFeature) and sign == -1      # the groove in the jar faces into the coil
+    thread, sign, shift = doc._thread_offset(last.faces)
+    assert isinstance(thread, ThreadFeature) and sign == -1 and list(shift) == [0.0, 0.0, -10.0]   # the lid was moved
 
 
-def test_offset_edits_thread_and_undoes():
+def test_minus_gives_the_jar_clearance_and_leaves_the_lid():
     doc, last = _doc()
-    burk = lambda: doc.bodies["body_split_2"].manifold
-    v0 = burk().volume()
-    n_offsets = len([f for f in doc.timeline.features if f.feature_type == "offset_face"])
-    feat = doc.add_offset_face("body_split_2", last.faces, -0.2)
-    assert isinstance(feat, ThreadFeature) and abs(feat.grow - 0.2) < 1e-9
-    assert burk().status().name == "NoError" and burk().volume() < v0 - 40      # a wider groove removes material
-    assert len([f for f in doc.timeline.features if f.feature_type == "offset_face"]) == n_offsets   # none added
+    lid0, jar0, grow0 = doc.bodies[LID].manifold.volume(), doc.bodies[JAR].manifold.volume(), doc.timeline.features[4].grow
+    assert _gap_in_thread(doc) < 1e-6                                   # an exact fit to begin with
+    feat = doc.add_offset_face(JAR, last.faces, -0.2)
+    assert feat.feature_type == "offset_face" and feat.faces[0]["kind"] == "thread" and feat.skipped == 0
+    assert doc.timeline.features[4].grow == grow0                      # the Thread step is left alone
+    assert abs(doc.bodies[LID].manifold.volume() - lid0) < 1e-6        # the lid keeps its size
+    jar = doc.bodies[JAR].manifold
+    assert jar.volume() < jar0 - 100 and len(jar.decompose()) == 1 and jar.status().name == "NoError"
+    assert 0.18 < _gap_in_thread(doc) < 0.21                           # ~0.2 mm all round (tessellation)
     doc.undo()
-    assert doc.timeline.features[4].grow == 0.0
-    assert abs(burk().volume() - v0) < 1e-6
+    assert abs(doc.bodies[JAR].manifold.volume() - jar0) < 1e-6
 
 
-def test_grow_widens_every_profile():
+def test_plus_adds_material_into_the_lid():
+    doc, last = _doc()
+    doc.add_offset_face(JAR, last.faces, 0.1)
+    overlap = (doc.bodies[JAR].manifold ^ doc.bodies[LID].manifold).volume()
+    assert overlap > 30                                                 # tighter: the jar now overlaps the lid
+
+
+def test_grow_widens_every_profile_also_in_the_lead_in():
     from omacad.model.kernel import CadKernel
     for prof in ("round", "trapezoidal_45", "iso_60"):
         a = CadKernel.create_thread(20, 2.5, 10, profile=prof, include_core=False, attached_to_cylinder=True)
         b = CadKernel.create_thread(20, 2.5, 10, profile=prof, include_core=False, attached_to_cylinder=True, grow=0.2)
-        assert b.volume() > a.volume()
+        assert b.volume() > a.volume() and len((b - a).decompose()) >= 1
 
 
-def test_dialog_explains_what_ok_does_for_a_thread():
+def test_dialog_says_which_body_changes():
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from omacad.ui.main_window import MainWindow
@@ -55,35 +71,22 @@ def test_dialog_explains_what_ok_does_for_a_thread():
     w.prompt_offset_face()
     dlg = w.inspector.current_tool_dlg
     dlg.spn_dist.setValue(-0.2)
-    dlg.toggle(last.faces[0], "body_split_2")
+    dlg.toggle(last.faces[0], JAR)
     QTest.qWait(400)
-    assert "Thread 1 coil" in dlg.lbl_note.text() and "0.2 mm thicker" in dlg.lbl_note.text()
+    assert "only Burk changes" in dlg.lbl_note.text() and "looser" in dlg.lbl_note.text()
     dlg.reject()
 
 
-def test_preview_equals_result_and_leaves_document_alone():
-    doc, last = _doc()
-    v0 = doc.bodies["body_split_2"].manifold.volume()
-    preview = doc.thread_offset_result(last.faces, -0.2, "body_split_2")
-    assert doc.timeline.features[4].grow == 0.0
-    assert abs(doc.bodies["body_split_2"].manifold.volume() - v0) < 1e-9
-    doc.add_offset_face("body_split_2", last.faces, -0.2)
-    assert abs(preview.volume() - doc.bodies["body_split_2"].manifold.volume()) < 1e-6
-
-
-def test_click_on_the_wall_between_the_turns_changes_the_thread():
+def test_click_on_the_wall_between_the_turns_is_the_thread_too():
     """The user's own click (burk med coils.omacad): the bore wall between the turns is a cylinder face. Before, it went
     to the cylinder offset, which could not move a band that short (nothing happened)."""
-    doc = Exporter.load_project(str(Path(__file__).parent / "data" / "offset_face_thread_band.omacad"))
-    last = doc.timeline.features[-1]
+    doc, last = _doc(str(Path(__file__).parent / "data" / "offset_face_thread_band.omacad"))
     assert last.faces[0]["kind"] == "cylinder" and last.faces[0]["internal"]
-    last.suppressed = True
-    doc.timeline.recompute(doc)
-    thread, sign = doc._thread_offset(last.faces)
-    assert thread.feature_type == "thread" and sign == -1          # a hole: minus widens the groove
-    v0, g0 = doc.bodies["body_split_2"].manifold.volume(), thread.grow
-    doc.add_offset_face("body_split_2", last.faces, -0.2)
-    assert abs(thread.grow - g0 - 0.2) < 1e-9 and doc.bodies["body_split_2"].manifold.volume() < v0 - 40
+    thread, sign, _ = doc._thread_offset(last.faces)
+    assert thread.feature_type == "thread" and sign == -1
+    v0 = doc.bodies[JAR].manifold.volume()
+    feat = doc.add_offset_face(JAR, last.faces, -0.2)
+    assert feat.skipped == 0 and doc.bodies[JAR].manifold.volume() < v0 - 100
 
 
 def test_cylinder_far_from_the_thread_is_not_taken():

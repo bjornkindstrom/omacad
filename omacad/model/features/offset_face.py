@@ -258,6 +258,25 @@ def offset_surfaces(manifold, refs, d: float) -> Optional[m3d.Manifold]:
     return out if out.status() == m3d.Error.NoError and not out.is_empty() else None
 
 
+OVERSHOOT = 0.02   # a shell that is added or cut reaches this far past the old surface: never two coinciding faces
+
+
+def offset_thread(manifold, ref, d: float, doc) -> Optional[m3d.Manifold]:
+    """Offset Face on a thread (ref kind "thread"): the threaded zone (coil + bore or pin, `ThreadFeature.zone`) is
+    rebuilt `d` bigger or smaller and cut from / added to THIS body only, so it gets clearance against the part it
+    mates with (whose shape stays). sign -1: the body was cut by the zone (a nut, a jar); +1: the zone is its material
+    (a bolt, a lid)."""
+    feat = next((f for f in getattr(getattr(doc, "timeline", None), "features", []) if f.feature_id == ref["thread_id"]), None)
+    if feat is None:
+        return None
+    shift = ref.get("shift") or [0.0, 0.0, 0.0]
+    zone = lambda extra: feat.zone(extra).translate(shift)
+    e = ref["sign"] * d          # how much the zone grows
+    if ref["sign"] < 0:
+        return manifold - zone(e) if e > 0 else manifold + (zone(OVERSHOOT) - zone(e))
+    return manifold + (zone(e) - zone(-OVERSHOOT)) if e > 0 else manifold - (zone(OVERSHOOT) - zone(e))
+
+
 class OffsetFaceFeature(Feature):
     """Moves the chosen faces of one body by `distance` (+ adds material, - removes it)."""
 
@@ -270,11 +289,17 @@ class OffsetFaceFeature(Feature):
         self.skipped = 0
 
     @staticmethod
-    def compute(manifold, faces, distance: float):
+    def compute(manifold, faces, distance: float, doc: Any = None):
         """(new manifold, number of faces that could not be moved)."""
         skipped = 0
         if abs(distance) < 1e-6:
             return manifold, 0
+        for ref in [r for r in faces if r.get("kind") == "thread"]:
+            new = offset_thread(manifold, ref, distance, doc)
+            if new is None or new.is_empty() or new.volume() < 1e-9:
+                skipped += 1
+            else:
+                manifold = new
         surfaces = [r for r in faces if r.get("kind") == "surface"]
         if surfaces:
             try:
@@ -287,7 +312,7 @@ class OffsetFaceFeature(Feature):
             else:
                 manifold = new
         for ref in faces:
-            if ref.get("kind") == "surface":
+            if ref.get("kind") in ("surface", "thread"):
                 continue
             try:
                 new = (offset_plane if ref.get("kind") == "plane" else offset_cylinder)(manifold, ref, distance)
@@ -304,7 +329,7 @@ class OffsetFaceFeature(Feature):
         target = doc.bodies.get(self.target_body_id)
         if not target:
             return
-        target.manifold, self.skipped = self.compute(target.manifold, self.faces, self.distance)
+        target.manifold, self.skipped = self.compute(target.manifold, self.faces, self.distance, doc)
         target.update_render_mesh()
 
     def to_dict(self) -> Dict[str, Any]:

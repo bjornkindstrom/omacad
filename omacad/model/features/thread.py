@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 import math
 import numpy as np
 import manifold3d as m3d
+from omacad.model import quality
 from omacad.model.kernel import CadKernel
 from omacad.model.features.base import Feature, Body, combine_with_bodies
 
@@ -67,10 +68,11 @@ class ThreadFeature(Feature):
             return max(0.0, self.host_length - self.length - self.anchor_gap)
         return self.anchor_gap
 
-    def surface_sign(self, point, normal, shifts, tol: float = 0.01) -> int:
-        """+1 / -1 when the picked surface point lies on this thread's coil and the surface faces the same way as /
-        against the coil's own outward normal (so offsetting it by d grows / shrinks the coil by d); 0 when it is
-        not on the coil. `shifts` are the places the body may have been moved to since (translations only)."""
+    def surface_sign(self, point, normal, shifts, tol: float = 0.01):
+        """(+1 / -1, shift) when the picked surface point lies on this thread's coil, moved by `shift`, and the surface
+        faces the same way as / against the coil's own outward normal (the picked body is the coil's own material /
+        the body the coil was cut from); (0, None) when it is not on the coil. `shifts` are the places the body may
+        have been moved to since (translations only)."""
         mesh = self.build_solid().to_mesh()
         v = np.asarray(mesh.vert_properties, dtype=float)[:, :3]
         t = np.asarray(mesh.tri_verts)
@@ -93,30 +95,52 @@ class ThreadFeature(Feature):
                 w = [float(np.cross(e1 - e0, q - e0) @ n_tri[i]) / area2[i]
                      for e0, e1 in ((a[i], b[i]), (b[i], c[i]), (c[i], a[i]))]
                 if min(w) >= -tol:
-                    return 1 if n_tri[i] @ n > 0 else -1
-        return 0
+                    return (1 if n_tri[i] @ n > 0 else -1), shift
+        return 0, None
 
-    def cylinder_sign(self, ref, shifts) -> int:
-        """For a picked cylinder face (the wall between the turns, a bore or pin carrying this thread): +1 / -1 when it
-        is coaxial with the thread, about the thread's diameter and inside its length, so Offset Face changes the thread
-        instead (+1: a pin, the coil belongs to its material; -1: a hole the coil was cut from); 0 otherwise."""
+    def cylinder_sign(self, ref, shifts):
+        """For a picked cylinder face (the wall between the turns, a bore or pin carrying this thread): (+1 / -1, shift)
+        when it is coaxial with the thread, about the thread's diameter and inside its length (+1: a pin, the coil
+        belongs to its material; -1: a hole the coil was cut from); (0, None) otherwise."""
         if self.plane_origin is None or self.plane_normal is None:
-            return 0
+            return 0, None
         n = np.asarray(self.plane_normal, dtype=float)
         n = n / max(float(np.linalg.norm(n)), 1e-12)
         a = np.asarray(ref["axis"], dtype=float)
         a = a / max(float(np.linalg.norm(a)), 1e-12)
         if np.linalg.norm(np.cross(a, n)) > 0.01 or abs(float(ref["radius"]) - 0.5 * self.diameter) > 0.6 * self.pitch:
-            return 0
+            return 0, None
         start = np.asarray(self.plane_origin, dtype=float) + n * self.start_offset()
         for shift in shifts:
             d = np.asarray(ref["origin"], dtype=float) - np.asarray(shift, dtype=float) - start
             along = float(d @ n)
             if np.linalg.norm(d - along * n) < 0.05 and -0.5 * self.pitch <= along <= self.length + 0.5 * self.pitch:
-                return -1 if ref.get("internal") else 1
-        return 0
+                return (-1 if ref.get("internal") else 1), shift
+        return 0, None
 
-    def build_solid(self) -> m3d.Manifold:
+    def placement(self) -> Optional[np.ndarray]:
+        """3x4 matrix from the thread's own frame (axis = +Z from where it starts) to the world; None: at the origin."""
+        if self.plane_origin is None or self.plane_normal is None:
+            return None
+        n = np.array(self.plane_normal, dtype=float)
+        n_len = float(np.linalg.norm(n))
+        if n_len <= 1e-12:
+            return None
+        n = n / n_len
+        if self.plane_u is not None and self.plane_v is not None:
+            u = np.array(self.plane_u, dtype=float)
+            u = u / max(float(np.linalg.norm(u)), 1e-12)
+            v = np.array(self.plane_v, dtype=float)
+            v = v / max(float(np.linalg.norm(v)), 1e-12)
+        else:
+            hint = np.array([1.0, 0.0, 0.0]) if abs(n[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            u = hint - np.dot(hint, n) * n
+            u /= np.linalg.norm(u)
+            v = np.cross(n, u)
+        origin = np.array(self.plane_origin, dtype=float) + n * self.start_offset()
+        return np.column_stack([u, v, n, origin]).astype(float)
+
+    def build_solid(self, grow: Optional[float] = None) -> m3d.Manifold:
         include_core = (self.operation == "new_body" or not self.target_body_id) and not self.is_female
         attached = bool(self.target_body_id and self.operation == "join" and not self.is_female)
         solid = CadKernel.create_thread(
@@ -130,28 +154,19 @@ class ThreadFeature(Feature):
             taper_turns=self.taper_turns,
             include_core=include_core,
             attached_to_cylinder=attached,
-            grow=self.grow,
+            grow=self.grow if grow is None else grow,
         )
+        mat = self.placement()
+        return solid if mat is None else solid.transform(mat)
 
-        if self.plane_origin is not None and self.plane_normal is not None:
-            n = np.array(self.plane_normal, dtype=float)
-            n_len = float(np.linalg.norm(n))
-            if n_len > 1e-12:
-                n = n / n_len
-                if self.plane_u is not None and self.plane_v is not None:
-                    u = np.array(self.plane_u, dtype=float)
-                    u = u / max(float(np.linalg.norm(u)), 1e-12)
-                    v = np.array(self.plane_v, dtype=float)
-                    v = v / max(float(np.linalg.norm(v)), 1e-12)
-                else:
-                    hint = np.array([1.0, 0.0, 0.0]) if abs(n[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-                    u = hint - np.dot(hint, n) * n
-                    u /= np.linalg.norm(u)
-                    v = np.cross(n, u)
-                origin = np.array(self.plane_origin, dtype=float) + n * self.start_offset()
-                mat = np.column_stack([u, v, n, origin]).astype(float)
-                solid = solid.transform(mat)
-        return solid
+    def zone(self, extra: float) -> m3d.Manifold:
+        """The threaded region (coil + the cylinder it sits on or in) grown by `extra` on every side, radially; used
+        by Offset Face to give one body clearance against the other without touching the Thread step."""
+        r = 0.5 * self.diameter + extra
+        core = m3d.Manifold.cylinder(self.length, r, r, circular_segments=quality.circle_segments())
+        mat = self.placement()
+        core = core if mat is None else core.transform(mat)
+        return self.build_solid(grow=self.grow + extra) + core
 
     def execute(self, doc: Any) -> None:
         tool = self.build_solid()

@@ -160,28 +160,24 @@ class ToolPromptsMixin:
         def refresh_preview():
             vp.highlighted_faces = []
             dlg.set_note("")
-            thread = self.doc._thread_offset(dlg.faces)
-            result, skipped = None, 0
-            if thread is not None:       # a thread surface: the preview is the rebuilt thread, exactly what OK gives
-                result = self.doc.thread_offset_result(dlg.faces, dlg.distance(), dlg.body_id)
             body = self.doc.bodies.get(dlg.body_id)
             if body is None or not dlg.faces:
                 show_body()
                 vp.shell_target_body_id = ""
                 vp.set_preview(None)
                 return
-            if result is None:
-                thread = None
-                result, skipped = OffsetFaceFeature.compute(body.manifold, dlg.faces, dlg.distance())
+            thread = self.doc.thread_faces(dlg.faces)
+            result, skipped = OffsetFaceFeature.compute(body.manifold, thread or dlg.faces, dlg.distance(), self.doc)
             body.visible = False
             hidden[0] = body.body_id
             vp.shell_target_body_id = body.body_id
             vp.set_preview(result, "new_body")
             if thread is not None:
-                feat, sign = thread
-                d = sign * dlg.distance()
-                dlg.set_note(f"{feat.name} coil: OK makes every turn {abs(d):g} mm {'thicker' if d > 0 else 'thinner'}.")
-                self.status_label.setText(f"Offset Face: OK will change {feat.name}.")
+                feat = next(f for f in self.doc.timeline.features if f.feature_id == thread[0]["thread_id"])
+                d = dlg.distance()
+                dlg.set_note(f"{feat.name}: only {body.name} changes, {abs(d):g} mm "
+                             f"{'more material (tighter)' if d > 0 else 'more room (looser)'} on the thread.")
+                self.status_label.setText(f"Offset Face: the thread of {feat.name} on {body.name}.")
             elif skipped:
                 self.status_label.setText(f"Offset Face: {skipped} face(s) could not be moved by this distance.")
 
@@ -202,8 +198,6 @@ class ToolPromptsMixin:
             if result and faces:
                 feat = self.doc.add_offset_face(body_id, faces, dist, exprs=exprs)
                 note = f" ({feat.skipped} could not be moved)" if getattr(feat, "skipped", 0) else ""
-                if feat is not None and feat.feature_type == "thread":
-                    note = f" by changing {feat.name}"
                 self.status_label.setText(f"Offset Face: {len(faces)} face(s) moved {dist:g} mm{note}.")
             else:
                 self.status_label.setText("Offset Face cancelled." if not result else "No faces were selected.")

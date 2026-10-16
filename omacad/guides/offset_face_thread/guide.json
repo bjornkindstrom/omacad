@@ -12,11 +12,11 @@
     },
     {
       "image": "3.jpg",
-      "text": "Type the distance. Minus removes material from the part you clicked (looser fit), plus adds material (tighter fit). If the panel says \"Thread 1 coil: OK makes every turn ...\" you picked the right surface. Press OK."
+      "text": "Type the distance. Minus removes material from the part you clicked (looser fit), plus adds material (tighter fit). The panel says \"Thread 1: only Burk changes ...\": only that part changes, the other one keeps its size. Press OK."
     },
     {
       "image": "4.jpg",
-      "text": "Result: the groove is wider and the wall is smooth, with no rough edges. The Thread step itself was changed, so you can adjust it again later, and Undo takes it back in one step."
+      "text": "Result with the lid on (section view): before, lid (yellow) and jar (blue) touch everywhere; after -0.2 on the jar there is 0.2 mm of air between them, the lid is unchanged. It is an Offset Face step in the timeline, so you can edit it or undo it."
     }
   ]
 }
