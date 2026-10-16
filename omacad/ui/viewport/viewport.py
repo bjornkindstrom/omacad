@@ -170,6 +170,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.edge_pick_mode: bool = False
         self.edge_xray: bool = False   # pick edges through the model too (stairs, inside corners)
         self.hover_edge = None            # PlanarEdge under the cursor
+        self.hover_face = None            # flat face under the cursor
         self.selected_edges: list = []    # PlanarEdge objects chosen so far
 
         # Right-click menu on a face

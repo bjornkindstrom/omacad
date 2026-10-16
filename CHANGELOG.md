@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.19 - 2026-10-16
+
+### Fixed
+- **Mouse move raised AttributeError after 0.7.9.18** (panels in the 3D view looked displaced): `Viewport3D` never defined `hover_face` until Fillet/Chamfer was started, but the idle hover reads it on every move. It is now set in `__init__`. Test in `tests/test_idle_hover.py`.
+
 ## 0.7.9.18 - 2026-10-16
 
 ### Fixed

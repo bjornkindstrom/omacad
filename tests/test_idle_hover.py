@@ -32,3 +32,10 @@ def test_idle_hover_off_while_editing():
     assert not _vp(doc=SimpleNamespace(active_sketch=object()))._idle_hover_ok()
     assert not _vp(move_gizmo={"dragging": False})._idle_hover_ok()
     assert not _vp(active_tool_title=lambda: "Extrude")._idle_hover_ok()
+
+
+def test_viewport_starts_with_hover_state(qtbot=None):
+    """mouseMoveEvent reads both on every move, so a fresh viewport must define them."""
+    import inspect
+    src = inspect.getsource(Viewport3D.__init__)
+    assert "self.hover_edge" in src and "self.hover_face" in src
