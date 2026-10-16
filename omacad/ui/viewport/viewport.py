@@ -1318,7 +1318,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     # ---- Profile picking & feature preview ------------------------------
     def set_preview(self, manifold: Optional[m3d.Manifold], operation: str = "new_body", extra=None, extra_op: str = "join"):
         """Shows a translucent preview solid (None clears it). `extra` is a second solid in another colour
-        (a pattern both adds and removes material)."""
+        (a pattern both adds and removes material). Under a section view only the kept side is shown, like the bodies."""
+        manifold, extra = self.section_trim(manifold), self.section_trim(extra)
         if manifold is None or manifold.is_empty():
             self.preview_mesh = None
         else:

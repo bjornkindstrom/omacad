@@ -46,6 +46,16 @@ class GizmoMixin:
         self.set_preview_plane(plane if show_plane else None)
         self.update()
 
+    def section_trim(self, manifold):
+        """The part of a solid a section view keeps (the solid itself when no section is shown)."""
+        sec = getattr(self, "section", None)
+        if sec is None or manifold is None:
+            return manifold
+        n = sec["normal"]
+        p = sec["origin"] + n * sec["offset"]
+        keep = n if sec["flip"] else -n
+        return manifold.trim_by_plane(tuple(keep), float(keep @ p))
+
     def clear_section(self):
         self.section = None
         self.set_preview_plane(None)

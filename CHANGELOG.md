@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.36 - 2026-10-16
+
+### Fixed
+- Under a section view the live preview of a tool (Offset Face, Extrude ...) was the whole solid and covered what you were looking at, for example the thread inside a jar. It is now cut like the bodies.
+
+### Added
+- How-to video script `video/offset_thread_take.py` (Offset Face on a thread, with the Browser and the tool panel in the picture).
+
 ## 0.7.9.35 - 2026-10-16
 
 ### Fixed
