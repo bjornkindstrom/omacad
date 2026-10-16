@@ -63,3 +63,24 @@ def test_browser_eyes_and_view_menu_follow_the_document():
     assert w.doc.origin_visible("plane", "XY")
     w.browser.on_item_clicked(item("origin", "all"), 1)
     assert not w.doc.origin_visible("all") and not w._origin_actions[("all", "")].isChecked()
+
+
+def test_tree_keeps_expanded_origin_when_toggling():
+    from PySide6.QtWidgets import QApplication
+    from omacad.ui.main_window import MainWindow
+    QApplication.instance() or QApplication([])
+    w = MainWindow()
+    tree = w.browser.tree
+    def origin_node():
+        stack = [tree.topLevelItem(0)]
+        while stack:
+            it = stack.pop()
+            if it.data(0, 0x100) == ("origin", "all"):
+                return it
+            stack += [it.child(i) for i in range(it.childCount())]
+    origin_node().setExpanded(True)
+    w.doc.set_origin_visibility("plane", "XY", True)
+    assert origin_node().isExpanded()
+    origin_node().setExpanded(False)
+    w.doc.set_origin_visibility("plane", "XY", False)
+    assert not origin_node().isExpanded()

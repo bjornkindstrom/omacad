@@ -104,10 +104,36 @@ class BrowserTree(QWidget):
     def refresh_tree(self):
         """Rebuilds the tree nodes based on the Document model."""
         self.tree.blockSignals(True)  # rebuilding must not look like a rename
+        expanded = self._expanded_keys()
+        scroll = self.tree.verticalScrollBar().value()
         try:
             self._rebuild_tree()
+            self._restore_expanded(expanded)
+            self.tree.verticalScrollBar().setValue(scroll)
         finally:
             self.tree.blockSignals(False)
+
+    @staticmethod
+    def _item_key(item: QTreeWidgetItem):
+        """Identity of a node across rebuilds: the item's own data (kind, id) or, for groups, its text."""
+        return item.data(0, Qt.ItemDataRole.UserRole) or item.text(0)
+
+    def _walk(self):
+        stack = [(self.tree.topLevelItem(i), ()) for i in range(self.tree.topLevelItemCount())]
+        while stack:
+            item, path = stack.pop()
+            key = path + (self._item_key(item),)
+            yield item, key
+            stack += [(item.child(i), key) for i in range(item.childCount())]
+
+    def _expanded_keys(self) -> dict:
+        """key -> expanded? for every node, so a rebuild (e.g. after hiding a plane) keeps the tree as it was."""
+        return {key: item.isExpanded() for item, key in self._walk()}
+
+    def _restore_expanded(self, state: dict):
+        for item, key in self._walk():
+            if key in state:
+                item.setExpanded(state[key])
 
     def _iconify(self, item: QTreeWidgetItem):
         """Leading emoji of an item's text becomes a real icon (so it can be larger than the font)."""

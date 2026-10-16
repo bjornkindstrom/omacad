@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.7 - 2026-10-16
+
+### Fixed
+- **The Browser tree collapsed whenever something changed** (hiding a plane, axis, body ...): the tree is rebuilt from the document on every change and every node came back with its default state (the Origin group closed). Now the expanded/collapsed state of every node and the scroll position are kept across a rebuild. Test in `tests/test_origin_visibility.py`.
+
 ## 0.7.9.6 - 2026-10-16
 
 ### Added (request for change from Lennart: control what is shown of the origin)
