@@ -198,6 +198,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.viewport.finish_sketch_requested.connect(self.on_finish_sketch)
         self.viewport.menu_command.connect(self.on_menu_command)
         self.viewport.active_tool_title = self._active_tool_title
+        self.viewport.round_requested.connect(lambda kind, edges: self.prompt_round_edges(kind, edges))
         self.viewport.lay_face_requested.connect(self.on_lay_face_requested)
         self.viewport.lay_target_picked.connect(self.on_lay_target_picked)
         self._lay_face = None

@@ -153,6 +153,11 @@ class PickerMixin:
                         res.append(e)
         return res
 
+    def _idle_hover_ok(self) -> bool:
+        """Nothing is being edited: edges and faces under the cursor light up so a right-click can fillet them."""
+        return not (self.edge_pick_mode or self.plane_pick_mode or self.doc.active_sketch or self.move_gizmo
+                    or self._move or self.active_tool_title())
+
     def _update_edge_hover(self, x: float, y: float):
         e = self._pick_edge(x, y)
         face = None
@@ -181,7 +186,7 @@ class PickerMixin:
         self.update()
 
     def render_edge_pick(self, mvp: np.ndarray):
-        if not self.edge_pick_mode:
+        if not (self.edge_pick_mode or self._idle_hover_ok()):
             return
         # If hovering a face, highlight it with translucent flat shading
         if self.hover_face is not None and self.hover_edge is None and self.prog_flat is not None:

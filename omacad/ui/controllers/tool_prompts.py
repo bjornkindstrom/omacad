@@ -22,7 +22,7 @@ from omacad.ui.canvas_dialog import CanvasEditorDialog
 
 class ToolPromptsMixin:
     """Mixin providing all prompt_* methods for MainWindow."""
-    def prompt_round_edges(self, kind: str = "fillet"):
+    def prompt_round_edges(self, kind: str = "fillet", edges=None):
         """Fillet / Chamfer: click edges (outside or inside corners), type the size, OK."""
         if getattr(self, "_round_dlg", None) is not None:
             self._round_dlg.raise_()
@@ -134,7 +134,9 @@ class ToolPromptsMixin:
         dlg.changed.connect(preview)
         dlg.finished.connect(on_finished)
         dlg.show()
-
+        if edges:   # started from a right-click on an edge or face
+            self.viewport.selected_edges = list(edges)
+            self.viewport.edges_selection_changed.emit()
 
     def prompt_pattern(self):
         """Copy what some steps did: evenly spaced, mirrored around the body, or around an axis."""

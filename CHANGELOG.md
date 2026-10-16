@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.18 - 2026-10-16
+
+### Fixed
+- **No hover highlight outside Fillet/Chamfer** (report via F9): edges and flat faces now light up under the cursor whenever nothing is being edited, and right-clicking a lit edge (or a face) offers Fillet / Chamfer, which opens the tool with those edges already picked. Test in `tests/test_idle_hover.py`.
+
 ## 0.7.9.17 - 2026-10-16
 
 ### Fixed

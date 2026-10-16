@@ -86,6 +86,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     body_clicked = Signal(str)  # body_id of clicked 3D body
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
+    round_requested = Signal(str, object)      # ("fillet" | "chamfer", edges): start the tool with these edges picked
     lay_face_requested = Signal(object, str)   # (face, "ground" | "pick"): turn the body so this face rests on a plane
     lay_target_picked = Signal(object)         # the plane a face is to be laid on
     step_point_clicked = Signal(object)        # a point on a body surface clicked while choosing steps (Pattern/Mirror)
@@ -1982,6 +1983,11 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self._update_profile_hover(x, y)
             if not self.is_orbiting and not self.is_panning:
                 self._update_entity_hover(x, y)
+                if self._idle_hover_ok():
+                    self._update_edge_hover(x, y)
+                elif self.hover_edge is not None or self.hover_face is not None:
+                    self.hover_edge = self.hover_face = None
+                    self.update()
 
         # Check Dimension Badge Hover
         prev_hovered = self.hovered_dim_id
@@ -2243,6 +2249,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         elif kind == "edges":
             self.show_edges = not self.show_edges
             self.update()
+        elif kind == "round":
+            self.round_requested.emit(*arg)
         elif kind == "tool":
             self.set_sketch_tool(arg)
         elif kind == "construction":
@@ -2376,6 +2384,24 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         if chosen:
             self._run_general(*chosen)
 
+    def _round_entries(self, menu, acts: dict, edges: list, what: str):
+        """Fillet / Chamfer entries for the edges under the cursor (nothing while a tool panel is open)."""
+        if self.active_tool_title():
+            return
+        for kind, icon in (("fillet", "🔵"), ("chamfer", "📐")):
+            acts[theme.action_with_icon(menu, f"{icon} {kind.title()} {what}…")] = ("round", (kind, edges))
+        menu.addSeparator()
+
+    def _show_edge_menu(self, event, edge):
+        """Right-click on a lit-up edge: fillet or chamfer it (and the edges joined to it smoothly)."""
+        menu = _vp_module.QMenu(self)
+        acts: dict = {}
+        self._round_entries(menu, acts, tangent_chain(edge, self._visible_edges()), "this edge")
+        self._add_history_and_view(menu, acts, False)
+        chosen = acts.get(menu.exec(event.globalPosition().toPoint()))
+        if chosen:
+            self._run_general(*chosen)
+
     def _show_face_menu(self, event):
         """Right-click on a flat face: offer to sketch on it directly."""
         target = self._pick_plane_target(event.position().x(), event.position().y())
@@ -2396,6 +2422,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             acts[theme.action_with_icon(menu, "⬇️ Lay this face on a face or plane…")] = ("lay", "pick")
         menu.addSeparator()
         self._add_tool_entries(menu, acts)
+        body = self.doc.bodies.get(face.body_id)
+        if body is not None:
+            self._round_entries(menu, acts, self._edges_of_face(face, body), "edges of this face")
         self._add_history_and_view(menu, acts, False)
         chosen = menu.exec(event.globalPosition().toPoint())
         self.ctx_face = None
@@ -2444,6 +2473,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     self._show_profile_menu(event, self.pick_profile(event.position().x(), event.position().y()))
                 elif not self.doc.active_sketch and self._sketch_line_at(event.position().x(), event.position().y()) is not None:
                     self._show_sketch_menu(event, self._sketch_line_at(event.position().x(), event.position().y()))
+                elif not self.doc.active_sketch and not self.active_tool_title() and self._pick_edge(event.position().x(), event.position().y()) is not None:
+                    self._show_edge_menu(event, self._pick_edge(event.position().x(), event.position().y()))
                 elif not self.doc.active_sketch:
                     target = self._pick_plane_target(event.position().x(), event.position().y())
                     if target is not None and target[0] == "face":
