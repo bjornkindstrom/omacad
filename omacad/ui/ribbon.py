@@ -490,7 +490,7 @@ class Ribbon(QWidget):
         self.btn_construct.clicked.connect(self.toggle_construction_clicked)
         h_layout.addWidget(self.btn_construct)
 
-        self.btn_dim = RibbonButton("Dimension\n(D)", "📏")
+        self.btn_dim = RibbonButton("Dimension\n(D)", "dimension")
         self.btn_dim.setCheckable(True)
         self.btn_dim.setToolTip("Add dimension constraint or drive geometry length/angle/radius (D)")
         self.btn_dim.clicked.connect(lambda: self.select_sketch_tool("DIMENSION"))

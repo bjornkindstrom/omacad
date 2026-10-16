@@ -38,7 +38,7 @@ def test_numbers_and_enter_place_a_circle_and_dimension_it(view):
     view._raw_mouse_uv = view.smart.mouse = (50, 30)
     view.smart.segments = view._smart_segments()
     typ(view, "8")          # diameter
-    view.smart.mouse = (48, 30)
+    view.smart.mouse = (52, 20)
     typ(view, "10")         # 10 from the right wall
     view.smart.mouse = (30, 38)
     typ(view, "6")          # 6 from the top wall

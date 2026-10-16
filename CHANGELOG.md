@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.12 - 2026-10-16
+
+### Changed (requests for change from Björn)
+- **Smart Circle works with lines at any angle:** step 2 now measures from the centre, at right angles, to the nearest straight line of any angle (vertical, horizontal or slanted; sketch lines and face edges); step 3 does the same to the nearest line that is not parallel to the first, and the two distances fix the centre. Both steps are still needed. With nothing typed a step still just takes the cursor, as before. The dotted measure line and the dimensions it creates (distance from the centre to the line) follow the right angle. Before, only vertical and horizontal lines were considered. Tests in `tests/test_smart_circle.py`.
+- **New Dimension icon:** the Dimension button no longer uses the ruler (that is the Measure icon). It shows a Fusion 360 style dimension: a shape with extension lines, a dimension line with arrowheads and a value box (all three icon sets).
+
 ## 0.7.9.11 - 2026-10-16
 
 ### Changed (requests for change from Björn)

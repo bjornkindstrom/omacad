@@ -1096,11 +1096,12 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         elif res == "need_size":
             self.status_message.emit("Smart Circle: type the diameter first.")
         elif res == "no_line":
-            self.status_message.emit("Smart Circle: no straight line in that direction to measure from. Clear the field to use the cursor.")
+            self.status_message.emit("Smart Circle: no straight line to measure from here (step 3 needs one that is not parallel to the first). Clear the field to use the cursor.")
         elif res == "next":
-            self.status_message.emit("Smart Circle: distance from the circle's centre to the nearest "
-                                     + ("vertical" if sc.stage == smart_circle.ACROSS else "horizontal")
-                                     + " line, Enter (empty = cursor).")
+            self.status_message.emit("Smart Circle: distance from the circle's centre (at right angles) to "
+                                     + ("the nearest line, any angle" if sc.stage == smart_circle.ACROSS
+                                        else "the nearest line that is not parallel to the first")
+                                     + ", Enter (empty = cursor).")
         elif res == "done":
             self._smart_create()
         self.update()
@@ -1153,9 +1154,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             if a is not None and b is not None:
                 line(a, b, f"\u00d8 {sc.diameter:g} mm")
         for stage, (seg, dist) in sc.dimension.items():
-            k = 0 if stage == smart_circle.ACROSS else 1
-            foot = (seg[0][0], c[1]) if k == 0 else (c[0], seg[0][1])
-            sf = scr(foot)
+            sf = scr(smart_circle.foot_on_line(seg, c))
             if sf is not None and sc_c is not None:
                 line(sf, sc_c, f"{dist:g} mm")
 
@@ -1187,9 +1186,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 painter.drawPolyline(QPolygonF(pts))
             sc_c = scr(c)
             if sc_c is not None and g is not None:   # dotted measure line from the guide to the centre
-                k = 0 if sc.stage == smart_circle.ACROSS else 1
-                foot = (g[0][0], c[1]) if k == 0 else (c[0], g[0][1])
-                sf = scr(foot)
+                sf = scr(smart_circle.foot_on_line(g, c))
                 if sf is not None:
                     painter.setPen(QPen(cyan, 1, Qt.PenStyle.DashLine))
                     painter.drawLine(sf, sc_c)
