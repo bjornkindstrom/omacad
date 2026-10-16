@@ -75,6 +75,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     shell_face_picked = Signal(object)   # plane/face chosen for hollow shell open face
     move_body_picked = Signal(object)    # plane/face chosen for move body selection
     status_message = Signal(str)
+    edit_sketch_requested = Signal(str)     # right-click on a sketch > Edit Sketch
+    extrude_sketch_requested = Signal(str)  # right-click on a sketch > Extrude
     edges_selection_changed = Signal()
     extrude_handle_dragged = Signal(float)  # signed distance along the extrude arrow while it is dragged
     extrude_handle_drag_finished = Signal()  # emitted when dragging the handle finishes
@@ -2249,6 +2251,46 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.finish_sketch_requested.emit()
         elif kind == "sketch":
             self.menu_command.emit(f"sketch:{arg}")
+        elif kind == "edit_sketch":
+            self.edit_sketch_requested.emit(arg)
+        elif kind == "extrude_sketch":
+            self.extrude_sketch_requested.emit(arg)
+        elif kind == "hide_sketch":
+            self.doc.toggle_sketch_visibility(arg)
+
+    def _sketch_line_at(self, x: float, y: float):
+        """Id of the visible sketch whose lines or circles are under the cursor (model mode), else None."""
+        proj, view, _ = self.get_matrices()
+        origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        tol, best, best_t = self._entity_tolerance(), None, float("inf")
+        for sid, sk in self.doc.sketches.items():
+            if not sk.visible:
+                continue
+            hit = ray_plane_intersect(origin, ray_dir, sk.plane.origin, sk.plane.normal)
+            if hit is None:
+                continue
+            u, v = sk.plane.world_to_uv(hit)
+            t = float(np.linalg.norm(hit - origin))
+            if t < best_t and sk.hit_test(u, v, tol) is not None:
+                best, best_t = sid, t
+        return best
+
+    def _show_sketch_menu(self, event, sketch_id: str):
+        """Right-click on a sketch (not in sketch mode): Edit Sketch first, as in Fusion 360."""
+        sk = self.doc.sketches.get(sketch_id)
+        if sk is None:
+            return
+        menu = _vp_module.QMenu(self)
+        acts: dict = {}
+        acts[theme.action_with_icon(menu, "✏️ Edit Sketch")] = ("edit_sketch", sketch_id)
+        acts[theme.action_with_icon(menu, "⬆️ Extrude\tE")] = ("extrude_sketch", sketch_id)
+        acts[theme.action_with_icon(menu, "👁️ Hide Sketch")] = ("hide_sketch", sketch_id)
+        menu.addSeparator()
+        self._add_tool_entries(menu, acts)
+        self._add_history_and_view(menu, acts, False)
+        chosen = acts.get(menu.exec(event.globalPosition().toPoint()))
+        if chosen:
+            self._run_general(*chosen)
 
     def _show_profile_menu(self, event, key):
         """Right-click on a sketch profile (the shaded area inside closed lines): act on that profile only,
@@ -2260,6 +2302,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.update()
         menu = _vp_module.QMenu(self)
         acts: dict = {}
+        acts[theme.action_with_icon(menu, "✏️ Edit Sketch")] = ("edit_sketch", key[0])
+        menu.addSeparator()
         self._add_tool_entries(menu, acts)
         n = 1 + len(doc.selected_extra)
         what = "profile" if n == 1 else f"{n} profiles"
@@ -2398,6 +2442,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     self._show_axis_menu(event)
                 elif not self.doc.active_sketch and self.pick_profile(event.position().x(), event.position().y()) is not None:
                     self._show_profile_menu(event, self.pick_profile(event.position().x(), event.position().y()))
+                elif not self.doc.active_sketch and self._sketch_line_at(event.position().x(), event.position().y()) is not None:
+                    self._show_sketch_menu(event, self._sketch_line_at(event.position().x(), event.position().y()))
                 elif not self.doc.active_sketch:
                     target = self._pick_plane_target(event.position().x(), event.position().y())
                     if target is not None and target[0] == "face":

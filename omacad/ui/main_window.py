@@ -222,6 +222,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.browser.shell_body_requested.connect(self.prompt_shell)
         self.browser.insert_canvas_requested.connect(self.prompt_insert_canvas)
         self.browser.edit_canvas_requested.connect(self.prompt_edit_canvas)
+        self.viewport.edit_sketch_requested.connect(self.on_edit_sketch)
+        self.viewport.extrude_sketch_requested.connect(self.on_extrude_sketch)
         self.browser.named_view_requested.connect(self.viewport.set_view)
         self.browser.extrude_sketch_requested.connect(self.on_extrude_sketch)
         self.browser.offset_plane_requested.connect(self.prompt_offset_plane)

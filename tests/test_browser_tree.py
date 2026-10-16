@@ -80,3 +80,24 @@ def test_expansion_is_kept_with_the_new_tree(win):
     named.setExpanded(True)
     win.doc.add_cylinder(2, 5)
     assert find(win, "view", "HOME").parent().isExpanded()
+
+
+def test_right_click_on_a_sketch_line_offers_edit_sketch():
+    """In the 3D view (not in sketch mode) a right-click on a sketch's lines finds the sketch."""
+    import numpy as np
+    QApplication.instance() or QApplication([])
+    from omacad.model.document import Document
+    from omacad.ui.viewport import Viewport3D
+    d = Document()
+    sk = d.start_sketch("XY")
+    sk.add_line((0, 0), (40, 0))
+    d.finish_sketch() if hasattr(d, "finish_sketch") else setattr(d, "active_sketch", None)
+    v = Viewport3D(d)
+    v.resize(800, 600)
+    v.azimuth, v.elevation = 0.0, 89.9
+    on_line = v.world_to_screen(sk.plane.uv_to_world(20.0, 0.0))
+    away = v.world_to_screen(sk.plane.uv_to_world(20.0, 30.0))
+    assert v._sketch_line_at(*on_line) == sk.sketch_id
+    assert v._sketch_line_at(*away) is None
+    sk.visible = False
+    assert v._sketch_line_at(*on_line) is None            # hidden sketches are not picked

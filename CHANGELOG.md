@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.16 - 2026-10-16
+
+### Added (request from Björn)
+- **Right-click on a sketch in the 3D view offers Edit Sketch** (also Extrude and Hide Sketch): on the sketch's lines or circles, and "Edit Sketch" also leads the menu when you right-click inside one of its shaded profiles. Test in `tests/test_browser_tree.py`.
+
 ## 0.7.9.15 - 2026-10-16
 
 ### Changed (requests from Björn: browser like Fusion 360)
