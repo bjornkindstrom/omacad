@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.35 - 2026-10-16
+
+### Fixed
+- Offset Face on a thread did nothing when the click landed on the wall between the turns (a short cylinder band, "could not be moved"). A cylinder that is coaxial with a thread and inside its length now changes the Thread step too, so the whole threaded zone works.
+
 ## 0.7.9.34 - 2026-10-16
 
 ### Fixed

@@ -96,6 +96,26 @@ class ThreadFeature(Feature):
                     return 1 if n_tri[i] @ n > 0 else -1
         return 0
 
+    def cylinder_sign(self, ref, shifts) -> int:
+        """For a picked cylinder face (the wall between the turns, a bore or pin carrying this thread): +1 / -1 when it
+        is coaxial with the thread, about the thread's diameter and inside its length, so Offset Face changes the thread
+        instead (+1: a pin, the coil belongs to its material; -1: a hole the coil was cut from); 0 otherwise."""
+        if self.plane_origin is None or self.plane_normal is None:
+            return 0
+        n = np.asarray(self.plane_normal, dtype=float)
+        n = n / max(float(np.linalg.norm(n)), 1e-12)
+        a = np.asarray(ref["axis"], dtype=float)
+        a = a / max(float(np.linalg.norm(a)), 1e-12)
+        if np.linalg.norm(np.cross(a, n)) > 0.01 or abs(float(ref["radius"]) - 0.5 * self.diameter) > 0.6 * self.pitch:
+            return 0
+        start = np.asarray(self.plane_origin, dtype=float) + n * self.start_offset()
+        for shift in shifts:
+            d = np.asarray(ref["origin"], dtype=float) - np.asarray(shift, dtype=float) - start
+            along = float(d @ n)
+            if np.linalg.norm(d - along * n) < 0.05 and -0.5 * self.pitch <= along <= self.length + 0.5 * self.pitch:
+                return -1 if ref.get("internal") else 1
+        return 0
+
     def build_solid(self) -> m3d.Manifold:
         include_core = (self.operation == "new_body" or not self.target_body_id) and not self.is_female
         attached = bool(self.target_body_id and self.operation == "join" and not self.is_female)

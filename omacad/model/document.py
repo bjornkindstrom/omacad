@@ -831,8 +831,9 @@ class Document:
         return feat
 
     def _thread_offset(self, faces):
-        """(thread feature, sign) when every picked face is a curved surface of the same thread's coil, else None."""
-        if not faces or any(r.get("kind") != "surface" for r in faces):
+        """(thread feature, sign) when every picked face belongs to the same thread: its coil, or the wall between the
+        turns (a coaxial cylinder inside the threaded length). Else None."""
+        if not faces or any(r.get("kind") not in ("surface", "cylinder") for r in faces):
             return None
         feats = self.timeline.features
         for i, f in enumerate(feats):
@@ -845,7 +846,8 @@ class Document:
                         break
                     here = here + (g.dx, g.dy, g.dz)
                     shifts.append(tuple(here))
-            signs = {f.surface_sign(r["point"], r["normal"], shifts) for r in faces}
+            signs = {f.surface_sign(r["point"], r["normal"], shifts) if r["kind"] == "surface" else f.cylinder_sign(r, shifts)
+                     for r in faces}
             if len(signs) == 1 and 0 not in signs:
                 return f, signs.pop()
         return None

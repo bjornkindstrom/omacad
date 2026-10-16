@@ -69,3 +69,24 @@ def test_preview_equals_result_and_leaves_document_alone():
     assert abs(doc.bodies["body_split_2"].manifold.volume() - v0) < 1e-9
     doc.add_offset_face("body_split_2", last.faces, -0.2)
     assert abs(preview.volume() - doc.bodies["body_split_2"].manifold.volume()) < 1e-6
+
+
+def test_click_on_the_wall_between_the_turns_changes_the_thread():
+    """The user's own click (burk med coils.omacad): the bore wall between the turns is a cylinder face. Before, it went
+    to the cylinder offset, which could not move a band that short (nothing happened)."""
+    doc = Exporter.load_project(str(Path(__file__).parent / "data" / "offset_face_thread_band.omacad"))
+    last = doc.timeline.features[-1]
+    assert last.faces[0]["kind"] == "cylinder" and last.faces[0]["internal"]
+    last.suppressed = True
+    doc.timeline.recompute(doc)
+    thread, sign = doc._thread_offset(last.faces)
+    assert thread.feature_type == "thread" and sign == -1          # a hole: minus widens the groove
+    v0, g0 = doc.bodies["body_split_2"].manifold.volume(), thread.grow
+    doc.add_offset_face("body_split_2", last.faces, -0.2)
+    assert abs(thread.grow - g0 - 0.2) < 1e-9 and doc.bodies["body_split_2"].manifold.volume() < v0 - 40
+
+
+def test_cylinder_far_from_the_thread_is_not_taken():
+    doc, last = _doc()
+    far = {"kind": "cylinder", "origin": [0, 0, 0], "axis": [0, 0, 1], "radius": 12.0, "length": 10.0, "internal": False}
+    assert doc._thread_offset([far]) is None                        # the outside of the jar, below the thread
