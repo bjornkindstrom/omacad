@@ -26,7 +26,7 @@ def test_shell_pick_hits_hidden_target_body_only(monkeypatch):
     vp = SimpleNamespace(doc=doc, plane_pick_mode=True, plane_pick_purpose="shell_face",
                          shell_target_body_id=a.body_id, width=lambda: 100, height=lambda: 100,
                          get_matrices=lambda: (None, None, None),
-                         _origin_plane_half_size=lambda: 100.0)
+                         _origin_plane_half_size=lambda: 100.0, _origin_quadrant_size=lambda: 100.0)
     top = next(f for f in a.faces if f.normal[2] > 0.9)
     monkeypatch.setattr("omacad.ui.viewport.ray_from_screen",
                         lambda *args: (np.array([5.0, 5.0, 50.0]), np.array([0.0, 0.0, -1.0])))

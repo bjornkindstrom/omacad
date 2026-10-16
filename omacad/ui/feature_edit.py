@@ -173,6 +173,7 @@ def edit_feature(win, doc, index: int) -> bool:
             dlg.plane_normal = feat.plane_normal
             dlg.plane_u = feat.plane_u
             dlg.plane_v = feat.plane_v
+        dlg.set_anchor(getattr(feat, "anchor", "bottom"), getattr(feat, "anchor_gap", 0.0), getattr(feat, "host_length", None))
         if not dlg.exec():
             return False
         vals = dlg.get_values()

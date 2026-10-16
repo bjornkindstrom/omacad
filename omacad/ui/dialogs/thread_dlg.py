@@ -148,8 +148,41 @@ class ThreadDialog(BaseFeatureDialog):
         face_row.addWidget(self.lbl_face, 1)
         form.addRow("Start Face:", face_row)
 
+        # Where along the cylinder the thread sits (only when a cylinder was picked: its length is known)
+        self.host_length = None
+        self.cmb_anchor = QComboBox()
+        self.cmb_anchor.addItem("Bottom end", "bottom")
+        self.cmb_anchor.addItem("Top end", "top")
+        self.cmb_anchor.currentIndexChanged.connect(lambda _: self.changed.emit())
+        self.spn_gap = ExprDoubleSpinBox()
+        self.spn_gap.setRange(0.0, 2000.0)
+        self.spn_gap.setValue(0.0)
+        self.spn_gap.setSuffix(" mm")
+        self.spn_gap.setToolTip("Free space kept between the cylinder end and the start of the thread.")
+        self.spn_gap.valueChanged.connect(lambda _: self.changed.emit())
+        anchor_row = QHBoxLayout()
+        anchor_row.setContentsMargins(0, 0, 0, 0)
+        anchor_row.addWidget(self.cmb_anchor, 1)
+        anchor_row.addWidget(self.spn_gap)
+        form.addRow("Place at:", anchor_row)
+        self._update_anchor_enabled()
+
         self.main_layout.addLayout(form)
         self.add_buttons()
+
+    def _update_anchor_enabled(self):
+        known = self.host_length is not None
+        for w in (self.cmb_anchor, self.spn_gap):
+            w.setEnabled(known)
+            w.setToolTip("Pick a cylinder (outside or inside) to choose which end the thread starts from." if not known
+                         else w.toolTip())
+
+    def set_anchor(self, anchor: str, gap: float, host_length):
+        """Used when editing an existing thread."""
+        self.host_length = host_length
+        self.cmb_anchor.setCurrentIndex(max(0, self.cmb_anchor.findData(anchor)))
+        self.spn_gap.setValue(float(gap))
+        self._update_anchor_enabled()
 
     def select_body(self, body_id: str):
         """Allows interactive clicking in 3D viewport to update selected body."""
@@ -199,6 +232,8 @@ class ThreadDialog(BaseFeatureDialog):
 
     def set_plane(self, plane):
         if plane is None:
+            self.host_length = None
+            self._update_anchor_enabled()
             self.plane_origin = None
             self.plane_normal = None
             self.plane_u = None
@@ -207,6 +242,8 @@ class ThreadDialog(BaseFeatureDialog):
             self.changed.emit()
             return
 
+        self.host_length = None            # a plain face has no "other end"
+        self._update_anchor_enabled()
         self.plane_origin = list(map(float, plane.origin))
         self.plane_normal = list(map(float, plane.normal))
         self.plane_u = list(map(float, plane.u_axis)) if hasattr(plane, "u_axis") else None
@@ -280,6 +317,8 @@ class ThreadDialog(BaseFeatureDialog):
         self.plane_u = list(map(float, info.get("u_axis", [1, 0, 0])))
         self.plane_v = list(map(float, info.get("v_axis", [0, 1, 0])))
 
+        self.host_length = length
+        self._update_anchor_enabled()
         kind_desc = "Insida hål" if is_internal else "Utsida cylinder"
         self.lbl_face.setText(f"{kind_desc} (Ø{dia:g} mm, L={length:g} mm)")
 
@@ -312,4 +351,7 @@ class ThreadDialog(BaseFeatureDialog):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "anchor": str(self.cmb_anchor.currentData() or "bottom"),
+            "anchor_gap": self.spn_gap.value(),
+            "host_length": self.host_length,
         }

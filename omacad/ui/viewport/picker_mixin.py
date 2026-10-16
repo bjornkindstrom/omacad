@@ -244,12 +244,22 @@ class PickerMixin:
                           float(np.abs(b.render_mesh.bounds_max).max()) * 1.2)
         return ext
 
+    def _origin_quadrant_size(self) -> float:
+        """Side of the marker drawn for each origin plane: only its first quadrant (positive u and v), kept small."""
+        ext = 20.0
+        for b in self.doc.bodies.values():
+            if b.visible and b.render_mesh is not None and len(b.render_mesh.vertices):
+                ext = max(ext, float(np.abs(b.render_mesh.bounds_min).max()) * 0.75,
+                          float(np.abs(b.render_mesh.bounds_max).max()) * 0.75)
+        return ext
+
     def _pick_plane_target(self, x: float, y: float):
         """Nearest origin plane (within its drawn quad) or planar body face under the cursor."""
         proj, view, _ = self.get_matrices()
         origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
         best, best_t = None, float("inf")
         half = self._origin_plane_half_size()
+        quad = self._origin_quadrant_size()
         only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_origin_only"
         shell_pick = self.plane_pick_mode and self.plane_pick_purpose == "shell_face"
         thread_pick = self.plane_pick_mode and self.plane_pick_purpose == "thread_surface"
@@ -266,7 +276,11 @@ class PickerMixin:
                 continue
             u, v = plane.world_to_uv(hit)
             t = float(np.linalg.norm(hit - origin))
-            if abs(u) <= half and abs(v) <= half and t < best_t:
+            if key[0] == "origin":
+                inside = 0.0 <= u <= quad and 0.0 <= v <= quad      # origin planes: first quadrant only
+            else:
+                inside = abs(u) <= half and abs(v) <= half
+            if inside and t < best_t:
                 best, best_t = key, t
         # Body faces take priority over origin planes (a plane passing through a body
         # would otherwise hide the faces behind it)
@@ -372,8 +386,9 @@ class PickerMixin:
         for name, plane in (self.doc.origin_planes.items() if picking else
                             ((n, self.doc.origin_planes[n]) for n in shown_origin)):
             hovered = self.hover_plane == ("origin", name)
-            corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
-                       plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]
+            q = self._origin_quadrant_size()
+            corners = [plane.uv_to_world(0, 0), plane.uv_to_world(q, 0),
+                       plane.uv_to_world(q, q), plane.uv_to_world(0, q)]
             quad = np.array([corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]], dtype=np.float32)
             r, g, b = base[name]
             GL.glUniform4f(loc_col, r, g, b, 0.45 if hovered else 0.14)

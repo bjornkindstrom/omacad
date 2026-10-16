@@ -32,8 +32,16 @@ class ThreadFeature(Feature):
         plane_normal: Any = None,
         plane_u: Any = None,
         plane_v: Any = None,
+        anchor: str = "bottom",
+        anchor_gap: float = 0.0,
+        host_length: Optional[float] = None,
     ):
         super().__init__(feature_id, "thread", name)
+        # Where along a cylinder the thread sits: `anchor` "bottom"/"top" is the end it starts from, `anchor_gap` the
+        # distance kept free at that end and `host_length` the cylinder's length (None: attached to a plain face).
+        self.anchor = "top" if anchor == "top" else "bottom"
+        self.anchor_gap = float(anchor_gap)
+        self.host_length = float(host_length) if host_length is not None else None
         self.diameter = float(diameter)
         self.pitch = float(pitch)
         self.length = float(length)
@@ -48,6 +56,14 @@ class ThreadFeature(Feature):
         self.plane_normal = [float(x) for x in plane_normal] if plane_normal is not None else None
         self.plane_u = [float(x) for x in plane_u] if plane_u is not None else None
         self.plane_v = [float(x) for x in plane_v] if plane_v is not None else None
+
+    def start_offset(self) -> float:
+        """Distance from the stored plane origin (the cylinder's bottom) to where the thread starts, along its axis."""
+        if self.host_length is None:
+            return 0.0
+        if self.anchor == "top":
+            return max(0.0, self.host_length - self.length - self.anchor_gap)
+        return self.anchor_gap
 
     def build_solid(self) -> m3d.Manifold:
         include_core = (self.operation == "new_body" or not self.target_body_id) and not self.is_female
@@ -80,7 +96,8 @@ class ThreadFeature(Feature):
                     u = hint - np.dot(hint, n) * n
                     u /= np.linalg.norm(u)
                     v = np.cross(n, u)
-                mat = np.column_stack([u, v, n, np.array(self.plane_origin, dtype=float)]).astype(float)
+                origin = np.array(self.plane_origin, dtype=float) + n * self.start_offset()
+                mat = np.column_stack([u, v, n, origin]).astype(float)
                 solid = solid.transform(mat)
         return solid
 
@@ -123,6 +140,9 @@ class ThreadFeature(Feature):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "anchor": self.anchor,
+            "anchor_gap": self.anchor_gap,
+            "host_length": self.host_length,
         }
 
     @classmethod
@@ -144,4 +164,7 @@ class ThreadFeature(Feature):
             plane_normal=data.get("plane_normal"),
             plane_u=data.get("plane_u"),
             plane_v=data.get("plane_v"),
+            anchor=data.get("anchor", "bottom"),
+            anchor_gap=data.get("anchor_gap", 0.0),
+            host_length=data.get("host_length"),
         )

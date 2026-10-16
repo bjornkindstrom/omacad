@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.10 - 2026-10-16
+
+### Changed / Added (requests for change from Björn)
+- **Smaller plane markers:** the origin plane markers (shown while picking a plane, and when you turn a plane on under Origin) now cover only the first quadrant of each plane (positive u and v) and are smaller: 20 mm, or 75% of the model's largest coordinate. Only that quadrant can be clicked. Test in `tests/test_origin_plane_quadrant.py`.
+- **Thread / Coil at the top of a cylinder:** after picking a cylinder (outside or inside) the Thread dialog has "Place at: Bottom end / Top end" and a gap in mm from that end, so a short thread no longer always starts at the bottom. A thread longer than the free space falls back to the bottom. Stored on the step (`anchor`, `anchor_gap`, `host_length`) so it can be edited and is saved. Tests in `tests/test_thread_anchor.py`.
+
 ## 0.7.9.9 - 2026-10-16
 
 ### Added (request for change from Lennart: distances between objects, movable dimensions)
