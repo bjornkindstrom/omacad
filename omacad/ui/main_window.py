@@ -107,7 +107,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
 
         # Right Inspector overlay floating on viewport
         self.inspector = InspectorPanel(self.doc, self.viewport)
-        self.inspector.setFixedWidth(350)
+        self.inspector.setFixedWidth(380)
         self.inspector.set_palette(self.viewport.sketch_palette)
         _dialogs.SIDE_HOST = self
         self.doc.add_change_listener(self.inspector.refresh_info)
@@ -120,9 +120,10 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
             bottom_pad = 10
             h = max(100, size.height() - top_pad - bottom_pad)
             self.browser.setGeometry(10, top_pad, 260, h)
-            self.inspector.setGeometry(max(10, size.width() - 360), top_pad, 350, h)
+            self.inspector.move(max(10, size.width() - 390), top_pad)
+            self.inspector.set_max_height(h)          # the panel is only as tall as its content needs
             # ViewCube sits just to the left of the Inspector panel
-            self.viewport.viewcube.right_margin = 375
+            self.viewport.viewcube.right_margin = 405
 
         self.viewport._on_viewport_resized = _update_overlays
         _update_overlays()
@@ -450,6 +451,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
             f.setPixelSize(13)
             app.setFont(f)
             theme.apply_qt_palette()
+            app.setStyleSheet(theme.indicator_stylesheet())   # visible tick boxes everywhere (lists, trees, dialogs)
 
     def on_theme_changed(self):
         """The Omarchy theme was switched: stylesheets were already re-applied by theme.refresh()."""

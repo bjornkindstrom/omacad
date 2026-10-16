@@ -898,5 +898,25 @@ QStatusBar {
 """
 
 
+def indicator_stylesheet() -> str:
+    """Tick boxes (also inside lists and trees) drawn from two small SVGs in the theme's colours: a visible empty box
+    and a filled box with a white tick. (QSS borders are not painted for item-view indicators, so images are used.)"""
+    import tempfile
+    accent = _palette.map_hex("#E26D28")
+    border, fill = _palette.map_hex("#6B7280"), _palette.map_hex("#2A2F37")
+    folder = Path(tempfile.gettempdir()) / "omacad-ui"
+    folder.mkdir(parents=True, exist_ok=True)
+    off, on = folder / "check_off.svg", folder / "check_on.svg"
+    off.write_text(f'<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="14" height="14" rx="3" '
+                   f'fill="{fill}" stroke="{border}" stroke-width="1.4"/></svg>', encoding="utf-8")
+    on.write_text(f'<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="14" height="14" rx="3" '
+                  f'fill="{accent}" stroke="{accent}" stroke-width="1.4"/><polyline points="4,8.5 7,11.5 12,5" fill="none" '
+                  f'stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>', encoding="utf-8")
+    views = "QListView::indicator, QTreeView::indicator, QCheckBox::indicator"
+    return (f"{views} {{ width: 16px; height: 16px; }}\n"
+            + ", ".join(f"{v}:unchecked" for v in views.split(", ")) + f" {{ image: url({off.as_posix()}); }}\n"
+            + ", ".join(f"{v}:checked" for v in views.split(", ")) + f" {{ image: url({on.as_posix()}); }}\n")
+
+
 def base_stylesheet() -> str:
     return themeify(_BASE_CSS)

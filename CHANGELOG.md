@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.13 - 2026-10-16
+
+### Fixed / Changed (reports from Björn)
+- **Tick boxes were black** (Pattern "Copy these steps", "Second direction", every list/tree/dialog check box): no theme was applied to the indicators, so the style drew black boxes where a tick could not be told from an empty box, which made it look impossible to un-tick a step. They are now a clear empty box and an orange box with a white tick, in the theme's colours (`theme.indicator_stylesheet`, set on the application).
+- **The tool panel fits its content:** the panel on the right is now only as tall as the open tool needs (no scrolling when there is room), and only scrolls when the window is too short. The sideways scrollbar is gone (the panel is 380 px wide for the 358 px tool boxes). Test in `tests/test_tool_panel_fit.py`.
+
 ## 0.7.9.12 - 2026-10-16
 
 ### Changed (requests for change from Björn)

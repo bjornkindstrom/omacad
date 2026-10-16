@@ -7,7 +7,7 @@ eliminating intrusive floating windows that block the 3D model.
 
 from typing import Optional
 import numpy as np
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QFrame, QPushButton, QGroupBox, QFormLayout
@@ -26,6 +26,7 @@ class InspectorPanel(QWidget):
         super().__init__(parent)
         self.doc = doc
         self.setFixedWidth(380)
+        self.max_height = 10_000          # set by the main window: the room the panel may use
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -46,6 +47,7 @@ class InspectorPanel(QWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         style(self.scroll, "background: transparent; border: none;")
 
@@ -80,10 +82,27 @@ class InspectorPanel(QWidget):
 
         self.content_layout.addStretch()
         self.scroll.setWidget(self.content_widget)
+        self.content_widget.installEventFilter(self)       # a change in what is shown re-fits the panel to it
         main_layout.addWidget(self.scroll)
 
         self.current_tool_dlg = None
         self.refresh_info()
+
+    def eventFilter(self, obj, event):
+        if obj is self.content_widget and event.type() == QEvent.Type.LayoutRequest:
+            QTimer.singleShot(0, self.fit_height)
+        return super().eventFilter(obj, event)
+
+    def set_max_height(self, h: int):
+        self.max_height = int(h)
+        self.fit_height()
+
+    def fit_height(self):
+        """As tall as what is shown needs (so nothing has to be scrolled), but never taller than the room."""
+        want = self.header.sizeHint().height() + 8 + self.content_widget.sizeHint().height()
+        h = max(100, min(want, self.max_height))
+        if h != self.height():
+            self.resize(self.width(), h)
 
     def set_palette(self, palette):
         """Host the sketch palette at the top of the panel (it hides itself outside sketch mode)."""
