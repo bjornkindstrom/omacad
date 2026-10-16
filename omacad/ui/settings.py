@@ -35,6 +35,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "rfc_name": "",                     # your name on requests for change (Help > Request a change)
     "ai_agent": "omarchy",              # AI agent to fix problems: "omarchy", "agy", "claude", "codex", "gemini", etc.
     "button_scale": 1.0,                # size of the ribbon buttons (0.75 = compact, 1.0 = standard, 1.25 = large)
+    "show_button_labels": False,        # show the name under each ribbon button (off = icon only, name on hover)
     "group_primitives": True,           # group Box/Cylinder/Sphere/Thread into Primitives dropdown
     "group_modify": False,              # group Combine/Split/Shell/Move into Modify dropdown
     "group_inspect": True,              # group Measure/Section/Params into Inspect dropdown

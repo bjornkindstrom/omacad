@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.5 - 2026-10-16
+
+### Changed (request for change: bigger drawing area)
+- **Icon-only ribbon:** the text under the toolbar buttons is gone by default, buttons and margins are tighter and the ribbon is about 30% lower, so the drawing area gets bigger. Hovering a button shows a tooltip that starts with its name. Settings > Sketch & View has "Show button names under the toolbar icons" to bring the labels back. Test in `tests/test_ribbon_compact.py`.
+
 ## 0.7.9.3 - 2026-10-16
 
 ### Added & Enhanced (Fusion 360 Parity)

@@ -378,6 +378,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         from omacad.ui.settings import get_settings
         before_curves = get_settings().get("curve_segments")
         before_scale = get_settings().get("button_scale")
+        before_labels = get_settings().get("show_button_labels")
         before_group_prim = get_settings().get("group_primitives")
         before_group_mod = get_settings().get("group_modify")
         before_group_insp = get_settings().get("group_inspect")
@@ -393,7 +394,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             get_settings().get("group_inspect") != before_group_insp or
             get_settings().get("group_constraints") != before_group_cons
         )
-        scale_changed = (get_settings().get("button_scale") != before_scale)
+        scale_changed = (get_settings().get("button_scale") != before_scale
+                         or get_settings().get("show_button_labels") != before_labels)
 
         if grouping_changed or scale_changed:
             self.ribbon.rebuild_ribbon()

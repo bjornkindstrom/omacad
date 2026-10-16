@@ -327,6 +327,10 @@ class SettingsDialog(QDialog):
         btn_size_row.addStretch()
         lay_sketch.addLayout(btn_size_row)
 
+        self.chk_labels = QCheckBox("Show button names under the toolbar icons (otherwise only on hover)")
+        self.chk_labels.setChecked(bool(self.settings.get("show_button_labels", False)))
+        lay_sketch.addWidget(self.chk_labels)
+
         # Toolbar Ribbon Grouping
         self.chk_group_primitives = QCheckBox("Group Primitives into dropdown (Box, Cylinder, Sphere, Thread)")
         self.chk_group_primitives.setChecked(bool(self.settings.get("group_primitives", True)))
@@ -525,6 +529,7 @@ class SettingsDialog(QDialog):
             "arrow_size": self.spn_arrow_size.value(),
             "arrow_gap": self.spn_arrow_gap.value(),
             "button_scale": float(self.cmb_btn_size.currentData() or 1.0),
+            "show_button_labels": self.chk_labels.isChecked(),
             "group_primitives": self.chk_group_primitives.isChecked(),
             "group_modify": self.chk_group_modify.isChecked(),
             "group_inspect": self.chk_group_inspect.isChecked(),

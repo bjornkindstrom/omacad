@@ -26,6 +26,19 @@ def ribbon_button_scale() -> float:
         return 1.0
 
 
+def ribbon_labels() -> bool:
+    """Whether ribbon buttons show their name under the icon (off = icon only, name in the tooltip)."""
+    from omacad.ui.settings import get_settings
+    return bool(get_settings().get("show_button_labels", False))
+
+
+def ribbon_height(scale: float) -> int:
+    """Height of the ribbon tab widget: tab bar + one row of buttons."""
+    if ribbon_labels():
+        return max(80, int(round(122 * scale)))
+    return max(64, int(round(86 * scale)))
+
+
 class RibbonButton(QToolButton):
     """Large Fusion 360 style ribbon tool button with vertical icon and label."""
 
@@ -34,14 +47,24 @@ class RibbonButton(QToolButton):
         self.raw_text = text
         self.icon_symbol = icon_symbol
         self.setText(text)
-        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.apply_scale()
+        self.setToolTip("")
+
+    def setToolTip(self, tip: str):
+        """The tooltip always starts with the button's name, since the label may be hidden."""
+        name = " ".join(self.raw_text.split())
+        super().setToolTip(f"<b>{name}</b><br>{tip}" if tip and tip != name else f"<b>{name}</b>")
 
     def apply_scale(self):
         scale = ribbon_button_scale()
         icon_px = max(18, int(round(30 * scale)))
         font_px = max(8, int(round(10 * scale)))
         min_h = max(50, int(round(76 * scale)))
+        labels = ribbon_labels()
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon if labels
+                                else Qt.ToolButtonStyle.ToolButtonIconOnly)
+        if not labels:
+            min_h = icon_px + max(10, int(round(14 * scale)))
         self.setIcon(theme.tool_icon(self.icon_symbol, icon_px))
         self.setIconSize(QSize(icon_px, icon_px))
         self.setMinimumHeight(min_h)
@@ -68,6 +91,9 @@ class RibbonButton(QToolButton):
             }}
         """)
         self.ensurePolished()
+        if not labels:
+            self.setMinimumWidth(icon_px + max(14, int(round(18 * scale))))
+            return
         fm = self.fontMetrics()
         widest = max(fm.horizontalAdvance(line) for line in self.text().split("\n"))
         base_w = max(48, int(round(68 * scale)))
@@ -121,7 +147,7 @@ class Ribbon(QWidget):
         # Tab Widget
         self.tabs = QTabWidget()
         scale = ribbon_button_scale()
-        self.tabs.setFixedHeight(max(80, int(round(122 * scale))))
+        self.tabs.setFixedHeight(ribbon_height(scale))
         layout.addWidget(self.tabs)
 
         # 1. SOLID Tab
@@ -140,7 +166,7 @@ class Ribbon(QWidget):
     def update_button_scale(self):
         """Update heights, icons and fonts for all ribbon buttons when button_scale setting changes."""
         scale = ribbon_button_scale()
-        self.tabs.setFixedHeight(max(80, int(round(122 * scale))))
+        self.tabs.setFixedHeight(ribbon_height(scale))
         for btn in self.findChildren(RibbonButton):
             btn.apply_scale()
         if hasattr(self, "btn_finish") and self.btn_finish:
@@ -178,7 +204,7 @@ class Ribbon(QWidget):
                 QWidget().setLayout(layout)
 
         scale = ribbon_button_scale()
-        self.tabs.setFixedHeight(max(80, int(round(122 * scale))))
+        self.tabs.setFixedHeight(ribbon_height(scale))
         self.setup_solid_tab()
         self.setup_sketch_tab()
         self.sync_active_tab()
@@ -192,8 +218,8 @@ class Ribbon(QWidget):
         group_inspect = bool(settings.get("group_inspect", True))
 
         h_layout = QHBoxLayout(self.solid_tab)
-        h_layout.setContentsMargins(8, 4, 8, 4)
-        h_layout.setSpacing(6)
+        h_layout.setContentsMargins(6, 2, 6, 2)
+        h_layout.setSpacing(4)
 
         # CREATE Group
         btn_sketch = RibbonButton("Create\nSketch", "✏️")
@@ -373,8 +399,8 @@ class Ribbon(QWidget):
         group_constraints = bool(settings.get("group_constraints", True))
 
         h_layout = QHBoxLayout(self.sketch_tab)
-        h_layout.setContentsMargins(8, 4, 8, 4)
-        h_layout.setSpacing(6)
+        h_layout.setContentsMargins(6, 2, 6, 2)
+        h_layout.setSpacing(4)
 
         # Sketch Creation Tools
         self.btn_line = RibbonButton("Line\n(L)", "✏️")
