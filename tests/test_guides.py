@@ -44,13 +44,18 @@ def test_guide_window_steps_through():
     assert w.index == len(g.steps) - 2
 
 
-def test_offset_face_dialog_opens_the_guide():
+def test_offset_face_panel_has_a_small_guide_that_can_be_enlarged():
     from omacad.ui.main_window import MainWindow
     QApplication.instance() or QApplication([])
     w = MainWindow()
     w.doc.add_box(20, 10, 5)
     w.prompt_offset_face()
-    w.inspector.current_tool_dlg.btn_guide.click()
-    assert w._guide_window.isVisible() and w._guide_window.guide.guide_id == "offset_face_thread"
-    w._guide_window.close()
+    box = w.inspector.current_tool_dlg.guide_box
+    assert box is not None and box.lbl_image.pixmap().width() <= 340    # small in the panel
+    box.go(2)
+    box.btn_big.click()
+    assert box.big.isVisible() and box.big.index == 2 and box.big.lbl_image.pixmap().width() > 800
+    box.big.close()
+    box.btn_fold.click()
+    assert box.body.isHidden()
     w.inspector.current_tool_dlg.reject()

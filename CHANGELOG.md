@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.34 - 2026-10-16
+
+### Fixed
+- A body hidden with its eye in the Browser came back after any rebuild of the history (for example Offset Face on a thread brought the lid, with its big thread, back into the jar). Hidden bodies now stay hidden.
+
+### Changed
+- The thread-fit guide is a small box inside the Offset Face panel (picture, text, Back/Next, Hide). "Bigger" opens the same guide in a large window at the same step.
+
 ## 0.7.9.33 - 2026-10-16
 
 ### Added

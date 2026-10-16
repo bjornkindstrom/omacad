@@ -76,6 +76,7 @@ class Timeline:
         active = getattr(doc, "active_sketch", None)
 
         limit = min(self.marker_index, len(self.features))
+        hidden = {bid for bid, b in doc.bodies.items() if not getattr(b, "visible", True)}   # the user's eye clicks
 
         # Invalidate any cache entries beyond current marker or length
         for k in list(self._state_cache.keys()):
@@ -128,6 +129,9 @@ class Timeline:
             }
 
         doc.step_states[limit] = {bid: b.manifold for bid, b in doc.bodies.items()}
+        for bid in hidden:       # the rebuilt bodies are fresh objects: a body the user hid stays hidden
+            if bid in doc.bodies:
+                doc.bodies[bid].visible = False
         if active and active.sketch_id not in doc.sketches:
             doc.sketches[active.sketch_id] = active
 

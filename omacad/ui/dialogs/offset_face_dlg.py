@@ -42,9 +42,12 @@ class OffsetFaceDialog(BaseFeatureDialog):
             btn = QPushButton("Clear selection")
             btn.clicked.connect(self.clear)
             self.main_layout.addWidget(btn)
-        self.btn_guide = QPushButton("? Guide: thread fit")
-        self.btn_guide.setToolTip("Pictures showing which body and surface to click to make a thread looser or tighter")
-        self.main_layout.addWidget(self.btn_guide)
+        from omacad.guide import find_guide
+        from omacad.ui.guide_dialog import GuideBox
+        guide = find_guide("offset_face_thread")       # which body and surface to click to change a thread's fit
+        self.guide_box = GuideBox(guide, self) if guide is not None else None
+        if self.guide_box is not None:
+            self.main_layout.addWidget(self.guide_box)
         self.add_buttons()
         self.spn_dist.valueChanged.connect(lambda *_: self.changed.emit())
         QTimer.singleShot(0, lambda: (self.spn_dist.setFocus(), self.spn_dist.selectAll()))

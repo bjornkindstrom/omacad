@@ -148,7 +148,6 @@ class ToolPromptsMixin:
         if self.inspector.current_tool_dlg is not None:
             return
         dlg = OffsetFaceDialog(self, embedded=True)
-        dlg.btn_guide.clicked.connect(lambda: self.show_guide("offset_face_thread"))
         self.dock(dlg)
         vp = self.viewport
         hidden = [None]    # the body whose preview replaces it
