@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.25 - 2026-10-16
+
+### Fixed
+- Offset Face on a thread or other curved surface no longer folds the flat faces next to it (end caps) into slivers: rim vertices slide within the neighbouring face, and a move that would turn a triangle inside out stops short.
+
 ## 0.7.9.24 - 2026-10-16
 
 ### Fixed

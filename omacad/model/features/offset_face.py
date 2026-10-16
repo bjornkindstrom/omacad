@@ -185,6 +185,30 @@ def _surface_patch(verts, tris, tri_normals, seed: int, max_angle_deg: float = 3
     return np.array(sorted(seen))
 
 
+def _move_without_folds(verts, tris, mv, step, tries: int = 12) -> None:
+    """verts[mv] += step, except that a vertex whose move would turn a triangle inside out (a hair-thin triangle in a
+    flat end cap, narrower than `d`) goes only part of the way: the result stays a valid solid."""
+    base = verts[mv].copy()
+    scale = np.ones(len(mv))
+    pos = np.full(len(verts), -1)
+    pos[mv] = np.arange(len(mv))
+    touched = np.where((pos[tris] >= 0).any(axis=1))[0]
+    tv = tris[touched]
+
+    def normals(v):
+        return np.cross(v[tv[:, 1]] - v[tv[:, 0]], v[tv[:, 2]] - v[tv[:, 0]])
+
+    before = normals(verts)
+    for _ in range(tries):
+        verts[mv] = base + step * scale[:, None]
+        flipped = np.einsum("ij,ij->i", before, normals(verts)) < 0
+        if not flipped.any():
+            return
+        bad = np.unique(tv[flipped].ravel())
+        scale[pos[bad[pos[bad] >= 0]]] *= 0.5
+    verts[mv] = base + step * scale[:, None]
+
+
 def offset_surfaces(manifold, refs, d: float) -> Optional[m3d.Manifold]:
     """Curved surfaces (threads, coils, fillets): the vertices of each picked smooth patch move `d` along their
     own outward normal; the neighbouring triangles stretch with them. Done for all patches at once."""
@@ -213,7 +237,22 @@ def offset_surfaces(manifold, refs, d: float) -> Optional[m3d.Manifold]:
     moved = np.unique(tris[idx].ravel())
     length = np.linalg.norm(vn[moved], axis=1)
     ok = length > 1e-12
-    verts[moved[ok]] += d * vn[moved[ok]] / length[ok][:, None]
+    mv = moved[ok]
+    step = d * vn[mv] / length[ok][:, None]
+    # A vertex on the rim of the patch also belongs to the neighbouring surface (an end cap, a root). It slides
+    # within that surface's plane, so the patch still moves `d` along its normal; moving it along the patch normal
+    # would lift it out of the neighbour and fold the neighbour's triangles over.
+    rest = np.setdiff1d(np.arange(len(tris)), idx)
+    nb = np.zeros_like(vn)
+    for k in range(3):
+        np.add.at(nb, tris[rest, k], cross[rest])
+    nb_len = np.linalg.norm(nb[mv], axis=1)
+    n = vn[mv] / length[ok][:, None]
+    m = nb[mv] / np.where(nb_len > 1e-12, nb_len, 1.0)[:, None]
+    c = np.einsum("ij,ij->i", n, m)
+    slide = (nb_len > 1e-12) & (1.0 - c * c > 0.1)       # nearly parallel surfaces keep the plain normal move
+    step[slide] = d * (n - c[:, None] * m)[slide] / (1.0 - c * c)[slide, None]
+    _move_without_folds(verts, tris, mv, step)
     out = m3d.Manifold(m3d.Mesh(vert_properties=verts.astype(np.float32), tri_verts=np.ascontiguousarray(tris.astype(np.uint32))))
     return out if out.status() == m3d.Error.NoError and not out.is_empty() else None
 
