@@ -1,0 +1,10 @@
+{
+  "id": "offset_face_thread",
+  "title": "Make a thread looser or tighter (Offset Face)",
+  "steps": [
+    {"image": "1.jpg", "text": "Pick the right body. Hide the lid (Locket) with its eye in the Browser: it sits inside the jar and hides the thread, so your clicks would land on it. A Section View helps you see the thread."},
+    {"image": "2.jpg", "text": "Start Offset Face and click the GREEN spots: the rounded thread flank. Orange is the smooth wall between the turns (then the whole hole moves, not the thread), blue is the flat bottom, red is outside the part."},
+    {"image": "3.jpg", "text": "Type the distance. Minus removes material from the part you clicked (looser fit), plus adds material (tighter fit). If the panel says \"Thread 1 coil: OK makes every turn ...\" you picked the right surface. Press OK."},
+    {"image": "4.jpg", "text": "Result: the groove is wider and the wall is smooth, with no rough edges. The Thread step itself was changed, so you can adjust it again later, and Undo takes it back in one step."}
+  ]
+}

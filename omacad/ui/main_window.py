@@ -387,6 +387,10 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         act_request.setToolTip("Ask for a change or a new feature: your text, a screenshot, the model and the log are sent to the owner on GitHub")
         act_request.triggered.connect(self.on_request_change)
         menu_help.addAction(act_request)
+        from omacad.guide import list_guides
+        menu_guides = menu_help.addMenu("Guides")
+        for g in list_guides():
+            menu_guides.addAction(g.title, lambda _=False, gid=g.guide_id: self.show_guide(gid))
         menu_help.addAction("Changelog…", self.on_changelog)
         menu_help.addAction("About Omacad", self.on_about)
 
@@ -1069,6 +1073,20 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         buf.open(QIODevice.OpenModeFlag.WriteOnly)
         image.save(buf, "PNG")
         return bytes(data)
+
+    def show_guide(self, guide_id: str) -> None:
+        """Opens a guide (omacad/guides/<id>) in a small window that stays beside the work."""
+        from omacad.guide import find_guide
+        from omacad.ui.guide_dialog import GuideWindow
+        guide = find_guide(guide_id)
+        if guide is None:
+            self.status_label.setText(f"Guide '{guide_id}' was not found.")
+            return
+        old = getattr(self, "_guide_window", None)
+        if old is not None:
+            old.close()
+        self._guide_window = GuideWindow(guide, self)
+        self._guide_window.show()
 
     def on_changelog(self):
         from omacad.ui.changelog_dialog import ChangelogDialog

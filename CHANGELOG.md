@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.33 - 2026-10-16
+
+### Added
+- In-app guides: Help > Guides opens a small window with pictures and short steps. The first guide, "Make a thread looser or tighter (Offset Face)", is also behind the "? Guide: thread fit" button in the Offset Face panel. Guide pictures are small JPEGs (max 900 px wide, 120 KB each) so the app does not grow.
+
 ## 0.7.9.32 - 2026-10-16
 
 ### Fixed
