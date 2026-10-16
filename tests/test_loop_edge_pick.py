@@ -2,6 +2,7 @@
 When an arc or line segment is shared between a composite LoopEdge and a CircularEdge arc,
 picking must prefer the full LoopEdge so the user can select and chamfer/fillet the contour."""
 import os
+from pathlib import Path
 import numpy as np
 
 from omacad.io.exporter import Exporter
@@ -11,7 +12,7 @@ from omacad.ui.math3d import orbit_view, perspective
 
 
 def test_pick_edge_prefers_loop_over_overlapping_arc():
-    doc_path = os.path.expanduser("~/.local/share/omacad/feedback/20261015-213135/document.omacad")
+    doc_path = str(Path(__file__).parent / "data" / "fillet_face_pick.omacad")
     doc = Exporter.load_project(doc_path)
     b = doc.bodies["body_extrude_2"]
     outer_loop = next(e for e in b.edges if getattr(e, "kind", "") == "loop" and np.allclose(np.asarray(e.polyline())[:, 2], 0.0, atol=1e-3) and len(e.polyline()) > 50)

@@ -3,6 +3,7 @@ Clicking a planar face during fillet/chamfer edge pick selects all boundary loop
 of the face.
 """
 import os
+from pathlib import Path
 import numpy as np
 
 from omacad.io.exporter import Exporter
@@ -13,7 +14,7 @@ from omacad.ui.math3d import orbit_view, perspective
 
 
 def test_fillet_face_click_selects_all_boundary_loops():
-    doc_path = os.path.expanduser("~/.local/share/omacad/feedback/20261015-213135/document.omacad")
+    doc_path = str(Path(__file__).parent / "data" / "fillet_face_pick.omacad")
     doc = Exporter.load_project(doc_path)
     b = doc.bodies["body_extrude_2"]
 

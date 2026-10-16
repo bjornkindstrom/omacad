@@ -2,12 +2,15 @@
 such as chamfering holes on the bottom face of a model where no sketch exists on that face.
 """
 
+import os
+from pathlib import Path
+
 from omacad.io.exporter import Exporter
 from omacad.model.features.pattern import PatternFeature
 
 
 def test_fill_pattern_on_bottom_face_chamfer():
-    report_file = "/home/kindstrom/.local/share/omacad/feedback/20261016-153449/document.omacad"
+    report_file = str(Path(__file__).parent / "data" / "fill_bottom_chamfer.omacad")
     doc = Exporter.load_project(report_file)
     body_id = list(doc.bodies.keys())[0]
 
