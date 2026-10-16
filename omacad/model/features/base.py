@@ -26,22 +26,49 @@ class Body:
     color: List[float] = field(default_factory=lambda: [0.72, 0.77, 0.82, 1.0])  # Fusion 360 steel/aluminum
     visible: bool = True
     selected: bool = False
-    faces: List[PlanarFace] = field(default_factory=list)
-    edges: List[PlanarEdge] = field(default_factory=list)
+    _faces: List[PlanarFace] = field(default_factory=list, repr=False)
+    _edges: List[PlanarEdge] = field(default_factory=list, repr=False)
+    _topology_src: Optional[m3d.Manifold] = field(default=None, repr=False)   # manifold whose faces/edges are still to be analysed
 
     def update_render_mesh(self):
+        """Refresh the render mesh now; the (expensive) face/edge analysis waits until somebody asks for it."""
         self.render_mesh = CadKernel.extract_render_mesh(self.manifold)
+        self._faces, self._edges = [], []
+        self._topology_src = self.manifold
+
+    def _analyse_topology(self) -> None:
+        src, self._topology_src = self._topology_src, None
+        if src is None:
+            return
         try:
-            self.faces, self.edges = compute_planar_faces_and_edges(self.manifold, self.body_id)
+            self._faces, self._edges = compute_planar_faces_and_edges(src, self.body_id)
         except Exception:
             try:
-                self.faces = compute_planar_faces(self.manifold, self.body_id)
+                self._faces = compute_planar_faces(src, self.body_id)
             except Exception:
-                self.faces = []
+                self._faces = []
             try:
-                self.edges = compute_planar_edges(self.manifold)
+                self._edges = compute_planar_edges(src)
             except Exception:
-                self.edges = []
+                self._edges = []
+
+    @property
+    def faces(self) -> List[PlanarFace]:
+        self._analyse_topology()
+        return self._faces
+
+    @faces.setter
+    def faces(self, value: List[PlanarFace]) -> None:
+        self._faces = value
+
+    @property
+    def edges(self) -> List[PlanarEdge]:
+        self._analyse_topology()
+        return self._edges
+
+    @edges.setter
+    def edges(self, value: List[PlanarEdge]) -> None:
+        self._edges = value
 
 
 def profile_cross_section(profile: Any) -> m3d.CrossSection:
