@@ -134,7 +134,7 @@ class InspectorPanel(QWidget):
 
     def _make_card(self, title: str, layout) -> QFrame:
         card = QFrame()
-        style(card, "QFrame { background-color: #1E2126; border: 1px solid #333842; border-radius: 6px; }")
+        style(card, "QFrame { background-color: rgba(30, 33, 38, 0.88); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; }")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(10, 8, 10, 10)
         card_layout.setSpacing(6)

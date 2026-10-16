@@ -507,6 +507,8 @@ class RenderGLMixin:
         super().resizeEvent(event)
         if hasattr(self, 'sketch_palette'):
             self.sketch_palette.place_default(self.size())
+        if hasattr(self, '_on_viewport_resized') and callable(self._on_viewport_resized):
+            self._on_viewport_resized(self.size())
 
     # ---- Sketch plane picking ---------------------------------------------
 

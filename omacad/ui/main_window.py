@@ -95,21 +95,31 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         self.ribbon = Ribbon(self.doc, self)
         central_layout.addWidget(self.ribbon)
 
-        # 2. 3D Viewport
+        # 2. 3D Viewport (spans full central width, overlays float on top like Fusion 360)
         self.viewport = Viewport3D(self.doc, self)
-        # right-hand panel: every tool dialog docks here so it never covers the model
+        central_layout.addWidget(self.viewport, stretch=1)
+
         from omacad.ui import dialogs as _dialogs
-        view_row = QHBoxLayout()
-        view_row.setContentsMargins(0, 0, 0, 0)
-        view_row.setSpacing(0)
-        view_row.addWidget(self.viewport, stretch=1)
-        self.inspector = InspectorPanel(self.doc, self)
-        view_row.addWidget(self.inspector)
+        # Left Browser overlay floating on viewport
+        self.browser = BrowserTree(self.doc, self.viewport)
+        self.browser.setFixedWidth(260)
+
+        # Right Inspector overlay floating on viewport
+        self.inspector = InspectorPanel(self.doc, self.viewport)
+        self.inspector.setFixedWidth(350)
         self.inspector.set_palette(self.viewport.sketch_palette)
-        central_layout.addLayout(view_row, stretch=1)
         _dialogs.SIDE_HOST = self
         self.doc.add_change_listener(self.inspector.refresh_info)
         self._init_undo_listener = True   # registered once the Edit menu exists (see _build_menus)
+
+        def _update_overlays(size):
+            top_pad = 10
+            bottom_pad = 10
+            h = max(100, size.height() - top_pad - bottom_pad)
+            self.browser.setGeometry(10, top_pad, 260, h)
+            self.inspector.setGeometry(max(10, size.width() - 360), top_pad, 350, h)
+
+        self.viewport._on_viewport_resized = _update_overlays
 
         # 3. Bottom Timeline
         self.timeline_bar = TimelineBar(self.doc, self)
@@ -117,17 +127,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
 
         self.setCentralWidget(central_container)
 
-        # 4. Left Browser Panel (DockWidget)
-        self.browser_dock = QDockWidget("Browser", self)
-        self.browser_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        self.browser_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
-        self.browser = BrowserTree(self.doc, self)
-        self.browser_dock.setWidget(self.browser)
-        self.browser_dock.setMinimumWidth(230)
-        self.browser_dock.setStyleSheet("QDockWidget { background: transparent; } QDockWidget::title { background: transparent; border: none; }")
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.browser_dock)
-
-        # 5. Status Bar
+        # 4. Status Bar
         self.status_label = _LoggedLabel("Ready")
         self.statusBar().addWidget(self.status_label)
         self.progress_bar = QProgressBar()

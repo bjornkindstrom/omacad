@@ -39,9 +39,20 @@ class BrowserTree(QWidget):
         self.doc.add_change_listener(self.refresh_tree)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(4)
 
+        # Header Bar (Fusion 360 floating card-style header)
+        self.header = QWidget()
+        style(self.header, "background-color: rgba(32, 34, 37, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 3px 6px;")
+        h_layout = QHBoxLayout(self.header)
+        h_layout.setContentsMargins(6, 2, 4, 2)
+        self.lbl_title = QLabel("BROWSER")
+        style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.8px; background: transparent;")
+        h_layout.addWidget(self.lbl_title)
+        h_layout.addStretch()
+
+        layout.addWidget(self.header)
 
         # Tree Widget
         self.tree = QTreeWidget()
