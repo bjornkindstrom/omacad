@@ -188,6 +188,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.plane_pick_purpose: str = "sketch"  # "sketch" or "extrude_target"
         self.shell_target_body_id: str = ""      # body whose faces "shell_face" picking may hit
         self.hover_plane = None  # ("origin", name) or ("face", PlanarFace)
+        self.hover_patch = None  # triangle corners (n, 3) of the curved surface under the cursor (Offset Face)
+        self._hover_patch_time = 0.0
         self.highlighted_faces: list = []  # list of faces or dicts to highlight (e.g. Shell open faces)
 
         # ViewCube overlay
@@ -1980,6 +1982,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             if not self.is_orbiting and not self.is_panning:
                 if self.plane_pick_purpose == "offset_surface":
                     self.surface_hover.emit(self._pick_surface(x, y))
+                elif self.plane_pick_purpose == "offset_face":
+                    self._update_offset_hover(x, y)
                 else:
                     self._update_plane_hover(x, y)
         else:

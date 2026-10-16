@@ -2,6 +2,7 @@
 
 from typing import Optional, List, Tuple
 import math
+import time
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
@@ -235,6 +236,7 @@ class PickerMixin:
     def end_plane_pick(self, cancelled: bool = False):
         self.plane_pick_mode = False
         self.hover_plane = None
+        self.hover_patch = None
         self.highlighted_faces = []
         if cancelled:
             self.plane_pick_cancelled.emit()
@@ -358,6 +360,34 @@ class PickerMixin:
         keep = n if sec["flip"] else -n
         return float(keep @ (np.asarray(point, dtype=float) - (sec["origin"] + n * sec["offset"]))) >= -1e-6
 
+    def _update_offset_hover(self, x: float, y: float):
+        """Offset Face: the flat face or the curved surface (cylinder, thread...) under the cursor lights up."""
+        now = time.monotonic()
+        if now - self._hover_patch_time < 0.06:          # finding a smooth patch is not free: at most ~16 times a second
+            return
+        self._hover_patch_time = now
+        surf = self._pick_surface(x, y)
+        face, patch = None, None
+        if surf is not None:
+            target = self._pick_plane_target(x, y)
+            if target is not None and target[0] == "face":
+                proj, view, _ = self.get_matrices()
+                origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
+                t_face = ray_hit_face(target[1], origin, ray_dir)
+                if t_face is not None and t_face <= surf["t"] + 1e-4:
+                    face = target[1]
+            if face is None:
+                patch = surf["patch"]
+        old = self.hover_plane
+        new = ("face", face) if face is not None else None
+        same_face = (old is None) == (new is None) and (new is None or (old[1].body_id, old[1].index) == (face.body_id, face.index))
+        same_patch = (patch is None and self.hover_patch is None) or (
+            patch is not None and self.hover_patch is not None and patch.shape == self.hover_patch.shape
+            and np.allclose(patch[0], self.hover_patch[0]) and np.allclose(patch[-1], self.hover_patch[-1]))
+        if not (same_face and same_patch):
+            self.hover_plane, self.hover_patch = new, patch
+            self.update()
+
     def _offset_face_click(self, x: float, y: float):
         """Offset Face: the nearest of a flat face and a cylinder under the cursor is picked."""
         from omacad.model.features.offset_face import cylinder_face_ref, plane_face_ref, surface_face_ref
@@ -416,7 +446,7 @@ class PickerMixin:
     def render_plane_pick(self, mvp: np.ndarray):
         """Translucent origin-plane quads and hovered face while choosing a sketch plane."""
         cplanes = [(pid, self.doc.construction_plane(pid)) for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
-        if self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face"):
+        if self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face", "offset_face"):
             cplanes = []
         shown_origin = [] if self.plane_pick_mode else [n for n in self.doc.origin_planes if self.doc.origin_visible("plane", n)]
         if (not self.plane_pick_mode and self.ctx_face is None and not cplanes and self.preview_plane is None
@@ -431,7 +461,7 @@ class PickerMixin:
         GL.glDisable(GL.GL_DEPTH_TEST)
         half = self._origin_plane_half_size()
         base = {"XY": (0.30, 0.55, 1.0), "XZ": (0.35, 0.85, 0.40), "YZ": (1.0, 0.40, 0.35)}
-        picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface")
+        picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface", "offset_face")
         for name, plane in (self.doc.origin_planes.items() if picking else
                             ((n, self.doc.origin_planes[n]) for n in shown_origin)):
             hovered = self.hover_plane == ("origin", name)
@@ -468,6 +498,14 @@ class PickerMixin:
             tris = (face.tris + lift).reshape(-1, 3).astype(np.float32)
             GL.glUniform4f(loc_col, *theme.palette().highlight01(0.1), 0.55)
             self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, tris)
+        if self.plane_pick_mode and self.hover_patch is not None and len(self.hover_patch):
+            GL.glEnable(GL.GL_DEPTH_TEST)
+            GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
+            GL.glPolygonOffset(-1.0, -1.0)               # on top of the surface it covers, hidden behind the model
+            GL.glUniform4f(loc_col, *theme.palette().highlight01(0.1), 0.55)
+            self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, self.hover_patch.astype(np.float32))
+            GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
+            GL.glDisable(GL.GL_DEPTH_TEST)
         for hf in self.highlighted_faces:
             face = getattr(hf, "face", hf) if not isinstance(hf, dict) else None
             if face is not None and hasattr(face, "tris"):

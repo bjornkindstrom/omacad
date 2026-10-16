@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.24 - 2026-10-16
+
+### Fixed
+- **Request #32: Offset Face on a cylinder left slivers (fins) of the old wall behind** (the report's body fell apart into 53 pieces): the ring that is added or removed now reaches a little past the old wall, so no hair-thin remainder is left. Test with the report's document in `tests/test_offset_face_hover_and_slivers.py`.
+- **Offset Face: cylinders, threads and other curved surfaces now light up under the cursor** (like flat faces), so you can see what a click will pick.
+
 ## 0.7.9.23 - 2026-10-16
 
 ### Fixed

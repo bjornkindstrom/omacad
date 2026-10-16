@@ -147,8 +147,18 @@ def offset_cylinder(manifold, ref, d: float) -> Optional[m3d.Manifold]:
     loop = _cylinder_loop(_apply(manifold, np.linalg.inv(M)), r, length)
     if loop is None:
         return None
-    big, small = (loop, loop * (r2 / r)) if r >= r2 else (loop * (r2 / r), loop)
-    ring = _apply(m3d.Manifold.extrude(m3d.CrossSection([big]) - m3d.CrossSection([small]), length), M)
+    # The ring reaches a little into the material (when adding) or the air (when removing) on the side of the old
+    # wall: a boundary that only nearly coincides with the wall would leave hair-thin slivers behind.
+    margin = 0.05 * r + 1e-2
+    r_in, r_out = sorted((r, r2))
+    if r > r2:          # the old wall is the outer edge of the ring
+        r_out += margin
+    else:               # the old wall is the inner edge
+        r_in = max(r_in - margin, 0.0)
+    ring_xs = m3d.CrossSection([loop * (r_out / r)])
+    if r_in > 1e-6:
+        ring_xs = ring_xs - m3d.CrossSection([loop * (r_in / r)])
+    ring = _apply(m3d.Manifold.extrude(ring_xs, length), M)
     return manifold + ring if d > 0 else manifold - ring
 
 
