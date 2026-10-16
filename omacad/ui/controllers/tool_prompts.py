@@ -160,6 +160,7 @@ class ToolPromptsMixin:
         def refresh_preview():
             body = self.doc.bodies.get(dlg.body_id)
             vp.highlighted_faces = []
+            dlg.set_note("")
             if body is None or not dlg.faces:
                 show_body()
                 vp.shell_target_body_id = ""
@@ -172,7 +173,12 @@ class ToolPromptsMixin:
             vp.set_preview(result, "new_body")
             thread = self.doc._thread_offset(dlg.faces)
             if thread is not None:
-                self.status_label.setText(f"Offset Face: OK will change {thread[0].name} (the preview is approximate).")
+                feat, sign = thread
+                d = sign * dlg.distance()
+                what = "thicker" if d > 0 else "thinner"
+                dlg.set_note(f"This is the coil of {feat.name}. OK makes the whole coil {abs(d):g} mm {what} "
+                             f"(every turn, one undo step). The preview below is only approximate.")
+                self.status_label.setText(f"Offset Face: OK will change {feat.name}.")
             elif skipped:
                 self.status_label.setText(f"Offset Face: {skipped} face(s) could not be moved by this distance.")
 

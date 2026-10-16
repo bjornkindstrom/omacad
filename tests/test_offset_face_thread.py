@@ -42,3 +42,20 @@ def test_grow_widens_every_profile():
         a = CadKernel.create_thread(20, 2.5, 10, profile=prof, include_core=False, attached_to_cylinder=True)
         b = CadKernel.create_thread(20, 2.5, 10, profile=prof, include_core=False, attached_to_cylinder=True, grow=0.2)
         assert b.volume() > a.volume()
+
+
+def test_dialog_explains_what_ok_does_for_a_thread():
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from omacad.ui.main_window import MainWindow
+    QApplication.instance() or QApplication([])
+    doc, last = _doc()
+    w = MainWindow()
+    w.attach_document(doc)
+    w.prompt_offset_face()
+    dlg = w.inspector.current_tool_dlg
+    dlg.spn_dist.setValue(-0.2)
+    dlg.toggle(last.faces[0], "body_split_2")
+    QTest.qWait(400)
+    assert "coil of Thread 1" in dlg.lbl_note.text() and "0.2 mm thicker" in dlg.lbl_note.text()
+    dlg.reject()

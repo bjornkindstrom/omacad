@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.30 - 2026-10-16
+
+### Added
+- Offset Face explains itself: a tip on how to get a looser or tighter thread fit, and a line that says what OK will do when the picked surface is a thread coil ("makes the whole coil 0.2 mm thicker").
+
 ## 0.7.9.29 - 2026-10-16
 
 ### Changed

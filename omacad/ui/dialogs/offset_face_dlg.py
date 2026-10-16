@@ -6,7 +6,9 @@ from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
 
 HINT = ("Click flat faces, holes, pins or curved surfaces such as threads in the viewport (click again to deselect). "
-        "Plus moves the face out of the body (adds material, a hole gets smaller), minus moves it in.")
+        "Plus moves the face out of the body (adds material, a hole gets smaller), minus moves it in.\n\n"
+        "Fit of a thread: click the thread flank on the part you want to change. Minus removes material there "
+        "(looser fit), plus adds material (tighter fit). The Thread step is adjusted, so the thread stays clean.")
 
 
 class OffsetFaceDialog(BaseFeatureDialog):
@@ -30,6 +32,11 @@ class OffsetFaceDialog(BaseFeatureDialog):
         self.lbl_count = QLabel("" if editing else HINT)
         self.lbl_count.setWordWrap(True)
         self.main_layout.addWidget(self.lbl_count)
+        self.lbl_note = QLabel("")       # what OK will do with the current selection (set by the tool prompt)
+        self.lbl_note.setWordWrap(True)
+        self.lbl_note.setStyleSheet("color: #FFC83B; font-weight: bold;")
+        self.lbl_note.hide()
+        self.main_layout.addWidget(self.lbl_note)
         self.main_layout.addLayout(form)
         if not editing:
             btn = QPushButton("Clear selection")
@@ -72,6 +79,10 @@ class OffsetFaceDialog(BaseFeatureDialog):
     def _update_count(self):
         n = len(self.faces)
         self.lbl_count.setText(f"{n} face{'s' if n != 1 else ''} selected. Click faces to add or remove them." if n else HINT)
+
+    def set_note(self, text: str) -> None:
+        self.lbl_note.setText(text)
+        self.lbl_note.setVisible(bool(text))
 
     def distance(self) -> float:
         return self.spn_dist.value()
