@@ -35,6 +35,7 @@ class ThreadFeature(Feature):
         anchor: str = "bottom",
         anchor_gap: float = 0.0,
         host_length: Optional[float] = None,
+        grow: float = 0.0,
     ):
         super().__init__(feature_id, "thread", name)
         # Where along a cylinder the thread sits: `anchor` "bottom"/"top" is the end it starts from, `anchor_gap` the
@@ -42,6 +43,7 @@ class ThreadFeature(Feature):
         self.anchor = "top" if anchor == "top" else "bottom"
         self.anchor_gap = float(anchor_gap)
         self.host_length = float(host_length) if host_length is not None else None
+        self.grow = float(grow)       # profile offset in mm (set by Offset Face on a thread surface)
         self.diameter = float(diameter)
         self.pitch = float(pitch)
         self.length = float(length)
@@ -65,6 +67,35 @@ class ThreadFeature(Feature):
             return max(0.0, self.host_length - self.length - self.anchor_gap)
         return self.anchor_gap
 
+    def surface_sign(self, point, normal, shifts, tol: float = 0.01) -> int:
+        """+1 / -1 when the picked surface point lies on this thread's coil and the surface faces the same way as /
+        against the coil's own outward normal (so offsetting it by d grows / shrinks the coil by d); 0 when it is
+        not on the coil. `shifts` are the places the body may have been moved to since (translations only)."""
+        mesh = self.build_solid().to_mesh()
+        v = np.asarray(mesh.vert_properties, dtype=float)[:, :3]
+        t = np.asarray(mesh.tri_verts)
+        a, b, c = v[t[:, 0]], v[t[:, 1]], v[t[:, 2]]
+        cross = np.cross(b - a, c - a)
+        area2 = np.linalg.norm(cross, axis=1)
+        n_tri = cross / np.where(area2 > 1e-12, area2, 1.0)[:, None]
+        reach = float(np.max(np.linalg.norm(b - a, axis=1))) * 1.5 + tol
+        centroid = (a + b + c) / 3.0
+        n = np.asarray(normal, dtype=float)
+        for shift in shifts:
+            p = np.asarray(point, dtype=float) - np.asarray(shift, dtype=float)
+            for i in np.where(np.linalg.norm(centroid - p, axis=1) < reach)[0]:
+                # the point lies in this triangle (to within tol) when its distance to the plane is small and the
+                # barycentric coordinates are inside
+                d = float(n_tri[i] @ (p - a[i]))
+                if abs(d) > tol or abs(float(n_tri[i] @ n)) < 0.8 or area2[i] < 1e-12:
+                    continue
+                q = p - d * n_tri[i]
+                w = [float(np.cross(e1 - e0, q - e0) @ n_tri[i]) / area2[i]
+                     for e0, e1 in ((a[i], b[i]), (b[i], c[i]), (c[i], a[i]))]
+                if min(w) >= -tol:
+                    return 1 if n_tri[i] @ n > 0 else -1
+        return 0
+
     def build_solid(self) -> m3d.Manifold:
         include_core = (self.operation == "new_body" or not self.target_body_id) and not self.is_female
         attached = bool(self.target_body_id and self.operation == "join" and not self.is_female)
@@ -79,6 +110,7 @@ class ThreadFeature(Feature):
             taper_turns=self.taper_turns,
             include_core=include_core,
             attached_to_cylinder=attached,
+            grow=self.grow,
         )
 
         if self.plane_origin is not None and self.plane_normal is not None:
@@ -143,6 +175,7 @@ class ThreadFeature(Feature):
             "anchor": self.anchor,
             "anchor_gap": self.anchor_gap,
             "host_length": self.host_length,
+            "grow": self.grow,
         }
 
     @classmethod
@@ -167,4 +200,5 @@ class ThreadFeature(Feature):
             anchor=data.get("anchor", "bottom"),
             anchor_gap=data.get("anchor_gap", 0.0),
             host_length=data.get("host_length"),
+            grow=data.get("grow", 0.0),
         )

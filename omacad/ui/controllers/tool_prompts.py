@@ -170,7 +170,10 @@ class ToolPromptsMixin:
             hidden[0] = body.body_id
             vp.shell_target_body_id = body.body_id
             vp.set_preview(result, "new_body")
-            if skipped:
+            thread = self.doc._thread_offset(dlg.faces)
+            if thread is not None:
+                self.status_label.setText(f"Offset Face: OK will change {thread[0].name} (the preview is approximate).")
+            elif skipped:
                 self.status_label.setText(f"Offset Face: {skipped} face(s) could not be moved by this distance.")
 
         def on_picked(ref, body_id):
@@ -189,7 +192,9 @@ class ToolPromptsMixin:
             dlg.deleteLater()
             if result and faces:
                 feat = self.doc.add_offset_face(body_id, faces, dist, exprs=exprs)
-                note = f" ({feat.skipped} could not be moved)" if feat and feat.skipped else ""
+                note = f" ({feat.skipped} could not be moved)" if getattr(feat, "skipped", 0) else ""
+                if feat is not None and feat.feature_type == "thread":
+                    note = f" by changing {feat.name}"
                 self.status_label.setText(f"Offset Face: {len(faces)} face(s) moved {dist:g} mm.{note}")
             else:
                 self.status_label.setText("Offset Face cancelled." if not result else "No faces were selected.")

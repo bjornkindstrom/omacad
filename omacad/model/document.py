@@ -659,7 +659,7 @@ class Document:
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
         "combine": ("operation",),
         "fillet": ("size", "kind"),
-        "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length"),
+        "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length", "grow"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),
@@ -830,11 +830,38 @@ class Document:
         self.notify_changed()
         return feat
 
+    def _thread_offset(self, faces):
+        """(thread feature, sign) when every picked face is a curved surface of the same thread's coil, else None."""
+        if not faces or any(r.get("kind") != "surface" for r in faces):
+            return None
+        feats = self.timeline.features
+        for i, f in enumerate(feats):
+            if f.feature_type != "thread" or f.suppressed:
+                continue
+            shifts, here = [(0.0, 0.0, 0.0)], np.zeros(3)
+            for g in feats[i + 1:]:                       # the body may have been moved (not turned) since
+                if g.feature_type == "move" and not g.suppressed:
+                    if abs(g.rx) > 1e-4 or abs(g.ry) > 1e-4 or abs(g.rz) > 1e-4:
+                        break
+                    here = here + (g.dx, g.dy, g.dz)
+                    shifts.append(tuple(here))
+            signs = {f.surface_sign(r["point"], r["normal"], shifts) for r in faces}
+            if len(signs) == 1 and 0 not in signs:
+                return f, signs.pop()
+        return None
+
     @undoable("Offset Face")
     def add_offset_face(self, body_id: str, faces, distance: float, exprs=None) -> Optional[OffsetFaceFeature]:
         """Moves the given faces of a body by `distance` (+ adds material, - removes it)."""
         if body_id not in self.bodies or not faces:
             return None
+        hit = self._thread_offset(faces)
+        if hit is not None:      # the surface is a thread's: grow/shrink the coil itself and rebuild
+            feat, sign = hit
+            feat.grow += sign * float(distance)
+            self.timeline.recompute(self)
+            self.notify_changed()
+            return feat
         n = len([f for f in self.timeline.features if f.feature_type == "offset_face"]) + 1
         feat = OffsetFaceFeature(f"offset_face_{len(self.timeline.features) + 1}", f"Offset Face {n}", body_id, faces, distance)
         feat.exprs = dict(exprs or {})

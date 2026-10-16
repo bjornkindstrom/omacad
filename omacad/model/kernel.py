@@ -436,6 +436,7 @@ class CadKernel:
         segments_per_turn: Optional[int] = None,
         include_core: bool = True,
         attached_to_cylinder: bool = False,
+        grow: float = 0.0,
     ) -> m3d.Manifold:
         """Create a 3D-print optimized helical thread (male bolt or female cutter/nut core).
 
@@ -450,6 +451,8 @@ class CadKernel:
         - taper_turns: how many helical turns over which to fade (e.g. 0.75 turn)
         - include_core: whether to include the inner core cylinder (for male thread)
         - attached_to_cylinder: whether thread is wrapped directly on an existing cylinder of diameter D
+        - grow: the tooth profile is offset outwards by this much on every side (negative: thinner); Offset Face on a
+          thread surface edits this instead of deforming the finished mesh
         """
         dia = float(diameter)
         p = max(0.2, float(pitch))
@@ -492,6 +495,8 @@ class CadKernel:
                 a_r = dr_eff + overlap
                 r_root = dia * 0.5
             
+            a_r = max(0.02, a_r + grow)
+            a_z = min(max(0.02, a_z + grow), 0.49 * p)     # 0.49: the turns never touch
             n_circ = 16
             circ_angles = np.linspace(0.0, 2.0 * math.pi, n_circ, endpoint=False)
 
@@ -565,6 +570,10 @@ class CadKernel:
 
         half_crest = crest_flat_z * 0.5
         half_slot = half_crest + flank_dz
+        if grow:   # offset every flank by `grow` along its normal (see `grow` above)
+            k = math.sqrt(1.0 + (dr_full / flank_dz) ** 2)
+            half_slot = min(half_slot + grow * k, 0.49 * p)
+            half_crest = min(max(half_crest + grow * (k - flank_dz / dr_full), 0.01), half_slot - 0.01)
 
         if not is_female:
             if attached_to_cylinder:
@@ -587,6 +596,7 @@ class CadKernel:
             r_in = r_root - (0.2 * dr_full)
             dr_eff = dr_full + (clr * 0.5)
 
+        dr_eff = max(0.02, dr_eff + grow)
         theta = np.linspace(0, turns * 2.0 * math.pi, n_pts + 1)
         z_base = (theta / (2.0 * math.pi)) * p
 

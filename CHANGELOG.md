@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.29 - 2026-10-16
+
+### Changed
+- Offset Face on a thread/coil surface now changes the Thread step itself (new `grow` value: the tooth profile is offset on every side) instead of deforming the finished mesh. The result is an exact, clean thread, it follows later Moves, and it is one undo step.
+
 ## 0.7.9.28 - 2026-10-16
 
 ### Added
