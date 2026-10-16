@@ -158,26 +158,30 @@ class ToolPromptsMixin:
             hidden[0] = None
 
         def refresh_preview():
-            body = self.doc.bodies.get(dlg.body_id)
             vp.highlighted_faces = []
             dlg.set_note("")
+            thread = self.doc._thread_offset(dlg.faces)
+            result, skipped = None, 0
+            if thread is not None:       # a thread surface: the preview is the rebuilt thread, exactly what OK gives
+                result = self.doc.thread_offset_result(dlg.faces, dlg.distance(), dlg.body_id)
+            body = self.doc.bodies.get(dlg.body_id)
             if body is None or not dlg.faces:
                 show_body()
                 vp.shell_target_body_id = ""
                 vp.set_preview(None)
                 return
-            result, skipped = OffsetFaceFeature.compute(body.manifold, dlg.faces, dlg.distance())
+            if result is None:
+                thread = None
+                result, skipped = OffsetFaceFeature.compute(body.manifold, dlg.faces, dlg.distance())
             body.visible = False
             hidden[0] = body.body_id
             vp.shell_target_body_id = body.body_id
             vp.set_preview(result, "new_body")
-            thread = self.doc._thread_offset(dlg.faces)
             if thread is not None:
                 feat, sign = thread
                 d = sign * dlg.distance()
-                what = "thicker" if d > 0 else "thinner"
-                dlg.set_note(f"This is the coil of {feat.name}. OK makes the whole coil {abs(d):g} mm {what} "
-                             f"(every turn, one undo step). The preview below is only approximate.")
+                dlg.set_note(f"This is the coil of {feat.name}. OK makes the whole coil {abs(d):g} mm "
+                             f"{'thicker' if d > 0 else 'thinner'} (every turn, one undo step).")
                 self.status_label.setText(f"Offset Face: OK will change {feat.name}.")
             elif skipped:
                 self.status_label.setText(f"Offset Face: {skipped} face(s) could not be moved by this distance.")

@@ -850,6 +850,24 @@ class Document:
                 return f, signs.pop()
         return None
 
+    def thread_offset_result(self, faces, distance: float, body_id: str):
+        """The body (manifold) that Offset Face would give through its thread, for the live preview; the document
+        is left as it was. None when the faces are not a thread's."""
+        hit = self._thread_offset(faces)
+        if hit is None:
+            return None
+        feat, sign = hit
+        old = feat.grow
+        feat.grow = old + sign * float(distance)
+        try:
+            self.timeline.recompute(self)
+            body = self.bodies.get(body_id)
+            result = body.manifold if body is not None else None
+        finally:
+            feat.grow = old
+            self.timeline.recompute(self)
+        return result
+
     @undoable("Offset Face")
     def add_offset_face(self, body_id: str, faces, distance: float, exprs=None) -> Optional[OffsetFaceFeature]:
         """Moves the given faces of a body by `distance` (+ adds material, - removes it)."""

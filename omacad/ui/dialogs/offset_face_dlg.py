@@ -34,7 +34,7 @@ class OffsetFaceDialog(BaseFeatureDialog):
         self.main_layout.addWidget(self.lbl_count)
         self.lbl_note = QLabel("")       # what OK will do with the current selection (set by the tool prompt)
         self.lbl_note.setWordWrap(True)
-        self.lbl_note.setStyleSheet("color: #FFC83B; font-weight: bold;")
+        self.lbl_note.setStyleSheet("font-weight: bold;")      # the theme's own text colour: always readable
         self.lbl_note.hide()
         self.main_layout.addWidget(self.lbl_note)
         self.main_layout.addLayout(form)

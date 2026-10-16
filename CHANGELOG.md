@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.31 - 2026-10-16
+
+### Fixed
+- Offset Face on a thread: the live preview still deformed the mesh and looked hairy; it now shows the rebuilt thread, exactly what OK gives. The explanation line under the dialog text uses the theme's text colour (the yellow one was unreadable).
+
 ## 0.7.9.30 - 2026-10-16
 
 ### Added

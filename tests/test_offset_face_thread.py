@@ -59,3 +59,13 @@ def test_dialog_explains_what_ok_does_for_a_thread():
     QTest.qWait(400)
     assert "coil of Thread 1" in dlg.lbl_note.text() and "0.2 mm thicker" in dlg.lbl_note.text()
     dlg.reject()
+
+
+def test_preview_equals_result_and_leaves_document_alone():
+    doc, last = _doc()
+    v0 = doc.bodies["body_split_2"].manifold.volume()
+    preview = doc.thread_offset_result(last.faces, -0.2, "body_split_2")
+    assert doc.timeline.features[4].grow == 0.0
+    assert abs(doc.bodies["body_split_2"].manifold.volume() - v0) < 1e-9
+    doc.add_offset_face("body_split_2", last.faces, -0.2)
+    assert abs(preview.volume() - doc.bodies["body_split_2"].manifold.volume()) < 1e-6
