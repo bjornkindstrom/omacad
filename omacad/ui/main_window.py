@@ -111,6 +111,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.inspector.set_palette(self.viewport.sketch_palette)
         _dialogs.SIDE_HOST = self
         self.doc.add_change_listener(self.inspector.refresh_info)
+        self.viewport.hover_info_changed.connect(self.inspector.show_hover)
         self._init_undo_listener = True   # registered once the Edit menu exists (see _build_menus)
 
         def _update_overlays(size=None):

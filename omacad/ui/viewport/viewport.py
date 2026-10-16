@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (QWidget, QMenu, QInputDialog, QDialog, QVBoxLayou
 import omacad.ui.viewport as _vp_module
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.model import quality
+from omacad.model.hover_info import describe_entity
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtGui import QGuiApplication, QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QFontMetrics
 from OpenGL import GL
@@ -58,6 +59,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     """Modern OpenGL 3D CAD canvas with Fusion 360 look and feel."""
 
     selection_changed = Signal()
+    hover_info_changed = Signal(object)    # (title, [(label, text)]) of what the mouse rests on, or None
     sketch_finished = Signal()
     finish_sketch_requested = Signal()
     construction_mode_changed = Signal(bool)
@@ -739,6 +741,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         hid = ent.entity_id if ent else None
         if hid != self.hover_entity_id:
             self.hover_entity_id = hid
+            self.hover_info_changed.emit(describe_entity(ent) if ent else None)
             self.update()
 
     def select_entity_at(self, x: float, y: float, additive: bool):
@@ -1993,6 +1996,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 if self._idle_hover_ok():
                     self._update_edge_hover(x, y)
                 elif self.hover_edge is not None or self.hover_face is not None:
+                    if self.hover_edge is not None:
+                        self.hover_info_changed.emit(None)
                     self.hover_edge = self.hover_face = None
                     self.update()
 

@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from OpenGL import GL
 import omacad.ui.viewport as _vp_pkg
+from omacad.model.hover_info import describe_edge
 from omacad.ui import theme
 from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
 from omacad.model.faces import ray_hit_face, tangent_chain
@@ -171,6 +172,8 @@ class PickerMixin:
         if edge_changed or face_changed:
             self.hover_edge = e
             self.hover_face = face
+            if edge_changed:
+                self.hover_info_changed.emit(describe_edge(e) if e is not None else None)
             self.update()
 
     def _visible_edges(self):

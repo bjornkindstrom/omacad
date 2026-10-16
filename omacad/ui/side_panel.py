@@ -73,6 +73,11 @@ class InspectorPanel(QWidget):
         self.palette_layout.setContentsMargins(0, 0, 0, 0)
         self.content_layout.addLayout(self.palette_layout)
 
+        # What the mouse rests on (a sketch line, a solid edge): its measures, shown above the context info
+        self.hover_layout = QVBoxLayout()
+        self.hover_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.addLayout(self.hover_layout)
+
         # 2. Properties & Info Container (when no tool is active or context info)
         self.info_container = QWidget()
         self.info_layout = QVBoxLayout(self.info_container)
@@ -169,6 +174,23 @@ class InspectorPanel(QWidget):
 
         card_layout.addLayout(layout)
         return card
+
+    def show_hover(self, info) -> None:
+        """Measures of the hovered element as (title, [(label, text)]); None clears the card."""
+        while self.hover_layout.count():
+            item = self.hover_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        if info:
+            title, rows = info
+            form = QFormLayout()
+            form.setContentsMargins(0, 4, 0, 0)
+            form.setSpacing(6)
+            for label, text in rows:
+                value = QLabel(text)
+                style(value, "color: #FFC83B; font-weight: bold; border: none; background: transparent;")
+                form.addRow(f"{label}:", value)
+            self.hover_layout.addWidget(self._make_card(f"👆 {title}", form))
 
     def refresh_info(self, selected_entities=None, measure_info=None):
         """Updates the context info based on document, selection, or sketch state."""

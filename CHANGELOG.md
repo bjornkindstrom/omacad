@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.28 - 2026-10-16
+
+### Added
+- Hovering a sketch line, circle, arc or rectangle, or a solid edge, shows its measures (length, angle, radius, diameter) in the inspector (#30).
+
 ## 0.7.9.27 - 2026-10-16
 
 ### Fixed
