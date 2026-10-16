@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.14 - 2026-10-16
+
+### Changed (request from Björn: Section View like Fusion 360)
+- **The cut face of a section view is hatched like Fusion 360:** pale yellow with dark diagonal hatching and a black outline (holes stay open), instead of a flat highlight colour. The hatching keeps about the same density on screen when you zoom. Logic in `omacad/model/section_hatch.py` (shapely), drawing in `render_section_cap`. Tests in `tests/test_section_hatch.py`.
+
 ## 0.7.9.13 - 2026-10-16
 
 ### Fixed / Changed (reports from Björn)

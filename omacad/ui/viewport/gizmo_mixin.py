@@ -44,7 +44,8 @@ class GizmoMixin:
             slab = slab.transform(plane.get_transform_matrix_3x4())
             cap = CadKernel.extract_render_mesh(slab)
         self.section = {"origin": np.asarray(origin, dtype=float), "normal": n, "offset": float(offset), "flip": flip,
-                        "meshes": meshes, "cap": cap}
+                        "meshes": meshes, "cap": cap, "polys": cap_cs.to_polygons() if cap_cs is not None else None,
+                        "mat": plane.get_transform_matrix_3x4(), "hatch": None}
         self.set_preview_plane(plane if show_plane else None)
         self.update()
 
@@ -67,8 +68,31 @@ class GizmoMixin:
         sec = act[1]
         self.set_section(sec["origin"], sec["normal"], sec["offset"], sec["flip"], show_plane=False)
 
+    SECTION_FILL = (1.0, 0.91, 0.69)      # the cut face: pale yellow with dark diagonal hatching, black outline
+
+    def _section_hatch(self, sec):
+        """Hatch and outline of the cut in world coordinates, rebuilt when the zoom changes the line spacing."""
+        from omacad.model.section_hatch import hatch_and_outline
+        spacing = max(0.15, self.distance * 0.009)
+        cached = sec.get("hatch")
+        if cached is not None and 0.7 <= spacing / cached[0] <= 1.4:
+            return cached[1], cached[2]
+        hatch2d, outline2d = hatch_and_outline(sec["polys"] or [], spacing)
+        mat = np.asarray(sec["mat"], dtype=float)
+
+        def to_world(seg):
+            if len(seg) == 0:
+                return np.zeros((0, 3), dtype=np.float32)
+            pts = seg.reshape(-1, 2)
+            world = pts[:, 0:1] * mat[:, 0] + pts[:, 1:2] * mat[:, 1] + mat[:, 3]
+            return world.astype(np.float32)
+
+        hatch, outline = to_world(hatch2d), to_world(outline2d)
+        sec["hatch"] = (spacing, hatch, outline)
+        return hatch, outline
+
     def render_section_cap(self, mvp: np.ndarray):
-        """The cut face, in the highlight colour, so the inside of the model reads clearly."""
+        """The cut face as Fusion 360 draws it: pale yellow, diagonal hatching and a black outline."""
         sec = self.section
         if not sec or sec["cap"] is None or not self.prog_flat or len(sec["cap"].vertices) == 0:
             return
@@ -77,8 +101,23 @@ class GizmoMixin:
         loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
         loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
         GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
-        GL.glUniform4f(loc_col, *theme.palette().highlight01(0.0), 1.0)
+        GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
+        GL.glPolygonOffset(1.0, 1.0)                    # the fill sits a hair behind, so the lines are never swallowed by it
+        GL.glUniform4f(loc_col, *self.SECTION_FILL, 1.0)
         self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, sec["cap"].vertices)
+        GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
+        if sec.get("polys"):
+            try:
+                hatch, outline = self._section_hatch(sec)
+            except Exception:
+                hatch = outline = np.zeros((0, 3), dtype=np.float32)
+            self.set_line_width(1.0)
+            if len(hatch):
+                GL.glUniform4f(loc_col, 0.30, 0.24, 0.12, 0.9)
+                self.draw_buffer_arrays(GL.GL_LINES, loc_pos, hatch)
+            if len(outline):
+                GL.glUniform4f(loc_col, 0.0, 0.0, 0.0, 1.0)
+                self.draw_buffer_arrays(GL.GL_LINES, loc_pos, outline)
         GL.glUseProgram(0)
 
     # ---- Extrude arrow ------------------------------------------------------------------
