@@ -120,6 +120,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             h = max(100, size.height() - top_pad - bottom_pad)
             self.browser.setGeometry(10, top_pad, 260, h)
             self.inspector.setGeometry(max(10, size.width() - 360), top_pad, 350, h)
+            # ViewCube sits just to the left of the Inspector panel
+            self.viewport.viewcube.right_margin = 375
 
         self.viewport._on_viewport_resized = _update_overlays
         _update_overlays()

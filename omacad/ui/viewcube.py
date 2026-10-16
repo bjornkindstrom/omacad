@@ -25,6 +25,7 @@ class ViewCube:
 
     def __init__(self, size: int = 90, on_face_clicked: Optional[Callable[[str], None]] = None):
         self.size = size
+        self.right_margin = 25
         self.on_face_clicked = on_face_clicked
         self.hovered_face: Optional[str] = None
         self.cube_center = (0, 0)
@@ -33,7 +34,7 @@ class ViewCube:
 
     def handle_mouse_move(self, local_x: int, local_y: int, viewport_w: int) -> bool:
         """Updates hover states and returns True if cursor is over ViewCube."""
-        cube_x = viewport_w - self.size - 25
+        cube_x = viewport_w - self.size - self.right_margin
         cube_y = 25
         rect = QRectF(cube_x - 15, cube_y - 15, self.size + 30, self.size + 30)
 
@@ -58,7 +59,7 @@ class ViewCube:
 
     def handle_mouse_press(self, local_x: int, local_y: int, viewport_w: int) -> bool:
         """Returns True if click was handled by ViewCube."""
-        cube_x = viewport_w - self.size - 25
+        cube_x = viewport_w - self.size - self.right_margin
         cube_y = 25
 
         # Check Home button
@@ -76,7 +77,7 @@ class ViewCube:
 
     def draw(self, painter: QPainter, viewport_w: int, viewport_h: int, azimuth: float, elevation: float):
         """Draws the 3D cube rotated according to camera azimuth and elevation."""
-        cube_x = viewport_w - self.size - 25
+        cube_x = viewport_w - self.size - self.right_margin
         cube_y = 35
         center_x = cube_x + self.size / 2.0
         center_y = cube_y + self.size / 2.0
