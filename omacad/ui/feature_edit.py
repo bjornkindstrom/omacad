@@ -17,7 +17,7 @@ OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as t
 
 
 def can_edit(feature) -> bool:
-    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern", "move", "thread")
+    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern", "move", "thread", "offset_face")
 
 
 def edit_feature(win, doc, index: int) -> bool:
@@ -129,6 +129,15 @@ def edit_feature(win, doc, index: int) -> bool:
         if not dlg.exec():
             return False
         return doc.edit_feature(index, size=dlg.spn_size.value(), kind=dlg.kind(), exprs=dlg.get_expressions())
+    if t == "offset_face":
+        from omacad.ui.dialogs import OffsetFaceDialog
+        dlg = OffsetFaceDialog(win, feat.distance, editing=True)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        if feat.exprs.get("distance"):
+            dlg.spn_dist.set_expression(feat.exprs["distance"])
+        if not dlg.exec():
+            return False
+        return doc.edit_feature(index, distance=dlg.distance(), exprs=dlg.get_expressions())
     if t == "pattern":
         dlg = PatternDialog(doc, win, feat)
         dlg.setWindowTitle(f"Edit {feat.name}")

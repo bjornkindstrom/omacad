@@ -86,6 +86,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     body_clicked = Signal(str)  # body_id of clicked 3D body
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
+    offset_face_picked = Signal(object, str)   # (face reference dict, body id) while Offset Face is open
+    offset_face_requested = Signal(object)     # a flat face chosen from the right-click menu
     round_requested = Signal(str, object)      # ("fillet" | "chamfer", edges): start the tool with these edges picked
     lay_face_requested = Signal(object, str)   # (face, "ground" | "pick"): turn the body so this face rests on a plane
     lay_target_picked = Signal(object)         # the plane a face is to be laid on
@@ -2252,6 +2254,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.update()
         elif kind == "round":
             self.round_requested.emit(*arg)
+        elif kind == "offset_face":
+            self.offset_face_requested.emit(arg)
         elif kind == "tool":
             self.set_sketch_tool(arg)
         elif kind == "construction":
@@ -2423,6 +2427,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             acts[theme.action_with_icon(menu, "⬇️ Lay this face on a face or plane…")] = ("lay", "pick")
         menu.addSeparator()
         self._add_tool_entries(menu, acts)
+        if not self.active_tool_title():
+            acts[theme.action_with_icon(menu, "↔️ Offset Face…")] = ("offset_face", face)
         body = self.doc.bodies.get(face.body_id)
         if body is not None:
             self._round_entries(menu, acts, self._edges_of_face(face, body), "edges of this face")
@@ -2562,6 +2568,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     self.end_plane_pick()
                     self.surface_picked.emit(hit)
                 return
+            if self.plane_pick_purpose == "offset_face":
+                self._offset_face_click(event.position().x(), event.position().y())
+                return
             if self.plane_pick_purpose == "thread_surface":
                 cyl = self._pick_cylinder_surface(event.position().x(), event.position().y())
                 if cyl is not None:
@@ -2571,7 +2580,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             if target is not None:
                 plane = self.plane_from_target(target)
                 purpose = self.plane_pick_purpose
-                if purpose not in ("move_body", "shell_face", "thread_surface"):
+                if purpose not in ("move_body", "shell_face", "thread_surface", "offset_face"):
                     self.end_plane_pick()
                 if purpose == "offset_base":
                     self.offset_base_picked.emit(plane)

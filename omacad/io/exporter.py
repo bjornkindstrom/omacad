@@ -13,7 +13,7 @@ import trimesh
 from omacad.model.document import Document, Parameter, default_origin_vis
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
                                     ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature,
-                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature)
+                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature)
 from omacad.model.sketch import Sketch
 from omacad.model.timeline import ProfileRefs
 from omacad.model import quality
@@ -490,6 +490,9 @@ class Exporter:
                     open_faces=f_data.get("open_faces", []),
                     direction=f_data.get("direction", "inside"), thickness2=f_data.get("thickness2", 2.0),
                 )
+                doc.timeline.add_feature(feat)
+            elif ft == "offset_face":
+                feat = OffsetFaceFeature(fid, fname, f_data["target_body_id"], f_data.get("faces", []), f_data.get("distance", 0.2))
                 doc.timeline.add_feature(feat)
             elif ft == "move":
                 feat = MoveFeature(

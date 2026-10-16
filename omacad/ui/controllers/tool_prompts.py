@@ -138,6 +138,76 @@ class ToolPromptsMixin:
             self.viewport.selected_edges = list(edges)
             self.viewport.edges_selection_changed.emit()
 
+    def prompt_offset_face(self, face=None):
+        """Offset Face: move flat faces, or change the radius of holes and pins (tolerances for threads and fits)."""
+        from omacad.model.features.offset_face import OffsetFaceFeature, plane_face_ref
+        from omacad.ui.dialogs import OffsetFaceDialog
+        if not self.doc.bodies:
+            QMessageBox.information(self, "Offset Face", "Create a 3D body first.")
+            return
+        if self.inspector.current_tool_dlg is not None:
+            return
+        dlg = OffsetFaceDialog(self, embedded=True)
+        self.dock(dlg)
+        vp = self.viewport
+        hidden = [None]    # the body whose preview replaces it
+
+        def show_body():
+            if hidden[0] in self.doc.bodies:
+                self.doc.bodies[hidden[0]].visible = True
+            hidden[0] = None
+
+        def refresh_preview():
+            body = self.doc.bodies.get(dlg.body_id)
+            vp.highlighted_faces = []
+            if body is None or not dlg.faces:
+                show_body()
+                vp.shell_target_body_id = ""
+                vp.set_preview(None)
+                return
+            result, skipped = OffsetFaceFeature.compute(body.manifold, dlg.faces, dlg.distance())
+            body.visible = False
+            hidden[0] = body.body_id
+            vp.shell_target_body_id = body.body_id
+            vp.set_preview(result, "new_body")
+            if skipped:
+                self.status_label.setText(f"Offset Face: {skipped} face(s) could not be moved by this distance.")
+
+        def on_picked(ref, body_id):
+            if not dlg.toggle(ref, body_id):
+                self.status_label.setText("Offset Face: all faces must belong to the same body.")
+
+        def on_finished(result):
+            vp.offset_face_picked.disconnect(on_picked)
+            faces, body_id, dist = list(dlg.faces), dlg.body_id, dlg.distance()
+            exprs = dlg.get_expressions()
+            show_body()
+            vp.shell_target_body_id = ""
+            vp.end_plane_pick()
+            vp.set_preview(None)
+            self.inspector.undock_tool()
+            dlg.deleteLater()
+            if result and faces:
+                feat = self.doc.add_offset_face(body_id, faces, dist, exprs=exprs)
+                note = f" ({feat.skipped} could not be moved)" if feat and feat.skipped else ""
+                self.status_label.setText(f"Offset Face: {len(faces)} face(s) moved {dist:g} mm.{note}")
+            else:
+                self.status_label.setText("Offset Face cancelled." if not result else "No faces were selected.")
+            vp.update()
+
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(60)
+        timer.timeout.connect(refresh_preview)
+        dlg.changed.connect(timer.start)
+        dlg.finished.connect(on_finished)
+        vp.offset_face_picked.connect(on_picked)
+        vp.begin_plane_pick("offset_face")
+        self.status_label.setText("Offset Face: click flat faces, holes or pins, type the distance, OK. Esc cancels.")
+        if face is not None:
+            dlg.toggle(plane_face_ref(face), face.body_id)
+        dlg.show()
+
     def prompt_pattern(self):
         """Copy what some steps did: evenly spaced, mirrored around the body, or around an axis."""
         from omacad.model.timeline import PatternFeature

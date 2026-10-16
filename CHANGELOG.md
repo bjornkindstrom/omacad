@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.21 - 2026-10-16
+
+### Added
+- **Offset Face** (Modify > Offset Face, Modify menu in the ribbon, or right-click a face): click flat faces, holes or pins, type a distance (+ adds material, so a hole gets smaller; - removes it), OK. Made for tolerances on threads, pins and pockets. Flat faces move along their normal (neighbouring faces that are slanted stay bounded by their own planes); full cylinders change radius. Live preview, one undo step, editable in the timeline, formulas and parameters work in the distance. Tests in `tests/test_offset_face.py` and `tests/test_offset_face_ui.py`.
+- **Help > Changelog** shows the whole `CHANGELOG.md` inside the app (searchable). The file is packaged with the app. Test in `tests/test_changelog_dialog.py`.
+
 ## 0.7.9.20 - 2026-10-16
 
 ### Fixed

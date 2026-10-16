@@ -12,7 +12,7 @@ import manifold3d as m3d
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
     SphereFeature, ExtrudeFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
-    ImportMeshFeature, ThreadFeature
+    ImportMeshFeature, ThreadFeature, OffsetFaceFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
 from omacad.model.sketch_solver import solve_sketch, SolveResult
@@ -664,6 +664,7 @@ class Document:
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),
         "shell": ("thickness", "direction", "thickness2"),
+        "offset_face": ("distance",),
         "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle"),
         "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot"),
     }
@@ -826,6 +827,19 @@ class Document:
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.hide_used_sketches()
+        self.notify_changed()
+        return feat
+
+    @undoable("Offset Face")
+    def add_offset_face(self, body_id: str, faces, distance: float, exprs=None) -> Optional[OffsetFaceFeature]:
+        """Moves the given faces of a body by `distance` (+ adds material, - removes it)."""
+        if body_id not in self.bodies or not faces:
+            return None
+        n = len([f for f in self.timeline.features if f.feature_type == "offset_face"]) + 1
+        feat = OffsetFaceFeature(f"offset_face_{len(self.timeline.features) + 1}", f"Offset Face {n}", body_id, faces, distance)
+        feat.exprs = dict(exprs or {})
+        self.timeline.add_feature(feat)
+        feat.execute(self)
         self.notify_changed()
         return feat
 

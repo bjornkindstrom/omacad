@@ -266,7 +266,7 @@ class PickerMixin:
         half = self._origin_plane_half_size()
         quad = self._origin_quadrant_size()
         only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_origin_only"
-        shell_pick = self.plane_pick_mode and self.plane_pick_purpose == "shell_face"
+        shell_pick = self.plane_pick_mode and self.plane_pick_purpose in ("shell_face", "offset_face")
         thread_pick = self.plane_pick_mode and self.plane_pick_purpose == "thread_surface"
         if shell_pick or thread_pick:
             candidates = []
@@ -291,9 +291,11 @@ class PickerMixin:
         # would otherwise hide the faces behind it)
         face_best, face_t = None, float("inf")
         for body in ([] if only_origin else self.doc.bodies.values()):
-            if shell_pick:   # the shelled body is hidden behind its preview; only its faces count
+            if shell_pick and self.shell_target_body_id:   # the body is hidden behind its preview; only its faces count
                 if body.body_id != self.shell_target_body_id:
                     continue
+            elif shell_pick and not body.visible:
+                continue
             elif not body.visible:
                 continue
             for face in body.faces:
@@ -323,9 +325,10 @@ class PickerMixin:
         proj, view, _ = self.get_matrices()
         origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
         best = None
+        only = self.shell_target_body_id if self.plane_pick_purpose == "offset_face" else ""
         for body in self.doc.bodies.values():
             mesh = body.render_mesh
-            if not body.visible or mesh is None or len(mesh.vertices) == 0:
+            if (only and body.body_id != only) or (not only and not body.visible) or mesh is None or len(mesh.vertices) == 0:
                 continue
             hit = ray_mesh_hit(mesh, origin, ray_dir)
             if hit is not None and (best is None or hit[0] < best[0]):
@@ -336,8 +339,25 @@ class PickerMixin:
         cyl_info = detect_cylinder_surface(mesh, tri)
         if cyl_info is not None:
             cyl_info["body_id"] = body_id
+            cyl_info["t"] = float(t)
             return cyl_info
         return None
+
+    def _offset_face_click(self, x: float, y: float):
+        """Offset Face: the nearest of a flat face and a cylinder under the cursor is picked."""
+        from omacad.model.features.offset_face import cylinder_face_ref, plane_face_ref
+        cyl = self._pick_cylinder_surface(x, y)
+        target = self._pick_plane_target(x, y)
+        if target is not None and target[0] == "face":
+            face = target[1]
+            proj, view, _ = self.get_matrices()
+            origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
+            t_face = ray_hit_face(face, origin, ray_dir)
+            if cyl is None or (t_face is not None and t_face <= cyl["t"] + 1e-4):
+                self.offset_face_picked.emit(plane_face_ref(face), face.body_id)
+                return
+        if cyl is not None:
+            self.offset_face_picked.emit(cylinder_face_ref(cyl), cyl["body_id"])
 
     def _pick_surface(self, x: float, y: float):
         """Any body surface under the cursor (curved ones too): the hit point and its smooth patch of vertices."""

@@ -38,6 +38,7 @@ from omacad.ui.dialogs.pattern_dlg import (
 from omacad.ui.dialogs.shell_dlg import (
     ShellDialog,
 )
+from omacad.ui.dialogs.offset_face_dlg import OffsetFaceDialog
 from omacad.ui.dialogs.transform_dlg import (
     MoveBodyDialog,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "RoundEdgesDialog",
     "PatternDialog",
     "ShellDialog",
+    "OffsetFaceDialog",
     "MoveBodyDialog",
     "ThreadDialog",
 ]

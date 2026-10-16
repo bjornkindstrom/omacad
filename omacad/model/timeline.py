@@ -38,6 +38,7 @@ from omacad.model.features import (
     MoveFeature,
     ImportMeshFeature,
     ThreadFeature,
+    OffsetFaceFeature,
 )
 
 

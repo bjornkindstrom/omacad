@@ -1053,6 +1053,7 @@ def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
         "radius": radius,
         "diameter": round(2.0 * radius, 3),
         "length": round(length, 3),
+        "length_exact": z_max - z_min,
         "axis": axis,
         "origin": origin_pt,
         "is_internal": is_internal,

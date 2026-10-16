@@ -182,6 +182,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
         self.ribbon.shell_clicked.connect(self.prompt_shell)
+        self.ribbon.offset_face_clicked.connect(lambda: self.prompt_offset_face())
         self.ribbon.project_clicked.connect(lambda: self.viewport.project_edges())
         self.ribbon.move_clicked.connect(self.prompt_move_body)
         self.ribbon.canvas_clicked.connect(self.prompt_insert_canvas)
@@ -198,6 +199,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.viewport.finish_sketch_requested.connect(self.on_finish_sketch)
         self.viewport.menu_command.connect(self.on_menu_command)
         self.viewport.active_tool_title = self._active_tool_title
+        self.viewport.offset_face_requested.connect(lambda face: self.prompt_offset_face(face))
         self.viewport.round_requested.connect(lambda kind, edges: self.prompt_round_edges(kind, edges))
         self.viewport.lay_face_requested.connect(self.on_lay_face_requested)
         self.viewport.lay_target_picked.connect(self.on_lay_target_picked)
@@ -329,6 +331,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         act_shell = QAction("Shell…", self)
         act_shell.triggered.connect(self.prompt_shell)
         menu_modify.addAction(act_shell)
+        act_offset_face = QAction("Offset Face…", self)
+        act_offset_face.triggered.connect(lambda: self.prompt_offset_face())
+        menu_modify.addAction(act_offset_face)
         act_pattern = QAction("Pattern / Mirror…", self)
         act_pattern.triggered.connect(self.prompt_pattern)
         menu_modify.addAction(act_pattern)
@@ -381,13 +386,14 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         act_request.setToolTip("Ask for a change or a new feature: your text, a screenshot, the model and the log are sent to the owner on GitHub")
         act_request.triggered.connect(self.on_request_change)
         menu_help.addAction(act_request)
+        menu_help.addAction("Changelog…", self.on_changelog)
         menu_help.addAction("About Omacad", self.on_about)
 
         # Icons for the menu entries (drawn from emoji at a size the menu font can't give)
         icons = {
             "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
             "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️", "Insert Canvas": "🖼️",
-            "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚",
+            "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚", "Offset Face": "↔️",
             "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
             "Fit View": "🔲", "Section View": "✂️", "Measure": "📏", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
             "Settings": "⚙️",
@@ -1062,6 +1068,10 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         buf.open(QIODevice.OpenModeFlag.WriteOnly)
         image.save(buf, "PNG")
         return bytes(data)
+
+    def on_changelog(self):
+        from omacad.ui.changelog_dialog import ChangelogDialog
+        ChangelogDialog(self).exec()
 
     def on_about(self):
         QMessageBox.about(

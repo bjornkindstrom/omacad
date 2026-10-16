@@ -4,6 +4,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 datas = [
     ('assets', 'assets'),
+    ('CHANGELOG.md', '.'),
 ]
 
 hiddenimports = [

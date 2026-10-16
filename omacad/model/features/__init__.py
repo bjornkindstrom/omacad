@@ -39,8 +39,10 @@ from omacad.model.features.transform import (
     ImportMeshFeature,
 )
 from omacad.model.features.thread import ThreadFeature
+from omacad.model.features.offset_face import OffsetFaceFeature
 
 __all__ = [
+    "OffsetFaceFeature",
     "Body",
     "Feature",
     "ProfileRefs",
