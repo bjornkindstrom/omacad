@@ -1,4 +1,5 @@
 from omacad.ui.controllers.tool_prompts import ToolPromptsMixin
+from omacad.ui.controllers.file_session import FileSessionMixin
 """
 Omacad - Main CAD Application Window
 Connects Ribbon, Viewport, Browser, Timeline, and Menu Bar.
@@ -62,7 +63,7 @@ class _LoggedLabel(QLabel):
         super().setText(text)
 
 
-class MainWindow(QMainWindow, ToolPromptsMixin):
+class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
     """Main Fusion 360 style window for Omacad."""
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -233,6 +234,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         act_open.setShortcut(QKeySequence.StandardKey.Open)
         act_open.triggered.connect(self.on_file_open)
         menu_file.addAction(act_open)
+        self.menu_recent = menu_file.addMenu("Open Recent")
+        self.rebuild_recent_menu()
 
         act_save = QAction("Save Project (.omacad)", self)
         act_save.setShortcut(QKeySequence.StandardKey.Save)
@@ -679,10 +682,12 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         self.viewport.show_edges = not self.viewport.show_edges
         self.viewport.update()
 
-    def attach_document(self, doc: Document, path: Optional[str] = None) -> None:
-        """Make `doc` the document every panel shows (used by New and Open)."""
+    def attach_document(self, doc: Document, path: Optional[str] = None, clean: bool = True) -> None:
+        """Make `doc` the document every panel shows (used by New and Open). `clean`: it equals what is on disk."""
         self.doc = doc
         self.current_path = path
+        if clean:
+            self.mark_clean()
         self.viewport.set_document(doc)
         self.inspector.doc = doc
         doc.add_change_listener(self.inspector.refresh_info)
@@ -704,6 +709,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             self.lbl_doc_title.setText(doc_display)
 
     def on_file_new(self):
+        if not self.confirm_discard_changes():
+            return
         self.attach_document(Document("Omacad - Untitled"))
         self.status_label.setText("Created new design.")
 
@@ -732,13 +739,20 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             QMessageBox.critical(self, "Save failed", f"Could not save {filepath}:\n{e}")
             return
         self.current_path = filepath
+        self.mark_clean()
+        self.add_recent_file(filepath)
         self.update_window_title()
         self.doc.notify_changed()
         self.status_label.setText(f"Saved {filepath}")
 
     def on_file_open(self):
         filepath, _ = QFileDialog.getOpenFileName(self, "Open Project", "", "Omacad (*.omacad *.om360)")
-        if not filepath:
+        if filepath:
+            self.open_path(filepath)
+
+    def open_path(self, filepath: str):
+        """Open a project file, first asking what to do with unsaved changes (also from Open Recent)."""
+        if not self.confirm_discard_changes():
             return
         try:
             doc = Exporter.load_project(filepath)
@@ -746,6 +760,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             QMessageBox.critical(self, "Open failed", f"Could not open {filepath}:\n{e}")
             return
         self.attach_document(doc, filepath)
+        self.add_recent_file(filepath)
         self.viewport.zoom_fit()
         self.status_label.setText(f"Opened {filepath}")
 
@@ -874,7 +889,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             return False
         doc = Document()
         Exporter.apply_dict(doc, data["document"])
-        self.attach_document(doc, data.get("path"))
+        self.attach_document(doc, data.get("path"), clean=False)
+        self.mark_clean(self._session_baseline(data.get("path")))
         cam = data.get("camera") or {}
         v = self.viewport
         v.azimuth = cam.get("azimuth", v.azimuth)
@@ -885,6 +901,15 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         v.update()
         self.status_label.setText(f"Restarted on Omacad {__import__('omacad').__version__}; your work is back.")
         return True
+
+    def _session_baseline(self, path: Optional[str]) -> str:
+        """What "unchanged" means for a restored session: the file it was opened from, or an empty design."""
+        try:
+            if path and Path(path).exists():
+                return self._state_of(Exporter.load_project(path))
+        except (OSError, ValueError, KeyError):
+            pass
+        return self._state_of(Document())
 
     def grab_with_overlay(self, view_shot):
         """Window screenshot where the 3D view includes its painter overlay (dimensions, banner, ViewCube):

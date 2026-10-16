@@ -3,6 +3,13 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.8 - 2026-10-16
+
+### Added (request for change from Björn: files)
+- **Unsaved-changes question:** New Design, Open (also from Open Recent) and closing the window ask "Do you want to save the changes to <name>?" (Save / Don't Save / Cancel) when the design differs from what is on disk. A cancelled Save As or a failed write keeps the current design. Selecting or moving the camera is not a change.
+- **File > Open Recent** (last 10 files, newest first, missing files are removed, "Clear Recent Files"). Files are added when opened or saved.
+- Save As already existed (File > Save Project As..., Ctrl+Shift+S). Tests in `tests/test_file_session.py`; the logic is in `omacad/ui/controllers/file_session.py`.
+
 ## 0.7.9.7 - 2026-10-16
 
 ### Fixed
