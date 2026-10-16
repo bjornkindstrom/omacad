@@ -199,9 +199,10 @@ def _move_without_folds(verts, tris, mv, step, tries: int = 12) -> None:
         return np.cross(v[tv[:, 1]] - v[tv[:, 0]], v[tv[:, 2]] - v[tv[:, 0]])
 
     before = normals(verts)
+    real = np.linalg.norm(before, axis=1) > 2e-4      # micro triangles flip by float rounding alone; ignore them
     for _ in range(tries):
         verts[mv] = base + step * scale[:, None]
-        flipped = np.einsum("ij,ij->i", before, normals(verts)) < 0
+        flipped = (np.einsum("ij,ij->i", before, normals(verts)) < 0) & real
         if not flipped.any():
             return
         bad = np.unique(tv[flipped].ravel())
