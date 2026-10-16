@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.27 - 2026-10-16
+
+### Fixed
+- Ribbon buttons were clipped on Windows and the second row of constraint buttons was hidden in sketch mode (#33, #34): the ribbon had a fixed height. It now follows the height of its content.
+
 ## 0.7.9.26 - 2026-10-16
 
 ### Fixed

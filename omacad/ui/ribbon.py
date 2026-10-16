@@ -163,6 +163,14 @@ class Ribbon(QWidget):
 
         # Hide sketch tab by default until sketch is started
         self.tabs.setTabVisible(1, False)
+        self.fit_height()
+
+    def fit_height(self):
+        """The ribbon is as high as its tab bar plus the tallest page (the sketch page has two rows of constraint
+        buttons). A fixed number clipped the buttons on Windows, where the tab bar and fonts are taller."""
+        pages = max(self.solid_tab.sizeHint().height(), self.sketch_tab.sizeHint().height())
+        need = self.tabs.tabBar().sizeHint().height() + pages + 10      # + the sideways scrollbar
+        self.tabs.setFixedHeight(max(ribbon_height(ribbon_button_scale()), need))
 
     def update_button_scale(self):
         """Update heights, icons and fonts for all ribbon buttons when button_scale setting changes."""
@@ -170,6 +178,7 @@ class Ribbon(QWidget):
         self.tabs.setFixedHeight(ribbon_height(scale))
         for btn in self.findChildren(RibbonButton):
             btn.apply_scale()
+        self.fit_height()
         if hasattr(self, "btn_finish") and self.btn_finish:
             self.btn_finish.setMinimumSize(max(100, int(round(140 * scale))), max(34, int(round(48 * scale))))
 
@@ -208,6 +217,7 @@ class Ribbon(QWidget):
         self.tabs.setFixedHeight(ribbon_height(scale))
         self.setup_solid_tab()
         self.setup_sketch_tab()
+        self.fit_height()
         self.sync_active_tab()
 
     def setup_solid_tab(self):
