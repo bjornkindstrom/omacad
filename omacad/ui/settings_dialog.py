@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QLineEdit, 
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QLabel,
     QPushButton, QComboBox, QCheckBox, QDoubleSpinBox, QColorDialog,
-    QFrame, QGridLayout
+    QFrame, QGridLayout, QScrollArea
 )
 
 from omacad.ui import theme
@@ -221,7 +221,7 @@ class SettingsDialog(QDialog):
         lay_colors.addWidget(self.row_highlight)
 
         lay_colors.addStretch()
-        self.tabs.addTab(tab_colors, "🎨 Theme")
+        self.tabs.addTab(self._make_scrollable(tab_colors), "🎨 Theme")
 
         # Tab: theme editor (every colour by hand, saved under a name)
         from omacad.ui.theme_editor import ThemeEditorTab
@@ -435,7 +435,7 @@ class SettingsDialog(QDialog):
         lay_sketch.addWidget(self.chk_auto_restart)
 
         lay_sketch.addStretch()
-        self.tabs.addTab(tab_sketch, "📐 Sketch & View")
+        self.tabs.addTab(self._make_scrollable(tab_sketch), "📐 Sketch & View")
 
         # Bottom buttons
         btn_row = QHBoxLayout()
@@ -454,6 +454,18 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(btn_save)
 
         main_lay.addLayout(btn_row)
+
+        # Ensure dialog fits comfortably within screen boundaries (e.g. on Windows laptops)
+        self.resize(600, 580)
+
+    @staticmethod
+    def _make_scrollable(widget: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll.setWidget(widget)
+        return scroll
 
     def _theme_saved(self, key: str):
         """A theme was saved (or deleted) in the editor."""

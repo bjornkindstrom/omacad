@@ -3,6 +3,13 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.2 - 2026-10-16
+
+### Fixed
+- **Settings-dialogen och sparaknappar på mindre skärmar (Windows):**
+  - Flikarna i Settings-dialogen (Theme samt Sketch & View) är nu inbäddade i `QScrollArea` och dialogens initiala storlek är anpassad så att Save/Cancel-knapparna längst ned alltid syns och går att klicka på oavsett skärmupplösning eller skalfaktor i Windows.
+  - Regressionstest tillagt i `tests/test_settings_dialog.py`.
+
 ## 0.7.9.1 - 2026-10-16
 
 ### Fixed
