@@ -73,12 +73,15 @@ class FilletFeature(Feature):
     @staticmethod
     def _safe_edge_size(body, edge, requested_size: float) -> float:
         """Limits the rounding/bevel size on a convex straight edge so that it does not cut past
-        adjacent face boundaries, holes, or opposite walls on either adjacent face."""
-        if not edge.convex or getattr(edge, "kind", "") != "line" or requested_size <= 1e-6:
+        adjacent face boundaries, holes, or opposite walls on either adjacent face. At the foot of a wall (concave)
+        the fillet touches each face `size / tan(half the angle)` from the edge, so that reach is what must fit."""
+        if getattr(edge, "kind", "") != "line" or requested_size <= 1e-6:
             return requested_size
         t = (edge.p1 - edge.p0) / max(float(np.linalg.norm(edge.p1 - edge.p0)), 1e-12)
         L = float(np.linalg.norm(edge.p1 - edge.p0))
         limit = requested_size
+        half = math.acos(float(np.clip(edge.d1 @ edge.d2, -1.0, 1.0))) / 2.0
+        reach_per_size = 1.0 if edge.convex else 1.0 / max(math.tan(half), 1e-6)
         for d, n in [(edge.d1, edge.n1), (edge.d2, edge.n2)]:
             for other in body.edges:
                 if other is edge:
@@ -93,7 +96,7 @@ class FilletFeature(Feature):
                             d1 = float((other.p1 - edge.p0) @ d)
                             dist = min(d0, d1)
                             if dist > 1e-4:
-                                limit = min(limit, dist * 0.99)
+                                limit = min(limit, dist * 0.99 / reach_per_size)
                 elif k in ("circle", "loop"):
                     pts = other.pts if k == "loop" else [other.center]
                     if all(abs(float((p - edge.p0) @ n)) < 1e-3 for p in pts):
@@ -103,10 +106,10 @@ class FilletFeature(Feature):
                             r_sub = other.radius if k == "circle" else 0.0
                             dist = min(d_vals) - r_sub
                             if dist > 1e-4:
-                                limit = min(limit, dist * 0.99)
+                                limit = min(limit, dist * 0.99 / reach_per_size)
         return max(limit, 0.01)
 
-    def _mitred_tool(self, body, edge, edges):
+    def _mitred_tool(self, body, edge, edges, size):
         """Fill tool for a straight edge at the foot of a wall. Where the next selected foot edge meets it on the
         same floor, both bands run past the corner and are cut off along the bisector (mitred), so the roundings
         flow into each other with no notch."""
@@ -135,7 +138,7 @@ class FilletFeature(Feature):
                 ext[k] = reach
                 trims.append((m, float(m @ v)))
                 break
-        tool = CadKernel.round_tool(edge, self.size, self.kind, extend=tuple(ext))
+        tool = CadKernel.round_tool(edge, size, self.kind, extend=tuple(ext))
         for m, off in trims:
             tool = tool.trim_by_plane([float(x) for x in m], off)
         return tool
@@ -189,7 +192,7 @@ class FilletFeature(Feature):
             if getattr(edge, "kind", "") == "loop" and not edge.convex:
                 tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
             elif not edge.convex and getattr(edge, "kind", "") == "line":
-                tool = self._mitred_tool(body, edge, [e for b, e in seen if b is body])
+                tool = self._mitred_tool(body, edge, [e for b, e in seen if b is body], eff_size)
             elif getattr(edge, "kind", "") == "circle" and edge.is_arc:
                 tool = CadKernel.circle_round_tool(edge, self.size, self.kind, reach=self._arc_reach(body, edge))
             else:

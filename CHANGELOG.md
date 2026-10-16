@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.20 - 2026-10-16
+
+### Fixed
+- **Fillet at the foot of a leaning wall hung over the box edge when the radius was too big**: a concave straight edge was never size-limited, so the filling extended past the floor face. Like in Fusion 360 the radius is now limited so the fillet stays on the floor (and the wall). Fillets that fit were already exact. Test in `tests/test_wall_foot_fillet.py`.
+
 ## 0.7.9.19 - 2026-10-16
 
 ### Fixed
