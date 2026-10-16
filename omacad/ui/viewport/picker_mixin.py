@@ -327,7 +327,7 @@ class PickerMixin:
         best = None
         only = self.shell_target_body_id if self.plane_pick_purpose == "offset_face" else ""
         for body in self.doc.bodies.values():
-            mesh = body.render_mesh
+            mesh = self._pick_mesh(body)
             if (only and body.body_id != only) or (not only and not body.visible) or mesh is None or len(mesh.vertices) == 0:
                 continue
             hit = ray_mesh_hit(mesh, origin, ray_dir)
@@ -343,6 +343,21 @@ class PickerMixin:
             return cyl_info
         return None
 
+    def _pick_mesh(self, body):
+        """The mesh the user sees: the part left of a section view, so clicks reach the cut face, not the half that is cut away."""
+        if self.section is not None and body.body_id in self.section["meshes"]:
+            return self.section["meshes"][body.body_id]
+        return body.render_mesh
+
+    def _section_keeps(self, point) -> bool:
+        """False for a point on the side of the section plane that is cut away."""
+        sec = self.section
+        if sec is None:
+            return True
+        n = sec["normal"]
+        keep = n if sec["flip"] else -n
+        return float(keep @ (np.asarray(point, dtype=float) - (sec["origin"] + n * sec["offset"]))) >= -1e-6
+
     def _offset_face_click(self, x: float, y: float):
         """Offset Face: the nearest of a flat face and a cylinder under the cursor is picked."""
         from omacad.model.features.offset_face import cylinder_face_ref, plane_face_ref, surface_face_ref
@@ -355,7 +370,7 @@ class PickerMixin:
             proj, view, _ = self.get_matrices()
             origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
             t_face = ray_hit_face(face, origin, ray_dir)
-            if t_face is not None and t_face <= surf["t"] + 1e-4:
+            if t_face is not None and t_face <= surf["t"] + 1e-4 and self._section_keeps(origin + t_face * ray_dir):
                 self.offset_face_picked.emit(plane_face_ref(face), face.body_id)
                 return
         cyl = self._pick_cylinder_surface(x, y)
@@ -372,7 +387,7 @@ class PickerMixin:
         best = None
         only = self.shell_target_body_id if self.plane_pick_purpose == "offset_face" else ""
         for body in self.doc.bodies.values():
-            mesh = body.render_mesh
+            mesh = self._pick_mesh(body)
             if (only and body.body_id != only) or (not only and not body.visible) or mesh is None or len(mesh.vertices) == 0:
                 continue
             hit = ray_mesh_hit(mesh, origin, ray_dir)
