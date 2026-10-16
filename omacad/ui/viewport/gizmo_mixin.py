@@ -25,7 +25,7 @@ class GizmoMixin:
         keep = n if flip else -n                       # the side that stays (the other side faces the viewer)
         plane = SketchPlane.from_face(n, p)
         inv = np.linalg.inv(np.vstack([plane.get_transform_matrix_3x4(), [0, 0, 0, 1]]))[:3]
-        meshes, cap_cs = {}, None
+        meshes, caps = {}, []
         for bid, body in self.doc.bodies.items():
             if not body.visible:
                 continue
@@ -35,17 +35,14 @@ class GizmoMixin:
                 polys = body.manifold.transform(inv).slice(1e-4 if not flip else -1e-4).to_polygons()
                 if polys:
                     cs = m3d.CrossSection(polys)
-                    cap_cs = cs if cap_cs is None else cap_cs + cs
+                    slab = m3d.Manifold.extrude(cs, 0.08).translate((0, 0, -0.04)).transform(plane.get_transform_matrix_3x4())
+                    # each body's cut has its own tint, so touching bodies can be told apart
+                    caps.append({"body_id": bid, "fill": self.SECTION_FILLS[len(caps) % len(self.SECTION_FILLS)],
+                                 "cap": CadKernel.extract_render_mesh(slab), "polys": cs.to_polygons(), "hatch": None})
             except Exception:
                 continue
-        cap = None
-        if cap_cs is not None:
-            slab = m3d.Manifold.extrude(cap_cs, 0.08).translate((0, 0, -0.04))
-            slab = slab.transform(plane.get_transform_matrix_3x4())
-            cap = CadKernel.extract_render_mesh(slab)
         self.section = {"origin": np.asarray(origin, dtype=float), "normal": n, "offset": float(offset), "flip": flip,
-                        "meshes": meshes, "cap": cap, "polys": cap_cs.to_polygons() if cap_cs is not None else None,
-                        "mat": plane.get_transform_matrix_3x4(), "hatch": None}
+                        "meshes": meshes, "caps": caps, "mat": plane.get_transform_matrix_3x4()}
         self.set_preview_plane(plane if show_plane else None)
         self.update()
 
@@ -68,16 +65,18 @@ class GizmoMixin:
         sec = act[1]
         self.set_section(sec["origin"], sec["normal"], sec["offset"], sec["flip"], show_plane=False)
 
-    SECTION_FILL = (1.0, 0.91, 0.69)      # the cut face: pale yellow with dark diagonal hatching, black outline
+    # the cut face of each body: a pale tint (the first is Fusion's yellow) with darker diagonal hatching, black outline
+    SECTION_FILLS = ((1.0, 0.91, 0.69), (0.70, 0.87, 1.0), (0.74, 0.95, 0.72), (1.0, 0.76, 0.82),
+                     (0.85, 0.78, 1.0), (1.0, 0.82, 0.62))
 
-    def _section_hatch(self, sec):
+    def _section_hatch(self, sec, cap):
         """Hatch and outline of the cut in world coordinates, rebuilt when the zoom changes the line spacing."""
         from omacad.model.section_hatch import hatch_and_outline
         spacing = max(0.15, self.distance * 0.009)
-        cached = sec.get("hatch")
+        cached = cap.get("hatch")
         if cached is not None and 0.7 <= spacing / cached[0] <= 1.4:
             return cached[1], cached[2]
-        hatch2d, outline2d = hatch_and_outline(sec["polys"] or [], spacing)
+        hatch2d, outline2d = hatch_and_outline(cap["polys"] or [], spacing)
         mat = np.asarray(sec["mat"], dtype=float)
 
         def to_world(seg):
@@ -88,32 +87,34 @@ class GizmoMixin:
             return world.astype(np.float32)
 
         hatch, outline = to_world(hatch2d), to_world(outline2d)
-        sec["hatch"] = (spacing, hatch, outline)
+        cap["hatch"] = (spacing, hatch, outline)
         return hatch, outline
 
     def render_section_cap(self, mvp: np.ndarray):
         """The cut face as Fusion 360 draws it: pale yellow, diagonal hatching and a black outline."""
         sec = self.section
-        if not sec or sec["cap"] is None or not self.prog_flat or len(sec["cap"].vertices) == 0:
+        if not sec or not sec["caps"] or not self.prog_flat:
             return
         GL.glUseProgram(self.prog_flat)
         loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
         loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
         loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
         GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
-        GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
-        GL.glPolygonOffset(1.0, 1.0)                    # the fill sits a hair behind, so the lines are never swallowed by it
-        GL.glUniform4f(loc_col, *self.SECTION_FILL, 1.0)
-        self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, sec["cap"].vertices)
-        GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
-        if sec.get("polys"):
+        for cap in sec["caps"]:
+            if len(cap["cap"].vertices) == 0:
+                continue
+            GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
+            GL.glPolygonOffset(1.0, 1.0)                # the fill sits a hair behind, so the lines are never swallowed by it
+            GL.glUniform4f(loc_col, *cap["fill"], 1.0)
+            self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, cap["cap"].vertices)
+            GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
             try:
-                hatch, outline = self._section_hatch(sec)
+                hatch, outline = self._section_hatch(sec, cap)
             except Exception:
                 hatch = outline = np.zeros((0, 3), dtype=np.float32)
             self.set_line_width(1.0)
             if len(hatch):
-                GL.glUniform4f(loc_col, 0.30, 0.24, 0.12, 0.9)
+                GL.glUniform4f(loc_col, *(0.33 * c for c in cap["fill"]), 0.9)
                 self.draw_buffer_arrays(GL.GL_LINES, loc_pos, hatch)
             if len(outline):
                 GL.glUniform4f(loc_col, 0.0, 0.0, 0.0, 1.0)

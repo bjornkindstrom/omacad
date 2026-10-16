@@ -8,6 +8,11 @@ The version lives in `omacad/__init__.py`; every build is published as release `
 ### Fixed
 - Offset Face under a Section View: clicks now hit the cut surface you see (for example the inner thread) instead of the half of the body that is cut away.
 
+## 0.7.9.23 - 2026-10-16
+
+### Changed
+- **Section view: every body gets its own tint on the cut face** (yellow, light blue, green, pink, lavender, peach, in the order of the bodies), with hatching in a darker shade of the same colour, so touching bodies can be told apart. A single body looks as before. Test in `tests/test_section_hatch.py`.
+
 ## 0.7.9.22 - 2026-10-16
 
 ### Added
