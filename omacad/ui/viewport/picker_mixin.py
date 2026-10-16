@@ -355,7 +355,9 @@ class PickerMixin:
         cplanes = [(pid, self.doc.construction_plane(pid)) for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
         if self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face"):
             cplanes = []
-        if (not self.plane_pick_mode and self.ctx_face is None and not cplanes and self.preview_plane is None) or not self.prog_flat:
+        shown_origin = [] if self.plane_pick_mode else [n for n in self.doc.origin_planes if self.doc.origin_visible("plane", n)]
+        if (not self.plane_pick_mode and self.ctx_face is None and not cplanes and self.preview_plane is None
+                and not shown_origin) or not self.prog_flat:
             return
         GL.glUseProgram(self.prog_flat)
         loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
@@ -366,7 +368,9 @@ class PickerMixin:
         GL.glDisable(GL.GL_DEPTH_TEST)
         half = self._origin_plane_half_size()
         base = {"XY": (0.30, 0.55, 1.0), "XZ": (0.35, 0.85, 0.40), "YZ": (1.0, 0.40, 0.35)}
-        for name, plane in (self.doc.origin_planes.items() if self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface") else ()):
+        picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface")
+        for name, plane in (self.doc.origin_planes.items() if picking else
+                            ((n, self.doc.origin_planes[n]) for n in shown_origin)):
             hovered = self.hover_plane == ("origin", name)
             corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
                        plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]

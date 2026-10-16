@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional, List, Tuple
 import numpy as np
 import trimesh
-from omacad.model.document import Document, Parameter
+from omacad.model.document import Document, Parameter, default_origin_vis
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
                                     ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature,
                                     PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature)
@@ -330,6 +330,7 @@ class Exporter:
             "active_sketch": doc.active_sketch.sketch_id if doc.active_sketch is not None else None,
             "construction_planes": doc.construction_planes,
             "sections": doc.sections,
+            "origin_vis": doc.origin_vis,
             "canvases": getattr(doc, "canvases", {}),
             "curve_segments": quality.circle_segments(),   # how finely circles were cut when profiles were numbered
         }
@@ -398,6 +399,11 @@ class Exporter:
 
         doc.construction_planes = dict(data.get("construction_planes", {}))
         doc.sections = dict(data.get("sections", {}))
+        doc.origin_vis = default_origin_vis()
+        saved_vis = data.get("origin_vis", {})
+        doc.origin_vis["all"] = bool(saved_vis.get("all", True))
+        for key in ("axes", "planes"):
+            doc.origin_vis[key].update({k: bool(v) for k, v in saved_vis.get(key, {}).items() if k in doc.origin_vis[key]})
         doc.canvases = dict(data.get("canvases", {}))
 
         # Load sketches

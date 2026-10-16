@@ -50,6 +50,14 @@ class Parameter:
     comment: str = ""
 
 
+ORIGIN_GROUPS = {"axis": "axes", "plane": "planes"}   # kind -> key in Document.origin_vis
+
+
+def default_origin_vis() -> Dict[str, object]:
+    """Axes shown, planes hidden (they only appear while picking a plane), as before this was configurable."""
+    return {"all": True, "axes": {"X": True, "Y": True, "Z": True}, "planes": {"XY": False, "XZ": False, "YZ": False}}
+
+
 class Document:
     """The root CAD model document."""
 
@@ -70,6 +78,9 @@ class Document:
 
         # Construction (offset) planes: id -> dict(name, origin, normal, visible); absolute, not associative
         self.construction_planes: Dict[str, dict] = {}
+
+        # What the 3D view shows of the origin: master switch, the three axes and the three planes (view state, saved)
+        self.origin_vis: Dict[str, object] = default_origin_vis()
 
         # Saved section views: id -> dict(name, origin, normal, offset, flip, active); at most one is active
         self.sections: Dict[str, dict] = {}
@@ -974,6 +985,24 @@ class Document:
     def delete_construction_plane(self, pid: str) -> None:
         if self.construction_planes.pop(pid, None) is not None:
             self.notify_changed()
+
+    def set_origin_visibility(self, kind: str, name: str, visible: bool) -> None:
+        """kind: "all" (the whole origin), "axis" (X/Y/Z) or "plane" (XY/XZ/YZ). View state, not an undo step."""
+        if kind == "all":
+            self.origin_vis["all"] = bool(visible)
+        elif kind in ORIGIN_GROUPS and name in self.origin_vis[ORIGIN_GROUPS[kind]]:
+            self.origin_vis[ORIGIN_GROUPS[kind]][name] = bool(visible)
+            if visible:
+                self.origin_vis["all"] = True   # turning one part on shows the origin again
+        else:
+            return
+        self.notify_changed()
+
+    def origin_visible(self, kind: str = "all", name: str = "") -> bool:
+        """Is this part drawn? An axis or plane needs both its own switch and the master switch."""
+        if kind == "all":
+            return bool(self.origin_vis["all"])
+        return bool(self.origin_vis["all"] and self.origin_vis[ORIGIN_GROUPS[kind]].get(name, False))
 
     def toggle_construction_plane(self, pid: str) -> None:
         if pid in self.construction_planes:

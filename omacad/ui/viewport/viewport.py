@@ -1459,6 +1459,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             if sk is not None and sk.plane.name == "FACE":
                 self.render_plane_grid(mvp, sk.plane)
 
+        self.render_origin_axes(mvp)
+
         # 2. Draw Canvases / Reference Images
         self.render_canvases(mvp)
 

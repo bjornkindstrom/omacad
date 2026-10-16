@@ -677,24 +677,27 @@ class RenderGLMixin:
         self.set_line_width(1.0)
         self.draw_buffer_arrays(GL.GL_LINES, loc_pos, grid_data)
 
-        # Draw Center Axes (X: Red, Y: Green, Z: Blue)
-        axis_len = 100.0
-        # X Axis
-        GL.glUniform4f(loc_col, 0.92, 0.25, 0.25, 0.9)
+        GL.glUseProgram(0)
+
+    ORIGIN_AXES = {"X": ((0.92, 0.25, 0.25), (1.0, 0.0, 0.0)),
+                   "Y": ((0.25, 0.78, 0.35), (0.0, 1.0, 0.0)),
+                   "Z": ((0.25, 0.55, 0.95), (0.0, 0.0, 1.0))}
+
+    def render_origin_axes(self, mvp: np.ndarray):
+        """The coloured X/Y/Z axes through the origin; each one can be hidden (Browser > Origin, View > Origin)."""
+        if not self.prog_flat:
+            return
+        axes = [(c, d) for name, (c, d) in self.ORIGIN_AXES.items() if self.doc.origin_visible("axis", name)]
+        if not axes:
+            return
+        GL.glUseProgram(self.prog_flat)
+        GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
+        loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
+        loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
         self.set_line_width(2.0)
-        x_axis = np.array([0.0, 0.0, 0.0, axis_len, 0.0, 0.0], dtype=np.float32)
-        self.draw_buffer_arrays(GL.GL_LINES, loc_pos, x_axis)
-
-        # Y Axis
-        GL.glUniform4f(loc_col, 0.25, 0.78, 0.35, 0.9)
-        y_axis = np.array([0.0, 0.0, 0.0, 0.0, axis_len, 0.0], dtype=np.float32)
-        self.draw_buffer_arrays(GL.GL_LINES, loc_pos, y_axis)
-
-        # Z Axis
-        GL.glUniform4f(loc_col, 0.25, 0.55, 0.95, 0.9)
-        z_axis = np.array([0.0, 0.0, 0.0, 0.0, 0.0, axis_len], dtype=np.float32)
-        self.draw_buffer_arrays(GL.GL_LINES, loc_pos, z_axis)
-
+        for (r, g, b), d in axes:
+            GL.glUniform4f(loc_col, r, g, b, 0.9)
+            self.draw_buffer_arrays(GL.GL_LINES, loc_pos, np.array([0.0, 0.0, 0.0, *(100.0 * x for x in d)], dtype=np.float32))
         GL.glUseProgram(0)
 
     def render_bodies(self, mvp: np.ndarray):

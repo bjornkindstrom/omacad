@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.6 - 2026-10-16
+
+### Added (request for change from Lennart: control what is shown of the origin)
+- **Origin visibility:** the whole origin, each of the X/Y/Z axes and each of the XY/XZ/YZ planes can be shown or hidden, from the eye icons in the Browser (Origin group) or from View > Origin. The planes are hidden by default, as before; showing one draws it as a translucent quad. Turning a single part on also turns the origin back on. The axes no longer depend on the ground grid being shown. The choice is saved in the `.omacad` file (`origin_vis`). Picking a plane while sketching still shows all three. Tests in `tests/test_origin_visibility.py`.
+
 ## 0.7.9.5 - 2026-10-16
 
 ### Changed (request for change: bigger drawing area)

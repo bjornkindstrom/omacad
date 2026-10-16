@@ -35,7 +35,7 @@ class _BackgroundWorker(QRunnable):
         except Exception as e:
             self.signals.error.emit(str(e))
 
-from omacad.model.document import Document
+from omacad.model.document import Document, ORIGIN_GROUPS
 from omacad.model.timeline import ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature, MoveFeature
 from omacad.ui import theme
 from omacad.ui.theme import style
@@ -337,6 +337,21 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         menu_view.addAction("Section View…", self.prompt_section)
         menu_view.addAction("Toggle Ground Grid", self.toggle_grid)
         menu_view.addAction("Toggle Feature Edges", self.toggle_edges)
+        self._origin_actions = {}
+        menu_origin = menu_view.addMenu("Origin")
+        for kind, name, label in (("all", "", "Show Origin"), ("axis", "X", "X Axis"), ("axis", "Y", "Y Axis"),
+                                  ("axis", "Z", "Z Axis"), ("plane", "XY", "XY Plane"), ("plane", "XZ", "XZ Plane"),
+                                  ("plane", "YZ", "YZ Plane")):
+            if kind == "axis" and name == "X":
+                menu_origin.addSeparator()
+            if kind == "plane" and name == "XY":
+                menu_origin.addSeparator()
+            act = menu_origin.addAction(label)
+            act.setCheckable(True)
+            act.toggled.connect(lambda on, k=kind, n=name: self.doc.set_origin_visibility(k, n, on))
+            self._origin_actions[(kind, name)] = act
+        self.doc.add_change_listener(self.sync_origin_actions)
+        self.sync_origin_actions()
 
         # Help Menu
         menu_help = menubar.addMenu("Help")
@@ -647,6 +662,14 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             self, "Document Statistics",
             f"Bodies: {num_bodies}\nSketches: {num_sketches}\nParametric Features: {num_features}\nUnits: mm"
         )
+
+    def sync_origin_actions(self):
+        """Tick the View > Origin entries to match the document (they show each part's own switch)."""
+        for (kind, name), act in getattr(self, "_origin_actions", {}).items():
+            on = self.doc.origin_vis["all"] if kind == "all" else self.doc.origin_vis[ORIGIN_GROUPS[kind]][name]
+            act.blockSignals(True)
+            act.setChecked(bool(on))
+            act.blockSignals(False)
 
     def toggle_grid(self):
         self.viewport.show_grid = not self.viewport.show_grid

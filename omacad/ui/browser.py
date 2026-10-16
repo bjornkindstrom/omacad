@@ -135,18 +135,19 @@ class BrowserTree(QWidget):
         units_item.setFlags(units_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
 
         # Origin Node
-        origin_item = QTreeWidgetItem(root, ["🌐 Origin"])
+        origin_item = QTreeWidgetItem(root, ["🌐 Origin", ""])
         origin_item.setExpanded(False)
-        QTreeWidgetItem(origin_item, ["• Origin (0, 0, 0)"])
-        QTreeWidgetItem(origin_item, ["• X Axis (Red)"])
-        QTreeWidgetItem(origin_item, ["• Y Axis (Green)"])
-        QTreeWidgetItem(origin_item, ["• Z Axis (Blue)"])
-        xy_item = QTreeWidgetItem(origin_item, ["📄 XY Plane"])
-        xy_item.setData(0, Qt.ItemDataRole.UserRole, ("plane", "XY"))
-        xz_item = QTreeWidgetItem(origin_item, ["📄 XZ Plane"])
-        xz_item.setData(0, Qt.ItemDataRole.UserRole, ("plane", "XZ"))
-        yz_item = QTreeWidgetItem(origin_item, ["📄 YZ Plane"])
-        yz_item.setData(0, Qt.ItemDataRole.UserRole, ("plane", "YZ"))
+        origin_item.setData(0, Qt.ItemDataRole.UserRole, ("origin", "all"))
+        self._style_eye(origin_item, self.doc.origin_visible("all"))
+        origin_item.setToolTip(1, "Show or hide the whole origin (axes and planes)")
+        for axis, label in (("X", "• X Axis (Red)"), ("Y", "• Y Axis (Green)"), ("Z", "• Z Axis (Blue)")):
+            it = QTreeWidgetItem(origin_item, [label, ""])
+            it.setData(0, Qt.ItemDataRole.UserRole, ("axis", axis))
+            self._style_eye(it, self.doc.origin_visible("axis", axis))
+        for name in ("XY", "XZ", "YZ"):
+            it = QTreeWidgetItem(origin_item, [f"📄 {name} Plane", ""])
+            it.setData(0, Qt.ItemDataRole.UserRole, ("plane", name))
+            self._style_eye(it, self.doc.origin_visible("plane", name))
 
         for pid, c in self.doc.construction_planes.items():
             pi = QTreeWidgetItem(origin_item, ["📄 " + c["name"] + ("" if c.get("visible", True) else " (hidden)")])
@@ -244,6 +245,10 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
+        if column == 1 and item_type in ("origin", "axis", "plane"):
+            kind, name = ("all", "") if item_type == "origin" else (item_type, item_id)
+            self.doc.set_origin_visibility(kind, name, not self.doc.origin_visible(kind, name))
+            return
         if column == 1 and item_type in ("body", "sketch", "section", "canvas"):
             if item_type == "canvas":
                 self.doc.toggle_canvas_visibility(item_id)
