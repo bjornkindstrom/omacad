@@ -136,6 +136,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
         # Dimension tool: elements picked so far, and a point-to-point pair waiting for its placement click
         self._dim_pending: list = []
+        self._dim_box = None          # floating value box while a point pair waits for its placement click
+        self._dim_hover_uv = None
         self._dim_place = None
         self._dim_side = None  # "near"/"far": which circle edge a guided edge-distance measures to
 
@@ -1877,6 +1879,22 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 return
         super().mouseDoubleClickEvent(event)
 
+    @property
+    def _dim_place(self):
+        return self._dim_place_v
+
+    @_dim_place.setter
+    def _dim_place(self, value):
+        self._dim_place_v = value
+        if value is None:
+            self._hide_dim_box()
+
+    def _hide_dim_box(self):
+        box, self._dim_box = getattr(self, "_dim_box", None), None
+        if box is not None:
+            box.hide()
+            box.deleteLater()
+
     def _dim_drag_move(self, event):
         from omacad.model.dim_layout import offset_for_point
         d = self._dim_drag
@@ -1940,6 +1958,12 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 self._handle_hover = hover
                 self.setCursor(Qt.CursorShape.OpenHandCursor if hover else Qt.CursorShape.ArrowCursor)
                 self.update()
+        if self._dim_place and self._dim_box is not None:
+            uv = self.get_sketch_plane_uv(x, y)
+            if uv is not None:
+                self._dim_hover_uv = uv
+                _kind, measured, label = self._dim_points_kind(self._dim_place, uv[0], uv[1])
+                self._dim_box.set_measure(label, measured)
         if self._dim_drag is not None:
             self._dim_drag_move(event)
             return

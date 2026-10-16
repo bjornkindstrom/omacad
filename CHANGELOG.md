@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.11 - 2026-10-16
+
+### Changed (requests for change from Björn)
+- **No sketch-mode banner:** the "SKETCH MODE: Sketch 1 (XY) · Under defined" box at the top of the 3D view is gone (it covered the drawing). The sketch name, plane and solve status ("Under defined (2 DOF)") now sit at the right end of the status bar.
+- **Dimension value box in the 3D view:** with the Dimension tool, as soon as two points are picked a small box appears next to them showing the distance as it is. It follows the cursor (above/below = horizontal, left/right = vertical, diagonal = aligned) until you type; type a number, a formula or a parameter name, then press Enter or click to place the dimension (a click without typing keeps the measured value, Esc cancels). Other dimension values (diameter, length, angle, distance to a line, editing an existing dimension) also open as a box next to the cursor instead of in the side panel. Tests in `tests/test_inline_dimension_box.py`.
+
 ## 0.7.9.10 - 2026-10-16
 
 ### Changed / Added (requests for change from Björn)

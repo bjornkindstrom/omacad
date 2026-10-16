@@ -136,6 +136,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         # 4. Status Bar
         self.status_label = _LoggedLabel("Ready")
         self.statusBar().addWidget(self.status_label)
+        self.lbl_sketch_status = QLabel("")
+        self.statusBar().addPermanentWidget(self.lbl_sketch_status)
+        self.doc.add_change_listener(self.sync_sketch_status)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # Indeterminate spinner
         self.progress_bar.setMaximumWidth(120)
@@ -666,6 +669,16 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
             f"Bodies: {num_bodies}\nSketches: {num_sketches}\nParametric Features: {num_features}\nUnits: mm"
         )
 
+    def sync_sketch_status(self):
+        """Sketch name, plane and solve status ("Under defined (2 DOF)") at the right of the status bar."""
+        sk = self.doc.active_sketch
+        text = ""
+        if sk is not None:
+            status = self.doc.sketch_status(sk)
+            text = f"✏️ {sk.name} ({sk.plane.name})" + (f"  ·  {status}" if status else "")
+        if text != self.lbl_sketch_status.text():
+            self.lbl_sketch_status.setText(text)
+
     def sync_origin_actions(self):
         """Tick the View > Origin entries to match the document (they show each part's own switch)."""
         for (kind, name), act in getattr(self, "_origin_actions", {}).items():
@@ -691,6 +704,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.viewport.set_document(doc)
         self.inspector.doc = doc
         doc.add_change_listener(self.inspector.refresh_info)
+        doc.add_change_listener(self.sync_sketch_status)
         doc.history_listeners.append(self._update_undo_actions)
         self._update_undo_actions()
         for panel, refresh in ((self.browser, "refresh_tree"), (self.timeline_bar, "refresh_timeline"),

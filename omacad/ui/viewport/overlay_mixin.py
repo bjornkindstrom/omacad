@@ -244,30 +244,7 @@ class OverlayMixin:
         self.draw_dyn_fields(painter)  # on top of everything else
         self.draw_smart_circle(painter)
 
-        # 5. Sketch Mode Active Banner
-        if self.doc.active_sketch:
-            sketch = self.doc.active_sketch
-            banner_text = (f"✏️ SKETCH MODE: {sketch.name} ({sketch.plane.name})"
-                           + (f"  ·  {self.doc.sketch_status(sketch)}" if self.doc.sketch_status(sketch) else ""))
-            banner_font = QFont()
-            banner_font.setBold(True)
-            banner_font.setPointSize(11)
-            banner_w = max(320, QFontMetrics(banner_font).horizontalAdvance(banner_text) + 40)
-            banner_rect = QRectF(w / 2.0 - banner_w / 2.0, 16, banner_w, 36)
-            painter.setPen(QPen(qcolor(226, 109, 40), 1))
-            painter.setBrush(QBrush(qcolor(30, 34, 40, 230)))
-            painter.drawRoundedRect(banner_rect, 6, 6)
-
-            painter.setPen(QPen(qcolor(255, 255, 255)))
-            font = QFont()
-            font.setBold(True)
-            font.setPointSize(11)
-            painter.setFont(font)
-            painter.drawText(
-                banner_rect,
-                Qt.AlignmentFlag.AlignCenter,
-                banner_text
-            )
+        # (no sketch-mode banner: it covered the drawing; the sketch name and its solve status are in the status bar)
 
         if self._rubber is not None:
             a, b = self._rubber["p0"], self._rubber["p1"]
@@ -670,7 +647,7 @@ class OverlayMixin:
             f"Parametric Dimension ({dim_id})",
             f"Enter new value for {dim_id} ({'degrees' if is_angle else 'mm'}); a formula or parameter name works too:",
             current_value, 0.1, 179.9 if is_angle else 50000.0, " °" if is_angle else " mm",
-            expr=dim.expr if dim is not None else None)
+            expr=dim.expr if dim is not None else None, inline=True)
         val, ex = res if res is not None else (None, None)
         if val is not None and val > 0.001:
             if not self.doc.update_dimension(sketch_id, dim_id, val, expr=ex):
@@ -709,9 +686,34 @@ class OverlayMixin:
                 near = (d, seg)
         return ("ref", near[1]) if near else None
 
+    def prompt_dimension_inline(self, label: str, value: float, lo: float, hi: float, suffix: str, expr: str = None):
+        """The value box floating in the 3D view next to the cursor; waits for Enter (value) or Esc (None)."""
+        from PySide6.QtCore import QEventLoop
+        from PySide6.QtGui import QCursor
+        from omacad.ui.inline_value import InlineValueBox
+        box = InlineValueBox(self, label, value, lo, hi, suffix, expr)
+        loop = QEventLoop(self)
+        outcome = []
+        box.committed.connect(lambda: (outcome.append(True), loop.quit()))
+        box.cancelled.connect(lambda: (outcome.append(False), loop.quit()))
+        pos = self.mapFromGlobal(QCursor.pos())
+        box.place_near(pos.x(), pos.y())
+        box.show()
+        box.focus_value()
+        loop.exec()
+        result = box.result() if outcome and outcome[0] else None
+        box.hide()
+        box.deleteLater()
+        self.setFocus()
+        return result
+
     def prompt_dimension_value(self, title: str, label: str, value: float, lo: float = 0.1,
-                               hi: float = 50000.0, suffix: str = " mm", expr: str = None, on_change=None):
-        """Value dialog with the number pre-selected: type it and press Enter. Returns None on cancel."""
+                               hi: float = 50000.0, suffix: str = " mm", expr: str = None, on_change=None,
+                               inline: bool = False):
+        """Value dialog with the number pre-selected: type it and press Enter. Returns None on cancel.
+        `inline`: a small box in the 3D view instead of the side panel (used for sketch dimensions)."""
+        if inline and on_change is None:
+            return self.prompt_dimension_inline(label, value, lo, hi, suffix, expr)
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
         lay = QVBoxLayout(dlg)
@@ -748,7 +750,7 @@ class OverlayMixin:
 
     def _dim_create(self, dim_type, target, measured, refs=(), pts=(), offset=12.0, label="", lo=0.1, hi=50000.0, suffix=" mm"):
         sk = self.doc.active_sketch
-        res = self.prompt_dimension_value(f"New dimension", label, measured, lo, hi, suffix)
+        res = self.prompt_dimension_value(f"New dimension", label, measured, lo, hi, suffix, inline=True)
         if res is None:
             return
         val, ex = res
@@ -805,7 +807,7 @@ class OverlayMixin:
                 self.prompt_edit_dimension(sk.sketch_id, existing.dim_id, existing.value)
                 return
         dist = line_distance(a, b)
-        res = self.prompt_dimension_value("New dimension", "Distance between the lines (mm):", dist, 0.0, 50000.0, " mm")
+        res = self.prompt_dimension_value("New dimension", "Distance between the lines (mm):", dist, 0.0, 50000.0, " mm", inline=True)
         if res is None:
             return
         val, ex = res
@@ -872,7 +874,28 @@ class OverlayMixin:
     def _dim_finish_points(self, u: float, v: float):
         """Placement click for a point-to-point distance: the side you click on picks the kind
         (above/below = horizontal, left/right = vertical, diagonal = aligned)."""
-        place, self._dim_place = self._dim_place, None
+        place = self._dim_place
+        box = self._dim_box
+        typed = box.result() if box is not None and box.edited else None
+        self._dim_place = None           # (this also closes the floating box)
+        (ea, na), (eb, nb) = (place["a"][1], place["a"][2]), (place["b"][1], place["b"][2])
+        dim_type, measured, _label, offset = self._dim_points_kind(place, u, v, with_offset=True)
+        existing = self._dim_existing(dim_type, ea.entity_id, refs=[eb.entity_id], pts=[na, nb])
+        if existing:
+            self.prompt_edit_dimension(self.doc.active_sketch.sketch_id, existing.dim_id, existing.value)
+            return
+        sk = self.doc.active_sketch
+        value, expr_text = typed if typed is not None else (measured, None)
+        self.doc.add_dimension_constraint(sk.sketch_id, dim_type, ea.entity_id, value, refs=[eb.entity_id], pts=[na, nb],
+                                          offset=offset, expr=expr_text)
+        self.status_message.emit(self.doc.last_message)
+        self.update()
+
+    DIM_POINT_LABELS = {"HORIZ_DIST": "Horizontal distance", "VERT_DIST": "Vertical distance", "DISTANCE": "Distance"}
+
+    def _dim_points_kind(self, place, u: float, v: float, with_offset: bool = False):
+        """What a point pair measures for a cursor at (u, v): above/below = horizontal, left/right = vertical,
+        diagonal = aligned. Returns (type, measured value, label[, offset])."""
         (ea, na), (eb, nb) = (place["a"][1], place["a"][2]), (place["b"][1], place["b"][2])
         A, B = point_of(ea, na), point_of(eb, nb)
         xmin, xmax = sorted((A[0], B[0]))
@@ -888,13 +911,46 @@ class OverlayMixin:
             L = measured or 1.0
             nx, ny = -(B[1] - A[1]) / L, (B[0] - A[0]) / L
             offset = (u - A[0]) * nx + (v - A[1]) * ny
-        existing = self._dim_existing(dim_type, ea.entity_id, refs=[eb.entity_id], pts=[na, nb])
-        if existing:
-            self.prompt_edit_dimension(self.doc.active_sketch.sketch_id, existing.dim_id, existing.value)
+        label = self.DIM_POINT_LABELS[dim_type] + " (mm) - type a value, Enter or click to place"
+        return (dim_type, measured, label, offset) if with_offset else (dim_type, measured, label)
+
+    def _show_dim_box(self):
+        """Floating value box for the point pair that just got picked: shows the distance, type to change it."""
+        from omacad.ui.inline_value import InlineValueBox
+        self._hide_dim_box()
+        place = self._dim_place
+        (ea, na), (eb, nb) = (place["a"][1], place["a"][2]), (place["b"][1], place["b"][2])
+        A, B = point_of(ea, na), point_of(eb, nb)
+        mid = ((A[0] + B[0]) / 2.0, (A[1] + B[1]) / 2.0)
+        _kind, measured, label = self._dim_points_kind(place, mid[0] + 1e6, mid[1] + 1e6)   # aligned until the cursor says otherwise
+        box = InlineValueBox(self, label, measured, 0.0)
+        box.committed.connect(self._dim_commit_from_box)
+        box.cancelled.connect(self._dim_cancel_from_box)
+        scr = self.world_to_screen(self.doc.active_sketch.plane.uv_to_world(mid[0], mid[1]))
+        box.place_near(*(scr if scr else (self.width() / 2, self.height() / 2)))
+        box.show()
+        box.focus_value()
+        self._dim_box = box
+        self._dim_hover_uv = None
+
+    def _dim_commit_from_box(self):
+        """Enter in the box: place the dimension where the cursor was last seen (or at the default side)."""
+        if not self._dim_place:
             return
-        self._dim_create(dim_type, ea.entity_id, measured, refs=[eb.entity_id], pts=[na, nb], offset=offset,
-                         label={"HORIZ_DIST": "Horizontal distance (mm):", "VERT_DIST": "Vertical distance (mm):"}.get(dim_type, "Distance (mm):"),
-                         lo=0.0)
+        uv = self._dim_hover_uv
+        if uv is None:
+            place = self._dim_place
+            A, B = point_of(place["a"][1], place["a"][2]), point_of(place["b"][1], place["b"][2])
+            uv = ((A[0] + B[0]) / 2.0, max(A[1], B[1]) + 12.0)
+        self._dim_finish_points(*uv)
+        self.setFocus()
+        self.update()
+
+    def _dim_cancel_from_box(self):
+        self._dim_pending, self._dim_place = [], None
+        self.status_message.emit("Dimension cancelled.")
+        self.setFocus()
+        self.update()
 
     def handle_dimension_tool_click(self, u: float, v: float) -> bool:
         """Dimension tool: circle = diameter; line + click away = length; line + line = angle;
@@ -965,6 +1021,7 @@ class OverlayMixin:
         else:                  # a point is waiting
             if pick and pick[0] == "pt" and (pick[1].entity_id, pick[2]) != (first[1].entity_id, first[2]):
                 self._dim_place = {"a": first, "b": pick}
+                self._show_dim_box()
                 self.status_message.emit("Dimension: click where to place it (above/below = horizontal, beside = vertical, diagonal = aligned).")
             elif pick and pick[0] == "ent" and isinstance(pick[1], SketchLine):
                 self._dim_pt_line(first, pick[1])
