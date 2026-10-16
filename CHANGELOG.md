@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.9 - 2026-10-16
+
+### Added (request for change from Lennart: distances between objects, movable dimensions)
+- **Drag a dimension out of the way:** in a sketch, press a dimension badge and drag it; the dimension line follows the cursor (length, rectangle sides, diameter/radius, angle, horizontal/vertical/aligned distance, distance from a point to a line). A plain click still edits the value. A drag is one undo step. Logic in `omacad/model/dim_layout.py` (`offset_for_point`, the inverse of the drawing layout).
+- **Distance between two parallel lines:** with the Dimension tool, clicking two lines that are parallel (within 0.5 degrees) now gives a distance (and keeps them parallel with a constraint) instead of an angle.
+- **Set the distance between two bodies (3D):** in the Measure tool pick an edge on each of two bodies, then press D, type the wanted distance and the second body moves along the measured line (a Move step in the timeline, so it can be edited and undone).
+- Tests in `tests/test_dimension_distance.py`.
+
 ## 0.7.9.8 - 2026-10-16
 
 ### Added (request for change from Björn: files)

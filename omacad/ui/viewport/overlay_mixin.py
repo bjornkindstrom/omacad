@@ -10,6 +10,7 @@ from omacad.ui import theme
 from omacad.ui.theme import qcolor
 from omacad.ui import dyn_input
 from omacad.ui.expr_spin import ExprDoubleSpinBox
+from omacad.model.dim_layout import pt_line_base_shift, PT_LINE_DEFAULT_OFFSET, lines_are_parallel, line_distance
 from omacad.model.sketch import (
     SketchLine, SketchRect, SketchCircle, SketchCenterRect, SketchArc, SketchSlot,
     point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex, ref_id, ref_segment, EDGE_PTS
@@ -517,7 +518,7 @@ class OverlayMixin:
                             # Offset perpendicular to dimension line so the badge doesn't cover circle or lines
                             line_dir = ((x2 - x1) / math.sqrt(L2), (y2 - y1) / math.sqrt(L2))
                             # Determine offset shift: for circle, shift outside the circle radius
-                            r_shift = (ent.radius + 6.0) if isinstance(ent, SketchCircle) else 8.0
+                            r_shift = pt_line_base_shift(ent) + dim.offset_distance - PT_LINE_DEFAULT_OFFSET
                             # Choose shift direction along the reference line
                             off_vec = (line_dir[0] * r_shift, line_dir[1] * r_shift)
                             p_off = (P[0] + off_vec[0], P[1] + off_vec[1])
@@ -795,6 +796,26 @@ class OverlayMixin:
         self._dim_create("ANGLE", a.entity_id, arm_angle_deg(a, ea, b, eb), refs=[b.entity_id], pts=[ea, eb],
                          offset=12.0, label="Angle (degrees):", lo=0.1, hi=179.9, suffix=" °")
 
+    def _dim_parallel(self, a, b):
+        """Two parallel lines: the distance between them (the lines are kept parallel by a constraint)."""
+        sk = self.doc.active_sketch
+        for x, y in ((a, b), (b, a)):
+            existing = self._dim_existing("PT_LINE_DIST", x.entity_id, refs=[y.entity_id], pts=["p1"])
+            if existing:
+                self.prompt_edit_dimension(sk.sketch_id, existing.dim_id, existing.value)
+                return
+        dist = line_distance(a, b)
+        res = self.prompt_dimension_value("New dimension", "Distance between the lines (mm):", dist, 0.0, 50000.0, " mm")
+        if res is None:
+            return
+        val, ex = res
+        if not any(c.ctype == "PARALLEL" and set(c.refs) == {a.entity_id, b.entity_id} for c in sk.constraints):
+            self.doc.add_constraints(sk.sketch_id, [("PARALLEL", [a.entity_id, b.entity_id], [])])
+        self.doc.add_dimension_constraint(sk.sketch_id, "PT_LINE_DIST", a.entity_id, val, refs=[b.entity_id], pts=["p1"],
+                                          offset=PT_LINE_DEFAULT_OFFSET, expr=ex)
+        self.status_message.emit(self.doc.last_message)
+        self.update()
+
     def _dim_pt_line(self, pt_pick, line):
         ent, pname = pt_pick[1], pt_pick[2]
         if ent is line:
@@ -933,7 +954,10 @@ class OverlayMixin:
             if pick and pick[0] == "ref":
                 self.status_message.emit("Dimension: to measure from a face edge, click the point or circle centre first.")
             elif pick and pick[0] == "ent" and isinstance(pick[1], SketchLine) and pick[1] is not line:
-                self._dim_angle(line, pick[1])
+                if lines_are_parallel(line, pick[1]):
+                    self._dim_parallel(line, pick[1])
+                else:
+                    self._dim_angle(line, pick[1])
             elif pick and pick[0] == "pt" and pick[1] is not line:
                 self._dim_pt_line(pick, line)
             else:

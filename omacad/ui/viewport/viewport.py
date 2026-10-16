@@ -143,6 +143,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.constraint_badges: List[Tuple[QRectF, str]] = []
 
         # Moving sketch elements (mouse drag or Move tool)
+        self._dim_drag = None   # pressed dimension badge: click = edit value, drag = move the dimension line
         self._drag = None   # pending/active mouse drag: dict(press_uv, press_pos, moved)
         self._move = None   # active move: dict(ids, orig, before, delta)
 
@@ -236,7 +237,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.sketch_tool = "NONE"
         self.sketch_start_uv = self.sketch_second_uv = self.sketch_current_uv = None
         self.active_snap = None
-        self._drag = self._move = None
+        self._drag = self._move = self._dim_drag = None
         self._dim_pending, self._dim_place = [], None
         self.dyn.reset()
         self.dyn_live = {}
@@ -614,8 +615,46 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             m["text"], m["segs"] = (measure_2d if m["mode"] == "sketch" else measure_3d)(m["picks"])
         else:
             m["text"], m["segs"] = [], []
+        m["set_distance"] = self._measure_set_distance_plan() if m["mode"] == "model" else None
         if m["text"]:
-            self.status_message.emit("Measure: " + "  |  ".join(m["text"]))
+            self.status_message.emit("Measure: " + "  |  ".join(m["text"]) +
+                                     ("  |  Press D to set this distance" if m["set_distance"] else ""))
+        self.update()
+
+    def _body_of_edge(self, edge):
+        return next((b for b in self.doc.bodies.values() if any(e is edge for e in b.edges)), None)
+
+    def _measure_set_distance_plan(self):
+        """Two edges on different bodies: (moving body, unit direction away from the first body, current gap)."""
+        m = self.measure
+        if m is None or m["mode"] != "model" or len(m["picks"]) != 2 or not m["segs"]:
+            return None
+        first, second = (self._body_of_edge(p) for p in m["picks"])
+        if first is None or second is None or first is second:
+            return None
+        a, b = (np.asarray(q, dtype=float) for q in m["segs"][0])
+        gap = float(np.linalg.norm(b - a))
+        if gap < 1e-6:
+            return None                          # touching: there is no direction to move in
+        return second, (b - a) / gap, gap
+
+    def _measure_set_distance(self):
+        """Measure tool, key D: type the wanted distance and the second body moves along the measured line."""
+        plan = self._measure_set_distance_plan()
+        if plan is None:
+            self.status_message.emit("Set distance: measure between edges on two different bodies that are not touching.")
+            return
+        body, direction, gap = plan
+        res = self.prompt_dimension_value("Set distance", f"Distance (mm); {body.name} moves along the measured line:",
+                                          gap, 0.0, 50000.0, " mm")
+        if res is None:
+            return
+        target = res[0]
+        delta = (target - gap) * direction
+        if np.linalg.norm(delta) > 1e-9:
+            self.doc.move_body(body.body_id, float(delta[0]), float(delta[1]), float(delta[2]))
+            self.status_message.emit(f"Moved {body.name} so the distance is {target:.3f} mm.")
+        self.measure["picks"], self.measure["text"], self.measure["segs"], self.measure["set_distance"] = [], [], [], None
         self.update()
 
     def _draw_measure(self, painter: QPainter):
@@ -654,6 +693,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     painter.setBrush(Qt.BrushStyle.NoBrush)
         # result panel
         lines = m["text"] or ["Measure: click a line, circle or edge"]
+        if m.get("set_distance"):
+            lines = lines + [f"D: set the distance (moves {m['set_distance'][0].name})"]
         font = QFont(theme.font_family(), 11)
         painter.setFont(font)
         fm = painter.fontMetrics()
@@ -1569,11 +1610,14 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.update()
             return
 
-        # Check Dimension Badge Clicks
+        # Dimension badge: a click edits the value, dragging it moves the dimension line out of the way
         if self.doc.active_sketch and event.button() == Qt.MouseButton.LeftButton:
             for dim_id, (rect, s_id, d_id, val) in list(self.dim_badges.items()):
                 if rect.contains(x, y):
-                    self.prompt_edit_dimension(s_id, d_id, val)
+                    sk = self.doc.sketches.get(s_id)
+                    dim = next((d for d in sk.dimensions if d.dim_id == d_id), None) if sk else None
+                    self._dim_drag = {"sketch": sk, "dim": dim, "press": event.position(), "moved": False,
+                                      "before": sk.to_dict() if sk else None, "value": val}
                     return
 
         # Handle Dimension Tool Click near geometry
@@ -1833,6 +1877,29 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 return
         super().mouseDoubleClickEvent(event)
 
+    def _dim_drag_move(self, event):
+        from omacad.model.dim_layout import offset_for_point
+        d = self._dim_drag
+        if not d["moved"] and (event.position() - d["press"]).manhattanLength() < 5:
+            return
+        uv = self.get_sketch_plane_uv(event.position().x(), event.position().y())
+        off = offset_for_point(d["sketch"], d["dim"], uv) if uv is not None and d["dim"] is not None else None
+        if off is None:
+            return                              # this kind of dimension has nothing to move: a click still edits it
+        d["moved"] = True
+        d["dim"].offset_distance = float(off)
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        self.update()
+
+    def _dim_drag_release(self):
+        d, self._dim_drag = self._dim_drag, None
+        self.unsetCursor()
+        if d["moved"]:
+            self.doc.record_sketch_change(d["sketch"], d["before"])   # one undo step for the whole drag
+            self.update()
+        elif d["sketch"] is not None:
+            self.prompt_edit_dimension(d["sketch"].sketch_id, d["dim"].dim_id, d["value"])
+
     def mouseMoveEvent(self, event):
         x = event.position().x()
         y = event.position().y()
@@ -1873,6 +1940,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 self._handle_hover = hover
                 self.setCursor(Qt.CursorShape.OpenHandCursor if hover else Qt.CursorShape.ArrowCursor)
                 self.update()
+        if self._dim_drag is not None:
+            self._dim_drag_move(event)
+            return
         if self._drag is not None:
             self._drag_move(event)
             return
@@ -2320,6 +2390,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     else:
                         self._show_general_menu(event)
             return
+        if self._dim_drag is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._dim_drag_release()
+            return
         if self._drag is not None and event.button() == Qt.MouseButton.LeftButton:
             self._drag_release(event)
             return
@@ -2481,6 +2554,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()
+            return
+        if self.measure is not None and self.measure["mode"] == "model" and event.key() == Qt.Key.Key_D:
+            self._measure_set_distance()
             return
         if self.doc.active_sketch and self.sketch_tool == "FILLET" and self.fillet_picked:
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
