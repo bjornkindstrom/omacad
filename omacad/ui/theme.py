@@ -406,6 +406,39 @@ class BigIconStyle(QProxyStyle):
             return 16
 
 
+_MENU_CSS = """
+QMenu {
+    background-color: #25282C;
+    color: #E0E3E7;
+    border: 1px solid #3D424A;
+    border-radius: 4px;
+    padding: 4px 0px;
+}
+QMenu::item {
+    background-color: transparent;
+    padding: 6px 28px 6px 10px;
+}
+QMenu::item:selected {
+    background-color: #E26D28;
+    color: #FFFFFF;
+}
+QMenu::item:disabled {
+    color: #7B818C;
+}
+QMenu::separator {
+    height: 1px;
+    background: #383D45;
+    margin: 4px 8px;
+}
+QMenu::icon { padding-left: 6px; }
+"""
+
+
+def style_menu(menu) -> None:
+    """A context menu in the app's colours (the default one came out black on the transparent overlays)."""
+    style(menu, _MENU_CSS)
+
+
 def action_with_icon(menu, text: str, px: int = 22):
     """menu.addAction for a label that starts with an emoji: the emoji becomes the icon."""
     emoji, rest = split_emoji(text)
@@ -913,7 +946,7 @@ def indicator_stylesheet() -> str:
                   f'fill="{accent}" stroke="{accent}" stroke-width="1.4"/><polyline points="4,8.5 7,11.5 12,5" fill="none" '
                   f'stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>', encoding="utf-8")
     views = "QListView::indicator, QTreeView::indicator, QCheckBox::indicator"
-    return (f"{views} {{ width: 16px; height: 16px; }}\n"
+    return (themeify(_MENU_CSS) + f"{views} {{ width: 16px; height: 16px; }}\n"
             + ", ".join(f"{v}:unchecked" for v in views.split(", ")) + f" {{ image: url({off.as_posix()}); }}\n"
             + ", ".join(f"{v}:checked" for v in views.split(", ")) + f" {{ image: url({on.as_posix()}); }}\n")
 

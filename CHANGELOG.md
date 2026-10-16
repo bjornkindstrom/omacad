@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.15 - 2026-10-16
+
+### Changed (requests from Björn: browser like Fusion 360)
+- **The browser tree is built like Fusion 360's** (same colours/theme as before): `(Unsaved)` / the file name at the top, then Document Settings (Units, Parametric Design), Named Views (Home, Top, Front, Right, Back, Left, Bottom; click one to go there), Origin, Analysis (the section views), Bodies, Canvases and Sketches. All sketches sit under Sketches (also those drawn on a body face). Bodies, Canvases and Sketches have an eye on the group that shows/hides everything in it, and **V** shows/hides the selected item. The group names no longer carry counts, so open/closed state is kept.
+- **Right-click menus like Fusion 360:** sketch: Extrude (E), Offset Plane, Edit Sketch, Rename, Show/Hide (V), Find in Window, Find in Timeline, Delete; body: Move, Shell, Split, Rename, Show/Hide, Find in Window/Timeline, Export STL/STEP, Delete; planes and canvases got Show/Hide and Rename too. Find in Window frames the body or sketch, Find in Timeline scrolls to its step and colours what it changed.
+- **Menus were black:** every pop-up menu is now dark grey with an orange selection, like the menu bar.
+- Tests in `tests/test_browser_tree.py`.
+
 ## 0.7.9.14 - 2026-10-16
 
 ### Changed (request from Björn: Section View like Fusion 360)

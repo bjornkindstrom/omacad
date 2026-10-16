@@ -1072,6 +1072,34 @@ class OverlayMixin:
             self.elevation = 0.0
         self.update()
 
+    def zoom_to_points(self, pts) -> None:
+        """Frames the given world points (Find in Window)."""
+        pts = np.asarray(pts, dtype=float).reshape(-1, 3)
+        if len(pts) == 0:
+            return
+        b_min, b_max = pts.min(axis=0), pts.max(axis=0)
+        self.target = ((b_min + b_max) * 0.5).astype(np.float32)
+        self.distance = max(40.0, float(np.linalg.norm(b_max - b_min)) * 1.8)
+        self.update()
+
+    def zoom_to_body(self, body_id: str) -> None:
+        b = self.doc.bodies.get(body_id)
+        if b is not None and b.render_mesh is not None and len(b.render_mesh.vertices):
+            self.zoom_to_points([b.render_mesh.bounds_min, b.render_mesh.bounds_max])
+
+    def zoom_to_sketch(self, sketch_id: str) -> None:
+        sk = self.doc.sketches.get(sketch_id)
+        if sk is None:
+            return
+        uv = []
+        for e in sk.entities:
+            for name in ("p1", "p2", "center", "center1", "center2", "p_mid"):
+                p = getattr(e, name, None)
+                if p is not None:
+                    uv.append(tuple(p))
+        if uv:
+            self.zoom_to_points([sk.plane.uv_to_world(u, v) for u, v in uv])
+
     def zoom_fit(self):
         """Centers and fits camera to visible bodies or origin."""
         all_pts = []

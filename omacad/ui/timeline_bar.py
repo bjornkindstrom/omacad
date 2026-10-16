@@ -214,6 +214,15 @@ class TimelineBar(QWidget):
             chip.context_requested.connect(self.on_node_menu)
             self.nodes_layout.insertWidget(idx, chip)
 
+    def find_step(self, index: int):
+        """Find in Timeline: scroll to that step and colour what it changed."""
+        item = self.nodes_layout.itemAt(index)
+        if item is None or item.widget() is None:
+            return
+        self.scroll_area.ensureWidgetVisible(item.widget())
+        if self._highlighted != index + 1:
+            self.on_node_clicked(index + 1)
+
     def on_node_clicked(self, step_index: int):
         """A click colours what that step changed in the model (green = added, red = removed); a second click
         on the same step clears it. Rolling back is done with the arrows or the right-click menu."""

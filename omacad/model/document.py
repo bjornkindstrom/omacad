@@ -1015,6 +1015,35 @@ class Document:
             self.construction_planes[pid]["visible"] = not self.construction_planes[pid]["visible"]
             self.notify_changed()
 
+    def feature_index_for(self, kind: str, item_id: str) -> Optional[int]:
+        """The timeline step that made a sketch or body (for "Find in Timeline"), or None."""
+        for i, f in enumerate(self.timeline.features):
+            if kind == "sketch" and f.feature_type == "sketch" and f.sketch.sketch_id == item_id:
+                return i
+            if kind == "body" and (f.feature_id == item_id[5:] or getattr(f, "body_id", None) == item_id):
+                return i
+        if kind == "body":
+            return next((i for i, f in enumerate(self.timeline.features) if getattr(f, "target_body_id", None) == item_id), None)
+        return None
+
+    def set_group_visibility(self, group: str, visible: bool) -> None:
+        """The eye on a browser group: show or hide everything in it ("bodies", "sketches", "canvases", "planes")."""
+        if group == "bodies":
+            for b in self.bodies.values():
+                b.visible = visible
+        elif group == "sketches":
+            for s in self.sketches.values():
+                s.visible = visible
+        elif group == "canvases":
+            for c in self.canvases.values():
+                c["visible"] = visible
+        elif group == "planes":
+            for c in self.construction_planes.values():
+                c["visible"] = visible
+        else:
+            return
+        self.notify_changed()
+
     def toggle_sketch_visibility(self, sketch_id: str) -> None:
         if sketch_id in self.sketches:
             self.sketches[sketch_id].visible = not self.sketches[sketch_id].visible

@@ -222,6 +222,12 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.browser.shell_body_requested.connect(self.prompt_shell)
         self.browser.insert_canvas_requested.connect(self.prompt_insert_canvas)
         self.browser.edit_canvas_requested.connect(self.prompt_edit_canvas)
+        self.browser.named_view_requested.connect(self.viewport.set_view)
+        self.browser.extrude_sketch_requested.connect(self.on_extrude_sketch)
+        self.browser.offset_plane_requested.connect(self.prompt_offset_plane)
+        self.browser.find_in_window_requested.connect(self.find_in_window)
+        self.browser.find_in_timeline_requested.connect(self.find_in_timeline)
+        self.browser.delete_sketch_requested.connect(self.on_delete_sketch)
 
     def setup_menu_bar(self):
         menubar = self.menuBar()
@@ -599,6 +605,45 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
             self.viewport.elevation = 0.0
         self.viewport.update()
         self.status_label.setText(f"Active Sketch: {sketch.name} on {plane_name} plane. Select a tool (Line, Rect, Circle) to draw.")
+
+    def on_extrude_sketch(self, sketch_id: str):
+        """Right-click a sketch > Extrude: open the Extrude panel with that sketch's first closed profile chosen."""
+        sk = self.doc.sketches.get(sketch_id)
+        if sk is None:
+            return
+        if self.doc.active_sketch is not None:
+            self.on_finish_sketch()
+        sk.visible = True
+        profiles = sk.solve_profiles()
+        if not profiles:
+            self.status_label.setText(f"{sk.name} has no closed profile to extrude.")
+            return
+        self.doc.selected_profile = (sketch_id, 0)
+        self.prompt_extrude()
+        dlg = getattr(self, "_extrude_dlg", None)
+        if dlg is not None:
+            dlg.reload_profiles()
+            dlg.select_profile((sketch_id, 0))
+
+    def find_in_window(self, kind: str, item_id: str):
+        if kind == "body":
+            self.doc.select_body(item_id)
+            self.viewport.zoom_to_body(item_id)
+        elif kind == "sketch":
+            self.viewport.zoom_to_sketch(item_id)
+
+    def find_in_timeline(self, kind: str, item_id: str):
+        idx = self.doc.feature_index_for(kind, item_id)
+        if idx is None:
+            self.status_label.setText("That item has no step in the timeline.")
+            return
+        self.timeline_bar.find_step(idx)
+
+    def on_delete_sketch(self, sketch_id: str):
+        from omacad.ui import feature_edit
+        idx = self.doc.feature_index_for("sketch", sketch_id)
+        if idx is not None and feature_edit.confirm_delete(self, self.doc, idx):
+            self.doc.delete_feature(idx)
 
     def on_edit_sketch(self, sketch_id: str):
         sketch = self.doc.edit_sketch(sketch_id)
