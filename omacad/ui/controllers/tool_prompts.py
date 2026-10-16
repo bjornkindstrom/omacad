@@ -180,8 +180,7 @@ class ToolPromptsMixin:
             if thread is not None:
                 feat, sign = thread
                 d = sign * dlg.distance()
-                dlg.set_note(f"This is the coil of {feat.name}. OK makes the whole coil {abs(d):g} mm "
-                             f"{'thicker' if d > 0 else 'thinner'} (every turn, one undo step).")
+                dlg.set_note(f"{feat.name} coil: OK makes every turn {abs(d):g} mm {'thicker' if d > 0 else 'thinner'}.")
                 self.status_label.setText(f"Offset Face: OK will change {feat.name}.")
             elif skipped:
                 self.status_label.setText(f"Offset Face: {skipped} face(s) could not be moved by this distance.")

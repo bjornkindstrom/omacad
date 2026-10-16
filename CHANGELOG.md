@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.32 - 2026-10-16
+
+### Fixed
+- The Offset Face explanation line was cut off at the bottom of the tool panel; it is shorter now ("Thread 1 coil: OK makes every turn 0.2 mm thicker.").
+
 ## 0.7.9.31 - 2026-10-16
 
 ### Fixed

@@ -57,7 +57,7 @@ def test_dialog_explains_what_ok_does_for_a_thread():
     dlg.spn_dist.setValue(-0.2)
     dlg.toggle(last.faces[0], "body_split_2")
     QTest.qWait(400)
-    assert "coil of Thread 1" in dlg.lbl_note.text() and "0.2 mm thicker" in dlg.lbl_note.text()
+    assert "Thread 1 coil" in dlg.lbl_note.text() and "0.2 mm thicker" in dlg.lbl_note.text()
     dlg.reject()
 
 
