@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QFormLayout, QLabel, QPushButton
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
 
-HINT = ("Click flat faces, holes or pins in the viewport (click again to deselect). "
+HINT = ("Click flat faces, holes, pins or curved surfaces such as threads in the viewport (click again to deselect). "
         "Plus moves the face out of the body (adds material, a hole gets smaller), minus moves it in.")
 
 
@@ -44,6 +44,8 @@ class OffsetFaceDialog(BaseFeatureDialog):
         import numpy as np
         if a["kind"] != b["kind"]:
             return False
+        if a["kind"] == "surface":    # the same patch: clicks close to each other
+            return bool(np.linalg.norm(np.asarray(a["point"]) - np.asarray(b["point"])) < 0.5)
         keys = ("normal", "origin") if a["kind"] == "plane" else ("origin", "axis")
         return all(np.allclose(a[k], b[k], atol=1e-3) for k in keys)
 

@@ -345,19 +345,24 @@ class PickerMixin:
 
     def _offset_face_click(self, x: float, y: float):
         """Offset Face: the nearest of a flat face and a cylinder under the cursor is picked."""
-        from omacad.model.features.offset_face import cylinder_face_ref, plane_face_ref
-        cyl = self._pick_cylinder_surface(x, y)
+        from omacad.model.features.offset_face import cylinder_face_ref, plane_face_ref, surface_face_ref
+        surf = self._pick_surface(x, y)     # what the cursor touches first, flat or curved
+        if surf is None:
+            return
         target = self._pick_plane_target(x, y)
         if target is not None and target[0] == "face":
             face = target[1]
             proj, view, _ = self.get_matrices()
             origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
             t_face = ray_hit_face(face, origin, ray_dir)
-            if cyl is None or (t_face is not None and t_face <= cyl["t"] + 1e-4):
+            if t_face is not None and t_face <= surf["t"] + 1e-4:
                 self.offset_face_picked.emit(plane_face_ref(face), face.body_id)
                 return
+        cyl = self._pick_cylinder_surface(x, y)
         if cyl is not None:
             self.offset_face_picked.emit(cylinder_face_ref(cyl), cyl["body_id"])
+        else:
+            self.offset_face_picked.emit(surface_face_ref(surf), surf["body_id"])
 
     def _pick_surface(self, x: float, y: float):
         """Any body surface under the cursor (curved ones too): the hit point and its smooth patch of vertices."""
@@ -365,18 +370,22 @@ class PickerMixin:
         proj, view, _ = self.get_matrices()
         origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
         best = None
+        only = self.shell_target_body_id if self.plane_pick_purpose == "offset_face" else ""
         for body in self.doc.bodies.values():
             mesh = body.render_mesh
-            if not body.visible or mesh is None or len(mesh.vertices) == 0:
+            if (only and body.body_id != only) or (not only and not body.visible) or mesh is None or len(mesh.vertices) == 0:
                 continue
             hit = ray_mesh_hit(mesh, origin, ray_dir)
             if hit is not None and (best is None or hit[0] < best[0]):
-                best = (hit[0], mesh, hit[1])
+                best = (hit[0], mesh, hit[1], body.body_id)
         if best is None:
             return None
-        t, mesh, tri = best
+        t, mesh, tri, body_id = best
+        corner = np.asarray(mesh.vertices, dtype=np.float64).reshape(-1, 3, 3)[tri]
+        normal = np.cross(corner[1] - corner[0], corner[2] - corner[0])
         return {"point": np.asarray(origin, dtype=float) + t * np.asarray(ray_dir, dtype=float),
-                "patch": smooth_patch_vertices(mesh, tri)}
+                "patch": smooth_patch_vertices(mesh, tri), "t": float(t), "body_id": body_id,
+                "normal": normal / max(float(np.linalg.norm(normal)), 1e-12)}
 
     def plane_from_target(self, target):
         from omacad.model.sketch import SketchPlane

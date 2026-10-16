@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.22 - 2026-10-16
+
+### Added
+- **Offset Face works on curved surfaces such as threads and coils**: clicking a surface that is not flat or a plain cylinder picks the whole smooth patch around the click (a whole round thread, a flank, a fillet) and moves it along its own normal; + adds material, - removes it. Clicking the same patch twice moves it once. Tests in `tests/test_offset_face.py` (sphere, flat patch, real thread).
+
 ## 0.7.9.21 - 2026-10-16
 
 ### Added

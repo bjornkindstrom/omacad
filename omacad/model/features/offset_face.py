@@ -152,6 +152,62 @@ def offset_cylinder(manifold, ref, d: float) -> Optional[m3d.Manifold]:
     return manifold + ring if d > 0 else manifold - ring
 
 
+def surface_face_ref(pick: Dict[str, Any]) -> Dict[str, Any]:
+    return {"kind": "surface", "point": [float(x) for x in pick["point"]], "normal": [float(x) for x in pick["normal"]]}
+
+
+def _surface_patch(verts, tris, tri_normals, seed: int, max_angle_deg: float = 35.0) -> np.ndarray:
+    """Triangle indices of the smooth surface around `seed` (neighbours join while their normals differ by less
+    than max_angle_deg): a thread flank, a whole round thread, a fillet..."""
+    by_vertex: Dict[int, List[int]] = {}
+    for t, row in enumerate(tris):
+        for x in row:
+            by_vertex.setdefault(int(x), []).append(t)
+    cos_min = float(np.cos(np.radians(max_angle_deg)))
+    seen, stack = {seed}, [seed]
+    while stack:
+        t = stack.pop()
+        for x in tris[t]:
+            for nb in by_vertex[int(x)]:
+                if nb not in seen and float(tri_normals[t] @ tri_normals[nb]) >= cos_min:
+                    seen.add(nb)
+                    stack.append(nb)
+    return np.array(sorted(seen))
+
+
+def offset_surfaces(manifold, refs, d: float) -> Optional[m3d.Manifold]:
+    """Curved surfaces (threads, coils, fillets): the vertices of each picked smooth patch move `d` along their
+    own outward normal; the neighbouring triangles stretch with them. Done for all patches at once."""
+    mesh = manifold.to_mesh()
+    verts = np.asarray(mesh.vert_properties, dtype=np.float64)[:, :3].copy()
+    tris = np.asarray(mesh.tri_verts, dtype=np.int64)
+    a, b, c = (verts[tris[:, i]] for i in range(3))
+    cross = np.cross(b - a, c - a)
+    area2 = np.linalg.norm(cross, axis=1)
+    normals = cross / np.where(area2 > 1e-12, area2, 1.0)[:, None]
+    centroids = (a + b + c) / 3.0
+    patch = set()
+    for ref in refs:
+        p, n = np.asarray(ref["point"], dtype=float), np.asarray(ref["normal"], dtype=float)
+        dist = np.linalg.norm(centroids - p, axis=1) + 10.0 * (normals @ n < 0.5)   # nearest triangle facing the same way
+        seed = int(dist.argmin())
+        if dist[seed] > 5.0 + 0.1 * float(np.ptp(verts, axis=0).max()):
+            continue
+        patch.update(_surface_patch(verts, tris, normals, seed).tolist())
+    if not patch:
+        return None
+    idx = np.array(sorted(patch))
+    vn = np.zeros_like(verts)
+    for k in range(3):
+        np.add.at(vn, tris[idx, k], cross[idx])          # area-weighted vertex normals of the patch
+    moved = np.unique(tris[idx].ravel())
+    length = np.linalg.norm(vn[moved], axis=1)
+    ok = length > 1e-12
+    verts[moved[ok]] += d * vn[moved[ok]] / length[ok][:, None]
+    out = m3d.Manifold(m3d.Mesh(vert_properties=verts.astype(np.float32), tri_verts=np.ascontiguousarray(tris.astype(np.uint32))))
+    return out if out.status() == m3d.Error.NoError and not out.is_empty() else None
+
+
 class OffsetFaceFeature(Feature):
     """Moves the chosen faces of one body by `distance` (+ adds material, - removes it)."""
 
@@ -169,7 +225,20 @@ class OffsetFaceFeature(Feature):
         skipped = 0
         if abs(distance) < 1e-6:
             return manifold, 0
+        surfaces = [r for r in faces if r.get("kind") == "surface"]
+        if surfaces:
+            try:
+                new = offset_surfaces(manifold, surfaces, distance)
+            except Exception as e:
+                print(f"OffsetFaceFeature: {e}")
+                new = None
+            if new is None or new.volume() < 1e-9:
+                skipped += len(surfaces)
+            else:
+                manifold = new
         for ref in faces:
+            if ref.get("kind") == "surface":
+                continue
             try:
                 new = (offset_plane if ref.get("kind") == "plane" else offset_cylinder)(manifold, ref, distance)
             except Exception as e:   # a degenerate boolean must not break the history

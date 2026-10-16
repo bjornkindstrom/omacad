@@ -73,3 +73,38 @@ def test_document_feature_roundtrip_and_undo(tmp_path):
     assert abs(next(iter(again.bodies.values())).manifold.volume() - v0 - 200.0) < 1e-6
     doc.undo()
     assert abs(next(iter(doc.bodies.values())).manifold.volume() - v0) < 1e-6
+
+
+def test_curved_surface_offset_moves_a_sphere_and_a_flat_patch():
+    from omacad.model.features.offset_face import surface_face_ref
+    sphere = m3d.Manifold.sphere(10.0, 64)
+    v0 = sphere.volume()
+    pick = {"point": [0.0, 0.0, 10.0], "normal": [0.0, 0.0, 1.0]}
+    out, skipped = OffsetFaceFeature.compute(sphere, [surface_face_ref(pick)], 0.5)
+    assert skipped == 0 and abs(out.volume() / v0 - (10.5 / 10.0) ** 3) < 0.02
+    box = m3d.Manifold.cube((20, 10, 5))        # a flat patch: its vertices move along its normal, walls stretch
+    top = {"point": [10.0, 5.0, 5.0], "normal": [0.0, 0.0, 1.0]}
+    up, skipped = OffsetFaceFeature.compute(box, [surface_face_ref(top)], 1.0)
+    assert skipped == 0 and abs(up.volume() - 20 * 10 * 6) < 1e-3
+
+
+def test_same_patch_clicked_twice_moves_once():
+    from omacad.model.features.offset_face import surface_face_ref
+    box = m3d.Manifold.cube((20, 10, 5))
+    refs = [surface_face_ref({"point": [5.0, 5.0, 5.0], "normal": [0, 0, 1]}),
+            surface_face_ref({"point": [15.0, 3.0, 5.0], "normal": [0, 0, 1]})]
+    out, _ = OffsetFaceFeature.compute(box, refs, 1.0)
+    assert abs(out.volume() - 20 * 10 * 6) < 1e-3
+
+
+def test_thread_tolerance_grows_and_shrinks_the_coil():
+    from omacad.model.features.offset_face import surface_face_ref
+    from omacad.model.kernel import CadKernel
+    bolt = CadKernel.create_thread(10.0, 2.0, 12.0, False, 0.0, "round")
+    v = np.asarray(bolt.to_mesh().vert_properties)[:, :3]
+    p = v[int(np.hypot(v[:, 0], v[:, 1]).argmax())]               # a point on the outer thread
+    ref = surface_face_ref({"point": p, "normal": [p[0], p[1], 0.0] / np.hypot(p[0], p[1])})
+    more, s1 = OffsetFaceFeature.compute(bolt, [ref], 0.2)
+    less, s2 = OffsetFaceFeature.compute(bolt, [ref], -0.2)
+    assert s1 == s2 == 0 and str(more.status()) == str(less.status()) == "Error.NoError"
+    assert more.volume() > bolt.volume() + 20 > bolt.volume() - 20 > less.volume()
