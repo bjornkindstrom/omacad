@@ -112,7 +112,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         self.doc.add_change_listener(self.inspector.refresh_info)
         self._init_undo_listener = True   # registered once the Edit menu exists (see _build_menus)
 
-        def _update_overlays(size):
+        def _update_overlays(size=None):
+            if size is None:
+                size = self.viewport.size()
             top_pad = 10
             bottom_pad = 10
             h = max(100, size.height() - top_pad - bottom_pad)
@@ -120,6 +122,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
             self.inspector.setGeometry(max(10, size.width() - 360), top_pad, 350, h)
 
         self.viewport._on_viewport_resized = _update_overlays
+        _update_overlays()
 
         # 3. Bottom Timeline
         self.timeline_bar = TimelineBar(self.doc, self)

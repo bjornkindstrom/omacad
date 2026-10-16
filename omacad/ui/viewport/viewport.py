@@ -216,6 +216,13 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'sketch_palette'):
+            self.sketch_palette.place_default(self.size())
+        if hasattr(self, '_on_viewport_resized') and callable(self._on_viewport_resized):
+            self._on_viewport_resized(self.size())
+
     def set_document(self, document: Document) -> None:
         """Switch to another document (File > New/Open) and drop all state tied to the old one."""
         self.doc = document
