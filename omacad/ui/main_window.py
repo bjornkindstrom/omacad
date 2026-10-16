@@ -467,6 +467,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.apply_theme_font()
         if hasattr(self, "ribbon") and self.ribbon:
             self.ribbon.update_button_scale()
+        if hasattr(self, "timeline_bar") and self.timeline_bar:
+            self.timeline_bar.update_icons()
         self.viewport.update()
         self.status_label.setText("Theme updated.")
 

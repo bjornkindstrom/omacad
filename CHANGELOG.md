@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.17 - 2026-10-16
+
+### Fixed
+- **The four timeline playback buttons were empty squares** (the arrow emoji did not render): they now have drawn icons (rewind, step back, step forward, fast forward) in all three icon sets, and follow the theme. Test in `tests/test_timeline_icons.py`.
+
 ## 0.7.9.16 - 2026-10-16
 
 ### Added (request from Björn)

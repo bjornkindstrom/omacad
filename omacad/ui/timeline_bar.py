@@ -4,7 +4,7 @@ Horizontal history timeline at the bottom with playback controls and feature nod
 """
 
 from typing import Optional
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QPushButton, QScrollArea, QFrame, QLabel, QSizePolicy, QMenu, QInputDialog
 )
@@ -144,27 +144,35 @@ class TimelineBar(QWidget):
         layout.addWidget(lbl_title)
 
         # Playback Controls
-        self.btn_rewind = QPushButton("⏮")
+        self.btn_rewind = QPushButton()
         self.btn_rewind.setToolTip("Rewind to Beginning")
         self.btn_rewind.setFixedSize(28, 28)
+        self.btn_rewind.setIcon(theme.tool_icon("timeline_rewind", 16))
+        self.btn_rewind.setIconSize(QSize(16, 16))
         self.btn_rewind.clicked.connect(self.on_rewind)
         layout.addWidget(self.btn_rewind)
 
-        self.btn_prev = QPushButton("◀")
+        self.btn_prev = QPushButton()
         self.btn_prev.setToolTip("Step Backward")
         self.btn_prev.setFixedSize(28, 28)
+        self.btn_prev.setIcon(theme.tool_icon("timeline_back", 16))
+        self.btn_prev.setIconSize(QSize(16, 16))
         self.btn_prev.clicked.connect(self.on_step_back)
         layout.addWidget(self.btn_prev)
 
-        self.btn_next = QPushButton("▶")
+        self.btn_next = QPushButton()
         self.btn_next.setToolTip("Step Forward")
         self.btn_next.setFixedSize(28, 28)
+        self.btn_next.setIcon(theme.tool_icon("timeline_forward", 16))
+        self.btn_next.setIconSize(QSize(16, 16))
         self.btn_next.clicked.connect(self.on_step_forward)
         layout.addWidget(self.btn_next)
 
-        self.btn_ff = QPushButton("⏭")
+        self.btn_ff = QPushButton()
         self.btn_ff.setToolTip("Fast Forward to End")
         self.btn_ff.setFixedSize(28, 28)
+        self.btn_ff.setIcon(theme.tool_icon("timeline_end", 16))
+        self.btn_ff.setIconSize(QSize(16, 16))
         self.btn_ff.clicked.connect(self.on_fast_forward)
         layout.addWidget(self.btn_ff)
 
@@ -213,6 +221,12 @@ class TimelineBar(QWidget):
             chip.double_clicked.connect(self.on_node_edit)
             chip.context_requested.connect(self.on_node_menu)
             self.nodes_layout.insertWidget(idx, chip)
+
+    def update_icons(self):
+        """The playback icons follow the theme (called when it changes)."""
+        for btn, name in ((self.btn_rewind, "timeline_rewind"), (self.btn_prev, "timeline_back"),
+                          (self.btn_next, "timeline_forward"), (self.btn_ff, "timeline_end")):
+            btn.setIcon(theme.tool_icon(name, 16))
 
     def find_step(self, index: int):
         """Find in Timeline: scroll to that step and colour what it changed."""
