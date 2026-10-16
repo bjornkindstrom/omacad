@@ -662,12 +662,13 @@ QTabBar::tab:hover:!selected {
 
 /* Dock Widgets & Panels */
 QDockWidget {
+    background: transparent;
     color: #E0E3E7;
     titlebar-close-icon: url();
     titlebar-normal-icon: url();
 }
 QDockWidget::title {
-    background: #202225;
+    background: transparent;
     padding: 6px 10px;
     border-bottom: 1px solid #33373D;
     font-weight: bold;
@@ -678,8 +679,8 @@ QDockWidget::title {
 }
 
 /* Tree Views (Browser Panel) */
-QTreeView {
-    background-color: #212326;
+QTreeView, QTreeWidget {
+    background: transparent;
     border: none;
     color: #D8DCE2;
     outline: none;

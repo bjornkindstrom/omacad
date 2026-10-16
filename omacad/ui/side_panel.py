@@ -31,28 +31,32 @@ class InspectorPanel(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Header Bar
+        # Header Bar (subtle floating card-style header)
         self.header = QWidget()
-        style(self.header, "background-color: #202225; border-bottom: 1px solid #33373D; padding: 6px 10px;")
+        style(self.header, "background-color: rgba(32, 34, 37, 0.85); border: 1px solid #33373D; border-radius: 6px; margin: 4px; padding: 4px 8px;")
         h_layout = QHBoxLayout(self.header)
         h_layout.setContentsMargins(8, 4, 8, 4)
         self.lbl_title = QLabel("INSPECTOR")
-        style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.5px;")
+        style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.5px; background: transparent;")
         h_layout.addWidget(self.lbl_title)
         h_layout.addStretch()
         main_layout.addWidget(self.header)
 
-        # Scroll Area for Content
+        # Scroll Area for Content (transparent so only actual cards/dialogs show backgrounds)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        style(self.scroll, "background-color: #24272C; border: none;")
+        self.scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        style(self.scroll, "background: transparent; border: none;")
 
         self.content_widget = QWidget()
-        style(self.content_widget, "background-color: #24272C;")
+        self.content_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        style(self.content_widget, "background: transparent;")
         self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(10, 10, 10, 10)
+        self.content_layout.setContentsMargins(6, 6, 6, 6)
         self.content_layout.setSpacing(8)
+
+        style(self, "background: transparent;")
 
         # 1. Tool Dock Container (when a tool/dialog is active)
         self.tool_container = QWidget()

@@ -117,6 +117,7 @@ class SettingsDialog(QDialog):
         lbl_theme = QLabel("Theme Mode:")
         lbl_theme.setMinimumWidth(200)
         self.cmb_theme_mode = QComboBox()
+        self.cmb_theme_mode.addItem("Fusion 360 (fuskion420)", "fuskion420")
         self.cmb_theme_mode.addItem("Follow Omarchy (live desktop sync)", "omarchy")
         self.cmb_theme_mode.addItem("Light Theme (Clean Studio Latte)", "light")
         self.cmb_theme_mode.addItem("Dark Theme (Tokyo Slate)", "dark_tokyo")
@@ -126,7 +127,9 @@ class SettingsDialog(QDialog):
         cur_dark = self.settings.get("dark_theme_name", "tokyo-night")
         cur_tname = self.settings.get("theme_name", "tokyo-night")
 
-        if cur_mode == "omarchy":
+        if cur_mode == "fixed" and cur_tname == "fuskion420" or cur_mode == "fuskion420":
+            select_key = "fuskion420"
+        elif cur_mode == "omarchy":
             select_key = "omarchy"
         elif cur_mode == "light":
             select_key = "light"
@@ -137,7 +140,8 @@ class SettingsDialog(QDialog):
 
         idx = self.cmb_theme_mode.findData(select_key)
         self.cmb_theme_mode.setCurrentIndex(max(0, idx))
-        self.cmb_theme_mode.setToolTip("Follow Omarchy: syncs live with Omarchy.\n"
+        self.cmb_theme_mode.setToolTip("Fusion 360: fuskion420 exact styling.\n"
+                                       "Follow Omarchy: syncs live with Omarchy.\n"
                                        "Light Theme: Clean Studio Latte.\n"
                                        "Dark Theme: Tokyo Slate or Nord Frost.")
         theme_row.addWidget(lbl_theme)
@@ -537,7 +541,11 @@ class SettingsDialog(QDialog):
 
         # Resolve theme mode choice
         mode_val = self.cmb_theme_mode.currentData()
-        if mode_val == "omarchy":
+        if mode_val == "fuskion420":
+            new_data["theme_mode"] = "fixed"
+            new_data["theme_name"] = "fuskion420"
+            fixed_name = "fuskion420"
+        elif mode_val == "omarchy":
             new_data["theme_mode"] = "omarchy"
             fixed_name = None
         elif mode_val == "light":

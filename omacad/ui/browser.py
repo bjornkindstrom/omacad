@@ -48,6 +48,28 @@ class BrowserTree(QWidget):
         self.tree.setHeaderHidden(True)
         self.tree.setIconSize(QSize(22, 22))
         self.tree.setIndentation(18)
+        self.tree.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        style(self.tree, """
+            QTreeWidget {
+                background: transparent;
+                border: none;
+                color: #D8DCE2;
+                outline: none;
+                padding: 4px;
+            }
+            QTreeWidget::item {
+                padding: 5px 6px;
+                border-radius: 4px;
+                background: transparent;
+            }
+            QTreeWidget::item:hover {
+                background-color: rgba(60, 68, 79, 0.4);
+            }
+            QTreeWidget::item:selected {
+                background-color: rgba(6, 150, 215, 0.45);
+                color: #FFFFFF;
+            }
+        """)
         # Column 0 = name, column 1 = clickable visibility eye
         self.tree.setColumnCount(2)
         hdr = self.tree.header()
@@ -65,6 +87,7 @@ class BrowserTree(QWidget):
         self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
         layout.addWidget(self.tree)
 
+        style(self, "background: transparent; border: none;")
         self.refresh_tree()
 
     def refresh_tree(self):

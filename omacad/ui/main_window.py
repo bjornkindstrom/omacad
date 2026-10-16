@@ -124,6 +124,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         self.browser = BrowserTree(self.doc, self)
         self.browser_dock.setWidget(self.browser)
         self.browser_dock.setMinimumWidth(230)
+        self.browser_dock.setStyleSheet("QDockWidget { background: transparent; } QDockWidget::title { background: transparent; border: none; }")
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.browser_dock)
 
         # 5. Status Bar
@@ -361,6 +362,13 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
                     if act.text().startswith(label):
                         act.setIcon(theme.emoji_icon(emoji, 24))
                         break
+
+        # Document / File Name display at the top (Fusion style)
+        self.lbl_doc_title = QLabel()
+        self.lbl_doc_title.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        style(self.lbl_doc_title, "font-size: 12px; font-weight: bold; color: #9AA0A6; padding: 2px 14px; background: transparent;")
+        menubar.setCornerWidget(self.lbl_doc_title, Qt.Corner.TopRightCorner)
+        self.update_window_title()
 
     def on_open_settings(self):
         from omacad.ui.settings_dialog import SettingsDialog
@@ -658,9 +666,12 @@ class MainWindow(QMainWindow, ToolPromptsMixin):
         doc.notify_changed()
 
     def update_window_title(self):
-        name = Path(self.current_path).name if getattr(self, "current_path", None) else "Untitled"
+        name = Path(self.current_path).name if getattr(self, "current_path", None) else (getattr(self.doc, "name", "Untitled") or "Untitled")
         from omacad import __version__
         self.setWindowTitle(f"{name} - Omacad {__version__}")
+        if hasattr(self, "lbl_doc_title") and self.lbl_doc_title:
+            doc_display = f"📄  {name}" if getattr(self, "current_path", None) else f"📄  {name}*"
+            self.lbl_doc_title.setText(doc_display)
 
     def on_file_new(self):
         self.attach_document(Document("Omacad - Untitled"))

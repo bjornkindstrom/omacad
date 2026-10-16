@@ -3,6 +3,19 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.3 - 2026-10-16
+
+### Added & Enhanced (Fusion 360 Parity)
+- **Fuskion420-tema (Fusion 360 färgval):**
+  - Nytt tema `assets/themes/fuskion420.toml` med exakta färgval från Autodesk Fusion (canvas `#F7F7F7`, grid `#D8DDE3`, accent/highlight `#0696D7`, finish green `#2E7D32` och rena gråa nyanser).
+  - Valbart i Settings-dialogen under Theme Mode ("Fusion 360 (fuskion420)").
+- **Genomskinligt Browser-träd:**
+  - Vänstra Browser-panelen har gjorts genomskinlig och integrerad i skärmen så 3D-vyn syns igenom, med flytande hover- och markeringsstilar precis som i Fusion 360.
+- **Filnamn i menyraden:**
+  - Det aktiva dokumentets filnamn visas nu tydligt uppe till höger i menyraden med ren typografi och ikon (`📄 <filnamn>`).
+- **Genomskinlig Inspector (högra verktygsfältet):**
+  - Högra verktygsfältet är nu helt genomskinligt där det inte finns innehåll. Endast aktiva verktygsdialoger, sketch palette och infokort har kortbakgrund, medan tomma ytor smälter in i 3D-skärmen.
+
 ## 0.7.9.2 - 2026-10-16
 
 ### Fixed
