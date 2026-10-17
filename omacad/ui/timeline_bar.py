@@ -4,7 +4,7 @@ Horizontal history timeline at the bottom with playback controls and feature nod
 """
 
 from typing import Optional
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QTimer
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QPushButton, QScrollArea, QFrame, QLabel, QSizePolicy, QMenu, QInputDialog
 )
@@ -21,6 +21,8 @@ class FeatureNodeWidget(QFrame):
     clicked = Signal(int)
     double_clicked = Signal(int)
     context_requested = Signal(int, object)  # step index, global position
+    hovered = Signal(int)                    # the mouse came over / left the chip (step number)
+    unhovered = Signal(int)
 
     FEATURE_ICONS = {
         "box": "📦",
@@ -38,15 +40,17 @@ class FeatureNodeWidget(QFrame):
         "offset_face": "↔️",
     }
 
-    def __init__(self, index: int, feature: Feature, is_active: bool, parent: Optional[QWidget] = None):
+    def __init__(self, index: int, feature: Feature, is_active: bool, parent: Optional[QWidget] = None,
+                 show_label: bool = True):
         super().__init__(parent)
         self.index = index
         self.feature = feature
         self.is_active = is_active
+        self.show_label = show_label       # only the last step shows its name; the others grow when hovered
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(6)
+        layout.setContentsMargins(5, 2, 5, 2)
+        layout.setSpacing(4)
 
         icon_str = self.FEATURE_ICONS.get(feature.feature_type, "⚙️")
         lbl_icon = QLabel()
@@ -60,6 +64,8 @@ class FeatureNodeWidget(QFrame):
             style(lbl_name, "font-size: 11px; font-weight: bold;")
         self.setToolTip(self._describe(feature) + "\n\nDouble-click to edit, right-click for more.")
         layout.addWidget(lbl_name)
+        self.lbl_name = lbl_name
+        lbl_name.setVisible(show_label)
 
         if is_active:
             style(self, """
@@ -103,6 +109,16 @@ class FeatureNodeWidget(QFrame):
             return f"{f.name}\n{f.kind.title()} {f.size:g} mm on {len(f.edges)} edge(s)"
         return f.name + ("  (suppressed)" if f.suppressed else "")
 
+    def enterEvent(self, event):
+        self.lbl_name.setVisible(True)
+        self.hovered.emit(self.index)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.lbl_name.setVisible(self.show_label)
+        self.unhovered.emit(self.index)
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.index)
@@ -120,11 +136,19 @@ class TimelineBar(QWidget):
 
     edit_sketch_requested = Signal(str)
     highlight_changed = Signal(object, object)  # (material the step added, material it removed), or (None, None)
+    flash_sketch_requested = Signal(object)     # sketch id to show highlighted for a moment, or None
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.doc = document
         self._highlighted: Optional[int] = None   # step number whose changes are coloured in the view
+        self._hovering: Optional[int] = None      # step number under the mouse (its changes are shown while it is there)
+        self._hover_step: Optional[int] = None
+        self._changes_cache: dict = {}
+        self._hover_timer = QTimer(self)
+        self._hover_timer.setSingleShot(True)
+        self._hover_timer.setInterval(90)           # a quick sweep over the chips does not compute every step
+        self._hover_timer.timeout.connect(self._apply_hover)
         self.doc.add_change_listener(self.refresh_timeline)
 
         self.setFixedHeight(48)
@@ -203,9 +227,12 @@ class TimelineBar(QWidget):
 
     def refresh_timeline(self):
         """Re-renders feature nodes according to timeline state."""
-        if self._highlighted is not None:
-            self._highlighted = None
+        if self._highlighted is not None or self._hovering is not None:
+            self._highlighted = self._hovering = None
             self.highlight_changed.emit(None, None)
+            self.flash_sketch_requested.emit(None)
+        self._hover_timer.stop()
+        self._changes_cache.clear()
         # Clear existing nodes
         while self.nodes_layout.count() > 1:
             item = self.nodes_layout.takeAt(0)
@@ -217,7 +244,9 @@ class TimelineBar(QWidget):
 
         for idx, feat in enumerate(features):
             is_active = (idx < marker)
-            chip = FeatureNodeWidget(idx + 1, feat, is_active)
+            chip = FeatureNodeWidget(idx + 1, feat, is_active, show_label=(idx == len(features) - 1))
+            chip.hovered.connect(self.on_node_hovered)
+            chip.unhovered.connect(self.on_node_unhovered)
             chip.clicked.connect(self.on_node_clicked)
             chip.double_clicked.connect(self.on_node_edit)
             chip.context_requested.connect(self.on_node_menu)
@@ -238,6 +267,44 @@ class TimelineBar(QWidget):
         if self._highlighted != index + 1:
             self.on_node_clicked(index + 1)
 
+    def _changes(self, step_index: int):
+        """(added, removed) material of a step, remembered until the timeline is rebuilt."""
+        if step_index not in self._changes_cache:
+            if (step_index - 1) not in self.doc.step_states or step_index not in self.doc.step_states:
+                self.doc.timeline.recompute(self.doc)       # steps just added have no recorded states yet
+            self._changes_cache[step_index] = self.doc.step_changes(step_index - 1)
+        return self._changes_cache[step_index]
+
+    def on_node_hovered(self, step_index: int):
+        self._hover_step = step_index
+        self._hover_timer.start()
+
+    def on_node_unhovered(self, step_index: int):
+        if self._hover_step == step_index:
+            self._hover_step = None
+            self._hover_timer.stop()
+        if self._hovering == step_index:       # back to what a click had coloured (or nothing)
+            self._hovering = None
+            self.flash_sketch_requested.emit(None)
+            if self._highlighted is not None:
+                self.highlight_changed.emit(*self._changes(self._highlighted))
+            else:
+                self.highlight_changed.emit(None, None)
+
+    def _apply_hover(self):
+        """Mouse rested on a chip: colour what that step added (green) / removed (red) in the model, or show its sketch."""
+        step = self._hover_step
+        if step is None or not (1 <= step <= len(self.doc.timeline.features)):
+            return
+        feat = self.doc.timeline.features[step - 1]
+        self._hovering = step
+        if feat.feature_type == "sketch":
+            self.flash_sketch_requested.emit(feat.sketch.sketch_id)
+            self.highlight_changed.emit(None, None)
+        else:
+            self.flash_sketch_requested.emit(None)
+            self.highlight_changed.emit(*self._changes(step))
+
     def on_node_clicked(self, step_index: int):
         """A click colours what that step changed in the model (green = added, red = removed); a second click
         on the same step clears it. Rolling back is done with the arrows or the right-click menu."""
@@ -245,7 +312,7 @@ class TimelineBar(QWidget):
             self._highlighted = None
             self.highlight_changed.emit(None, None)
             return
-        added, removed = self.doc.step_changes(step_index - 1)
+        added, removed = self._changes(step_index)
         self._highlighted = step_index
         self.highlight_changed.emit(added, removed)
 

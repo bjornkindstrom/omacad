@@ -908,7 +908,8 @@ class RenderGLMixin:
 
         # Draw all visible sketches
         for sketch in self.doc.sketches.values():
-            if not sketch.visible:
+            flash = sketch.sketch_id == getattr(self, "flash_sketch_id", None)
+            if not sketch.visible and not flash:
                 continue
 
             is_active = (sketch == self.doc.active_sketch)
@@ -927,7 +928,9 @@ class RenderGLMixin:
             selected_lines = []
             hover_lines = []
             for ent in sketch.entities:
-                if is_active and (ent.entity_id in self.selected_entities or ent.entity_id in self._dim_highlight_ids()):
+                if flash:
+                    dest = selected_lines          # lit up in the highlight colour
+                elif is_active and (ent.entity_id in self.selected_entities or ent.entity_id in self._dim_highlight_ids()):
                     dest = selected_lines
                 elif is_active and ent.entity_id == self.hover_entity_id:
                     dest = hover_lines

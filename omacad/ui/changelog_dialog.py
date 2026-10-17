@@ -3,7 +3,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtGui import QTextDocument
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QTextCursor, QTextDocument
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QPushButton, QTextBrowser, QVBoxLayout
 
 
@@ -42,7 +43,22 @@ class ChangelogDialog(QDialog):
         # no raw HTML: a text like <name> would otherwise be read as a tag and swallow the rest of the page
         flags = QTextDocument.MarkdownFeature.MarkdownDialectGitHub | QTextDocument.MarkdownFeature.MarkdownNoHTML
         self.view.document().setMarkdown(changelog_text(), flags)
+        self.view.moveCursor(QTextCursor.MoveOperation.Start)      # setMarkdown leaves the cursor, and so the view, at the end
         layout.addWidget(self.view)
+        row = QHBoxLayout()
+        row.addStretch()
+        self.btn_close = QPushButton("Close")
+        self.btn_close.setDefault(True)
+        self.btn_close.clicked.connect(self.accept)
+        row.addWidget(self.btn_close)
+        layout.addLayout(row)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._to_top)     # the newest version is at the top of the file: start there
+
+    def _to_top(self):
+        self.view.verticalScrollBar().setValue(0)
 
     def find_next(self):
         text = self.search.text()

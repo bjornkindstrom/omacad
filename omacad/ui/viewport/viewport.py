@@ -145,6 +145,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.hud_sketch = HudText(self)
         self.hud_busy = HudText(self)
         self.hud_busy.setVisible(False)
+        self.flash_sketch_id = None      # a sketch lit up for a moment (hovering its step in the timeline)
 
         # Sketch element selection (click / Ctrl+click, Delete)
         self.selected_entities: set = set()
@@ -1326,6 +1327,11 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, txt)
 
     # ---- Profile picking & feature preview ------------------------------
+    def set_flash_sketch(self, sketch_id) -> None:
+        if sketch_id != self.flash_sketch_id:
+            self.flash_sketch_id = sketch_id
+            self.update()
+
     def set_preview(self, manifold: Optional[m3d.Manifold], operation: str = "new_body", extra=None, extra_op: str = "join"):
         """Shows a translucent preview solid (None clears it). `extra` is a second solid in another colour
         (a pattern both adds and removes material). Under a section view only the kept side is shown, like the bodies."""

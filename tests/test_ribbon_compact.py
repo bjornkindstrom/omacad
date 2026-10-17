@@ -17,8 +17,8 @@ def test_icon_only_and_tooltip_then_labels():
     assert "Create Sketch" in btn.toolTip() and "Make a sketch" in btn.toolTip()
     for b in r.findChildren(ribbon_mod.RibbonButton):
         assert b.toolTip().startswith("<b>")
-    compact_h = r.tabs.height()
+    compact_h = r.solid_tab.sizeHint().height()      # (the tab widget itself is as high as the tallest page: the sketch one)
     st.set("show_button_labels", True)
     r.rebuild_ribbon()
-    assert r.tabs.height() > compact_h
+    assert r.solid_tab.sizeHint().height() > compact_h
     assert ribbon_mod.RibbonButton("A", "✏️").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon

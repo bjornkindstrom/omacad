@@ -18,3 +18,26 @@ def test_dialog_contains_every_version_of_the_changelog():
     dlg.search.setText(versions[-1])
     dlg.find_next()
     assert dlg.view.textCursor().hasSelection()
+
+
+def test_changelog_has_a_close_button():
+    from PySide6.QtWidgets import QApplication
+    from omacad.ui.changelog_dialog import ChangelogDialog
+    QApplication.instance() or QApplication([])
+    dlg = ChangelogDialog()
+    dlg.show()
+    assert dlg.btn_close.text() == "Close"
+    dlg.btn_close.click()
+    assert not dlg.isVisible()
+
+
+def test_changelog_opens_at_the_newest_version():
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from omacad.ui.changelog_dialog import ChangelogDialog
+    QApplication.instance() or QApplication([])
+    dlg = ChangelogDialog()
+    dlg.show()
+    QTest.qWait(100)
+    assert dlg.view.verticalScrollBar().value() == 0              # not at the oldest entries at the bottom
+    assert dlg.view.verticalScrollBar().maximum() > 0

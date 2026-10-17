@@ -3,6 +3,16 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.47 - 2026-10-17
+
+### Changed
+- Timeline: only the last step shows its name, the others are small icons. Hover a step and it grows to show its name, and the model shows what that step made: green = material it added (a coil, an extruded face with its preview), red = material it removed; a sketch step lights its sketch up. Moving away restores what you had (a step you clicked stays coloured). A quick pass over the steps does not compute anything.
+- The SOLID / SKETCH tabs are small muted text on the window's own background instead of a band of their own, with a thin line under the active one.
+- Ribbon buttons have much smaller margins, with and without text, so more fit and the ribbon is lower.
+
+### Fixed
+- Help > Changelog has a Close button and opens at the newest version (it used to open at the oldest entries at the bottom).
+
 ## 0.7.9.46 - 2026-10-17
 
 ### Changed

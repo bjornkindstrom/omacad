@@ -667,30 +667,32 @@ QToolButton:pressed, QToolButton:checked {
     color: #FFFFFF;
 }
 
-/* Tab Bar (Ribbon workspaces) */
+/* Tab Bar (Ribbon workspaces): small muted text on the window's own background, not a band of its own */
 QTabWidget::pane {
-    border-top: 1px solid #353940;
-    background: #25282C;
+    border: none;
+    background: transparent;
+}
+QTabBar {
+    background: transparent;
 }
 QTabBar::tab {
-    background: #1E2022;
-    color: #9AA0A6;
-    padding: 6px 16px;
+    background: transparent;
+    color: #7B818C;
+    padding: 2px 9px;
     border: none;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
     margin-right: 2px;
-    font-weight: bold;
-    font-size: 12px;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.5px;
 }
 QTabBar::tab:selected {
-    background: #25282C;
-    color: #FFFFFF;
-    border-bottom: 2px solid #E26D28;
+    background: transparent;
+    color: #E0E3E7;
+    border-bottom: 1px solid #E26D28;
 }
 QTabBar::tab:hover:!selected {
-    background: #272A2E;
-    color: #D2D6DC;
+    background: transparent;
+    color: #C4C9D0;
 }
 
 /* Dock Widgets & Panels */

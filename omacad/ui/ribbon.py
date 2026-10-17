@@ -35,8 +35,8 @@ def ribbon_labels() -> bool:
 def ribbon_height(scale: float) -> int:
     """Height of the ribbon tab widget: tab bar + one row of buttons."""
     if ribbon_labels():
-        return max(80, int(round(122 * scale)))
-    return max(64, int(round(86 * scale)))
+        return max(70, int(round(104 * scale)))
+    return max(50, int(round(66 * scale)))
 
 
 class RibbonButton(QToolButton):
@@ -59,12 +59,12 @@ class RibbonButton(QToolButton):
         scale = ribbon_button_scale()
         icon_px = max(18, int(round(30 * scale)))
         font_px = max(8, int(round(10 * scale)))
-        min_h = max(50, int(round(76 * scale)))
+        min_h = max(44, int(round(62 * scale)))
         labels = ribbon_labels()
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon if labels
                                 else Qt.ToolButtonStyle.ToolButtonIconOnly)
         if not labels:
-            min_h = icon_px + max(10, int(round(14 * scale)))
+            min_h = icon_px + max(6, int(round(8 * scale)))
         self.setIcon(theme.tool_icon(self.icon_symbol, icon_px))
         self.setIconSize(QSize(icon_px, icon_px))
         self.setMinimumHeight(min_h)
@@ -77,7 +77,7 @@ class RibbonButton(QToolButton):
                 font-size: {font_px}px;
                 font-weight: 500;
                 text-align: center;
-                padding: {max(2, int(round(4 * scale)))}px;
+                padding: {max(1, int(round(2 * scale)))}px;
             }}
             QToolButton:hover {{
                 background-color: #353A42;
@@ -92,12 +92,12 @@ class RibbonButton(QToolButton):
         """)
         self.ensurePolished()
         if not labels:
-            self.setMinimumWidth(icon_px + max(14, int(round(18 * scale))))
+            self.setMinimumWidth(icon_px + max(8, int(round(10 * scale))))
             return
         fm = self.fontMetrics()
         widest = max(fm.horizontalAdvance(line) for line in self.text().split("\n"))
-        base_w = max(48, int(round(68 * scale)))
-        pad_w = max(14, int(round(22 * scale)))
+        base_w = max(40, int(round(54 * scale)))
+        pad_w = max(8, int(round(12 * scale)))
         self.setMinimumWidth(max(base_w, widest + pad_w))
 
 
@@ -229,8 +229,8 @@ class Ribbon(QWidget):
         group_inspect = bool(settings.get("group_inspect", True))
 
         h_layout = QHBoxLayout(self.solid_tab)
-        h_layout.setContentsMargins(6, 2, 6, 2)
-        h_layout.setSpacing(4)
+        h_layout.setContentsMargins(4, 1, 4, 1)
+        h_layout.setSpacing(2)
 
         # CREATE Group
         btn_sketch = RibbonButton("Create\nSketch", "✏️")
@@ -412,8 +412,8 @@ class Ribbon(QWidget):
         group_constraints = bool(settings.get("group_constraints", True))
 
         h_layout = QHBoxLayout(self.sketch_tab)
-        h_layout.setContentsMargins(6, 2, 6, 2)
-        h_layout.setSpacing(4)
+        h_layout.setContentsMargins(4, 1, 4, 1)
+        h_layout.setSpacing(2)
 
         # Sketch Creation Tools
         self.btn_line = RibbonButton("Line\n(L)", "✏️")
