@@ -1126,9 +1126,7 @@ class ToolPromptsMixin:
             is_rot = axis in ("RX", "RY", "RZ")
             new_val = drag_state["start_axis_val"] + delta
             if is_rot:
-                # Snap to 5° increments if Shift is held or by default 5 deg clean steps
-                step = 5.0 if abs(delta) > 5.0 else 1.0
-                new_val = round(new_val / step) * step
+                new_val = round(new_val, 1)   # the viewport already snapped delta to the ring ticks when outside the ring
             else:
                 new_val = round(new_val, 2)
             dlg.set_active_axis_value(new_val)

@@ -1946,7 +1946,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             g = self.move_gizmo
             if g.get("dragging"):
                 cur_proj = self._gizmo_project_mouse(x, y, g["active_axis"])
-                delta = cur_proj - g["start_proj"]
+                delta = self.gizmo_snapped_delta(x, y, g["active_axis"], cur_proj - g["start_proj"])
                 self.move_gizmo_dragged.emit(g["active_axis"], delta)
                 self.update()
                 return

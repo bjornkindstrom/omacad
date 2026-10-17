@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.43 - 2026-10-17
+
+### Changed
+- Move / Rotate gizmo: smaller wheels and arrows, pale and translucent until the mouse is on them. Rotation rings show degree ticks (every 15°, longer at 45° and 90°) outside the ring: drag close to the ring to turn freely, drag outside the ticks to snap to 15° steps.
+
 ## 0.7.9.42 - 2026-10-17
 
 ### Added

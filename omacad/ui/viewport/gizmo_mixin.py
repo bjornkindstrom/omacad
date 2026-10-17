@@ -294,7 +294,7 @@ class GizmoMixin:
     def set_move_gizmo(self, origin, length=None):
         """Sets the 3D translation & rotation gizmo at the given body/pivot origin."""
         if length is None:
-            length = max(25.0, min(75.0, self.distance * 0.18))
+            length = max(14.0, min(45.0, self.distance * 0.11))
         self.move_gizmo = {
             "origin": np.asarray(origin, dtype=float),
             "length": float(length),
@@ -427,13 +427,40 @@ class GizmoMixin:
         step = 0.1 if abs(t) < 10 else 0.5 if abs(t) < 50 else 1.0
         return round(t / step) * step
 
+    GIZMO_SNAP_DEG = 15.0        # ticks and snapping step on the rotation rings
+    GIZMO_SNAP_RADIUS = 1.12     # dragging beyond this x the ring radius snaps; inside it turns freely
+
+    @staticmethod
+    def _gizmo_color(base_col, lit: bool, boost: float):
+        """Gizmo colours are pale and translucent until the mouse is on them."""
+        if lit:
+            return (*(min(1.0, c + boost) for c in base_col), 1.0)
+        return (*(0.55 * c + 0.45 * 0.7 for c in base_col), 0.55)
+
+    def gizmo_snapped_delta(self, x: float, y: float, axis_name: str, delta: float) -> float:
+        """Rotation delta, rounded to the tick step when the mouse is outside the ring (free inside it)."""
+        if axis_name not in ("RX", "RY", "RZ") or not self.move_gizmo:
+            return delta
+        g = self.move_gizmo
+        n = {"RX": (1, 0, 0), "RY": (0, 1, 0), "RZ": (0, 0, 1)}[axis_name]
+        proj, view, _ = self.get_matrices()
+        r0, rd = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        r0, rd, n = np.asarray(r0, dtype=float), np.asarray(rd, dtype=float), np.asarray(n, dtype=float)
+        denom = float(rd @ n)
+        if abs(denom) < 1e-6:
+            return delta
+        t = float((g["origin"] - r0) @ n) / denom
+        if t <= 0 or np.linalg.norm(r0 + rd * t - g["origin"]) < g["length"] * 0.72 * self.GIZMO_SNAP_RADIUS:
+            return delta
+        return round(delta / self.GIZMO_SNAP_DEG) * self.GIZMO_SNAP_DEG
+
     def render_move_gizmo(self, mvp: np.ndarray):
         g = self.move_gizmo
         if not g or self.prog_flat is None or self.prog_thick is None:
             return
         origin = g["origin"]
         length = g["length"]
-        size = self.distance * 0.038
+        size = self.distance * 0.024
         dirs = {
             "X": (np.array([1.0, 0.0, 0.0]), (0.95, 0.25, 0.25)),
             "Y": (np.array([0.0, 1.0, 0.0]), (0.25, 0.85, 0.35)),
@@ -446,10 +473,10 @@ class GizmoMixin:
             is_hover = (g.get("hover_axis") == ax)
             is_active = (g.get("active_axis") == ax and g.get("dragging"))
             lit = is_hover or is_active
-            col = (*(min(1.0, c + (0.3 if lit else 0.0)) for c in base_col), 1.0)
+            col = self._gizmo_color(base_col, lit, 0.3)
             tip = origin + axis_vec * length
             shaft_end = tip - axis_vec * size * 0.8
-            self.draw_thick_lines(mvp, [*origin, *shaft_end], col, 5.0 if lit else 3.5, halo=True)
+            self.draw_thick_lines(mvp, [*origin, *shaft_end], col, 4.0 if lit else 2.5, halo=lit)
 
             # 3D Arrowhead cone
             u = np.cross(axis_vec, [1.0, 0.0, 0.0])
@@ -479,21 +506,23 @@ class GizmoMixin:
             is_hover = (g.get("hover_axis") == rot_ax)
             is_active = (g.get("active_axis") == rot_ax and g.get("dragging"))
             lit = is_hover or is_active
-            col = (*(min(1.0, c + (0.35 if lit else 0.0)) for c in base_col), 0.95 if lit else 0.70)
+            col = self._gizmo_color(base_col, lit, 0.35)
             angles = np.linspace(0, 2 * math.pi, 49)
             ring_pts = [origin + ring_r * (math.cos(a) * u + math.sin(a) * v_) for a in angles]
             ring_segs = []
             for p0, p1 in zip(ring_pts[:-1], ring_pts[1:]):
                 ring_segs.extend([*p0, *p1])
-            self.draw_thick_lines(mvp, ring_segs, col, 4.0 if lit else 2.5, halo=True)
+            self.draw_thick_lines(mvp, ring_segs, col, 3.5 if lit else 2.0, halo=lit)
 
-            # Small grab ticks on the ring
-            if lit:
+            if lit:   # degree ticks outside the ring; dragging out there snaps to them
+                ref = math.radians(g["start_proj"]) if g.get("dragging") else 0.0
                 tick_pts = []
-                for a in np.linspace(0, 2 * math.pi, 9)[:-1]:
-                    p_inner = origin + (ring_r - size * 0.3) * (math.cos(a) * u + math.sin(a) * v_)
-                    p_outer = origin + (ring_r + size * 0.3) * (math.cos(a) * u + math.sin(a) * v_)
-                    tick_pts.extend([*p_inner, *p_outer])
+                for k in range(int(360 / self.GIZMO_SNAP_DEG)):
+                    deg = k * self.GIZMO_SNAP_DEG
+                    a = ref + math.radians(deg)
+                    r1 = ring_r * (1.14 if deg % 90 == 0 else 1.10 if deg % 45 == 0 else 1.05)
+                    c, sn = math.cos(a), math.sin(a)
+                    tick_pts.extend([*(origin + ring_r * 1.02 * (c * u + sn * v_)), *(origin + r1 * (c * u + sn * v_))])
                 self.draw_thick_lines(mvp, tick_pts, col, 2.0, halo=False)
 
         GL.glUseProgram(0)
