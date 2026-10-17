@@ -433,6 +433,13 @@ QMenu::separator {
     margin: 4px 8px;
 }
 QMenu::icon { padding-left: 6px; }
+QToolTip {
+    background-color: #25282C;
+    color: #E0E3E7;
+    border: 1px solid #4D535E;
+    padding: 5px 9px;
+    font-size: 12px;
+}
 """
 
 
@@ -511,9 +518,9 @@ def apply_qt_palette() -> None:
     """Gives Qt's own palette the theme colours too: widgets without a stylesheet (the inside of scroll
     areas, the ribbon behind the buttons) otherwise stay Fusion dark whatever the theme is."""
     from PySide6.QtGui import QPalette
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QToolTip
     app = QApplication.instance()
-    if app is None or not _palette.loaded:
+    if app is None:
         return
     m = lambda h: QColor(_palette.map_hex(h))
     pal = QPalette()
@@ -526,6 +533,7 @@ def apply_qt_palette() -> None:
     pal.setColor(QPalette.ColorRole.Highlight, QColor(*(round(v) for v in _palette.accent)))
     pal.setColor(QPalette.ColorRole.HighlightedText, QColor(*(round(v) for v in _palette.darker)))
     app.setPalette(pal)
+    QToolTip.setPalette(pal)
 
 
 def refresh() -> None:
@@ -533,6 +541,10 @@ def refresh() -> None:
     _palette = load_palette()
     _font = current_font()
     apply_qt_palette()
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is not None:
+        app.setStyleSheet(indicator_stylesheet())
     alive = []
     for ref, css in _styled:
         w = ref()
@@ -739,6 +751,15 @@ QTreeView::branch:closed:has-children:has-siblings {
     border-image: none;
 }
 
+/* Tooltips */
+QToolTip {
+    background-color: #25282C;
+    color: #E0E3E7;
+    border: 1px solid #4D535E;
+    padding: 5px 9px;
+    font-size: 12px;
+}
+
 /* Buttons */
 QPushButton {
     background-color: #33373E;
@@ -746,10 +767,10 @@ QPushButton {
     border: 1px solid #4D535E;
     border-bottom: 2px solid #25282D;
     border-radius: 5px;
-    padding: 7px 18px;
+    padding: 5px 14px;
     font-weight: 600;
     font-size: 13px;
-    min-height: 18px;
+    min-height: 16px;
 }
 QPushButton:hover {
     background-color: #3E434C;
@@ -761,7 +782,7 @@ QPushButton:pressed {
     border: 1px solid #E26D28;
     border-top: 2px solid #B85317;
     color: #FFFFFF;
-    padding-top: 8px;
+    padding-top: 6px;
 }
 QPushButton#PrimaryButton, QPushButton:default {
     background-color: #E26D28;
@@ -769,7 +790,7 @@ QPushButton#PrimaryButton, QPushButton:default {
     border-bottom: 2px solid #B85317;
     color: #FFFFFF;
     font-weight: bold;
-    padding: 7px 22px;
+    padding: 5px 16px;
 }
 QPushButton#PrimaryButton:hover, QPushButton:default:hover {
     background-color: #FF7E36;
@@ -781,7 +802,7 @@ QPushButton#PrimaryButton:pressed, QPushButton:default:pressed {
     border: 1px solid #B85317;
     border-top: 2px solid #8C3A0A;
     color: #FFFFFF;
-    padding-top: 8px;
+    padding-top: 6px;
 }
 
 QPushButton#SuccessButton {

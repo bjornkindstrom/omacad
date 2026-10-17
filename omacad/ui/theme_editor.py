@@ -188,3 +188,32 @@ class ThemeEditorTab(QWidget):
         theme.delete_custom_theme(name)
         self.refresh_custom()
         self.saved.emit("")
+
+
+class ThemeEditorDialog(QDialog):
+    """Stand-alone dialog for editing themes."""
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Theme Editor")
+        self.setMinimumWidth(500)
+        self.resize(540, 600)
+        theme.style(self, theme._BASE_CSS)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(10)
+
+        self.editor = ThemeEditorTab(self)
+        lay.addWidget(self.editor, 1)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_close = QPushButton("Close")
+        btn_close.clicked.connect(self.accept)
+        btn_row.addWidget(btn_close)
+        lay.addLayout(btn_row)
+
+    def reject(self):
+        theme.set_preview(None)
+        super().reject()
+

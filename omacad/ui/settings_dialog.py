@@ -1,13 +1,13 @@
 """
 Omacad - Settings Dialog
-GUI for configuring user preferences including custom colors, sketch palette placement, and navigation.
+GUI for configuring user preferences including custom colors, UI layout, sketch & view options, and system preferences.
 """
 
 from typing import Dict, Optional
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QLineEdit, 
-    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QLabel,
+from PySide6.QtWidgets import (
+    QLineEdit, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QLabel,
     QPushButton, QComboBox, QCheckBox, QDoubleSpinBox, QColorDialog,
     QFrame, QGridLayout, QScrollArea
 )
@@ -93,7 +93,7 @@ class SettingsDialog(QDialog):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
         theme.style(self, theme._BASE_CSS)
 
         self.settings = get_settings()
@@ -106,13 +106,15 @@ class SettingsDialog(QDialog):
         self.tabs = QTabWidget()
         main_lay.addWidget(self.tabs)
 
-        # Tab 1: Colours
-        tab_colors = QWidget()
-        lay_colors = QVBoxLayout(tab_colors)
-        lay_colors.setContentsMargins(12, 12, 12, 12)
-        lay_colors.setSpacing(10)
+        # ----------------------------------------------------
+        # Tab 1: Appearance & Colours (🎨 Appearance)
+        # ----------------------------------------------------
+        tab_appearance = QWidget()
+        lay_appearance = QVBoxLayout(tab_appearance)
+        lay_appearance.setContentsMargins(12, 12, 12, 12)
+        lay_appearance.setSpacing(12)
 
-        # Theme mode: Följ Omarchy, Ljust tema, Mörkt tema
+        # Theme mode
         theme_row = QHBoxLayout()
         lbl_theme = QLabel("Theme Mode:")
         lbl_theme.setMinimumWidth(200)
@@ -122,12 +124,16 @@ class SettingsDialog(QDialog):
         self.cmb_theme_mode.addItem("Light Theme (Clean Studio Latte)", "light")
         self.cmb_theme_mode.addItem("Dark Theme (Tokyo Slate)", "dark_tokyo")
         self.cmb_theme_mode.addItem("Dark Theme (Nord Frost)", "dark_nord")
+        for cname in theme.custom_themes():
+            self.cmb_theme_mode.addItem(f"Custom: {cname}", f"user:{cname}")
 
         cur_mode = self.settings.get("theme_mode", "omarchy")
         cur_dark = self.settings.get("dark_theme_name", "tokyo-night")
         cur_tname = self.settings.get("theme_name", "tokyo-night")
 
-        if cur_mode == "fixed" and cur_tname == "fuskion420" or cur_mode == "fuskion420":
+        if (cur_mode == "fixed" and str(cur_tname).startswith("user:")):
+            select_key = cur_tname
+        elif (cur_mode == "fixed" and cur_tname == "fuskion420") or cur_mode == "fuskion420":
             select_key = "fuskion420"
         elif cur_mode == "omarchy":
             select_key = "omarchy"
@@ -147,9 +153,9 @@ class SettingsDialog(QDialog):
         theme_row.addWidget(lbl_theme)
         theme_row.addWidget(self.cmb_theme_mode)
         theme_row.addStretch()
-        lay_colors.addLayout(theme_row)
+        lay_appearance.addLayout(theme_row)
 
-        # Icon Theme selector: Modern Solid Fill, Technical Blueprint, Semantic Color-Coded CAD
+        # Icon Theme selector
         icon_row = QHBoxLayout()
         lbl_icon = QLabel("Icon Theme:")
         lbl_icon.setMinimumWidth(200)
@@ -164,14 +170,54 @@ class SettingsDialog(QDialog):
         icon_row.addWidget(lbl_icon)
         icon_row.addWidget(self.cmb_icon_theme)
         icon_row.addStretch()
-        lay_colors.addLayout(icon_row)
+        lay_appearance.addLayout(icon_row)
 
-        # Toolbar button size
+        info_lbl = QLabel("Customise colours for 3D arrows, highlights and tools in the view:")
+        info_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px; margin-top: 8px;")
+        lay_appearance.addWidget(info_lbl)
+
+        self.row_arrow = ColorRow("Extrude arrow / dragger:", self.settings.get("arrow_color"), default_hex=None)
+        lay_appearance.addWidget(self.row_arrow)
+
+        self.row_measure = ColorRow("Measure tool (overlay):", self.settings.get("measure_color"), default_hex="#FFAA3C")
+        lay_appearance.addWidget(self.row_measure)
+
+        self.row_sketch = ColorRow("Active sketch lines:", self.settings.get("sketch_line_color"), default_hex="#4CE0FF")
+        lay_appearance.addWidget(self.row_sketch)
+
+        self.row_construct = ColorRow("Construction lines:", self.settings.get("sketch_construction_color"), default_hex="#FFCC4D")
+        lay_appearance.addWidget(self.row_construct)
+
+        self.row_highlight = ColorRow("Highlight:", self.settings.get("highlight_color"), default_hex=None)
+        lay_appearance.addWidget(self.row_highlight)
+
+        # Button to open Theme Editor dialog
+        btn_editor_row = QHBoxLayout()
+        self.btn_open_theme_editor = QPushButton("🖌 Open Theme Editor…")
+        self.btn_open_theme_editor.setToolTip("Customise every single colour in the interface and save custom theme palettes.")
+        self.btn_open_theme_editor.clicked.connect(self._open_theme_editor)
+        btn_editor_row.addWidget(self.btn_open_theme_editor)
+        btn_editor_row.addStretch()
+        lay_appearance.addSpacing(6)
+        lay_appearance.addLayout(btn_editor_row)
+
+        lay_appearance.addStretch()
+        self.tabs.addTab(self._make_scrollable(tab_appearance), "🎨 Appearance")
+
+        # ----------------------------------------------------
+        # Tab 2: Interface & Layout (🖥️ Interface)
+        # ----------------------------------------------------
+        tab_ui = QWidget()
+        lay_ui = QVBoxLayout(tab_ui)
+        lay_ui.setContentsMargins(12, 12, 12, 12)
+        lay_ui.setSpacing(12)
+
+        # Toolbar button size / UI density
         btn_size_row = QHBoxLayout()
         lbl_btn_size = QLabel("Toolbar button size:")
         lbl_btn_size.setMinimumWidth(200)
         self.cmb_btn_size = QComboBox()
-        self.cmb_btn_size.addItem("Compact (75%)", 0.75)
+        self.cmb_btn_size.addItem("Compact / Low resolution (75%)", 0.75)
         self.cmb_btn_size.addItem("Medium (default, 100%)", 1.0)
         self.cmb_btn_size.addItem("Large (125%)", 1.25)
         self.cmb_btn_size.addItem("Extra large (150%)", 1.5)
@@ -181,11 +227,15 @@ class SettingsDialog(QDialog):
             self.cmb_btn_size.addItem(f"Custom ({int(round(cur_scale * 100))}%)", cur_scale)
             idx_scale = self.cmb_btn_size.count() - 1
         self.cmb_btn_size.setCurrentIndex(max(0, idx_scale))
-        self.cmb_btn_size.setToolTip("Adjusts the height and icon sizes of buttons in the top toolbar ribbon.")
+        self.cmb_btn_size.setToolTip("Adjusts the height and icon sizes of buttons in the top toolbar ribbon. Ideal for laptops or low-resolution screens.")
         btn_size_row.addWidget(lbl_btn_size)
         btn_size_row.addWidget(self.cmb_btn_size)
         btn_size_row.addStretch()
-        lay_colors.addLayout(btn_size_row)
+        lay_ui.addLayout(btn_size_row)
+
+        self.chk_labels = QCheckBox("Show button names under toolbar icons (otherwise only on hover)")
+        self.chk_labels.setChecked(bool(self.settings.get("show_button_labels", False)))
+        lay_ui.addWidget(self.chk_labels)
 
         # Palette position
         pos_row = QHBoxLayout()
@@ -197,53 +247,55 @@ class SettingsDialog(QDialog):
         self.cmb_pos.addItem("Bottom left", "bottom_left")
         self.cmb_pos.addItem("Top right", "top_right")
         cur_pos = self.settings.get("palette_position", "bottom_right")
-        idx = self.cmb_pos.findData(cur_pos)
-        if idx >= 0:
-            self.cmb_pos.setCurrentIndex(idx)
+        idx_pos = self.cmb_pos.findData(cur_pos)
+        if idx_pos >= 0:
+            self.cmb_pos.setCurrentIndex(idx_pos)
         pos_row.addWidget(lbl_pos)
         pos_row.addWidget(self.cmb_pos)
         pos_row.addStretch()
-        lay_colors.addLayout(pos_row)
-
-        info_lbl = QLabel("Customise colours for 3D arrows, highlights and tools in the view:")
-        info_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px;")
-        lay_colors.addWidget(info_lbl)
-
-        self.row_arrow = ColorRow("Extrude arrow / dragger:", self.settings.get("arrow_color"), default_hex=None)
-        lay_colors.addWidget(self.row_arrow)
-
-        self.row_measure = ColorRow("Measure tool (overlay):", self.settings.get("measure_color"), default_hex="#FFAA3C")
-        lay_colors.addWidget(self.row_measure)
-
-        self.row_sketch = ColorRow("Active sketch lines:", self.settings.get("sketch_line_color"), default_hex="#4CE0FF")
-        lay_colors.addWidget(self.row_sketch)
-
-        self.row_construct = ColorRow("Construction lines:", self.settings.get("sketch_construction_color"), default_hex="#FFCC4D")
-        lay_colors.addWidget(self.row_construct)
-
-        self.row_highlight = ColorRow("Highlight:", self.settings.get("highlight_color"), default_hex=None)
-        lay_colors.addWidget(self.row_highlight)
-
-        lay_colors.addStretch()
-        self.tabs.addTab(self._make_scrollable(tab_colors), "🎨 Theme")
-
-        # Tab: theme editor (every colour by hand, saved under a name)
-        from omacad.ui.theme_editor import ThemeEditorTab
-        self.editor = ThemeEditorTab()
-        self.editor.saved.connect(self._theme_saved)
-        self.tabs.addTab(self.editor, "🖌 Theme editor")
-
-        # Tab 2: Sketch & View
-        tab_sketch = QWidget()
-        lay_sketch = QVBoxLayout(tab_sketch)
-        lay_sketch.setContentsMargins(12, 12, 12, 12)
-        lay_sketch.setSpacing(12)
+        lay_ui.addLayout(pos_row)
 
         # Autohide on measure
         self.chk_autohide = QCheckBox("Hide the sketch palette automatically while measuring (M)")
         self.chk_autohide.setToolTip("Stops the palette from covering lines or dimensions while you measure.")
         self.chk_autohide.setChecked(bool(self.settings.get("autohide_palette_on_measure", True)))
-        lay_sketch.addWidget(self.chk_autohide)
+        lay_ui.addWidget(self.chk_autohide)
+
+        # Toolbar Ribbon Grouping
+        grp_lbl = QLabel("Toolbar grouping (saves horizontal space on smaller screens):")
+        grp_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px; margin-top: 6px;")
+        lay_ui.addWidget(grp_lbl)
+
+        self.chk_group_primitives = QCheckBox("Group Primitives into dropdown (Box, Cylinder, Sphere, Thread)")
+        self.chk_group_primitives.setChecked(bool(self.settings.get("group_primitives", True)))
+        self.chk_group_primitives.setToolTip("Puts 3D primitive tools into a compact Primitives ▾ dropdown menu.")
+        lay_ui.addWidget(self.chk_group_primitives)
+
+        self.chk_group_modify = QCheckBox("Group Modify into dropdown (Combine, Split Body, Shell, Move, Delete)")
+        self.chk_group_modify.setChecked(bool(self.settings.get("group_modify", False)))
+        self.chk_group_modify.setToolTip("Puts solid modification tools into a compact Modify ▾ dropdown menu.")
+        lay_ui.addWidget(self.chk_group_modify)
+
+        self.chk_group_inspect = QCheckBox("Group Inspect into dropdown (Measure, Section View, Parameters)")
+        self.chk_group_inspect.setChecked(bool(self.settings.get("group_inspect", True)))
+        self.chk_group_inspect.setToolTip("Puts measurement, sectioning and parameters into an Inspect ▾ dropdown menu.")
+        lay_ui.addWidget(self.chk_group_inspect)
+
+        self.chk_group_constraints = QCheckBox("Compact 2-row layout for Sketch Constraints")
+        self.chk_group_constraints.setChecked(bool(self.settings.get("group_constraints", True)))
+        self.chk_group_constraints.setToolTip("Arranges sketch constraints into a compact 2-row grid to save horizontal ribbon space.")
+        lay_ui.addWidget(self.chk_group_constraints)
+
+        lay_ui.addStretch()
+        self.tabs.addTab(self._make_scrollable(tab_ui), "🖥️ Interface")
+
+        # ----------------------------------------------------
+        # Tab 4: Sketch & 3D View (📐 Sketch & View)
+        # ----------------------------------------------------
+        tab_sketch = QWidget()
+        lay_sketch = QVBoxLayout(tab_sketch)
+        lay_sketch.setContentsMargins(12, 12, 12, 12)
+        lay_sketch.setSpacing(12)
 
         # Invert zoom
         self.chk_invert_zoom = QCheckBox("Reverse the mouse wheel zoom direction")
@@ -278,7 +330,7 @@ class SettingsDialog(QDialog):
 
         # The extrude arrow
         arrow_row = QHBoxLayout()
-        lbl_arrow = QLabel("Arrow size:")
+        lbl_arrow = QLabel("Extrude arrow size:")
         lbl_arrow.setMinimumWidth(200)
         self.spn_arrow_size = QDoubleSpinBox()
         self.spn_arrow_size.setRange(0.3, 4.0)
@@ -292,7 +344,7 @@ class SettingsDialog(QDialog):
         lay_sketch.addLayout(arrow_row)
 
         gap_row = QHBoxLayout()
-        lbl_gap = QLabel("Arrow distance from the surface:")
+        lbl_gap = QLabel("Arrow distance from surface:")
         lbl_gap.setMinimumWidth(200)
         self.spn_arrow_gap = QDoubleSpinBox()
         self.spn_arrow_gap.setRange(0.0, 20.0)
@@ -306,89 +358,6 @@ class SettingsDialog(QDialog):
         gap_row.addStretch()
         lay_sketch.addLayout(gap_row)
 
-        # Toolbar button size
-        btn_size_row = QHBoxLayout()
-        lbl_btn_size = QLabel("Toolbar button size:")
-        lbl_btn_size.setMinimumWidth(200)
-        self.cmb_btn_size = QComboBox()
-        self.cmb_btn_size.addItem("Compact (75%)", 0.75)
-        self.cmb_btn_size.addItem("Medium (default, 100%)", 1.0)
-        self.cmb_btn_size.addItem("Large (125%)", 1.25)
-        self.cmb_btn_size.addItem("Extra large (150%)", 1.5)
-        cur_scale = float(self.settings.get("button_scale", 1.0))
-        idx_scale = self.cmb_btn_size.findData(cur_scale)
-        if idx_scale < 0:
-            self.cmb_btn_size.addItem(f"Custom ({int(round(cur_scale * 100))}%)", cur_scale)
-            idx_scale = self.cmb_btn_size.count() - 1
-        self.cmb_btn_size.setCurrentIndex(max(0, idx_scale))
-        self.cmb_btn_size.setToolTip("Adjusts the height and icon sizes of buttons in the top toolbar ribbon.")
-        btn_size_row.addWidget(lbl_btn_size)
-        btn_size_row.addWidget(self.cmb_btn_size)
-        btn_size_row.addStretch()
-        lay_sketch.addLayout(btn_size_row)
-
-        self.chk_labels = QCheckBox("Show button names under the toolbar icons (otherwise only on hover)")
-        self.chk_labels.setChecked(bool(self.settings.get("show_button_labels", False)))
-        lay_sketch.addWidget(self.chk_labels)
-
-        # Toolbar Ribbon Grouping
-        self.chk_group_primitives = QCheckBox("Group Primitives into dropdown (Box, Cylinder, Sphere, Thread)")
-        self.chk_group_primitives.setChecked(bool(self.settings.get("group_primitives", True)))
-        self.chk_group_primitives.setToolTip("Puts 3D primitive tools into a compact Primitives ▾ dropdown menu.")
-        lay_sketch.addWidget(self.chk_group_primitives)
-
-        self.chk_group_modify = QCheckBox("Group Modify into dropdown (Combine, Split Body, Shell, Move, Delete)")
-        self.chk_group_modify.setChecked(bool(self.settings.get("group_modify", False)))
-        self.chk_group_modify.setToolTip("Puts solid modification tools into a compact Modify ▾ dropdown menu.")
-        lay_sketch.addWidget(self.chk_group_modify)
-
-        self.chk_group_inspect = QCheckBox("Group Inspect into dropdown (Measure, Section View, Parameters)")
-        self.chk_group_inspect.setChecked(bool(self.settings.get("group_inspect", True)))
-        self.chk_group_inspect.setToolTip("Puts measurement, sectioning and parameters into an Inspect ▾ dropdown menu.")
-        lay_sketch.addWidget(self.chk_group_inspect)
-
-        self.chk_group_constraints = QCheckBox("Compact 2-row layout for Sketch Constraints")
-        self.chk_group_constraints.setChecked(bool(self.settings.get("group_constraints", True)))
-        self.chk_group_constraints.setToolTip("Arranges sketch constraints into a compact 2-row grid to save horizontal ribbon space.")
-        lay_sketch.addWidget(self.chk_group_constraints)
-
-        # Request for change
-        rfc_row = QHBoxLayout()
-        lbl_rfc = QLabel("Your name on change requests:")
-        lbl_rfc.setMinimumWidth(200)
-        self.edt_rfc_name = QLineEdit(str(self.settings.get("rfc_name") or ""))
-        self.edt_rfc_name.setPlaceholderText("Help > Request a change (F8)")
-        rfc_row.addWidget(lbl_rfc)
-        rfc_row.addWidget(self.edt_rfc_name)
-        lay_sketch.addLayout(rfc_row)
-        tok_row = QHBoxLayout()
-        lbl_tok = QLabel("GitHub token for requests (optional):")
-        lbl_tok.setMinimumWidth(200)
-        self.edt_rfc_token = QLineEdit(str(self.settings.get("rfc_token") or ""))
-        self.edt_rfc_token.setEchoMode(QLineEdit.EchoMode.Password)
-        self.edt_rfc_token.setPlaceholderText("empty = use the one built into the app")
-        tok_row.addWidget(lbl_tok)
-        tok_row.addWidget(self.edt_rfc_token)
-        lay_sketch.addLayout(tok_row)
-
-        # AI Agent for fixing errors / reporting problems
-        from omacad import feedback
-        agent_row = QHBoxLayout()
-        lbl_agent = QLabel("AI agent for fixing errors (F9):")
-        lbl_agent.setMinimumWidth(200)
-        self.cmb_ai_agent = QComboBox()
-        cur_agent = self.settings.get("ai_agent", "omarchy")
-        for key, name in feedback.available_agents():
-            self.cmb_ai_agent.addItem(name, key)
-        idx_agent = self.cmb_ai_agent.findData(cur_agent)
-        if idx_agent >= 0:
-            self.cmb_ai_agent.setCurrentIndex(idx_agent)
-        self.cmb_ai_agent.setToolTip("Choose which coding agent to open when reporting a problem (F9) to fix it.")
-        agent_row.addWidget(lbl_agent)
-        agent_row.addWidget(self.cmb_ai_agent)
-        agent_row.addStretch()
-        lay_sketch.addLayout(agent_row)
-
         # Smoothness of round shapes
         q_row = QHBoxLayout()
         lbl_q = QLabel("Curve smoothness:")
@@ -398,11 +367,11 @@ class SettingsDialog(QDialog):
                          ("Extra smooth (192)", 192), ("Seamless (360), heavy", 360)):
             self.cmb_curves.addItem(label, n)
         cur = int(self.settings.get("curve_segments", 96))
-        idx = self.cmb_curves.findData(cur)
-        if idx < 0:
-            self.cmb_curves.addItem(f"Egen ({cur})", cur)
-            idx = self.cmb_curves.count() - 1
-        self.cmb_curves.setCurrentIndex(idx)
+        idx_c = self.cmb_curves.findData(cur)
+        if idx_c < 0:
+            self.cmb_curves.addItem(f"Custom ({cur})", cur)
+            idx_c = self.cmb_curves.count() - 1
+        self.cmb_curves.setCurrentIndex(idx_c)
         self.cmb_curves.setToolTip("How many flat pieces a circle is cut into. More = smoother round surfaces but heavier for the computer. Applies to the whole model, which is rebuilt.")
         q_row.addWidget(lbl_q)
         q_row.addWidget(self.cmb_curves)
@@ -437,15 +406,66 @@ class SettingsDialog(QDialog):
         fov_row.addStretch()
         lay_sketch.addLayout(fov_row)
 
-        # Restart on a new version
-        self.chk_auto_restart = QCheckBox("Restart automatically when a new version has been committed (your work is saved and restored)")
-        self.chk_auto_restart.setChecked(bool(self.settings.get("auto_restart", True)))
-        lay_sketch.addWidget(self.chk_auto_restart)
-
         lay_sketch.addStretch()
         self.tabs.addTab(self._make_scrollable(tab_sketch), "📐 Sketch & View")
 
+        # ----------------------------------------------------
+        # Tab 5: System & Feedback (⚙️ General)
+        # ----------------------------------------------------
+        tab_general = QWidget()
+        lay_general = QVBoxLayout(tab_general)
+        lay_general.setContentsMargins(12, 12, 12, 12)
+        lay_general.setSpacing(12)
+
+        # Request for change
+        rfc_row = QHBoxLayout()
+        lbl_rfc = QLabel("Your name on change requests:")
+        lbl_rfc.setMinimumWidth(200)
+        self.edt_rfc_name = QLineEdit(str(self.settings.get("rfc_name") or ""))
+        self.edt_rfc_name.setPlaceholderText("Help > Request a change (F8)")
+        rfc_row.addWidget(lbl_rfc)
+        rfc_row.addWidget(self.edt_rfc_name)
+        lay_general.addLayout(rfc_row)
+
+        tok_row = QHBoxLayout()
+        lbl_tok = QLabel("GitHub token for requests (optional):")
+        lbl_tok.setMinimumWidth(200)
+        self.edt_rfc_token = QLineEdit(str(self.settings.get("rfc_token") or ""))
+        self.edt_rfc_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.edt_rfc_token.setPlaceholderText("empty = use the one built into the app")
+        tok_row.addWidget(lbl_tok)
+        tok_row.addWidget(self.edt_rfc_token)
+        lay_general.addLayout(tok_row)
+
+        # AI Agent for fixing errors / reporting problems
+        from omacad import feedback
+        agent_row = QHBoxLayout()
+        lbl_agent = QLabel("AI agent for fixing errors (F9):")
+        lbl_agent.setMinimumWidth(200)
+        self.cmb_ai_agent = QComboBox()
+        cur_agent = self.settings.get("ai_agent", "omarchy")
+        for key, name in feedback.available_agents():
+            self.cmb_ai_agent.addItem(name, key)
+        idx_agent = self.cmb_ai_agent.findData(cur_agent)
+        if idx_agent >= 0:
+            self.cmb_ai_agent.setCurrentIndex(idx_agent)
+        self.cmb_ai_agent.setToolTip("Choose which coding agent to open when reporting a problem (F9) to fix it.")
+        agent_row.addWidget(lbl_agent)
+        agent_row.addWidget(self.cmb_ai_agent)
+        agent_row.addStretch()
+        lay_general.addLayout(agent_row)
+
+        # Restart on a new version
+        self.chk_auto_restart = QCheckBox("Restart automatically when a new version has been committed (work is saved and restored)")
+        self.chk_auto_restart.setChecked(bool(self.settings.get("auto_restart", True)))
+        lay_general.addWidget(self.chk_auto_restart)
+
+        lay_general.addStretch()
+        self.tabs.addTab(self._make_scrollable(tab_general), "⚙️ General")
+
+        # ----------------------------------------------------
         # Bottom buttons
+        # ----------------------------------------------------
         btn_row = QHBoxLayout()
         btn_reset_all = QPushButton("Reset to defaults")
         btn_reset_all.clicked.connect(self.reset_all)
@@ -464,7 +484,7 @@ class SettingsDialog(QDialog):
         main_lay.addLayout(btn_row)
 
         # Ensure dialog fits comfortably within screen boundaries (e.g. on Windows laptops)
-        self.resize(600, 580)
+        self.resize(620, 580)
 
     @staticmethod
     def _make_scrollable(widget: QWidget) -> QScrollArea:
@@ -475,9 +495,28 @@ class SettingsDialog(QDialog):
         scroll.setWidget(widget)
         return scroll
 
+    def _open_theme_editor(self):
+        from omacad.ui.theme_editor import ThemeEditorDialog
+        dlg = ThemeEditorDialog(self)
+        dlg.editor.saved.connect(self._theme_saved)
+        dlg.exec()
+
     def _theme_saved(self, key: str):
         """A theme was saved (or deleted) in the editor."""
         self._just_saved = key
+        # Refresh theme mode combo box so custom themes show up
+        cur_data = self.cmb_theme_mode.currentData()
+        self.cmb_theme_mode.clear()
+        self.cmb_theme_mode.addItem("Fusion 360 (fuskion420)", "fuskion420")
+        self.cmb_theme_mode.addItem("Follow Omarchy (live desktop sync)", "omarchy")
+        self.cmb_theme_mode.addItem("Light Theme (Clean Studio Latte)", "light")
+        self.cmb_theme_mode.addItem("Dark Theme (Tokyo Slate)", "dark_tokyo")
+        self.cmb_theme_mode.addItem("Dark Theme (Nord Frost)", "dark_nord")
+        for name in theme.custom_themes():
+            self.cmb_theme_mode.addItem(f"Custom: {name}", f"user:{name}")
+        idx = self.cmb_theme_mode.findData(key if key else cur_data)
+        if idx >= 0:
+            self.cmb_theme_mode.setCurrentIndex(idx)
 
     def reject(self):
         theme.set_preview(None)
@@ -489,9 +528,9 @@ class SettingsDialog(QDialog):
         self.row_sketch.reset_color()
         self.row_construct.reset_color()
         self.row_highlight.reset_color()
-        idx = self.cmb_pos.findData("bottom_right")
-        if idx >= 0:
-            self.cmb_pos.setCurrentIndex(idx)
+        idx_p = self.cmb_pos.findData("bottom_right")
+        if idx_p >= 0:
+            self.cmb_pos.setCurrentIndex(idx_p)
         self.chk_autohide.setChecked(True)
         self.chk_invert_zoom.setChecked(False)
         self.spn_grid.setValue(5.0)
@@ -503,6 +542,7 @@ class SettingsDialog(QDialog):
         self.spn_arrow_size.setValue(1.0)
         self.spn_arrow_gap.setValue(2.0)
         self.cmb_btn_size.setCurrentIndex(max(0, self.cmb_btn_size.findData(1.0)))
+        self.chk_labels.setChecked(False)
         self.chk_group_primitives.setChecked(True)
         self.chk_group_modify.setChecked(False)
         self.chk_group_inspect.setChecked(True)
@@ -545,8 +585,12 @@ class SettingsDialog(QDialog):
         }
 
         # Resolve theme mode choice
-        mode_val = self.cmb_theme_mode.currentData()
-        if mode_val == "fuskion420":
+        mode_val = str(self.cmb_theme_mode.currentData() or "")
+        if mode_val.startswith("user:"):
+            new_data["theme_mode"] = "fixed"
+            new_data["theme_name"] = mode_val
+            fixed_name = mode_val
+        elif mode_val == "fuskion420":
             new_data["theme_mode"] = "fixed"
             new_data["theme_name"] = "fuskion420"
             fixed_name = "fuskion420"
@@ -562,7 +606,7 @@ class SettingsDialog(QDialog):
             new_data["dark_theme_name"] = "nord"
             new_data["theme_name"] = "nord"
             fixed_name = "nord"
-        else: # dark_tokyo
+        else:  # dark_tokyo
             new_data["theme_mode"] = "dark"
             new_data["dark_theme_name"] = "tokyo-night"
             new_data["theme_name"] = "tokyo-night"

@@ -68,25 +68,26 @@ class FeatureNodeWidget(QFrame):
         self.lbl_name = lbl_name
         lbl_name.setVisible(show_label)
 
+        self.setObjectName("TimelineChip")
         if is_active:
             style(self, """
-                QFrame {
+                QFrame#TimelineChip {
                     background-color: #2D333B;
                     border: 1px solid #E26D28;
                     border-radius: 4px;
                 }
-                QFrame:hover {
+                QFrame#TimelineChip:hover {
                     background-color: #353D47;
                 }
             """)
         else:
             style(self, """
-                QFrame {
+                QFrame#TimelineChip {
                     background-color: #212428;
                     border: 1px solid #333842;
                     border-radius: 4px;
                 }
-                QFrame:hover {
+                QFrame#TimelineChip:hover {
                     background-color: #282C32;
                 }
             """)
@@ -155,8 +156,9 @@ class TimelineBar(QWidget):
         self.doc.add_change_listener(self.refresh_timeline)
 
         self.setFixedHeight(48)
+        self.setObjectName("TimelineBar")
         style(self, """
-            QWidget {
+            QWidget#TimelineBar {
                 background-color: #1A1C1E;
                 border-top: 1px solid #2B2E33;
             }
@@ -332,6 +334,7 @@ class TimelineBar(QWidget):
         idx = step_index - 1
         feat = self.doc.timeline.features[idx]
         menu = QMenu(self)
+        theme.style_menu(menu)
         a_edit = theme.action_with_icon(menu, "✏️ Edit…") if feature_edit.can_edit(feat) else None
         a_rename = theme.action_with_icon(menu, "🏷️ Rename…")
         a_supp = theme.action_with_icon(menu, "▶️ Unsuppress" if feat.suppressed else "⏸️ Suppress")
