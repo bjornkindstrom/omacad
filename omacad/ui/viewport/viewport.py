@@ -1525,10 +1525,13 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         # 3. Draw Active or Visible Sketches
         self.render_sketches(mvp)
         self.render_profile_fills(mvp)
-        self.render_preview(mvp)
+        if self.section is None:
+            self.render_preview(mvp)
         self.render_plane_pick(mvp)
         self.render_edge_pick(mvp)
         self.render_section_cap(mvp)
+        if self.section is not None:
+            self.render_preview(mvp)      # after the opaque cut face, so a cut preview shows through it
         self.render_extrude_handle(mvp)
         self.render_move_gizmo(mvp)
         if (self.offset_preview is not None or self.fillet_preview is not None) and self.prog_thick is not None:

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.44 - 2026-10-17
+
+### Fixed
+- Under a section view the preview of a cut (Extrude cut, Offset Face ...) was partly hidden behind the opaque cut face; it is now drawn after it and shows through the cross-section (#36).
+
 ## 0.7.9.43 - 2026-10-17
 
 ### Changed
