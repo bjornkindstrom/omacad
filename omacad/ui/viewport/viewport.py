@@ -86,6 +86,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     move_gizmo_finished = Signal()
     move_gizmo_axis_selected = Signal(str)
     body_clicked = Signal(str)  # body_id of clicked 3D body
+    plane_clicked = Signal(str)  # an origin plane ("XY") or construction plane id clicked without a tool
+    split_plane_requested = Signal(str)   # right-click on a plane > Split Body with this plane
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
     offset_face_picked = Signal(object, str)   # (face reference dict, body id) while Offset Face is open
@@ -1996,6 +1998,11 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 self._update_entity_hover(x, y)
                 if self._idle_hover_ok():
                     self._update_edge_hover(x, y)
+                    if self.hover_edge is None and self.hover_face is None:
+                        self._update_idle_plane_hover(x, y)
+                    elif self.hover_plane is not None:
+                        self.hover_plane = None
+                        self.update()
                 elif self.hover_edge is not None or self.hover_face is not None:
                     if self.hover_edge is not None:
                         self.hover_info_changed.emit(None)
@@ -2266,6 +2273,19 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.round_requested.emit(*arg)
         elif kind == "offset_face":
             self.offset_face_requested.emit(arg)
+        elif kind == "offset_plane":
+            self.offset_base_picked.emit(arg)
+        elif kind == "split_plane":
+            self.split_plane_requested.emit(arg)
+        elif kind == "sketch_plane":
+            self.plane_picked.emit(arg)
+        elif kind == "hide_plane":
+            if arg[0] == "origin":
+                self.doc.set_origin_visibility("plane", arg[1], False)
+            else:
+                self.doc.toggle_construction_plane(arg[1])
+            self.hover_plane = None
+            self.update()
         elif kind == "tool":
             self.set_sketch_tool(arg)
         elif kind == "construction":
@@ -2439,6 +2459,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self._add_tool_entries(menu, acts)
         if not self.active_tool_title():
             acts[theme.action_with_icon(menu, "↔️ Offset Face…")] = ("offset_face", face)
+            acts[theme.action_with_icon(menu, "📐 Offset Plane from this Face…")] = ("offset_plane", self.plane_from_target(("face", face)))
         body = self.doc.bodies.get(face.body_id)
         if body is not None:
             self._round_entries(menu, acts, self._edges_of_face(face, body), "edges of this face")
@@ -2454,6 +2475,26 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.plane_picked.emit(self.plane_from_target(("face", face)))
         elif chosen is act_extrude:
             self.face_extrude_requested.emit(face)
+
+    def _show_plane_menu(self, event, target):
+        """Right-click on an origin or construction plane: split a body with it, offset from it, sketch on it, hide it."""
+        menu = _vp_module.QMenu(self)
+        acts: dict = {}
+        plane = self.plane_from_target(target)
+        name = f"{target[1]} plane" if target[0] == "origin" else self.doc.construction_planes[target[1]].get("name", "plane")
+        menu.addSection(name)
+        if not self.active_tool_title():
+            if self.doc.bodies:
+                acts[theme.action_with_icon(menu, "✂️ Split Body with this Plane…")] = ("split_plane", target[1])
+            acts[theme.action_with_icon(menu, "📐 Offset Plane from this Plane…")] = ("offset_plane", plane)
+            acts[theme.action_with_icon(menu, "✏️ Create Sketch on this Plane")] = ("sketch_plane", plane)
+            menu.addSeparator()
+        acts[theme.action_with_icon(menu, "👁 Hide Plane")] = ("hide_plane", target)
+        menu.addSeparator()
+        self._add_history_and_view(menu, acts, False)
+        chosen = acts.get(menu.exec(event.globalPosition().toPoint()))
+        if chosen:
+            self._run_general(*chosen)
 
     def mouseReleaseEvent(self, event):
         if self._rubber is not None and event.button() == Qt.MouseButton.LeftButton:
@@ -2496,6 +2537,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     target = self._pick_plane_target(event.position().x(), event.position().y())
                     if target is not None and target[0] == "face":
                         self._show_face_menu(event)
+                    elif target is not None:
+                        self._show_plane_menu(event, target)
                     else:
                         self._show_general_menu(event)
                 elif self.sketch_tool in ("NONE", "DIMENSION") and not self._move:
@@ -2638,9 +2681,13 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                     doc.select_body(clicked_body_id, multi=multi)
                     self.body_clicked.emit(clicked_body_id)
                     self.update()
-                elif doc.selected_body_ids:
-                    doc.select_body(None)    # a click in empty space clears the body selection
-                    self.update()
+                else:
+                    target = self._pick_plane_target(event.position().x(), event.position().y())
+                    if target is not None and target[0] in ("origin", "cplane"):
+                        self.plane_clicked.emit(target[1])     # e.g. Split Body takes it as its splitting plane
+                    if doc.selected_body_ids:
+                        doc.select_body(None)    # a click in empty space clears the body selection
+                        self.update()
 
     def wheelEvent(self, event):
         delta = event.angleDelta().y()

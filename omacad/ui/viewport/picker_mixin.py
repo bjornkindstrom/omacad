@@ -276,7 +276,8 @@ class PickerMixin:
         if shell_pick or thread_pick:
             candidates = []
         else:
-            candidates = [(("origin", n), pl) for n, pl in self.doc.origin_planes.items()]
+            candidates = [(("origin", n), pl) for n, pl in self.doc.origin_planes.items()
+                          if self.plane_pick_mode or self.doc.origin_visible("plane", n)]   # a hidden plane is not there
             if not only_origin:
                 candidates += [(("cplane", pid), self.doc.construction_plane(pid))
                                for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
@@ -318,6 +319,14 @@ class PickerMixin:
             return None if h is None else (h[0], h[1] if h[0] in ("origin", "cplane") else (h[1].body_id, h[1].index))
         if key(hover) != key(self.hover_plane):
             self.hover_plane = hover
+            self.update()
+
+    def _update_idle_plane_hover(self, x: float, y: float):
+        """Without a tool, an origin or construction plane under the cursor lights up (a body in front wins)."""
+        hit = self._pick_plane_target(x, y)
+        key = hit if hit is not None and hit[0] in ("origin", "cplane") else None
+        if key != self.hover_plane:
+            self.hover_plane = key
             self.update()
 
     def set_preview_plane(self, plane):
@@ -446,14 +455,33 @@ class PickerMixin:
         p.face = payload
         return p
 
+    PLANE_COLORS = {"XY": (0.30, 0.55, 1.0), "XZ": (0.35, 0.85, 0.40), "YZ": (1.0, 0.40, 0.35)}
+    CPLANE_COLOR = (0.75, 0.55, 0.95)
+
+    def _plane_quads(self):
+        """The origin and construction planes drawn right now: (key, name, four world corners, rgb). Origin planes
+        are their first quadrant; while a plane is being picked all three origin planes show."""
+        out = []
+        picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface", "offset_face")
+        q = self._origin_quadrant_size()
+        for name, plane in self.doc.origin_planes.items():
+            if (picking or (not self.plane_pick_mode and self.doc.origin_visible("plane", name))):
+                corners = [plane.uv_to_world(0, 0), plane.uv_to_world(q, 0), plane.uv_to_world(q, q), plane.uv_to_world(0, q)]
+                out.append((("origin", name), f"{name} Plane", corners, self.PLANE_COLORS[name]))
+        if not (self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face", "offset_face")):
+            half = self._origin_plane_half_size()
+            for pid, c in self.doc.construction_planes.items():
+                if c.get("visible", True):
+                    plane = self.doc.construction_plane(pid)
+                    corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
+                               plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]
+                    out.append((("cplane", pid), c.get("name", pid), corners, self.CPLANE_COLOR))
+        return out
+
     def render_plane_pick(self, mvp: np.ndarray):
         """Translucent origin-plane quads and hovered face while choosing a sketch plane."""
-        cplanes = [(pid, self.doc.construction_plane(pid)) for pid, c in self.doc.construction_planes.items() if c.get("visible", True)]
-        if self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face", "offset_face"):
-            cplanes = []
-        shown_origin = [] if self.plane_pick_mode else [n for n in self.doc.origin_planes if self.doc.origin_visible("plane", n)]
-        if (not self.plane_pick_mode and self.ctx_face is None and not cplanes and self.preview_plane is None
-                and not shown_origin) or not self.prog_flat:
+        quads = self._plane_quads()
+        if (not self.plane_pick_mode and self.ctx_face is None and not quads and self.preview_plane is None) or not self.prog_flat:
             return
         GL.glUseProgram(self.prog_flat)
         loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
@@ -463,35 +491,18 @@ class PickerMixin:
         GL.glDepthMask(GL.GL_FALSE)
         GL.glDisable(GL.GL_DEPTH_TEST)
         half = self._origin_plane_half_size()
-        base = {"XY": (0.30, 0.55, 1.0), "XZ": (0.35, 0.85, 0.40), "YZ": (1.0, 0.40, 0.35)}
-        picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface", "offset_face")
-        for name, plane in (self.doc.origin_planes.items() if picking else
-                            ((n, self.doc.origin_planes[n]) for n in shown_origin)):
-            hovered = self.hover_plane == ("origin", name)
-            q = self._origin_quadrant_size()
-            corners = [plane.uv_to_world(0, 0), plane.uv_to_world(q, 0),
-                       plane.uv_to_world(q, q), plane.uv_to_world(0, q)]
-            quad = np.array([corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]], dtype=np.float32)
-            r, g, b = base[name]
-            GL.glUniform4f(loc_col, r, g, b, 0.45 if hovered else 0.14)
-            self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, quad)
-            outline = np.array([c for i in range(4) for c in (corners[i], corners[(i + 1) % 4])], dtype=np.float32)
-            GL.glUniform4f(loc_col, r, g, b, 0.9 if hovered else 0.5)
-            self.set_line_width(1.5)
-            self.draw_buffer_arrays(GL.GL_LINES, loc_pos, outline)
-        extra = [(("cplane", pid), pl, (0.75, 0.55, 0.95)) for pid, pl in cplanes]
         if self.preview_plane is not None:
-            extra.append((None, self.preview_plane, (1.0, 0.65, 0.2)))
-        for key, plane, (r, g, b) in extra:
-            hovered = key is not None and self.plane_pick_mode and self.hover_plane == key
-            strong = hovered or key is None
-            corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
-                       plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]
+            pl = self.preview_plane
+            quads = quads + [(None, "", [pl.uv_to_world(-half, -half), pl.uv_to_world(half, -half),
+                                         pl.uv_to_world(half, half), pl.uv_to_world(-half, half)], (1.0, 0.65, 0.2))]
+        for key, _name, corners, (r, g, b) in quads:
+            hovered = key is not None and self.hover_plane == key        # also without a tool: the plane lights up
+            fill = 0.25 if key is None else (0.42 if hovered else (0.14 if key[0] == "origin" else 0.10))
             quad = np.array([corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]], dtype=np.float32)
-            GL.glUniform4f(loc_col, r, g, b, 0.40 if hovered else (0.25 if key is None else 0.10))
+            GL.glUniform4f(loc_col, r, g, b, fill)
             self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, quad)
             outline = np.array([c for i in range(4) for c in (corners[i], corners[(i + 1) % 4])], dtype=np.float32)
-            GL.glUniform4f(loc_col, r, g, b, 0.95 if strong else 0.55)
+            GL.glUniform4f(loc_col, r, g, b, 0.95 if (hovered or key is None) else 0.5)
             self.set_line_width(1.5)
             self.draw_buffer_arrays(GL.GL_LINES, loc_pos, outline)
         shown = self.hover_plane if self.plane_pick_mode else (("face", self.ctx_face) if self.ctx_face is not None else None)

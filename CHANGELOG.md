@@ -3,6 +3,17 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.40 - 2026-10-17
+
+### Added
+- Planes without a tool: an origin or construction plane lights up under the cursor, and every shown plane has its name in small text in its lower-right corner as seen from the camera.
+- Right-click on a plane: Split Body with this Plane, Offset Plane from this Plane, Create Sketch on this Plane, Hide Plane.
+- Right-click on a flat face: Offset Plane from this Face.
+- While Split Body is open, clicking a plane in the view makes it the splitting plane.
+
+### Fixed
+- A hidden origin plane could still be clicked and right-clicked where it would have been.
+
 ## 0.7.9.39 - 2026-10-17
 
 ### Fixed

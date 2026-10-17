@@ -180,6 +180,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.ribbon.thread_clicked.connect(self.prompt_thread)
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
+        self.viewport.split_plane_requested.connect(lambda pid: self.prompt_split_body(plane_id=pid))
         self.ribbon.shell_clicked.connect(self.prompt_shell)
         self.ribbon.offset_face_clicked.connect(lambda: self.prompt_offset_face())
         self.ribbon.project_clicked.connect(lambda: self.viewport.project_edges())

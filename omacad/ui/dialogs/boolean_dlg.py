@@ -125,6 +125,11 @@ class SplitBodyDialog(BaseFeatureDialog):
         self.cmb_plane.currentIndexChanged.connect(self._update_status)
         self._update_status()
 
+    def select_plane(self, plane_id: str) -> None:
+        """The splitting plane clicked in the view (origin plane name or construction plane id)."""
+        if plane_id in self.plane_keys:
+            self.cmb_plane.setCurrentIndex(self.plane_keys.index(plane_id))
+
     def _update_status(self):
         body_id, plane_id = self.get_values()
         if not body_id or not plane_id:

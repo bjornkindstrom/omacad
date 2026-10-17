@@ -928,12 +928,11 @@ class ToolPromptsMixin:
             dlg.select_body(bid)
 
         self.viewport.body_clicked.connect(on_body_clicked)
+        self.viewport.plane_clicked.connect(dlg.select_plane)     # click a plane in the view to split with it
 
         def on_finished(result):
-            try:
-                self.viewport.body_clicked.disconnect(on_body_clicked)
-            except Exception:
-                pass
+            self.viewport.body_clicked.disconnect(on_body_clicked)
+            self.viewport.plane_clicked.disconnect(dlg.select_plane)
             self.inspector.undock_tool()
             if result:
                 b_id, p_id = dlg.get_values()

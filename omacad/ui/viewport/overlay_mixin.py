@@ -19,12 +19,40 @@ from omacad.model.sketch import (
 
 class OverlayMixin:
     """Mixin providing 2D QPainter overlays (dimensions, badges, HUD) for Viewport3D."""
+    def _draw_plane_labels(self, painter: QPainter):
+        """Each shown plane's name, small, in the corner of the plane that is lowest-right on screen, so it reads
+        from wherever the camera looks."""
+        painter.save()
+        font = QFont(painter.font())
+        font.setPixelSize(11)
+        painter.setFont(font)
+        fm = painter.fontMetrics()
+        for key, name, corners, (r, g, b) in self._plane_quads():
+            pts = [self.world_to_screen(np.asarray(c, dtype=float)) for c in corners]
+            if any(p is None for p in pts):
+                continue
+            pts = np.array(pts, dtype=float)
+            area = 0.5 * abs(float(np.dot(pts[:, 0], np.roll(pts[:, 1], 1)) - np.dot(pts[:, 1], np.roll(pts[:, 0], 1))))
+            tw, th = fm.horizontalAdvance(name), fm.height()
+            if area < 4.0 * tw * th:            # seen edge-on or tiny: no room for a label
+                continue
+            # the corner lowest-right on screen; an origin plane skips its corner at the origin, which all three share
+            cand = pts[1:] if key[0] == "origin" else pts
+            corner = cand[int(np.argmax(cand[:, 0] + cand[:, 1]))]
+            inner = corner + 0.22 * (pts.mean(axis=0) - corner)      # inside its own plane, clear of shared edges
+            hovered = self.hover_plane == key
+            painter.setPen(QColor(int(r * 255), int(g * 255), int(b * 255), 235 if hovered else 150))
+            painter.drawText(QRectF(inner[0] - tw - 4, inner[1] - th - 2, tw + 4, th),
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, name)
+        painter.restore()
+
     def draw_painter_overlays(self, painter: QPainter):
         """Draws ViewCube, sketch status banner, and HUD controls."""
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         w = self.width()
         h = self.height()
 
+        self._draw_plane_labels(painter)
         # 1. ViewCube
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
         self._draw_measure(painter)
