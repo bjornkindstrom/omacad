@@ -897,7 +897,7 @@ class ToolPromptsMixin:
 
         def do_refresh_preview():
             from omacad.model import quality
-            prev = quality.is_interactive()
+            prev = quality.is_interactive_mode()
             quality.set_interactive_mode(True)
             try:
                 vals = dlg.get_values()

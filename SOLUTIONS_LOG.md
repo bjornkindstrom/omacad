@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Flärp efter cylindrisk Deboss** (0.7.9.68): Enbart segmenterade profilkanter lämnade långa triangeldiagonaler i verktygets lock. Vid warp skar kordorna genom cylinderytan och lämnade en friliggande materialremsa. `refine_to_length` förtätar även lockens inre före warp. Regression: rapportmodell `tests/data/deboss_slot_flap.omacad`, snittets konturer och analytiska area i `tests/test_emboss_wrap.py`.
+
 - **Fillet efter cylindrisk Emboss/Deboss** (0.7.9.67, request #63): Kantlistan saknade spårets icke-plana 3D-konturer. `wrapped_edges` hittar slutna konturer på cylindriska smooth-patches, möjliggör ytval i Fillet/Chamfer-läge och vecklar ut/rundar/återkröker verktyget. Verktygets plana trianglar förtätas innan warp så långa kordor inte skär tvärs genom cylindern; radien begränsas av spårdjupet. Referenser följer save/rebuild/ångra. Test: `tests/test_wrapped_fillet.py`, rapportmodell i `tests/data/wrapped_deboss_fillet.omacad`.
 
 - **Taper angle på Box/Cylinder** (0.7.9.66): Positiv vinkel smalnar toppen, negativ vidgar. Parametrisk `taper_angle` följer preview, edit, formler, export/import och ångra; shell-hålrummet offsettas med t/cos(vinkel) för bibehållen normal väggtjocklek. Fillet/chamfer följer taper; validering stoppar stängd topp och ogiltig öppning innan dokumentet ändras. Test: `tests/test_primitive_taper.py`.

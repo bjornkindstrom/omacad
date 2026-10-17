@@ -382,13 +382,10 @@ class ThreadDialog(BaseFeatureDialog):
         self.cmb_taper.setCurrentIndex(best)
 
     def get_expressions(self) -> dict:
-        return self.expressions(
-            diameter=self.spn_dia,
-            pitch=self.spn_pitch,
-            length=self.spn_length,
-            clearance=self.spn_clearance,
-            anchor_gap=self.spn_gap,
-        )
+        out = {"diameter": self.spn_dia.expression(), "pitch": self.spn_pitch.expression(),
+               "length": self.spn_length.expression(), "clearance": self.spn_clearance.expression(),
+               "anchor_gap": self.spn_gap.expression()}
+        return {k: v for k, v in out.items() if v}
 
     def get_values(self):
         is_female = bool(self.cmb_type.currentData())
