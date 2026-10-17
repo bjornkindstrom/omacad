@@ -611,7 +611,7 @@ class PatternFeature(Feature):
         for index in positions:
             before = doc.step_states.get(index, {}).get(body_id, empty)
             after = doc.step_states.get(index+1, {}).get(body_id, empty)
-            cut, join = before-after, after-before
+            cut, join = CadKernel.clean_difference(before, after), CadKernel.clean_difference(after, before)
             removed, added = ((removed-join)+(cut-added),
                               (added-cut)+(join-removed))
         return removed, added
@@ -642,7 +642,7 @@ class PatternFeature(Feature):
                 before = after
                 whole_body = True
         else:
-            removed, added = before - after, after - before
+            removed, added = CadKernel.clean_difference(before, after), CadKernel.clean_difference(after, before)
         removed, added = CadKernel.drop_slivers(removed), CadKernel.drop_slivers(added)
         removed = self._reach_out(removed, before)
         regions = [m for m in (removed, added) if not m.is_empty()]

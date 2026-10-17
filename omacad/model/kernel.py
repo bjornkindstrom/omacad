@@ -146,6 +146,62 @@ class CadKernel:
         return solid.transform(mat)
 
     @staticmethod
+    def grown(solid: m3d.Manifold, dist: float) -> m3d.Manifold:
+        """`solid` grown `dist` outward (a hair-thin offset): each vertex moves so that every face around it moves
+        `dist` along its normal, in the least-squares sense (a box corner moves (1, 1, 1) * dist)."""
+        mesh = solid.to_mesh64()
+        verts = np.asarray(mesh.vert_properties[:, :3], dtype=float)
+        tris = np.asarray(mesh.tri_verts, dtype=np.int64)
+        if len(tris) == 0:
+            return solid
+        keys, inv = np.unique(verts, axis=0, return_inverse=True)   # split copies of a vertex move together
+        inv = inv.reshape(-1)
+        p = verts[tris]
+        face_n = np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0])
+        area = np.linalg.norm(face_n, axis=1)
+        face_n /= np.maximum(area, 1e-30)[:, None]
+        longest = np.max([np.einsum("ij,ij->i", e, e) for e in (p[:, 1] - p[:, 0], p[:, 2] - p[:, 1], p[:, 0] - p[:, 2])], axis=0)
+        ok = area > 1e-3 * longest              # needle triangles a boolean leaves have no trustworthy normal
+        nn = np.einsum("ij,ik->ijk", face_n, face_n)
+        A = np.zeros((len(keys), 3, 3))
+        rhs = np.zeros((len(keys), 3))
+        for k in range(3):
+            a, b = p[:, (k + 1) % 3] - p[:, k], p[:, (k + 2) % 3] - p[:, k]
+            cos = np.einsum("ij,ij->i", a, b) / np.maximum(np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1), 1e-30)
+            w = np.where(ok, np.arccos(np.clip(cos, -1.0, 1.0)), 0.0)
+            np.add.at(A, inv[tris[:, k]], w[:, None, None] * nn)
+            np.add.at(rhs, inv[tris[:, k]], w[:, None] * face_n)
+        # Damped: nearly parallel faces (a flat face split into slivers) must not send a vertex far off.
+        A += 0.01 * np.trace(A, axis1=1, axis2=2)[:, None, None] * np.eye(3) + 1e-30 * np.eye(3)
+        move = np.linalg.solve(A, rhs[:, :, None])[:, :, 0]
+        move *= dist / np.maximum(1.0, np.linalg.norm(move, axis=1) / 3.0)[:, None]
+        real = area > 1e-6 * longest
+        for k in range(3):   # a vertex that would pull one of its faces inward (a fin in `solid`) stays put
+            inward = real & (np.einsum("ij,ij->i", move[inv[tris[:, k]]], face_n) < 0.0)
+            move[inv[tris[inward, k]]] = 0.0
+
+        def push(pts):
+            if pts.shape == verts.shape and np.array_equal(pts, verts):   # warp sees the mesh's own vertex order
+                return pts + move[inv]
+            index = {tuple(k): i for i, k in enumerate(keys)}
+            return pts + move[[index[tuple(q)] for q in pts]]
+        return solid.warp_batch(push)
+
+    @staticmethod
+    def clean_difference(a: m3d.Manifold, b: m3d.Manifold, eps: float = 1e-6) -> m3d.Manifold:
+        """a - b without zero-thickness sheets. Where a's surface lies on b's but is tessellated differently
+        (a body before and after a join), a plain difference keeps both copies of that surface as volume-less
+        sheets fused to the real change; copied by a pattern they become hundreds of hair-thin strips. The
+        cut is taken against b grown by `eps`, then the result is grown back 2 eps and clipped to a, so it still
+        reaches (a hair into) b and nothing thinner than eps survives."""
+        if a.is_empty() or b.is_empty():
+            return a - b
+        cut = a - CadKernel.grown(b, eps)
+        if cut.is_empty():
+            return cut
+        return CadKernel.grown(cut, 2.0 * eps) ^ a
+
+    @staticmethod
     def drop_slivers(solid: m3d.Manifold) -> m3d.Manifold:
         """Removes loose, practically volume-less shells that a boolean can leave where two almost-equal
         surfaces (a mirrored copy of a tessellated curve) fail to coincide."""

@@ -196,3 +196,30 @@ def test_circular_pattern_on_square_body_keeps_its_corners():
     doc.add_pattern([cut.feature_id], kind="circular", count1=3, angle=360.0, rotation_axis="z")
     body = next(iter(doc.bodies.values())).manifold
     assert body.volume() == pytest.approx(40*40*10 - 3*4*10, abs=1e-3)
+
+
+def test_circular_pattern_of_wrapped_emboss_has_no_hair_strips():
+    """Report: 12 wrapped emboss slots around a cylinder came out covered in vertical hair-thin strips.
+    The cylinder's surface before and after the emboss is tessellated differently, so `after - before` kept
+    both as volume-less sheets fused to the slot, and every copy carried them. The copies must be clean:
+    no tunnels (genus 0), one shell, and exactly the cylinder plus twelve slots."""
+    doc = Exporter.load_project("tests/data/circular_pattern_wrapped_emboss.omacad")
+    before, after = doc.step_states[2]["body_cylinder_1"], doc.step_states[3]["body_cylinder_1"]
+    body = doc.bodies["body_cylinder_1"].manifold
+    assert body.genus() == 0
+    assert len(body.decompose()) == 1
+    slot = after.volume() - before.volume()
+    assert body.volume() == pytest.approx(before.volume() + 12*slot, abs=0.05)
+
+
+def test_clean_difference_drops_coincident_surface_sheets():
+    """A boss joined onto a box: the join re-tessellates the top face; the clean difference is the boss alone."""
+    from omacad.model.kernel import CadKernel
+    base = m3d.Manifold.cylinder(10, 20, 20, 48)
+    boss = m3d.Manifold.cube((4, 4, 3)).translate((18, -2, 4))
+    after = base + boss
+    added = CadKernel.clean_difference(after, base)
+    assert added.genus() == 0 and len(added.decompose()) == 1
+    assert added.volume() == pytest.approx((after - base).volume(), abs=1e-3)
+    # It still touches the body, so joining it back leaves one shell.
+    assert len((base + added).decompose()) == 1

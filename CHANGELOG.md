@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.6 - 2026-10-17
+
+### Fixed
+- Patterns no longer cover a body in hair-thin strips. A circular pattern of an emboss wrapped on a cylinder copied, with every slot, the zero-thickness sheets left where the cylinder's surface was tessellated differently before and after the emboss. Patterns now copy a cleaned difference (`CadKernel.clean_difference`) that keeps nothing thinner than a millionth of a millimetre, for every pattern kind.
+
 ## 0.9.9.5 - 2026-10-17
 
 ### Added
