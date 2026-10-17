@@ -1538,17 +1538,20 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         GL.glViewport(0, 0, w, h)
 
     def get_matrices(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Calculates Model, View, and Projection matrices."""
+        """Calculates Model, View, and Projection matrices (cached until the camera, size or view settings change:
+        picking projects hundreds of points per mouse move)."""
         w = max(1, self.width())
         h = max(1, self.height())
-        aspect = float(w) / float(h)
         from omacad.ui.settings import get_settings
         settings = get_settings()
-        proj, view = camera_matrices(self.target, self.distance, self.azimuth, self.elevation, aspect,
-                                     float(settings.get("view_fov", 30.0)),
-                                     settings.get("view_projection", "perspective") == "orthographic")
-        mvp = proj @ view
-        return proj, view, mvp
+        fov = float(settings.get("view_fov", 30.0))
+        ortho = settings.get("view_projection", "perspective") == "orthographic"
+        key = (tuple(float(c) for c in self.target), float(self.distance), float(self.azimuth), float(self.elevation), w, h, fov, ortho)
+        if key != getattr(self, "_matrices_key", None):
+            proj, view = camera_matrices(self.target, self.distance, self.azimuth, self.elevation, float(w) / float(h), fov, ortho)
+            self._matrices = (proj, view, proj @ view)
+            self._matrices_key = key
+        return self._matrices
 
     def paintGL(self):
         # QPainter (used for the overlay) resets GL state at the end of every frame,

@@ -11,7 +11,7 @@ import omacad.ui.viewport as _vp_pkg
 from omacad.model.hover_info import describe_edge
 from omacad.ui import theme
 from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
-from omacad.model.faces import ray_hit_face, tangent_chain
+from omacad.model.faces import ray_hit_face, ray_hit_faces, tangent_chain
 
 
 class PickerMixin:
@@ -47,9 +47,10 @@ class PickerMixin:
                 if hit is not None and hit[0] < best_t:
                     best_t = hit[0]
                     best_id = bid
-            for face in getattr(body, "faces", []):
-                t = ray_hit_face(face, origin, ray_dir)
-                if t is not None and t < best_t:
+            faces = getattr(body, "faces", [])
+            if len(faces):
+                t = float(ray_hit_faces(faces, origin, ray_dir).min())
+                if t < best_t:
                     best_t = t
                     best_id = bid
         return best_id
@@ -86,27 +87,28 @@ class PickerMixin:
         for body in self.doc.bodies.values():
             if not body.visible:
                 continue
-            for e in body.edges:
-                pts = e.polyline()
-                screen = [self.world_to_screen(p) for p in pts]
-                d, near = best_d, None
-                for i in range(len(screen) - 1):
-                    if screen[i] is None or screen[i + 1] is None:
-                        continue
-                    dd = self._point_to_segment_dist((x, y), screen[i], screen[i + 1])
-                    if dd < d:
-                        d, near = dd, i
-                if near is None:
+            edges, pts, seg_edge, seg_start = self._edge_segments(body)
+            if not edges:
+                continue
+            # every segment of every edge at once; only edges within reach go on to the (slow) hidden test
+            seg_d = self._screen_segment_dists(pts, seg_start, x, y)
+            edge_d = np.full(len(edges), np.inf)
+            np.minimum.at(edge_d, seg_edge, seg_d)
+            for k in np.flatnonzero(edge_d < best_d):
+                d = float(edge_d[k])
+                if d >= best_d:
                     continue
+                e = edges[k]
+                s = int(np.flatnonzero((seg_edge == k) & (seg_d == d))[0])
                 # hidden behind a face? test the point of the edge nearest the cursor
-                mid = (pts[near] + pts[near + 1]) / 2.0
+                mid = (pts[seg_start[s]] + pts[seg_start[s] + 1]) / 2.0
                 direction = mid - origin
                 dist = float(np.linalg.norm(direction))
                 direction = direction / dist if dist > 1e-9 else direction
                 blocked = (not xray) and any(
                     self._ray_hits_body_aabb(bd, origin, direction, dist)
-                    and any((t := ray_hit_face(f, origin, direction)) is not None and t < dist - 1e-3 for f in bd.faces)
-                    for bd in self.doc.bodies.values() if bd.visible
+                    and bool((ray_hit_faces(bd.faces, origin, direction) < dist - 1e-3).any())
+                    for bd in self.doc.bodies.values() if bd.visible and len(bd.faces)
                 )
                 if not blocked:
                     loop_beats_circ = getattr(e, "kind", "") == "loop" and getattr(best, "kind", "") == "circle"
@@ -114,6 +116,48 @@ class PickerMixin:
                     if d < best_d - 1.0 or (d <= best_d + 1.0 and (loop_beats_circ or (not circ_beats_loop and dist < best_eye))):
                         best, best_d, best_eye = e, min(d, best_d), dist   # near-ties: prefer composite loop, otherwise closer
         return best
+
+    def _edge_segments(self, body):
+        """A body's edges as one flat set of segments, built once per rebuild of the body (its edge list is
+        replaced then): (edges, points, edge index per segment, index of each segment's first point)."""
+        cache = self.__dict__.setdefault("_edge_segment_cache", {})
+        hit = cache.get(body.body_id)
+        if hit is None or hit[0] is not body.edges:
+            edges, polys = [], []
+            for e in body.edges:
+                p = np.asarray(e.polyline(), dtype=float).reshape(-1, 3)
+                if len(p) >= 2:
+                    edges.append(e)
+                    polys.append(p)
+            counts = np.array([len(p) for p in polys], dtype=int)
+            firsts = np.concatenate([[0], np.cumsum(counts)[:-1]]) if polys else np.zeros(0, dtype=int)
+            seg_edge = np.repeat(np.arange(len(polys)), np.maximum(counts - 1, 0))
+            seg_start = np.concatenate([f + np.arange(c - 1) for f, c in zip(firsts, counts)]) if polys else np.zeros(0, dtype=int)
+            pts = np.concatenate(polys) if polys else np.zeros((0, 3))
+            hit = cache[body.body_id] = (body.edges, (edges, pts, seg_edge, seg_start.astype(int)))
+        return hit[1]
+
+    def project_points(self, pts: np.ndarray):
+        """Screen x/y of many world points in one go, and which of them lie in front of the camera."""
+        proj, view, _ = self.get_matrices()
+        pv = np.asarray(proj, dtype=float) @ np.asarray(view, dtype=float)
+        p = np.asarray(pts, dtype=float).reshape(-1, 3)
+        clip = np.c_[p, np.ones(len(p))] @ pv.T
+        front = clip[:, 3] > 0.001
+        w = np.where(front, clip[:, 3], 1.0)
+        screen = np.c_[(clip[:, 0] / w + 1.0) * 0.5 * self.width(), (1.0 - clip[:, 1] / w) * 0.5 * self.height()]
+        return screen, front
+
+    def _screen_segment_dists(self, pts: np.ndarray, seg_start: np.ndarray, x: float, y: float) -> np.ndarray:
+        """Pixel distance from the cursor to each segment pts[i]-pts[i+1] (i in seg_start); inf behind the camera."""
+        screen, front = self.project_points(pts)
+        a, b = screen[seg_start], screen[seg_start + 1]
+        ab = b - a
+        length2 = np.einsum("ij,ij->i", ab, ab)
+        t = np.clip(np.einsum("ij,ij->i", np.array([x, y]) - a, ab) / np.where(length2 > 1e-12, length2, 1.0), 0.0, 1.0)
+        dist = np.hypot(*(a + t[:, None] * ab - (x, y)).T)
+        dist[~(front[seg_start] & front[seg_start + 1])] = np.inf
+        return dist
 
     def _edge_loop(self, e, other_face: bool = False):
         """Double-click: the edges joined end to end around one flat face (e.g. the whole top of a box).
@@ -149,14 +193,17 @@ class PickerMixin:
         for body in self.doc.bodies.values():
             if not body.visible or not self._ray_hits_body_aabb(body, origin, ray_dir, best_t):
                 continue
-            faces = list(body.faces)
+            hits = ray_hit_faces(body.faces, origin, ray_dir) if len(body.faces) else np.zeros(0)
+            candidates = [(body.faces[i], float(hits[i])) for i in np.flatnonzero(np.isfinite(hits))]
             if getattr(self, "edge_pick_mode", False):
                 from dataclasses import replace
                 patches = {p.index: p for e in body.edges if e.kind == "wrapped" for p in e.patches}
-                faces += [replace(p, body_id=body.body_id) for p in patches.values()]
-            for face in faces:
-                t = ray_hit_face(face, origin, ray_dir)
-                if t is not None and (t < best_t or (face.index < 0 and t <= best_t+1e-6)):
+                for p in patches.values():
+                    t = ray_hit_face(p, origin, ray_dir)
+                    if t is not None:
+                        candidates.append((replace(p, body_id=body.body_id), t))
+            for face, t in candidates:
+                if t < best_t or (face.index < 0 and t <= best_t+1e-6):
                     best, best_t = (body, face), t
         return best
 
@@ -336,10 +383,11 @@ class PickerMixin:
                 continue
             elif not body.visible:
                 continue
-            for face in body.faces:
-                t = ray_hit_face(face, origin, ray_dir)
-                if t is not None and t < face_t:
-                    face_best, face_t = ("face", face), t
+            if len(body.faces):
+                hits = ray_hit_faces(body.faces, origin, ray_dir)
+                i = int(np.argmin(hits))
+                if hits[i] < face_t:
+                    face_best, face_t = ("face", body.faces[i]), float(hits[i])
         if face_best is not None:
             return face_best
         return best
@@ -588,15 +636,6 @@ class PickerMixin:
 
     def world_to_screen(self, world_pt: np.ndarray) -> Optional[Tuple[float, float]]:
         """Projects a 3D point in world space to 2D screen viewport coordinates."""
-        proj, view, _ = self.get_matrices()
-        pv = proj @ view
-        p4 = np.array([world_pt[0], world_pt[1], world_pt[2], 1.0], dtype=np.float32)
-        clip = pv @ p4
-        if clip[3] <= 0.001:
-            return None
-        ndc_x = clip[0] / clip[3]
-        ndc_y = clip[1] / clip[3]
-        sx = (ndc_x + 1.0) * 0.5 * float(self.width())
-        sy = (1.0 - ndc_y) * 0.5 * float(self.height())
-        return sx, sy
+        screen, front = self.project_points(world_pt)
+        return (float(screen[0, 0]), float(screen[0, 1])) if front[0] else None
 

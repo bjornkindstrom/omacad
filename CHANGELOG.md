@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.2 - 2026-10-17
+
+### Fixed
+- The 3D view no longer turns sluggish on bodies with fillets, text or many faces. Finding the edge and face under the cursor projected every edge point and tested every face one by one on each mouse move (up to 0.2-0.6 s per move); it now handles a body's edges and faces in one go and reuses the camera matrices, so a mouse move takes 1-4 ms on the same models.
+
 ## 0.9.9.1 - 2026-10-17
 
 ### Changed

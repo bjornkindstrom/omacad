@@ -344,11 +344,11 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
     return faces, all_edges
 
 
-def ray_hit_face(face: PlanarFace, ray_origin: np.ndarray, ray_dir: np.ndarray) -> Optional[float]:
-    """Moller-Trumbore against all triangles of a face. Returns nearest hit distance or None."""
+def _ray_triangles(tris: np.ndarray, ray_origin, ray_dir) -> np.ndarray:
+    """Moller-Trumbore against many triangles (N, 3, 3) at once: hit distance per triangle, inf where missed."""
     o = np.asarray(ray_origin, dtype=np.float64)
     d = np.asarray(ray_dir, dtype=np.float64)
-    v0, v1, v2 = face.tris[:, 0], face.tris[:, 1], face.tris[:, 2]
+    v0, v1, v2 = tris[:, 0], tris[:, 1], tris[:, 2]
     e1, e2 = v1 - v0, v2 - v0
     p = np.cross(d, e2)
     det = np.einsum("ij,ij->i", e1, p)
@@ -360,7 +360,34 @@ def ray_hit_face(face: PlanarFace, ray_origin: np.ndarray, ray_dir: np.ndarray) 
     w = (q @ d) * inv
     t = np.einsum("ij,ij->i", e2, q) * inv
     hit = ok & (u >= -1e-9) & (w >= -1e-9) & (u + w <= 1.0 + 1e-9) & (t > 1e-6)
-    return float(t[hit].min()) if hit.any() else None
+    return np.where(hit, t, np.inf)
+
+
+def ray_hit_face(face: PlanarFace, ray_origin: np.ndarray, ray_dir: np.ndarray) -> Optional[float]:
+    """Nearest hit distance of a ray on one face, or None."""
+    t = _ray_triangles(face.tris, ray_origin, ray_dir)
+    return float(t.min()) if len(t) and np.isfinite(t.min()) else None
+
+
+_FACE_STACKS: dict = {}
+
+
+def ray_hit_faces(faces, ray_origin: np.ndarray, ray_dir: np.ndarray) -> np.ndarray:
+    """Nearest hit distance per face (inf = missed), all triangles of all faces in one go. The triangles
+    are stacked once per face list (a body's list is replaced when it is rebuilt): hovering a body with
+    thousands of faces stays fast."""
+    hit = _FACE_STACKS.get(id(faces))
+    if hit is None or hit[0] is not faces:
+        if len(_FACE_STACKS) > 64:
+            _FACE_STACKS.clear()
+        tris = [np.asarray(f.tris, dtype=np.float64).reshape(-1, 3, 3) for f in faces]
+        owner = np.repeat(np.arange(len(tris)), [len(t) for t in tris]).astype(int)
+        hit = _FACE_STACKS[id(faces)] = (faces, np.concatenate(tris) if tris else np.zeros((0, 3, 3)), owner)
+    _, tris, owner = hit
+    out = np.full(len(faces), np.inf)
+    if len(tris):
+        np.minimum.at(out, owner, _ray_triangles(tris, ray_origin, ray_dir))
+    return out
 
 
 def in_plane_edges(bodies, plane, tol_rel: float = 1e-3):
