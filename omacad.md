@@ -19,7 +19,7 @@ Ett native parametriskt 3D-CAD för Omarchy Linux (Python 3.14, PySide6/Qt6 + Op
 ```
 - **Kör inte helsviten** (118 filer, ~8 min). `tools/pick_tests.py` tar ändrade testfiler + de tester som nämner ändrade funktioner/moduler (`--list` visar bara valet, `<commit>` testar en commit). Helsviten körs av CI vid push; kör den lokalt bara om användaren ber om det.
 - Kör GUI-tester en i taget; överlappande testfönster kan ge falska renderingsfel (`test_thread_dialog_click` faller i helsviten men passerar ensam). Upprepa inte gröna kontroller utan ny ändring eller kvarstående osäkerhet.
-- Version: `omacad/__init__.py` (0.x tills "komplett CAD" = 1.0). Höj patch för rättningar, minor för funktioner, skriv i `CHANGELOG.md` och uppdatera `README.md`/`ROADMAP.md`/`PLAN.md`.
+- Version: `omacad/__init__.py`. **Supersmå steg:** varje ändring, rättning som funktion, höjer bara sista siffran i fyrdelad version (0.9.9 → 0.9.9.1 → 0.9.9.2 …). Hoppa aldrig till 0.9.10, 0.10 eller **1.0**; det beslutar bara användaren ("ok"). Skriv i `CHANGELOG.md` och uppdatera `README.md`/`ROADMAP.md`/`PLAN.md`.
 - Push till `main` kör CI: testjobb (`tests/`), sedan Windows-EXE och en release `v<version>` (+ `latest`). Push med `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
 - Sajtsidan `/omacad/` ligger i `~/Work/kindstrom-site` (databas + `Publicera`), uppdateras per minor-version.
 - Commit-meddelanden slutar med de attribueringsrader som sessionen anger.
