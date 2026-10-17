@@ -691,7 +691,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         if tool_name == "TEXT":
             self.prompt_text()
             return
-        self.status_label.setText(f"Sketch Tool: {tool_name}. Click on grid plane to place points.")
+        if tool_name != "ROTATE":
+            self.status_label.setText(f"Sketch Tool: {tool_name}. Click on grid plane to place points.")
 
     def sync_sketch_tool_from_viewport(self, tool_name: str):
         self.ribbon.btn_line.setChecked(tool_name == "LINE")
@@ -707,6 +708,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.btn_fillet_sk.setChecked(tool_name == "FILLET")
         self.ribbon.btn_dim.setChecked(tool_name == "DIMENSION")
         self.ribbon.btn_move.setChecked(tool_name == "MOVE")
+        self.ribbon.btn_rotate_sk.setChecked(tool_name == "ROTATE")
         if tool_name != "NONE":
             self.status_label.setText(f"Sketch Tool: {tool_name}. Click on grid plane to place points.")
         else:

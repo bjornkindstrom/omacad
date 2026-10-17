@@ -1,11 +1,13 @@
 # Omacad – progress and roadmap
 
-Current version: **0.6.0** (see `CHANGELOG.md`). Goal: behave like Fusion 360 wherever it makes sense; 1.0 = a complete, dependable CAD.
+Current version: **0.8.0** (see `CHANGELOG.md`). Goal: behave like Fusion 360 wherever it makes sense; 1.0 = a complete, dependable CAD.
 
 Native parametric 3D CAD for Omarchy (Hyprland/Wayland). Python 3.14, PySide6 + OpenGL, manifold3d, shapely, SolveSpace.
 This file lists what has been built, step by step, and what is left. (Swedish feature overview: `README.md`.)
 
 ## Done
+
+- Sketch rotation with selectable area/face/origin/custom pivots, live preview, point snapping, and undo/redo (0.8.0).
 
 ### 1. Foundation
 - Fusion-style UI: ribbon (SOLID / SKETCH), browser tree, timeline bar, ViewCube, OpenGL canvas with edge lines, themed from the active Omarchy theme and font.

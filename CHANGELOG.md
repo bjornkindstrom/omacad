@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.8.0 - 2026-10-17
+
+### Added
+- Rotate selected sketch elements (Shift+R) with live preview and a visible pivot marker. Choose the figure area centroid (including holes), selection center, supporting face center, sketch origin, or a picked/exact custom point.
+- Rotation supports cancel, one-step undo/redo and project persistence; horizontal/vertical relations follow the rotated selection while preserving rectangle shape and dimensions. Fixed geometry and incompatible axis distance dimensions are protected.
+
 ## 0.7.9.68 - 2026-10-17
 
 ### Fixed

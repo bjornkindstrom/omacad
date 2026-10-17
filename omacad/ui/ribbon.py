@@ -593,6 +593,12 @@ class Ribbon(QWidget):
         self.btn_move.clicked.connect(lambda: self.select_sketch_tool("MOVE"))
         h_layout.addWidget(self.btn_move)
 
+        self.btn_rotate_sk = RibbonButton("Rotate\n(Shift+R)", "↻")
+        self.btn_rotate_sk.setCheckable(True)
+        self.btn_rotate_sk.setToolTip("Rotate selected sketch elements about an area center, face center, origin or picked pivot (Shift+R)")
+        self.btn_rotate_sk.clicked.connect(lambda: self.select_sketch_tool("ROTATE"))
+        h_layout.addWidget(self.btn_rotate_sk)
+
         sep_con = QFrame()
         sep_con.setFrameShape(QFrame.Shape.VLine)
         style(sep_con, "color: #353940;")
@@ -749,6 +755,7 @@ class Ribbon(QWidget):
             self.btn_trim_sk.setChecked(tool_name == "TRIM")
         self.btn_dim.setChecked(tool_name == "DIMENSION")
         self.btn_move.setChecked(tool_name == "MOVE")
+        self.btn_rotate_sk.setChecked(tool_name == "ROTATE")
         self.sketch_tool_selected.emit(tool_name)
 
     def sync_active_tab(self):
@@ -765,7 +772,7 @@ class Ribbon(QWidget):
                 self.btn_line, self.btn_rect, self.btn_circle, self.btn_arc,
                 self.btn_slot, self.btn_polygon, self.btn_text, self.btn_fillet_sk,
                 self.btn_trim_sk, self.btn_mirror_sk, self.btn_offset_sk,
-                self.btn_dim, self.btn_move, self.btn_construct,
+                self.btn_dim, self.btn_move, self.btn_rotate_sk, self.btn_construct,
             ):
                 btn.setChecked(False)
 

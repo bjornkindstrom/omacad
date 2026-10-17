@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+**Rotera skisselement:** markera en figur (dubbelklick) eller flera element (Ctrl+klick), välj **Rotate (Shift+R)** och ange vinkel. Välj pivot i figurens areacentrum, markeringens mitt, kroppsytans centrum, skissens origo eller en egen punkt med klick/exakta koordinater. Förhandsvisning, OK och Esc; hela rotationen är ett ångra-steg. Text som följer en bana behöver först kopplas loss från banan för fri rotation.
+
 Verktygspanelens måttfält har sliders; du kan fortfarande skriva exakta värden och formler.
 
 Box och cylinder har **Taper angle**: positiv vinkel smalnar av uppåt, negativ vinkel vidgar, 0° ger raka väggar. Fungerar även med shell.

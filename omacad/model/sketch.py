@@ -785,6 +785,7 @@ class Sketch:
         # geometry alone leaves open, e.g. an arc whose ends sit on the edge of a face.
         self.reference_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
         self.visible: bool = True
+        self.face_center = None  # supporting face area centroid in sketch coordinates
         self.face_key = None  # set for sketches made from a body face, so the same face is not duplicated
         self.parent_body_id: Optional[str] = None  # body this sketch was drawn on, or None if independent
 
@@ -1715,6 +1716,7 @@ class Sketch:
             "constraints": [c.to_dict() for c in self.constraints],
             "face_key": list(self.face_key) if self.face_key else None,
             "parent_body_id": self.parent_body_id,
+            "face_center": list(self.face_center) if self.face_center is not None else None,
             "visible": self.visible,
         }
 
@@ -1732,6 +1734,7 @@ class Sketch:
         sketch.visible = data.get("visible", True)
         sketch.face_key = tuple(data["face_key"]) if data.get("face_key") else None
         sketch.parent_body_id = data.get("parent_body_id", None)
+        sketch.face_center = tuple(data["face_center"]) if data.get("face_center") is not None else None
 
         groups = {ed.get("entity_id"): ed["group"] for ed in data.get("entities", []) if ed.get("group")}
         for ent_data in data.get("entities", []):

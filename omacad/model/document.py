@@ -376,6 +376,9 @@ class Document:
         sketch_id = f"sketch_{len(self.sketches) + 1}"
         sketch = Sketch(sketch_id, f"Sketch {len(self.sketches) + 1}", plane)
         face = getattr(plane, "face", None)
+        if face is not None:
+            from omacad.model.sketch_rotate import face_centroid
+            sketch.face_center = face_centroid(plane, face.tris)
         if face is not None and getattr(face, "body_id", None):
             sketch.parent_body_id = face.body_id
         self.refresh_sketch_references(sketch)
@@ -415,6 +418,8 @@ class Document:
         sketch_id = f"sketch_{len(self.sketches) + 1}"
         sk = Sketch(sketch_id, f"Face {n}", plane)
         sk.face_key = key
+        from omacad.model.sketch_rotate import face_centroid
+        sk.face_center = face_centroid(plane, face.tris)
         if getattr(face, "body_id", None):
             sk.parent_body_id = face.body_id
         sk.visible = False  # a helper: it only supplies the outline for extruding

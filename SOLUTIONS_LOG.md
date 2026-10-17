@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Shelled Box och Shelled Cylinder** (0.7.9.64): Egna menyval i båda ribbon-lägen och Create återanvänder Box/Cylinder med förvald `wall_thickness`. Öppen topp, samma vägg-/bottentjocklek, justerbart Shell Wall per form; standard via `primitive_shell_thickness` i Settings → Sketch & View (2 mm). Test: `tests/test_shelled_primitives.py`, `tests/test_settings_dialog.py`.
+
 - **Precision och färre primitivhandtag** (0.7.9.63): `primitive_drag_decimals` under Settings → Sketch & View styr 0/1/2 decimaler vid dragning (standard 0, hela mm). Cylinder har en radie och en höjd, sfär en radie. Måttfält kan fortfarande ta exakta värden. Test: `tests/test_primitive_handles.py`, `tests/test_settings_dialog.py`.
 
 - **Egen bild i RFC/F9-dialogen** (0.7.9.52, önskemål): `FeedbackDialog.choose_own_image/use_builtin_image/own_image` (+ `MarkableImage.set_pixmap`); `MainWindow.on_request_change` och rapportfunktionen skickar då bara `screenshot_own.png` (med ritade markeringar) i stället för de inbyggda skärmbilderna. Test: `tests/test_feedback_own_image.py`.

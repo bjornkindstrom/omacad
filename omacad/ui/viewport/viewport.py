@@ -8,6 +8,7 @@ from omacad.ui.viewport.gizmo_mixin import GizmoMixin
 from omacad.ui.viewport.picker_mixin import PickerMixin
 from omacad.ui.viewport.overlay_mixin import OverlayMixin
 from omacad.ui.viewport.text_mixin import TextToolMixin
+from omacad.ui.viewport.sketch_rotate_mixin import SketchRotateMixin
 """
 Omacad - 3D CAD OpenGL Viewport
 Interactive 3D canvas with CAD shading, sharp edge outlines, dynamic ground grid,
@@ -56,7 +57,7 @@ from omacad.ui import theme
 from omacad.ui.theme import qcolor
 
 
-class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayMixin, TextToolMixin):
+class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayMixin, TextToolMixin, SketchRotateMixin):
     """Modern OpenGL 3D CAD canvas with Fusion 360 look and feel."""
 
     selection_changed = Signal()
@@ -218,6 +219,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
         # Floating Sketch Palette
         self.sketch_palette = SketchPalette(self)
+        self._init_sketch_rotation()
         self.sketch_palette.finish_clicked.connect(self.finish_sketch_requested)
         self.sketch_palette.look_at_clicked.connect(self.look_at_active_plane)
         self.sketch_palette.settings_changed.connect(self.update)
@@ -266,6 +268,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.plane_pick_mode = False
         self.plane_pick_purpose = "sketch"
         self.sketch_tool = "NONE"
+        self.rotation_panel.hide()
+        self._rotate_pick = False
         self.sketch_start_uv = self.sketch_second_uv = self.sketch_current_uv = None
         self.active_snap = None
         self._drag = self._move = self._dim_drag = None
@@ -303,6 +307,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.sketch_palette.place_default(self.size())
         else:
             self.sketch_palette.hide()
+            self.rotation_panel.hide()
+            self._rotate_pick = False
             self.active_snap = None
             self.sketch_tool = "NONE"
             self.sketch_start_uv = None
@@ -517,6 +523,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 if abs(du) > 1e-9 or abs(dv) > 1e-9:
                     move_entity(moved, du, dv)
                 sk.entities[i] = moved
+        sk._bind_texts()
         sk.solve_profiles()
         m["delta"] = (du, dv)
         m["angle"] = angle_deg
@@ -535,7 +542,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         du, dv = m["delta"]
         ang = m.get("angle", 0.0)
         has_change = (abs(du) > 1e-9 or abs(dv) > 1e-9 or abs(ang) > 1e-4)
-        if commit and has_change and sk.constraints:
+        if commit and has_change and (sk.constraints or sk.dimensions):
             res = solve_sketch(sk, fixed_ids=m["ids"])
             if not res.ok:
                 sk.restore_from_dict(m["before"])
@@ -548,11 +555,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.doc.timeline.recompute(self.doc)
             self.doc.notify_changed()
         else:
-            for i, ent in enumerate(sk.entities):
-                orig = m["orig"].get(ent.entity_id)
-                if orig is not None:
-                    sk.entities[i] = orig
-            sk.solve_profiles()
+            sk.restore_from_dict(m["before"])
         self.update()
 
     def _snap_move_delta(self, du: float, dv: float):
@@ -1656,6 +1659,14 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 self.show_grid = not self.show_grid
             self.update()
             return
+
+        if self.doc.active_sketch and self.sketch_tool == "ROTATE":
+            if event.button() == Qt.MouseButton.LeftButton:
+                self._rotate_click(x, y)
+                return
+            if event.button() == Qt.MouseButton.RightButton:
+                self.set_sketch_tool("NONE")
+                return
 
         # Dimension badge: a click edits the value, dragging it moves the dimension line out of the way
         if self.doc.active_sketch and event.button() == Qt.MouseButton.LeftButton:
@@ -2829,6 +2840,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 self.status_message.emit("Fillet: picked corners cleared.")
                 self.update()
                 return
+        if self.doc.active_sketch and self.sketch_tool == "ROTATE":
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self._rotate_finish(True)
+                return
         if self.doc.active_sketch and self.sketch_tool == "OFFSET":
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
                 self._offset_go()
@@ -2870,6 +2885,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         if self.doc.active_sketch:
             if event.key() == Qt.Key.Key_L:
                 self.set_sketch_tool("LINE")
+                return
+            elif event.key() == Qt.Key.Key_R and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self.set_sketch_tool("ROTATE")
                 return
             elif event.key() == Qt.Key.Key_R:
                 self.set_sketch_tool("RECT")

@@ -124,8 +124,10 @@ class RenderGLMixin:
         self._mirror_phase = "axis" if (tool_name == "MIRROR" and self.selected_entities) else "pick"
         if self._move:
             self._end_move(False)
-        if tool_name == "MOVE" and not self.selected_entities:
-            self.status_message.emit("Move: select the sketch elements to move first (click, Ctrl+click), then press M.")
+        self.rotation_panel.hide()
+        self._rotate_pick = False
+        if tool_name in ("MOVE", "ROTATE") and not self.selected_entities:
+            self.status_message.emit("Move / Rotate: select sketch elements first (click, Ctrl+click, or double-click for a whole figure).")
             tool_name = "NONE"
         self.sketch_tool = tool_name
         self.dyn.reset()
@@ -138,7 +140,11 @@ class RenderGLMixin:
         self.sketch_start_uv = None
         self.sketch_second_uv = None
         self.sketch_current_uv = None
+        if tool_name == "ROTATE" and not self._rotate_begin():
+            self.sketch_tool = tool_name = "NONE"
         self.sketch_tool_changed.emit(tool_name)
+        if tool_name == "ROTATE":
+            self.status_message.emit("Rotate: choose a pivot and angle in the sketch palette. OK applies; Esc cancels.")
         if tool_name == "OFFSET":
             self._offset_status()
         if tool_name == "MIRROR":

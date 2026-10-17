@@ -24,6 +24,7 @@ SKETCH_TOOLS = [
     ("MIRROR", "Mirror", "Modify", None),
     ("FILLET", "Fillet  (F)", "Modify", None),
     ("MOVE", "Move", "Modify", None),
+    ("ROTATE", "Rotate  (Shift+R)", "Modify", None),
     ("DIMENSION", "Dimension", "Dimension", None),
 ]
 # tool names the viewport uses that are not menu entries
