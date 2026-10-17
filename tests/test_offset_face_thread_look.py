@@ -32,7 +32,10 @@ def _picture(win, app, doc):
     vp.update()
     for _ in range(20):
         app.processEvents()
-    img = vp.grabFramebuffer().convertToFormat(QImage.Format.Format_Grayscale8)
+    img = vp.grabFramebuffer()
+    if img.isNull():                  # no GL context (CI, offscreen)
+        return None
+    img = img.convertToFormat(QImage.Format.Format_Grayscale8)
     w, h = img.width(), img.height()
     a = np.frombuffer(img.constBits(), np.uint8).reshape(h, img.bytesPerLine())[:, :w].astype(float)
     return a[int(h * 0.1):int(h * 0.5), int(w * 0.3):int(w * 0.7)]      # the inside of the thread
@@ -61,12 +64,14 @@ def test_thread_offset_looks_as_clean_as_the_original():
     fmt.setStencilBufferSize(8)
     QSurfaceFormat.setDefaultFormat(fmt)
     app = QApplication.instance() or QApplication([])
+    if app.platformName() in ("offscreen", "minimal"):
+        pytest.skip("needs the real display (GL)")
     ratios = {}
     for mode in ("orig", "thread", "mesh"):
         win = MainWindow()
         pic = _picture(win, app, _doc(mode))
         win.close()
-        if pic.std() < 1.0:
+        if pic is None or pic.std() < 1.0:
             pytest.skip("no GL picture (offscreen)")
         ratios[mode] = _stripes(pic)
     assert ratios["thread"] < ratios["orig"] * 1.2, ratios      # as clean as the thread was before
