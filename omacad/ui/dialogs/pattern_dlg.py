@@ -32,14 +32,19 @@ class PatternDialog(BaseFeatureDialog):
         self.lst = QListWidget()
         self.lst.setFixedHeight(120)
         feats = doc.timeline.features
-        last_sketch = max((i for i, f in enumerate(feats) if f.feature_type == "sketch"), default=0)
-        for i, f in enumerate(feats):
-            if f.feature_type == "pattern":
-                continue
+        non_pat = [(i, f) for i, f in enumerate(feats) if f.feature_type != "pattern"]
+        sketches = [i for i, f in non_pat if f.feature_type == "sketch"]
+        if sketches and (not non_pat or non_pat[-1][1].feature_type not in ("box", "cylinder", "sphere", "thread")):
+            start_idx = max(sketches)
+        elif non_pat:
+            start_idx = non_pat[-1][0]
+        else:
+            start_idx = 0
+        for i, f in non_pat:
             item = QListWidgetItem(f.name)
             item.setData(Qt.ItemDataRole.UserRole, f.feature_id)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(Qt.CheckState.Checked if i >= last_sketch else Qt.CheckState.Unchecked)
+            item.setCheckState(Qt.CheckState.Checked if i >= start_idx else Qt.CheckState.Unchecked)
             self.lst.addItem(item)
         form.addRow("Copy these steps:", self.lst)
 

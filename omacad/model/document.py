@@ -252,11 +252,15 @@ class Document:
 
     @undoable("Box")
     def add_box(self, length: float, width: float, height: float, center: Any = False, name: Optional[str] = None,
-                plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None) -> Body:
+                plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
+                wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
+                inner_round: float = 0.0, inner_round_kind: str = "fillet") -> Body:
         feat_id = f"box_{len(self.timeline.features) + 1}"
         feat_name = name or f"Box {len([f for f in self.timeline.features if f.feature_type == 'box']) + 1}"
         feat = BoxFeature(feat_id, feat_name, length, width, height, center,
-                          plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v)
+                          plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
+                          wall_thickness=wall_thickness, outer_round=outer_round, outer_round_kind=outer_round_kind,
+                          inner_round=inner_round, inner_round_kind=inner_round_kind)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
@@ -264,11 +268,15 @@ class Document:
 
     @undoable("Cylinder")
     def add_cylinder(self, radius: float, height: float, center: Any = False, name: Optional[str] = None,
-                     plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None) -> Body:
+                     plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
+                     wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
+                     inner_round: float = 0.0, inner_round_kind: str = "fillet") -> Body:
         feat_id = f"cylinder_{len(self.timeline.features) + 1}"
         feat_name = name or f"Cylinder {len([f for f in self.timeline.features if f.feature_type == 'cylinder']) + 1}"
         feat = CylinderFeature(feat_id, feat_name, radius, height, center,
-                               plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v)
+                               plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
+                               wall_thickness=wall_thickness, outer_round=outer_round, outer_round_kind=outer_round_kind,
+                               inner_round=inner_round, inner_round_kind=inner_round_kind)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
@@ -500,12 +508,12 @@ class Document:
 
     @undoable("Emboss")
     def add_emboss(self, sketch_id: str, profile_idx: int, depth: float = 1.0, flip: bool = False, dx: float = 0.0,
-                   dy: float = 0.0, rotation: float = 0.0, extra_profiles=None, extra_refs=None, exprs=None):
+                   dy: float = 0.0, rotation: float = 0.0, wrap: bool = True, extra_profiles=None, extra_refs=None, exprs=None):
         """Fusion's Emboss: raise (depth > 0) or press in (depth < 0) the chosen sketch profiles from the face they sit on."""
         feat_id = f"emboss_{len(self.timeline.features) + 1}"
         feat_name = f"Emboss {len([f for f in self.timeline.features if f.feature_type == 'emboss']) + 1}"
         feat = EmbossFeature(feat_id, feat_name, sketch_id, profile_idx, depth, flip=flip, dx=dx, dy=dy, rotation=rotation,
-                             extra_profiles=extra_profiles, extra_refs=extra_refs)
+                             wrap=wrap, extra_profiles=extra_profiles, extra_refs=extra_refs)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)
@@ -671,13 +679,15 @@ class Document:
 
     # ---- Editing the history (timeline) ----------------------------------------------
     EDITABLE = {
-        "box": ("length", "width", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v"),
-        "cylinder": ("radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v"),
+        "box": ("length", "width", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
+                "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind"),
+        "cylinder": ("radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
+                     "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind"),
         "sphere": ("radius",),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "operation"),
-        "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation"),
+        "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
-        "combine": ("operation",),
+        "combine": ("operation", "keep_tool"),
         "fillet": ("size", "kind"),
         "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length", "grow", "follow_host", "host_offset"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",

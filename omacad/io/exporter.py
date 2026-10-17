@@ -420,14 +420,24 @@ class Exporter:
                 feat = BoxFeature(
                     fid, fname, f_data["length"], f_data["width"], f_data["height"], f_data["center"],
                     plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
-                    plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v")
+                    plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v"),
+                    wall_thickness=f_data.get("wall_thickness", 0.0),
+                    outer_round=f_data.get("outer_round", 0.0),
+                    outer_round_kind=f_data.get("outer_round_kind", "fillet"),
+                    inner_round=f_data.get("inner_round", 0.0),
+                    inner_round_kind=f_data.get("inner_round_kind", "fillet"),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "cylinder":
                 feat = CylinderFeature(
                     fid, fname, f_data["radius"], f_data["height"], f_data["center"],
                     plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
-                    plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v")
+                    plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v"),
+                    wall_thickness=f_data.get("wall_thickness", 0.0),
+                    outer_round=f_data.get("outer_round", 0.0),
+                    outer_round_kind=f_data.get("outer_round_kind", "fillet"),
+                    inner_round=f_data.get("inner_round", 0.0),
+                    inner_round_kind=f_data.get("inner_round_kind", "fillet"),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "sphere":
@@ -451,7 +461,8 @@ class Exporter:
                 feat = EmbossFeature(
                     fid, fname, f_data["sketch_id"], f_data["profile_idx"], f_data.get("depth", 1.0),
                     flip=f_data.get("flip", False), dx=f_data.get("dx", 0.0), dy=f_data.get("dy", 0.0),
-                    rotation=f_data.get("rotation", 0.0), extra_profiles=f_data.get("extra_profiles", []),
+                    rotation=f_data.get("rotation", 0.0), wrap=f_data.get("wrap", True),
+                    extra_profiles=f_data.get("extra_profiles", []),
                     extra_refs=f_data.get("extra_refs", []))
                 feat.load_profile_refs(f_data)
                 doc.timeline.add_feature(feat)

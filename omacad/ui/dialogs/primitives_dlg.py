@@ -67,9 +67,63 @@ class BoxDialog(BaseFeatureDialog):
         self.face_row_widget = face_row
         form.addRow("Target Face:", face_row)
 
+        # Smart Box options: Shell wall, Outer round, Inner round
+        self.spn_wall = ExprDoubleSpinBox()
+        self.spn_wall.setRange(0.0, 5000.0)
+        self.spn_wall.setValue(0.0)
+        self.spn_wall.setSingleStep(0.5)
+        self.spn_wall.setSuffix(" mm")
+        self.spn_wall.setToolTip("Shell wall thickness (0 = solid box; > 0 hollows the box with open top face).")
+        self.spn_wall.valueChanged.connect(self._on_wall_changed)
+        form.addRow("Shell Wall:", self.spn_wall)
+
+        self.spn_outer_round = ExprDoubleSpinBox()
+        self.spn_outer_round.setRange(0.0, 5000.0)
+        self.spn_outer_round.setValue(0.0)
+        self.spn_outer_round.setSingleStep(0.5)
+        self.spn_outer_round.setSuffix(" mm")
+        self.spn_outer_round.setToolTip("Round or bevel the outside corners and bottom edges (0 = sharp).")
+        self.spn_outer_round.valueChanged.connect(lambda _: self.changed.emit())
+        self.cmb_outer_kind = QComboBox()
+        self.cmb_outer_kind.addItem("Fillet", "fillet")
+        self.cmb_outer_kind.addItem("Chamfer", "chamfer")
+        self.cmb_outer_kind.currentIndexChanged.connect(lambda _: self.changed.emit())
+        outer_row = QHBoxLayout()
+        outer_row.setContentsMargins(0, 0, 0, 0)
+        outer_row.addWidget(self.spn_outer_round, 1)
+        outer_row.addWidget(self.cmb_outer_kind)
+        form.addRow("Outer Edge:", outer_row)
+
+        self.spn_inner_round = ExprDoubleSpinBox()
+        self.spn_inner_round.setRange(0.0, 5000.0)
+        self.spn_inner_round.setValue(0.0)
+        self.spn_inner_round.setSingleStep(0.5)
+        self.spn_inner_round.setSuffix(" mm")
+        self.spn_inner_round.setToolTip("Round or bevel the inside cavity corners and floor when Shell Wall > 0.")
+        self.spn_inner_round.valueChanged.connect(lambda _: self.changed.emit())
+        self.cmb_inner_kind = QComboBox()
+        self.cmb_inner_kind.addItem("Fillet", "fillet")
+        self.cmb_inner_kind.addItem("Chamfer", "chamfer")
+        self.cmb_inner_kind.currentIndexChanged.connect(lambda _: self.changed.emit())
+        inner_row = QHBoxLayout()
+        inner_row.setContentsMargins(0, 0, 0, 0)
+        inner_row.addWidget(self.spn_inner_round, 1)
+        inner_row.addWidget(self.cmb_inner_kind)
+        form.addRow("Inner Edge:", inner_row)
+
         self.main_layout.addLayout(form)
         self.add_buttons()
         self._update_face_row_visibility()
+        self._update_inner_enabled()
+
+    def _on_wall_changed(self, *_):
+        self._update_inner_enabled()
+        self.changed.emit()
+
+    def _update_inner_enabled(self):
+        has_wall = self.spn_wall.value() > 1e-4
+        self.spn_inner_round.setEnabled(has_wall)
+        self.cmb_inner_kind.setEnabled(has_wall)
 
     def _on_placement_changed(self):
         self._update_face_row_visibility()
@@ -102,8 +156,36 @@ class BoxDialog(BaseFeatureDialog):
         self.changed.emit()
 
     def get_expressions(self) -> dict:
-        out = {"length": self.spn_length.expression(), "width": self.spn_width.expression(), "height": self.spn_height.expression()}
+        out = {
+            "length": self.spn_length.expression(),
+            "width": self.spn_width.expression(),
+            "height": self.spn_height.expression(),
+            "wall_thickness": self.spn_wall.expression(),
+            "outer_round": self.spn_outer_round.expression(),
+            "inner_round": self.spn_inner_round.expression(),
+        }
         return {k: v for k, v in out.items() if v}
+
+    def get_smart_params(self) -> dict:
+        return {
+            "wall_thickness": self.spn_wall.value(),
+            "outer_round": self.spn_outer_round.value(),
+            "outer_round_kind": self.cmb_outer_kind.currentData(),
+            "inner_round": self.spn_inner_round.value(),
+            "inner_round_kind": self.cmb_inner_kind.currentData(),
+        }
+
+    def set_smart_params(self, feat) -> None:
+        self.spn_wall.setValue(getattr(feat, "wall_thickness", 0.0))
+        self.spn_outer_round.setValue(getattr(feat, "outer_round", 0.0))
+        idx_o = self.cmb_outer_kind.findData(getattr(feat, "outer_round_kind", "fillet"))
+        if idx_o >= 0:
+            self.cmb_outer_kind.setCurrentIndex(idx_o)
+        self.spn_inner_round.setValue(getattr(feat, "inner_round", 0.0))
+        idx_i = self.cmb_inner_kind.findData(getattr(feat, "inner_round_kind", "fillet"))
+        if idx_i >= 0:
+            self.cmb_inner_kind.setCurrentIndex(idx_i)
+        self._update_inner_enabled()
 
     def get_values(self):
         mode = self.cmb_placement.currentData()
@@ -179,9 +261,63 @@ class CylinderDialog(BaseFeatureDialog):
         self.face_row_widget = face_row
         form.addRow("Target Face:", face_row)
 
+        # Smart Cylinder options: Shell wall, Outer round, Inner round
+        self.spn_wall = ExprDoubleSpinBox()
+        self.spn_wall.setRange(0.0, 5000.0)
+        self.spn_wall.setValue(0.0)
+        self.spn_wall.setSingleStep(0.5)
+        self.spn_wall.setSuffix(" mm")
+        self.spn_wall.setToolTip("Shell wall thickness (0 = solid cylinder; > 0 hollows the cylinder with open top face).")
+        self.spn_wall.valueChanged.connect(self._on_wall_changed)
+        form.addRow("Shell Wall:", self.spn_wall)
+
+        self.spn_outer_round = ExprDoubleSpinBox()
+        self.spn_outer_round.setRange(0.0, 5000.0)
+        self.spn_outer_round.setValue(0.0)
+        self.spn_outer_round.setSingleStep(0.5)
+        self.spn_outer_round.setSuffix(" mm")
+        self.spn_outer_round.setToolTip("Round or bevel the outside bottom/top rim (0 = sharp).")
+        self.spn_outer_round.valueChanged.connect(lambda _: self.changed.emit())
+        self.cmb_outer_kind = QComboBox()
+        self.cmb_outer_kind.addItem("Fillet", "fillet")
+        self.cmb_outer_kind.addItem("Chamfer", "chamfer")
+        self.cmb_outer_kind.currentIndexChanged.connect(lambda _: self.changed.emit())
+        outer_row = QHBoxLayout()
+        outer_row.setContentsMargins(0, 0, 0, 0)
+        outer_row.addWidget(self.spn_outer_round, 1)
+        outer_row.addWidget(self.cmb_outer_kind)
+        form.addRow("Outer Edge:", outer_row)
+
+        self.spn_inner_round = ExprDoubleSpinBox()
+        self.spn_inner_round.setRange(0.0, 5000.0)
+        self.spn_inner_round.setValue(0.0)
+        self.spn_inner_round.setSingleStep(0.5)
+        self.spn_inner_round.setSuffix(" mm")
+        self.spn_inner_round.setToolTip("Round or bevel the inside floor corner when Shell Wall > 0.")
+        self.spn_inner_round.valueChanged.connect(lambda _: self.changed.emit())
+        self.cmb_inner_kind = QComboBox()
+        self.cmb_inner_kind.addItem("Fillet", "fillet")
+        self.cmb_inner_kind.addItem("Chamfer", "chamfer")
+        self.cmb_inner_kind.currentIndexChanged.connect(lambda _: self.changed.emit())
+        inner_row = QHBoxLayout()
+        inner_row.setContentsMargins(0, 0, 0, 0)
+        inner_row.addWidget(self.spn_inner_round, 1)
+        inner_row.addWidget(self.cmb_inner_kind)
+        form.addRow("Inner Edge:", inner_row)
+
         self.main_layout.addLayout(form)
         self.add_buttons()
         self._update_face_row_visibility()
+        self._update_inner_enabled()
+
+    def _on_wall_changed(self, *_):
+        self._update_inner_enabled()
+        self.changed.emit()
+
+    def _update_inner_enabled(self):
+        has_wall = self.spn_wall.value() > 1e-4
+        self.spn_inner_round.setEnabled(has_wall)
+        self.cmb_inner_kind.setEnabled(has_wall)
 
     def _on_placement_changed(self):
         self._update_face_row_visibility()
@@ -214,8 +350,35 @@ class CylinderDialog(BaseFeatureDialog):
         self.changed.emit()
 
     def get_expressions(self) -> dict:
-        out = {"radius": self.spn_radius.expression(), "height": self.spn_height.expression()}
+        out = {
+            "radius": self.spn_radius.expression(),
+            "height": self.spn_height.expression(),
+            "wall_thickness": self.spn_wall.expression(),
+            "outer_round": self.spn_outer_round.expression(),
+            "inner_round": self.spn_inner_round.expression(),
+        }
         return {k: v for k, v in out.items() if v}
+
+    def get_smart_params(self) -> dict:
+        return {
+            "wall_thickness": self.spn_wall.value(),
+            "outer_round": self.spn_outer_round.value(),
+            "outer_round_kind": self.cmb_outer_kind.currentData(),
+            "inner_round": self.spn_inner_round.value(),
+            "inner_round_kind": self.cmb_inner_kind.currentData(),
+        }
+
+    def set_smart_params(self, feat) -> None:
+        self.spn_wall.setValue(getattr(feat, "wall_thickness", 0.0))
+        self.spn_outer_round.setValue(getattr(feat, "outer_round", 0.0))
+        idx_o = self.cmb_outer_kind.findData(getattr(feat, "outer_round_kind", "fillet"))
+        if idx_o >= 0:
+            self.cmb_outer_kind.setCurrentIndex(idx_o)
+        self.spn_inner_round.setValue(getattr(feat, "inner_round", 0.0))
+        idx_i = self.cmb_inner_kind.findData(getattr(feat, "inner_round_kind", "fillet"))
+        if idx_i >= 0:
+            self.cmb_inner_kind.setCurrentIndex(idx_i)
+        self._update_inner_enabled()
 
     def get_values(self):
         mode = self.cmb_placement.currentData()
@@ -239,6 +402,8 @@ class CylinderDialog(BaseFeatureDialog):
 class SphereDialog(BaseFeatureDialog):
     """Dialog for creating a primitive sphere."""
 
+    changed = Signal()
+
     def __init__(self, parent=None):
         super().__init__("Create Sphere", parent)
         form = QFormLayout()
@@ -247,6 +412,7 @@ class SphereDialog(BaseFeatureDialog):
         self.spn_radius.setRange(0.1, 10000.0)
         self.spn_radius.setValue(25.0)
         self.spn_radius.setSuffix(" mm")
+        self.spn_radius.valueChanged.connect(lambda _: self.changed.emit())
         form.addRow("Radius:", self.spn_radius)
 
         self.main_layout.addLayout(form)

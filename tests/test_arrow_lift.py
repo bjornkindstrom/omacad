@@ -19,7 +19,8 @@ def view(tmp_path, monkeypatch):
     from omacad.ui.viewport import Viewport3D
     v = Viewport3D(Document())
     v.resize(600, 400)
-    return v
+    yield v
+    v.deleteLater()
 
 
 @pytest.mark.parametrize("dist", [10.0, -10.0, 0.0])

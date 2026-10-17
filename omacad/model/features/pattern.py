@@ -569,9 +569,16 @@ class PatternFeature(Feature):
         after = doc.step_states.get(max(pos) + 1, {}).get(body_id)
         if after is None:
             return None
+        whole_body = False
         if before is None or before.is_empty():
-            removed, added = self._enclosed_voids(after), m3d.Manifold()
-            before = after + removed
+            voids = self._enclosed_voids(after)
+            if not voids.is_empty():
+                removed, added = voids, m3d.Manifold()
+                before = after + removed
+            else:
+                removed, added = m3d.Manifold(), after
+                before = after
+                whole_body = True
         else:
             removed, added = before - after, after - before
         removed, added = CadKernel.drop_slivers(removed), CadKernel.drop_slivers(added)
@@ -583,8 +590,8 @@ class PatternFeature(Feature):
         hi = np.max([np.array(r.bounding_box()[3:]) for r in regions], axis=0)
         bb = before.bounding_box()
         bmin, bmax = np.array(bb[:3]), np.array(bb[3:])
-        centre = (bmin + bmax) / 2.0 if self.about == "body" else np.zeros(3)
-        self._round_body = self._is_round(before)
+        centre = (bmin + bmax) / 2.0 if (self.about == "body" and not whole_body) else np.zeros(3)
+        self._round_body = self._is_round(before) and not whole_body
         self._mirror_plane = self._resolve_plane(doc) if self.mirror_mode.startswith("plane:") else None
         if self.kind == "fill":
             step_bodies = doc.step_states.get(idx, {})

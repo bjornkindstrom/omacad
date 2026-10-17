@@ -17,6 +17,7 @@ class SketchPalette(QFrame):
 
     finish_clicked = Signal()
     look_at_clicked = Signal()
+    edit_text_clicked = Signal()
     settings_changed = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -141,6 +142,27 @@ class SketchPalette(QFrame):
 
         content_layout.addSpacing(4)
 
+        # Edit Text Button (shown when active sketch contains SketchText entities)
+        self.btn_edit_text = QPushButton("🔤  Edit Text…")
+        self.btn_edit_text.setToolTip("Edit text in the active sketch (or double-click text in the 3D view)")
+        style(self.btn_edit_text, """
+            QPushButton {
+                background-color: #2D333B;
+                border: 1px solid #444C56;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+                color: #E0E3E7;
+            }
+            QPushButton:hover {
+                background-color: #373E47;
+                border-color: #57606A;
+            }
+        """)
+        self.btn_edit_text.clicked.connect(self.edit_text_clicked)
+        self.btn_edit_text.setVisible(False)
+        content_layout.addWidget(self.btn_edit_text)
+
         # Look At Button
         btn_look_at = QPushButton("🎯  Look at Plane")
         style(btn_look_at, """
@@ -185,6 +207,12 @@ class SketchPalette(QFrame):
         content_layout.addWidget(btn_finish)
 
         layout.addWidget(self.content_widget)
+
+    def set_has_text(self, has_text: bool) -> None:
+        """Show or hide the Edit Text button based on whether the active sketch has SketchText."""
+        if self.btn_edit_text.isHidden() == bool(has_text):
+            self.btn_edit_text.setVisible(bool(has_text))
+            self.adjustSize()
 
     def embed(self):
         """Live inside the inspector panel instead of floating over the canvas: no dragging, full width."""

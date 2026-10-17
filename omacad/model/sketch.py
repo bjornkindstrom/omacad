@@ -799,15 +799,25 @@ class Sketch:
     def hit_test(self, u: float, v: float, tol: float) -> Optional[SketchEntity]:
         """Nearest entity whose outline passes within `tol` of (u, v)."""
         best, best_d = None, tol
+        text_bbox_hit: Optional[SketchEntity] = None
         for ent in self.entities:
             box = ent.bbox() if isinstance(ent, SketchText) else None
-            if box is not None and (u < box[0] - tol or u > box[2] + tol or v < box[1] - tol or v > box[3] + tol):
-                continue                                   # lots of segments: skip text the point is nowhere near
+            if box is not None:
+                if u < box[0] - tol or u > box[2] + tol or v < box[1] - tol or v > box[3] + tol:
+                    continue                               # lots of segments: skip text the point is nowhere near
+                if box[0] - tol <= u <= box[2] + tol and box[1] - tol <= v <= box[3] + tol:
+                    pt = Point(u, v)
+                    for poly in ent.polygons():
+                        if poly.contains(pt):
+                            best, best_d = ent, 0.0
+                            break
+                    if text_bbox_hit is None and box[0] <= u <= box[2] and box[1] <= v <= box[3]:
+                        text_bbox_hit = ent
             for p1, p2 in ent.to_lines():
                 d = _dist_point_segment((u, v), p1, p2)
                 if d <= best_d:
                     best, best_d = ent, d
-        return best
+        return best if best is not None else text_bbox_hit
 
     def restore_from_dict(self, data: Dict[str, Any]) -> None:
         """Replaces entities/dimensions with a snapshot, keeping this object's identity

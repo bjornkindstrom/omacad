@@ -408,6 +408,17 @@ class BigIconStyle(QProxyStyle):
             return 16
 
 
+_big_icon_style_instance: Optional[BigIconStyle] = None
+
+
+def ensure_big_icon_style(app) -> None:
+    """Install BigIconStyle once on QApplication and keep a module-level reference."""
+    global _big_icon_style_instance
+    if app is not None and _big_icon_style_instance is None:
+        _big_icon_style_instance = BigIconStyle("Fusion")
+        app.setStyle(_big_icon_style_instance)
+
+
 _MENU_CSS = """
 QMenu {
     background-color: #25282C;

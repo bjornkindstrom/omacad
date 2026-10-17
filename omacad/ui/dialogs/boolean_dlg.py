@@ -2,6 +2,7 @@
 
 from typing import Optional
 import numpy as np
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFormLayout, QComboBox, QLabel
 from omacad.model.document import Document
 from omacad.ui.dialogs.base import BaseFeatureDialog
@@ -9,6 +10,8 @@ from omacad.ui.dialogs.base import BaseFeatureDialog
 
 class CombineDialog(BaseFeatureDialog):
     """Dialog for boolean combine operations (Join, Cut, Intersect)."""
+
+    changed = Signal()
 
     def __init__(self, doc: Document, parent=None, preselected_target_id: Optional[str] = None):
         super().__init__("Combine Bodies", parent)
@@ -24,6 +27,7 @@ class CombineDialog(BaseFeatureDialog):
             self.cmb_target.setCurrentIndex(self.body_ids.index(preselected_target_id))
         elif doc.selected_body_ids and doc.selected_body_ids[0] in self.body_ids:
             self.cmb_target.setCurrentIndex(self.body_ids.index(doc.selected_body_ids[0]))
+        self.cmb_target.currentIndexChanged.connect(lambda _: self.changed.emit())
         form.addRow("Target Body:", self.cmb_target)
 
         self.cmb_tool = QComboBox()
@@ -32,16 +36,19 @@ class CombineDialog(BaseFeatureDialog):
         if len(names) > 1:
             tool_idx = 1 if t_idx == 0 else 0
             self.cmb_tool.setCurrentIndex(tool_idx)
+        self.cmb_tool.currentIndexChanged.connect(lambda _: self.changed.emit())
         form.addRow("Tool Body:", self.cmb_tool)
 
         self.cmb_op = QComboBox()
         self.cmb_op.addItems(["Join (Union)", "Cut (Difference)", "Intersect"])
+        self.cmb_op.currentIndexChanged.connect(lambda _: self.changed.emit())
         form.addRow("Operation:", self.cmb_op)
 
         # Keep Tool Bodies checkbox (Fusion 360 style)
         from PySide6.QtWidgets import QCheckBox
         self.chk_keep_tool = QCheckBox("Keep tool bodies (Behåll verktygskropp)")
         self.chk_keep_tool.setChecked(False)
+        self.chk_keep_tool.toggled.connect(lambda _: self.changed.emit())
         form.addRow("", self.chk_keep_tool)
 
         self.main_layout.addLayout(form)

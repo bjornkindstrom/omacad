@@ -326,6 +326,7 @@ class Ribbon(QWidget):
             btn_primitives.setToolTip("Create basic 3D solids: Box, Cylinder, Sphere, Thread & Coil")
             btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             prim_menu = QMenu(btn_primitives)
+            theme.style_menu(prim_menu)
             act_box = prim_menu.addAction(theme.tool_icon("📦", 18), "Box")
             act_box.triggered.connect(self.box_clicked)
             act_cyl = prim_menu.addAction(theme.tool_icon("🥫", 18), "Cylinder")
@@ -366,9 +367,10 @@ class Ribbon(QWidget):
         # MODIFY Group
         if group_modify:
             btn_mod = RibbonButton("Modify\n▾", "🔗")
-            btn_mod.setToolTip("Solid modifications: Combine, Split Body, Shell, Move, Delete")
+            btn_mod.setToolTip("Solid modifications: Combine, Split Body, Shell, Offset Face, Move, Delete")
             btn_mod.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             mod_menu = QMenu(btn_mod)
+            theme.style_menu(mod_menu)
             act_comb = mod_menu.addAction(theme.tool_icon("🔗", 18), "Combine (Boolean Join/Cut/Intersect)")
             act_comb.triggered.connect(self.combine_clicked)
             act_split = mod_menu.addAction(theme.tool_icon("🪚", 18), "Split Body (Split with plane)")
@@ -399,6 +401,11 @@ class Ribbon(QWidget):
             btn_shell.clicked.connect(self.shell_clicked)
             h_layout.addWidget(btn_shell)
 
+            btn_offset_face = RibbonButton("Offset\nFace", "↔️")
+            btn_offset_face.setToolTip("Move flat faces or adjust hole/pin/thread tolerances")
+            btn_offset_face.clicked.connect(self.offset_face_clicked)
+            h_layout.addWidget(btn_offset_face)
+
             btn_move = RibbonButton("Move\n(M)", "↔️")
             btn_move.setToolTip("Translate or rotate a 3D solid body parametrically (M)")
             btn_move.clicked.connect(self.move_clicked)
@@ -421,6 +428,7 @@ class Ribbon(QWidget):
             btn_insp.setToolTip("Inspection and parameters: Measure, Section View, Parameters")
             btn_insp.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             insp_menu = QMenu(btn_insp)
+            theme.style_menu(insp_menu)
             act_meas = insp_menu.addAction(theme.tool_icon("📏", 18), "Measure (I)")
             act_meas.triggered.connect(self.measure_clicked)
             act_sec = insp_menu.addAction(theme.tool_icon("✂️", 18), "Section View")
@@ -480,6 +488,7 @@ class Ribbon(QWidget):
         from PySide6.QtWidgets import QMenu, QToolButton
         self.btn_circle.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         circle_menu = QMenu(self.btn_circle)
+        theme.style_menu(circle_menu)
         for tool, label in (("CIRCLE", "Center Circle  (C)"), ("SMART_CIRCLE", "Smart Circle  (Shift+C)")):
             circle_menu.addAction(label).triggered.connect(lambda _=False, t=tool: self.select_sketch_tool(t))
         self.btn_circle.setMenu(circle_menu)
@@ -551,9 +560,9 @@ class Ribbon(QWidget):
         h_layout.addWidget(btn_measure_s)
 
         # Construction Toggle & Dimension Tool & Move
-        self.btn_construct = RibbonButton("Construct\n(X)", "⚡")
+        self.btn_construct = RibbonButton("Guide\nLine (X)", "┄")
         self.btn_construct.setCheckable(True)
-        self.btn_construct.setToolTip("Toggle Construction Geometry mode (X)")
+        self.btn_construct.setToolTip("Construction / Guide Geometry (X): draw dashed helper lines or toggle selected curves to construction lines (ignored by Extrude, used as Revolve/Mirror axes)")
         self.btn_construct.clicked.connect(self.toggle_construction_clicked)
         h_layout.addWidget(self.btn_construct)
 
@@ -675,11 +684,13 @@ class Ribbon(QWidget):
         self.btn_rect.setCheckable(True)
         self.btn_rect.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         menu = QMenu(self.btn_rect)
+        theme.style_menu(menu)
         for tool, (label, _icon) in RECT_TOOLS.items():
             act = menu.addAction(label.replace("\n", " "))
             act.triggered.connect(lambda _=False, t=tool: self.select_sketch_tool(t))
         menu.addSeparator()
         default_menu = menu.addMenu("Button default")
+        theme.style_menu(default_menu)
         group = QActionGroup(default_menu)
         self._rect_default_actions = {}
         for tool, (label, _icon) in RECT_TOOLS.items():

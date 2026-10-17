@@ -111,7 +111,7 @@ class ToolPromptsMixin:
             self.viewport.edge_pick_cancelled.disconnect(on_cancel_pick)
             try:
                 self.viewport.extrude_handle_dragged.disconnect(on_handle_drag)
-            except Exception:
+            except (RuntimeError, TypeError):
                 pass
             self.viewport.clear_extrude_handle()
             edges = [e.ref() for e in self.viewport.selected_edges]
@@ -682,11 +682,14 @@ class ToolPromptsMixin:
 
         def refresh_preview():
             l, w, h, center, po, pn, pu, pv = dlg.get_values()
+            smart = dlg.get_smart_params()
             feat = BoxFeature("preview_box", "Preview", l, w, h, center,
-                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
             try:
                 solid = feat.build_solid()
-            except Exception:
+            except Exception as exc:
+                from omacad import applog
+                applog.log(f"Box preview error: {exc}")
                 solid = None
             self.viewport.set_preview(solid, "new_body")
             self.viewport.update()
@@ -700,26 +703,24 @@ class ToolPromptsMixin:
             dlg.activateWindow()
 
         def on_finished(result):
-            try:
-                dlg.changed.disconnect(refresh_preview)
-            except Exception:
-                pass
-            try:
-                dlg.pick_face_requested.disconnect(on_pick_face)
-            except Exception:
-                pass
-            try:
-                self.viewport.primitive_face_picked.disconnect(on_face_picked)
-            except Exception:
-                pass
+            for sig, slot in (
+                (dlg.changed, refresh_preview),
+                (dlg.pick_face_requested, on_pick_face),
+                (self.viewport.primitive_face_picked, on_face_picked),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
             if self.viewport.plane_pick_mode:
                 self.viewport.end_plane_pick()
             self.viewport.set_preview(None)
             self.viewport.update()
             if result:
                 l, w, h, center, po, pn, pu, pv = dlg.get_values()
+                smart = dlg.get_smart_params()
                 body = self.doc.add_box(l, w, h, center=center,
-                                        plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+                                        plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
                 self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
@@ -737,11 +738,14 @@ class ToolPromptsMixin:
 
         def refresh_preview():
             r, h, center, po, pn, pu, pv = dlg.get_values()
+            smart = dlg.get_smart_params()
             feat = CylinderFeature("preview_cyl", "Preview", r, h, center,
-                                   plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+                                   plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
             try:
                 solid = feat.build_solid()
-            except Exception:
+            except Exception as exc:
+                from omacad import applog
+                applog.log(f"Cylinder preview error: {exc}")
                 solid = None
             self.viewport.set_preview(solid, "new_body")
             self.viewport.update()
@@ -755,26 +759,24 @@ class ToolPromptsMixin:
             dlg.activateWindow()
 
         def on_finished(result):
-            try:
-                dlg.changed.disconnect(refresh_preview)
-            except Exception:
-                pass
-            try:
-                dlg.pick_face_requested.disconnect(on_pick_face)
-            except Exception:
-                pass
-            try:
-                self.viewport.primitive_face_picked.disconnect(on_face_picked)
-            except Exception:
-                pass
+            for sig, slot in (
+                (dlg.changed, refresh_preview),
+                (dlg.pick_face_requested, on_pick_face),
+                (self.viewport.primitive_face_picked, on_face_picked),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
             if self.viewport.plane_pick_mode:
                 self.viewport.end_plane_pick()
             self.viewport.set_preview(None)
             self.viewport.update()
             if result:
                 r, h, center, po, pn, pu, pv = dlg.get_values()
+                smart = dlg.get_smart_params()
                 body = self.doc.add_cylinder(r, h, center=center,
-                                            plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv)
+                                            plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
                 self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} (R={r}, H={h} mm).")
@@ -833,26 +835,17 @@ class ToolPromptsMixin:
             dlg.activateWindow()
 
         def on_finished(result):
-            try:
-                dlg.changed.disconnect(refresh_preview)
-            except Exception:
-                pass
-            try:
-                dlg.pick_face_requested.disconnect(on_pick_face)
-            except Exception:
-                pass
-            try:
-                self.viewport.primitive_face_picked.disconnect(on_face_picked)
-            except Exception:
-                pass
-            try:
-                self.viewport.cylinder_picked.disconnect(on_cylinder_picked)
-            except Exception:
-                pass
-            try:
-                self.viewport.body_clicked.disconnect(dlg.select_body)
-            except Exception:
-                pass
+            for sig, slot in (
+                (dlg.changed, refresh_preview),
+                (dlg.pick_face_requested, on_pick_face),
+                (self.viewport.primitive_face_picked, on_face_picked),
+                (self.viewport.cylinder_picked, on_cylinder_picked),
+                (self.viewport.body_clicked, dlg.select_body),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
             if self.viewport.plane_pick_mode:
                 self.viewport.end_plane_pick()
             self.viewport.set_preview(None)
@@ -893,7 +886,7 @@ class ToolPromptsMixin:
         def on_finished(result):
             try:
                 self.viewport.body_clicked.disconnect(on_body_clicked)
-            except Exception:
+            except (RuntimeError, TypeError):
                 pass
             self.inspector.undock_tool()
             if result:
@@ -999,11 +992,11 @@ class ToolPromptsMixin:
         def cleanup():
             try:
                 self.viewport.shell_face_picked.disconnect(on_face_picked)
-            except Exception:
+            except (RuntimeError, TypeError):
                 pass
             try:
                 self.viewport.body_clicked.disconnect(dlg.select_body)
-            except Exception:
+            except (RuntimeError, TypeError):
                 pass
             self.viewport.end_plane_pick()
             self.viewport.set_preview(None)
@@ -1193,26 +1186,17 @@ class ToolPromptsMixin:
                     self.status_label.setText("Face laid on the ground. Adjust the numbers or press OK.")
 
         def cleanup():
-            try:
-                self.viewport.move_body_picked.disconnect(on_face_picked)
-            except Exception:
-                pass
-            try:
-                self.viewport.body_clicked.disconnect(dlg.select_body)
-            except Exception:
-                pass
-            try:
-                self.viewport.move_gizmo_dragged.disconnect(on_gizmo_drag)
-            except Exception:
-                pass
-            try:
-                self.viewport.move_gizmo_finished.disconnect(on_drag_finished)
-            except Exception:
-                pass
-            try:
-                self.viewport.move_gizmo_axis_selected.disconnect(on_gizmo_axis_selected)
-            except Exception:
-                pass
+            for sig, slot in (
+                (self.viewport.move_body_picked, on_face_picked),
+                (self.viewport.body_clicked, dlg.select_body),
+                (self.viewport.move_gizmo_dragged, on_gizmo_drag),
+                (self.viewport.move_gizmo_finished, on_drag_finished),
+                (self.viewport.move_gizmo_axis_selected, on_gizmo_axis_selected),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
             self.viewport.end_plane_pick()
             self.viewport.clear_move_gizmo()
             self.viewport.set_preview(None)

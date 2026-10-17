@@ -27,6 +27,7 @@ class BrowserTree(QWidget):
     export_body_stl = Signal(str)
     export_body_step = Signal(str)
     edit_sketch_requested = Signal(str)
+    edit_sketch_text_requested = Signal(str, str)     # sketch_id, entity_id
     split_body_requested = Signal(str, str)
     insert_canvas_requested = Signal(str)
     edit_canvas_requested = Signal(str)
@@ -243,6 +244,7 @@ class BrowserTree(QWidget):
                 it.setToolTip(1, "Click to hide canvas" if c.get("visible", True) else "Click to show canvas")
 
         # Sketches (all of them, also those drawn on a body face)
+        from omacad.model.sketch import SketchText
         sketches_group = group("✏️ Sketches", "sketches", any(sk.visible for sk in self.doc.sketches.values()) or not self.doc.sketches)
         for s_id, sketch in self.doc.sketches.items():
             s_item = QTreeWidgetItem(sketches_group, ["✏️ " + sketch.name, ""])
@@ -254,6 +256,16 @@ class BrowserTree(QWidget):
                 s_item.setFont(0, font)
                 s_item.setToolTip(0, "Active sketch")
             self._style_eye(s_item, sketch.visible)
+            texts = [e for e in sketch.entities if isinstance(e, SketchText)]
+            for t_ent in texts:
+                preview = t_ent.text.replace("\n", " ↵ ")
+                if len(preview) > 24:
+                    preview = preview[:23] + "…"
+                t_item = QTreeWidgetItem(s_item, [f'🔤 "{preview}"', ""])
+                t_item.setData(0, Qt.ItemDataRole.UserRole, ("sketch_text", f"{s_id}:{t_ent.entity_id}"))
+                t_item.setToolTip(0, "Double-click to edit text")
+            if texts and sketch == self.doc.active_sketch:
+                s_item.setExpanded(True)
 
     @staticmethod
     def _style_eye(item: QTreeWidgetItem, visible: bool):
@@ -339,6 +351,9 @@ class BrowserTree(QWidget):
             self.doc.toggle_body_visibility(item_id)
         elif item_type == "sketch":
             self.edit_sketch_requested.emit(item_id)
+        elif item_type == "sketch_text":
+            s_id, ent_id = item_id.split(":", 1)
+            self.edit_sketch_text_requested.emit(s_id, ent_id)
         elif item_type == "canvas":
             self.edit_canvas_requested.emit(item_id)
         elif item_type == "section":
@@ -420,6 +435,12 @@ class BrowserTree(QWidget):
             add("⬆️ Extrude\tE", lambda: self.extrude_sketch_requested.emit(item_id))
             add("📐 Offset Plane", self.offset_plane_requested.emit)
             add("✏️ Edit Sketch", lambda: self.edit_sketch_requested.emit(item_id))
+            sk = self.doc.sketches.get(item_id)
+            if sk is not None:
+                from omacad.model.sketch import SketchText
+                first_txt = next((e for e in sk.entities if isinstance(e, SketchText)), None)
+                if first_txt is not None:
+                    add("🔤 Edit Text…", lambda eid=first_txt.entity_id: self.edit_sketch_text_requested.emit(item_id, eid))
             menu.addSeparator()
             rename()
             menu.addSeparator()
@@ -427,6 +448,11 @@ class BrowserTree(QWidget):
             find("sketch")
             menu.addSeparator()
             add("🗑️ Delete", lambda: self.delete_sketch_requested.emit(item_id))
+
+        elif item_type == "sketch_text":
+            s_id, ent_id = item_id.split(":", 1)
+            add("🔤 Edit Text…", lambda: self.edit_sketch_text_requested.emit(s_id, ent_id))
+            add("✏️ Edit Sketch", lambda: self.edit_sketch_requested.emit(s_id))
 
         elif item_type in ("origin", "axis", "group"):
             show_hide()

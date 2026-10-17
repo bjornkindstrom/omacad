@@ -3,6 +3,20 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.55 - 2026-10-17
+
+### Added
+- **Live 3D preview when editing from Timeline** (#31): editing any step from the timeline (*Extrude*, *Emboss*, *Revolve*, *Box*, *Cylinder*, *Sphere*, *Fillet/Chamfer*, *Offset Face*, *Shell*, *Combine*, *Pattern/Mirror*, *Move*, *Thread*) now shows a live 3D preview in the viewport while you adjust values and temporarily hides the replaced target body.
+- **Edit Revolve, Shell and Combine from Timeline**: double-clicking or right-clicking a *Revolve*, *Shell* or *Combine* step in the timeline now opens its dialog to edit parameters.
+- **Copy primitives with Pattern / Mirror** (#35): standalone primitives (*Box*, *Cylinder*, *Sphere*, *Thread*) can now be copied with *Linear Pattern*, *Circular Pattern* and *Mirror*, and are automatically pre-checked in the Pattern dialog when created last.
+- **Easy text editing in sketches** (#38):
+  - Clicking or double-clicking anywhere inside the letters or bounding box of a `SketchText` selects / edits it.
+  - Added an **🔤 Edit Text…** button in the *Sketch Palette* whenever the active sketch contains text.
+  - Text items are now listed as child nodes under their sketch in the *Browser* tree—double-clicking or right-clicking a text node enters the sketch and opens the text editor directly.
+- **Full cylindrical wrapping (>180° / 360°) and Wrap toggle in Emboss** (#40): added a **Wrap around curved surface** checkbox (enabled by default) in *Emboss*. When enabled on a cylinder, the embossed/debossed profile wraps around the cylinder's circumference using true arc-length mapping (`theta = s / r`), supporting wide text and full 360° wraps; unchecking it uses flat projection.
+- **Smart Box & Smart Cylinder** (#42): *Box* and *Cylinder* dialogs and timeline editors now include optional **Wall Thickness (Shell)** (hollow with open top), **Outer Edges** (*Fillet* or *Chamfer* + size) and **Inner Edges** (*Fillet* or *Chamfer* + size) in a single parametric step.
+- **Standalone Offset Face button & clearer Guide Line button in Ribbon**: added `Offset Face` to the Solid tab when *Group Modify* is off, styled all ribbon dropdown menus consistently with the active theme, and renamed `Construct (X)` to `Guide Line (X)` (`┄`) with a clearer tooltip.
+
 ## 0.7.9.54 - 2026-10-17
 
 ### Fixed

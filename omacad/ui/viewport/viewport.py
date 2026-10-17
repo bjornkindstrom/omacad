@@ -1910,8 +1910,14 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         if event.button() == Qt.MouseButton.LeftButton and self._can_select_sketch_entities():
             ent = self._pick_entity(x, y)
             if ent is not None:
-                # Double-click selects everything joined to this element (e.g. a whole rectangle)
                 self._drag = None
+                if isinstance(ent, SketchText):
+                    self.selected_entities = {ent.entity_id}
+                    self.selection_changed.emit()
+                    self.update()
+                    self.text_edit_requested.emit(ent.entity_id)
+                    return
+                # Double-click selects everything joined to this element (e.g. a whole rectangle)
                 self.selected_entities = self.doc.active_sketch.connected_entities(ent.entity_id)
                 self.selection_changed.emit()
                 self.update()

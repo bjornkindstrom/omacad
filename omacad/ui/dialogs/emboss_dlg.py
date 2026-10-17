@@ -45,6 +45,11 @@ class EmbossDialog(BaseFeatureDialog):
         self.chk_flip.setToolTip("Reverses the side of the sketch the letters grow from.")
         form.addRow("", self.chk_flip)
 
+        self.chk_wrap = QCheckBox("Wrap around curved surface")
+        self.chk_wrap.setChecked(True)
+        self.chk_wrap.setToolTip("When checked, text and shapes wrap around cylindrical surfaces (even beyond the cylinder width). Uncheck for straight projection.")
+        form.addRow("", self.chk_wrap)
+
         self.spn_dx = ExprDoubleSpinBox()
         self.spn_dx.setRange(-10000.0, 10000.0)
         self.spn_dx.setDecimals(3)
@@ -68,6 +73,7 @@ class EmbossDialog(BaseFeatureDialog):
         self.cmb_effect.currentIndexChanged.connect(self._effect_changed)
         self.spn_depth.valueChanged.connect(self._depth_changed)
         self.chk_flip.toggled.connect(lambda *_: self.changed.emit())
+        self.chk_wrap.toggled.connect(lambda *_: self.changed.emit())
         for w in (self.spn_dx, self.spn_dy, self.spn_rot):
             w.valueChanged.connect(lambda *_: self.changed.emit())
 
@@ -93,11 +99,12 @@ class EmbossDialog(BaseFeatureDialog):
 
     def get_values(self) -> dict:
         return {"depth": self.spn_depth.value(), "flip": self.chk_flip.isChecked(), "dx": self.spn_dx.value(),
-                "dy": self.spn_dy.value(), "rotation": self.spn_rot.value()}
+                "dy": self.spn_dy.value(), "rotation": self.spn_rot.value(), "wrap": self.chk_wrap.isChecked()}
 
     def set_values(self, feat) -> None:
         self.spn_depth.setValue(feat.depth)
         self.chk_flip.setChecked(feat.flip)
+        self.chk_wrap.setChecked(getattr(feat, "wrap", True))
         self.spn_dx.setValue(feat.dx)
         self.spn_dy.setValue(feat.dy)
         self.spn_rot.setValue(feat.rotation)

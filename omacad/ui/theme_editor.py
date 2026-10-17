@@ -6,7 +6,7 @@ Saved themes are TOML files in ~/.config/omacad/themes and show up in the Theme 
 
 from typing import Dict, Optional
 
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
+from PySide6.QtWidgets import (QComboBox, QDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
                                QScrollArea, QVBoxLayout, QWidget)
 from PySide6.QtCore import Signal
 

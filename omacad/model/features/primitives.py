@@ -10,9 +10,102 @@ from omacad.model.sketch import Sketch
 from omacad.model.features.base import Feature, Body
 
 
+def _rect_cross_section(lx: float, wy: float, r: float, kind: str) -> m3d.CrossSection:
+    """2D cross-section centered at (0, 0) of size lx x wy with corner fillet or chamfer `r`."""
+    import math
+    from omacad.model import quality
+    hx, hy = lx / 2.0, wy / 2.0
+    r = max(0.0, min(float(r), hx - 0.01, hy - 0.01))
+    if r <= 1e-4:
+        return m3d.CrossSection.square((lx, wy), center=True)
+    if kind == "chamfer":
+        pts = [
+            (hx - r, -hy), (hx, -hy + r),
+            (hx, hy - r), (hx - r, hy),
+            (-hx + r, hy), (-hx, hy - r),
+            (-hx, -hy + r), (-hx + r, -hy),
+        ]
+        return m3d.CrossSection([pts])
+    n_arc = max(6, quality.circle_segments() // 4)
+    pts = []
+    corners = [
+        (hx - r, -hy + r, -math.pi / 2.0, 0.0),
+        (hx - r, hy - r, 0.0, math.pi / 2.0),
+        (-hx + r, hy - r, math.pi / 2.0, math.pi),
+        (-hx + r, -hy + r, math.pi, 1.5 * math.pi),
+    ]
+    for cx, cy, a0, a1 in corners:
+        for k in range(n_arc + 1):
+            a = a0 + (a1 - a0) * k / n_arc
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    return m3d.CrossSection([pts])
+
+
+def _rounded_prism(lx: float, wy: float, hz: float, r: float, kind: str, round_top: bool = True) -> m3d.Manifold:
+    """Prism centered in XY, z in [0, hz], with vertical corners and bottom (plus optionally top) edges rounded/chamfered."""
+    import math
+    from omacad.model import quality
+    hx, hy = lx / 2.0, wy / 2.0
+    max_r = min(hx - 0.02, hy - 0.02, (hz / 2.0 if round_top else hz) - 0.02)
+    r = max(0.0, min(float(r), max_r))
+    if r <= 1e-4:
+        return m3d.Manifold.extrude(_rect_cross_section(lx, wy, 0.0, kind), hz)
+    n_steps = 1 if kind == "chamfer" else max(6, quality.circle_segments() // 4)
+    z_levels = [0.0]
+    for k in range(1, n_steps + 1):
+        if kind == "chamfer":
+            z_levels.append(r * k / n_steps)
+        else:
+            theta = (math.pi / 2.0) * (1.0 - k / n_steps)
+            z_levels.append(r * (1.0 - math.sin(theta)))
+    if round_top:
+        top_start = hz - r
+        if top_start > z_levels[-1] + 1e-4:
+            z_levels.append(top_start)
+        for k in range(1, n_steps + 1):
+            if kind == "chamfer":
+                z_levels.append(hz - r * (1.0 - k / n_steps))
+            else:
+                theta = (math.pi / 2.0) * (k / n_steps)
+                z_levels.append(hz - r * (1.0 - math.sin(theta)))
+    else:
+        if hz > z_levels[-1] + 1e-4:
+            z_levels.append(hz)
+
+    def inset_at(z: float) -> float:
+        if z < r - 1e-6:
+            dz = r - z
+            return dz if kind == "chamfer" else (r - math.sqrt(max(0.0, r * r - dz * dz)))
+        if round_top and z > hz - r + 1e-6:
+            dz = z - (hz - r)
+            return dz if kind == "chamfer" else (r - math.sqrt(max(0.0, r * r - dz * dz)))
+        return 0.0
+
+    # Build via convex hull of consecutive layer slabs for guaranteed watertight manifold
+    slabs = []
+    eps = 1e-3
+    for i in range(len(z_levels) - 1):
+        z0, z1 = z_levels[i], z_levels[i + 1]
+        if z1 - z0 < 1e-6:
+            continue
+        ins0, ins1 = inset_at(z0), inset_at(z1)
+        if abs(ins0 - ins1) < 1e-6:
+            cs = _rect_cross_section(lx - 2 * ins0, wy - 2 * ins0, max(0.0, r - ins0), kind)
+            slabs.append(m3d.Manifold.extrude(cs, z1 - z0).translate((0.0, 0.0, z0)))
+        else:
+            cs0 = _rect_cross_section(lx - 2 * ins0, wy - 2 * ins0, max(0.0, r - ins0), kind)
+            cs1 = _rect_cross_section(lx - 2 * ins1, wy - 2 * ins1, max(0.0, r - ins1), kind)
+            p0 = m3d.Manifold.extrude(cs0, eps).translate((0.0, 0.0, z0))
+            p1 = m3d.Manifold.extrude(cs1, eps).translate((0.0, 0.0, z1 - eps))
+            slabs.append((p0 + p1).hull())
+    return m3d.Manifold.batch_boolean(slabs, m3d.OpType.Add) if len(slabs) > 1 else slabs[0]
+
+
 class BoxFeature(Feature):
     def __init__(self, feature_id: str, name: str, length: float, width: float, height: float, center: Any = False,
-                 plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None):
+                 plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
+                 wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
+                 inner_round: float = 0.0, inner_round_kind: str = "fillet"):
         super().__init__(feature_id, "box", name)
         self.length = float(length)
         self.width = float(width)
@@ -22,13 +115,37 @@ class BoxFeature(Feature):
         self.plane_normal = [float(x) for x in plane_normal] if plane_normal is not None else None
         self.plane_u = [float(x) for x in plane_u] if plane_u is not None else None
         self.plane_v = [float(x) for x in plane_v] if plane_v is not None else None
+        self.wall_thickness = float(wall_thickness)
+        self.outer_round = float(outer_round)
+        self.outer_round_kind = str(outer_round_kind or "fillet")
+        self.inner_round = float(inner_round)
+        self.inner_round_kind = str(inner_round_kind or "fillet")
 
     def build_solid(self) -> m3d.Manifold:
         is_centered = (self.center is True or self.center == "center")
         is_bottom = (self.center == "bottom_center")
-        solid = CadKernel.create_box(self.length, self.width, self.height, is_centered)
-        if is_bottom:
-            solid = solid.translate((-self.length / 2.0, -self.width / 2.0, 0.0))
+        hollow = self.wall_thickness > 1e-4
+        has_smart = hollow or self.outer_round > 1e-4 or self.inner_round > 1e-4
+
+        if not has_smart:
+            solid = CadKernel.create_box(self.length, self.width, self.height, is_centered)
+            if is_bottom:
+                solid = solid.translate((-self.length / 2.0, -self.width / 2.0, 0.0))
+        else:
+            # Build in bottom-centered coordinates (XY centered, Z in 0..height), then shift to requested center mode
+            solid = _rounded_prism(self.length, self.width, self.height, self.outer_round, self.outer_round_kind,
+                                   round_top=not hollow)
+            if hollow:
+                t = min(self.wall_thickness, min(self.length, self.width) * 0.45, self.height * 0.9)
+                in_l = max(0.2, self.length - 2.0 * t)
+                in_w = max(0.2, self.width - 2.0 * t)
+                in_h = max(0.2, self.height - t) + 1.0
+                cavity = _rounded_prism(in_l, in_w, in_h, self.inner_round, self.inner_round_kind, round_top=False)
+                solid = solid - cavity.translate((0.0, 0.0, t))
+            if is_centered:
+                solid = solid.translate((0.0, 0.0, -self.height / 2.0))
+            elif not is_bottom:
+                solid = solid.translate((self.length / 2.0, self.width / 2.0, 0.0))
 
         if self.plane_origin is not None and self.plane_normal is not None:
             n = np.array(self.plane_normal, dtype=float)
@@ -69,12 +186,49 @@ class BoxFeature(Feature):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "wall_thickness": self.wall_thickness,
+            "outer_round": self.outer_round,
+            "outer_round_kind": self.outer_round_kind,
+            "inner_round": self.inner_round,
+            "inner_round_kind": self.inner_round_kind,
         }
+
+
+def _rounded_cylinder(radius: float, height: float, r: float, kind: str, round_top: bool = True) -> m3d.Manifold:
+    """Cylinder of `radius` and `height` (z in 0..height) with bottom (and optionally top) rim rounded/chamfered."""
+    import math
+    from omacad.model import quality
+    max_r = min(radius - 0.02, (height / 2.0 if round_top else height) - 0.02)
+    r = max(0.0, min(float(r), max_r))
+    if r <= 1e-4:
+        return CadKernel.create_cylinder(radius, height, center=False)
+    n_arc = 1 if kind == "chamfer" else max(6, quality.circle_segments() // 4)
+    pts = [(0.0, 0.0), (radius - r, 0.0)]
+    if kind == "chamfer":
+        pts.append((radius, r))
+    else:
+        for k in range(1, n_arc + 1):
+            a = -math.pi / 2.0 + (math.pi / 2.0) * k / n_arc
+            pts.append((radius - r + r * math.cos(a), r + r * math.sin(a)))
+    if round_top:
+        if kind == "chamfer":
+            pts.extend([(radius, height - r), (radius - r, height)])
+        else:
+            for k in range(n_arc + 1):
+                a = (math.pi / 2.0) * k / n_arc
+                pts.append((radius - r + r * math.cos(a), height - r + r * math.sin(a)))
+    else:
+        pts.append((radius, height))
+    pts.append((0.0, height))
+    cs = m3d.CrossSection([pts])
+    return m3d.Manifold.revolve(cs, circular_segments=quality.circle_segments())
 
 
 class CylinderFeature(Feature):
     def __init__(self, feature_id: str, name: str, radius: float, height: float, center: Any = False,
-                 plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None):
+                 plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
+                 wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
+                 inner_round: float = 0.0, inner_round_kind: str = "fillet"):
         super().__init__(feature_id, "cylinder", name)
         self.radius = float(radius)
         self.height = float(height)
@@ -83,10 +237,30 @@ class CylinderFeature(Feature):
         self.plane_normal = [float(x) for x in plane_normal] if plane_normal is not None else None
         self.plane_u = [float(x) for x in plane_u] if plane_u is not None else None
         self.plane_v = [float(x) for x in plane_v] if plane_v is not None else None
+        self.wall_thickness = float(wall_thickness)
+        self.outer_round = float(outer_round)
+        self.outer_round_kind = str(outer_round_kind or "fillet")
+        self.inner_round = float(inner_round)
+        self.inner_round_kind = str(inner_round_kind or "fillet")
 
     def build_solid(self) -> m3d.Manifold:
         is_centered = (self.center is True or self.center == "center")
-        solid = CadKernel.create_cylinder(self.radius, self.height, center=is_centered)
+        hollow = self.wall_thickness > 1e-4
+        has_smart = hollow or self.outer_round > 1e-4 or self.inner_round > 1e-4
+
+        if not has_smart:
+            solid = CadKernel.create_cylinder(self.radius, self.height, center=is_centered)
+        else:
+            solid = _rounded_cylinder(self.radius, self.height, self.outer_round, self.outer_round_kind,
+                                      round_top=not hollow)
+            if hollow:
+                t = min(self.wall_thickness, self.radius * 0.9, self.height * 0.9)
+                in_r = max(0.1, self.radius - t)
+                in_h = max(0.2, self.height - t) + 1.0
+                cavity = _rounded_cylinder(in_r, in_h, self.inner_round, self.inner_round_kind, round_top=False)
+                solid = solid - cavity.translate((0.0, 0.0, t))
+            if is_centered:
+                solid = solid.translate((0.0, 0.0, -self.height / 2.0))
 
         if self.plane_origin is not None and self.plane_normal is not None:
             n = np.array(self.plane_normal, dtype=float)
@@ -126,6 +300,11 @@ class CylinderFeature(Feature):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "wall_thickness": self.wall_thickness,
+            "outer_round": self.outer_round,
+            "outer_round_kind": self.outer_round_kind,
+            "inner_round": self.inner_round,
+            "inner_round_kind": self.inner_round_kind,
         }
 
 

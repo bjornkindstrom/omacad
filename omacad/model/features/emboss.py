@@ -24,13 +24,14 @@ class EmbossFeature(ExtrudeFeature):
 
     def __init__(self, feature_id: str, name: str, sketch_id: str, profile_idx: int, depth: float = 1.0,
                  flip: bool = False, dx: float = 0.0, dy: float = 0.0, rotation: float = 0.0,
-                 extra_profiles=None, extra_refs=None):
+                 wrap: bool = True, extra_profiles=None, extra_refs=None):
         super().__init__(feature_id, name, sketch_id, profile_idx, depth, "join" if depth > 0 else "cut",
                          extra_profiles=extra_profiles, extra_refs=extra_refs)
         self.feature_type = "emboss"
         self.depth = float(depth)
         self.flip = bool(flip)
         self.dx, self.dy, self.rotation = float(dx), float(dy), float(rotation)
+        self.wrap = bool(wrap)
 
     @property
     def effect(self) -> str:
@@ -54,7 +55,7 @@ class EmbossFeature(ExtrudeFeature):
         M = sketch.plane.get_transform_matrix_3x4()
         surface = None if self.flip else self._surface_behind(doc, M, region)
         if surface and surface["kind"] == "cylinder":
-            solid = self._wrapped(cs, M, surface)
+            solid = self._wrapped(cs, M, surface, region)
         else:
             z0 = surface["z"] if surface else 0.0      # a flat face behind the sketch plane: the letters start on it
             lo, hi = (-EPS, self.depth) if self.depth > 0 else (self.depth, EPS)      # along the sketch normal
@@ -103,11 +104,49 @@ class EmbossFeature(ExtrudeFeature):
             return {"kind": "plane", "z": z}
         return None
 
-    def _wrapped(self, cs, M, surface) -> m3d.Manifold:
-        """Letters that hug a cylinder: the extruded profile clipped to the coaxial cylinder of radius r + depth
-        (Emboss) or to the shell between r + margin and r - depth (Deboss). Only the side facing the sketch is used."""
+    def _wrapped(self, cs, M, surface, region=None) -> m3d.Manifold:
+        """Letters that hug a cylinder: when `self.wrap` is True, the 2D profile is bent around the cylinder's
+        circumference (theta = s_perp / r) so text wider than the diameter wraps all the way around; when False,
+        it projects straight along the sketch normal and is clipped to the coaxial cylinder."""
         from omacad.model.features.offset_face import _frame
-        r, d = surface["radius"], self.depth
+        r, d = float(surface["radius"]), float(self.depth)
+        if self.wrap and r > 1e-4:
+            A = np.vstack([np.asarray(M, dtype=float).reshape(3, 4), [0.0, 0.0, 0.0, 1.0]])
+            inv = np.linalg.inv(A)
+            centre_sk = (inv @ np.append(surface["centre"], 1.0))[:3]
+            axis_sk = inv[:3, :3] @ np.asarray(surface["axis"], dtype=float)
+            axis_uv = np.array([axis_sk[0], axis_sk[1]], dtype=float)
+            norm_uv = float(np.linalg.norm(axis_uv))
+            if norm_uv > 1e-4:
+                e_par = axis_uv / norm_uv
+                e_perp = np.array([-e_par[1], e_par[0]], dtype=float)
+                u0, v0 = float(centre_sk[0]), float(centre_sk[1])
+                if region is not None and not region.is_empty:
+                    from shapely import segmentize
+                    step = max(0.25, r * math.radians(3.0))
+                    cs_fine = region_cross_section(segmentize(region, max_segment_length=step))
+                else:
+                    cs_fine = cs
+                margin = 0.05 * r + 0.02
+                r_in, r_out = (max(0.01, r - EPS), r + d) if d > 0 else (max(0.01, r + d), r + margin)
+                prism = m3d.Manifold.extrude(cs_fine, height=1.0, n_divisions=2)
+
+                def _warp_batch(pts):
+                    du = pts[:, 0] - u0
+                    dv = pts[:, 1] - v0
+                    s_par = du * e_par[0] + dv * e_par[1]
+                    s_perp = du * e_perp[0] + dv * e_perp[1]
+                    theta = s_perp / r
+                    rad = r_in + pts[:, 2] * (r_out - r_in)
+                    sin_t = np.sin(theta)
+                    cos_t = np.cos(theta)
+                    u_new = u0 + s_par * e_par[0] + rad * sin_t * e_perp[0]
+                    v_new = v0 + s_par * e_par[1] + rad * sin_t * e_perp[1]
+                    z_new = float(surface["zc"]) + rad * cos_t
+                    return np.column_stack([u_new, v_new, z_new])
+
+                return prism.warp_batch(_warp_batch).transform(M)
+
         zc = surface["zc"]
         prism = m3d.Manifold.extrude(cs, height=float(r + abs(d) + 1.0)).translate((0.0, 0.0, float(zc)))
         prism = prism.transform(M)
@@ -143,5 +182,6 @@ class EmbossFeature(ExtrudeFeature):
             "dx": self.dx,
             "dy": self.dy,
             "rotation": self.rotation,
+            "wrap": self.wrap,
             **self.profile_refs_dict(),
         }

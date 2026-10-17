@@ -200,6 +200,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         # Connect Browser Signals
         self.browser.start_sketch_on_plane.connect(self.start_sketch_on_plane)
         self.browser.edit_sketch_requested.connect(self.on_edit_sketch)
+        self.browser.edit_sketch_text_requested.connect(self.on_edit_sketch_text)
+        self.viewport.sketch_palette.edit_text_clicked.connect(self.on_palette_edit_text)
         self.browser.start_sketch_on_cplane.connect(self.start_sketch_on_cplane)
         self.viewport.offset_base_picked.connect(self.on_offset_base_picked)
         self.viewport.section_base_picked.connect(self.on_section_base_picked)
@@ -454,8 +456,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         from PySide6.QtGui import QFont
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
-        if app is not None and not isinstance(app.style(), theme.BigIconStyle):
-            app.setStyle(theme.BigIconStyle("Fusion"))  # larger icons in menus, trees and buttons
+        theme.ensure_big_icon_style(app)
         if app is not None:
             f = QFont(theme.font_family())
             f.setPixelSize(13)
@@ -656,7 +657,30 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         if sketch:
             self.viewport.align_to_plane(sketch.plane)
             self.viewport.update()
-            self.status_label.setText(f"Editing {sketch.name}. Double-click dimension badges to edit dimensions.")
+            self.status_label.setText(f"Editing {sketch.name}. Double-click dimension badges or text to edit.")
+
+    def on_edit_sketch_text(self, sketch_id: str, entity_id: str):
+        if self.doc.active_sketch is None or self.doc.active_sketch.sketch_id != sketch_id:
+            self.on_edit_sketch(sketch_id)
+        if self.doc.active_sketch is not None:
+            self.viewport.selected_entities = {entity_id}
+            self.viewport.selection_changed.emit()
+            self.viewport.update()
+            self.prompt_text_edit(entity_id)
+
+    def on_palette_edit_text(self):
+        sk = self.doc.active_sketch
+        if sk is None:
+            return
+        from omacad.model.sketch import SketchText
+        texts = [e for e in sk.entities if isinstance(e, SketchText)]
+        if not texts:
+            return
+        chosen = next((e for e in texts if e.entity_id in self.viewport.selected_entities), texts[0])
+        self.viewport.selected_entities = {chosen.entity_id}
+        self.viewport.selection_changed.emit()
+        self.viewport.update()
+        self.prompt_text_edit(chosen.entity_id)
 
     def on_sketch_tool_selected(self, tool_name: str):
         self.viewport.set_sketch_tool(tool_name)
@@ -730,9 +754,13 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         """Sketch name, plane and solve status ("Under defined (2 DOF)") at the right of the status bar."""
         sk = self.doc.active_sketch
         text = ""
+        has_text = False
         if sk is not None:
+            from omacad.model.sketch import SketchText
+            has_text = any(isinstance(e, SketchText) for e in sk.entities)
             status = self.doc.sketch_status(sk)
             text = f"✏️ {sk.name} ({sk.plane.name})" + (f"  ·  {status}" if status else "")
+        self.viewport.sketch_palette.set_has_text(has_text)
         if text != self.lbl_sketch_status.text():
             self.lbl_sketch_status.setText(text)
 
