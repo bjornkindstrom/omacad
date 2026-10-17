@@ -9,6 +9,7 @@ This file lists what has been built, step by step, and what is left. (Swedish fe
 
 ### 1. Foundation
 - Fusion-style UI: ribbon (SOLID / SKETCH), browser tree, timeline bar, ViewCube, OpenGL canvas with edge lines, themed from the active Omarchy theme and font.
+- Direct dimension handles with live previews for box, cylinder and sphere creation.
 - Primitives (box, cylinder, sphere), Combine (join / cut / intersect), STL/OBJ export, `.omacad` project files (JSON, atomic save).
 
 ### 2. Sketching

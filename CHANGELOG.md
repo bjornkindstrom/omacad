@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.62 - 2026-10-17
+
+### Added
+- Drag dimension handles directly in the Box, Cylinder and Sphere previews to resize primitives, with live measurements and synchronized numeric fields. Handles follow the chosen placement plane; Escape cancels a drag or the tool.
+
+### Fixed
+- Stop pending primitive previews after OK/Cancel and return the created sphere body correctly.
+
 ## 0.7.9.61 - 2026-10-17
 
 ### Added

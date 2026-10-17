@@ -1,5 +1,7 @@
 # Omacad – färdplan
 
+Genomfört 2026-10-17: direkt storleksändring av Box/Cylinder/Sphere via måtthandtag i förhandsvisningen, med ångra och avbryt.
+
 Nuvarande version: **0.6.10** (global ångra, testsvit, offset av bågar, rapportknappen, rektangelvarianter, automatisk omstart, jämnare vy ovanifrån, fotfillet som vilar på kroppen, tidslinjeklick som visar stegets ändring och kamerainställningar (synfält + ortografisk) är klara; resten av planen kvarstår). Milstolparna efter 0.6.x är omnumrerade (0.7 och uppåt) eftersom sidospåren tog 0.6.2–0.6.10. Den här planen skrevs 2026-10-11. `ROADMAP.md` är historiken (vad som är gjort), den här filen är vad vi bygger härnäst och varför. Versionslogg: `CHANGELOG.md`.
 
 ## Principer

@@ -57,6 +57,8 @@ class OverlayMixin:
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
         self._draw_measure(painter)
         self._draw_handle_value(painter)
+        if self.primitive_handles:
+            self.primitive_handles.draw(painter)
 
         if self.doc.active_sketch and self.sketch_tool == "FILLET" and self.fillet_picked:
             for pt, _a, _b in self.fillet_picked:

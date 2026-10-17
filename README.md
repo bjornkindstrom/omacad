@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+Primitiver: dra de blå måtthandtagen i förhandsvisningen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie. Måttfälten följer med; OK skapar och Esc avbryter.
+
 **Version 0.7.6** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 
 **Omacad** är ett native parametriskt 3D CAD-program för **Omarchy Linux** (Arch + Hyprland/Wayland), inspirerat av **Autodesk Fusion 360**.

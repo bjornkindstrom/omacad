@@ -290,6 +290,8 @@ class Document:
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
+        return self.bodies[f"body_{feat_id}"]
+
     @undoable("Thread")
     def add_thread(
         self,

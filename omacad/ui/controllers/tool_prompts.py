@@ -23,9 +23,9 @@ from omacad.ui.canvas_dialog import CanvasEditorDialog
 class ToolPromptsMixin:
     """Mixin providing all prompt_* methods for MainWindow."""
 
-    def _connect_debounced_preview(self, dlg, preview_fn, interval_ms: int = 50):
+    def _connect_debounced_preview(self, dlg, preview_fn, interval_ms: int = 50, throttle: bool = False):
         """Connects `dlg.changed` to `preview_fn` via a single-shot QTimer (debounced) while running `preview_fn`
-        in interactive quality mode so typing numbers into spinboxes never blocks the UI thread."""
+        in interactive quality mode. Throttling keeps previews updating during continuous dragging."""
         from omacad.model import quality
         timer = QTimer(dlg)
         timer.setSingleShot(True)
@@ -40,7 +40,10 @@ class ToolPromptsMixin:
                 quality.set_interactive_mode(prev)
 
         timer.timeout.connect(_fire)
-        dlg.changed.connect(timer.start)
+        if throttle:
+            dlg.changed.connect(lambda: timer.start() if not timer.isActive() else None)
+        else:
+            dlg.changed.connect(timer.start)
         return timer
 
     def prompt_round_edges(self, kind: str = "fillet", edges=None):
@@ -749,10 +752,13 @@ class ToolPromptsMixin:
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
 
-        self._connect_debounced_preview(dlg, refresh_preview)
+        timer = self._connect_debounced_preview(dlg, refresh_preview, throttle=True)
+        dlg.finished.connect(lambda _: timer.stop())
         dlg.pick_face_requested.connect(on_pick_face)
         self.viewport.primitive_face_picked.connect(on_face_picked)
         dlg.finished.connect(on_finished)
+        from omacad.ui.primitive_handles import attach_primitive_handles
+        attach_primitive_handles(self.viewport, dlg, "box")
         self.dock(dlg)
         refresh_preview()
 
@@ -804,21 +810,39 @@ class ToolPromptsMixin:
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} (R={r}, H={h} mm).")
 
-        self._connect_debounced_preview(dlg, refresh_preview)
+        timer = self._connect_debounced_preview(dlg, refresh_preview, throttle=True)
+        dlg.finished.connect(lambda _: timer.stop())
         dlg.pick_face_requested.connect(on_pick_face)
         self.viewport.primitive_face_picked.connect(on_face_picked)
         dlg.finished.connect(on_finished)
+        from omacad.ui.primitive_handles import attach_primitive_handles
+        attach_primitive_handles(self.viewport, dlg, "cylinder")
         self.dock(dlg)
         refresh_preview()
 
     def prompt_sphere(self):
+        from omacad.model.kernel import CadKernel
+        from omacad.ui.primitive_handles import attach_primitive_handles
         dlg = SphereDialog(self)
-        if dlg.exec():
-            r = dlg.get_values()
-            body = self.doc.add_sphere(r)
-            self.doc.timeline.features[-1].exprs = dlg.get_expressions()
-            self.viewport.zoom_fit()
-            self.status_label.setText(f"Created {body.name} (R={r} mm).")
+
+        def preview():
+            self.viewport.set_preview(CadKernel.create_sphere(dlg.get_values()), "new_body")
+
+        def finished(result):
+            self.viewport.set_preview(None)
+            if result:
+                r = dlg.get_values()
+                body = self.doc.add_sphere(r)
+                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.viewport.zoom_fit()
+                self.status_label.setText(f"Created {body.name} (R={r} mm).")
+
+        timer = self._connect_debounced_preview(dlg, preview, throttle=True)
+        dlg.finished.connect(lambda _: timer.stop())
+        attach_primitive_handles(self.viewport, dlg, "sphere")
+        dlg.finished.connect(finished)
+        self.dock(dlg)
+        preview()
 
     def prompt_thread(self):
         from omacad.model.features.thread import ThreadFeature

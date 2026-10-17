@@ -210,6 +210,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self._hover_patch_time = 0.0
         self.highlighted_faces: list = []  # list of faces or dicts to highlight (e.g. Shell open faces)
 
+        self.primitive_handles = None
+
         # ViewCube overlay
         self.viewcube = ViewCube(size=110, on_face_clicked=self.set_view,
                                  on_orbit=self._orbit_viewcube)
@@ -1606,6 +1608,11 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         x = event.position().x()
         y = event.position().y()
 
+        if (event.button() == Qt.MouseButton.LeftButton and self.primitive_handles
+                and self.primitive_handles.press(x, y)):
+            self.update()
+            return
+
         # Check ViewCube click first
         if (event.button() == Qt.MouseButton.LeftButton
                 and self.viewcube.handle_mouse_press(int(x), int(y), self.width())):
@@ -1968,6 +1975,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     def mouseMoveEvent(self, event):
         x = event.position().x()
         y = event.position().y()
+        if (self.primitive_handles and not self.is_orbiting and not self.is_panning
+                and self.primitive_handles.move(x, y)):
+            self.update()
+            return
         if self._rubber is not None:
             self._rubber["p1"] = event.position()
             self.update()
@@ -2576,6 +2587,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self._run_general(*chosen)
 
     def mouseReleaseEvent(self, event):
+        if (event.button() == Qt.MouseButton.LeftButton and self.primitive_handles
+                and self.primitive_handles.release()):
+            self.update()
+            return
         if event.button() == Qt.MouseButton.LeftButton and self.viewcube.handle_mouse_release():
             self.update()
             return
@@ -2914,6 +2929,14 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             return
         if event.key() == Qt.Key.Key_Escape and self.plane_pick_mode:
             self.end_plane_pick(cancelled=True)
+            return
+        if event.key() == Qt.Key.Key_Escape and self.primitive_handles:
+            handles = self.primitive_handles
+            if handles.drag:
+                handles.cancel_drag()
+                self.update()
+            else:
+                handles.dialog.reject()
             return
         if event.key() == Qt.Key.Key_Escape:
             if self.sketch_second_uv is not None:
