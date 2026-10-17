@@ -20,6 +20,7 @@ from omacad.model.features.base import (
 from omacad.model.features.primitives import (
     BoxFeature,
     CylinderFeature,
+    PrismFeature,
     SphereFeature,
     SketchFeature,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "profile_polygon_in",
     "BoxFeature",
     "CylinderFeature",
+    "PrismFeature",
     "SphereFeature",
     "SketchFeature",
     "ExtrudeFeature",

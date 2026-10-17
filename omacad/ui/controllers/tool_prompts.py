@@ -13,7 +13,7 @@ from omacad.model.timeline import (
 )
 from omacad.ui.dialogs import (
     RoundEdgesDialog, PatternDialog, OffsetPlaneDialog,
-    SketchPlaneDialog, ExtrudeDialog, BoxDialog, CylinderDialog,
+    SketchPlaneDialog, ExtrudeDialog, BoxDialog, CylinderDialog, PrismDialog,
     SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog, MoveBodyDialog,
     ThreadDialog
 )
@@ -797,9 +797,20 @@ class ToolPromptsMixin:
         self.dock(dlg)
         refresh_preview()
 
-    def prompt_cylinder(self, shelled=False):
-        from omacad.model.features.primitives import CylinderFeature
-        dlg = CylinderDialog(self)
+    def prompt_prism(self):
+        """Hexagon (any regular prism): the Cylinder flow with flat sides, sized across flats."""
+        self.prompt_cylinder(prism=True)
+
+    def prompt_cylinder(self, shelled=False, prism=False):
+        from omacad.model.features.primitives import CylinderFeature, PrismFeature
+        dlg = PrismDialog(self) if prism else CylinderDialog(self)
+        label = "Hexagon" if prism else "Cylinder"
+
+        def make_feature(fid, name, size, h, center, **params):
+            if prism:
+                return PrismFeature(fid, name, size, h, center, sides=dlg.sides(), **params)
+            return CylinderFeature(fid, name, size, h, center, **params)
+
         if shelled:
             from omacad.ui.settings import get_settings
             dlg.setWindowTitle("Create Shelled Cylinder")
@@ -809,14 +820,14 @@ class ToolPromptsMixin:
         def refresh_preview():
             r, h, center, po, pn, pu, pv = dlg.get_values()
             smart = dlg.get_smart_params()
-            feat = CylinderFeature("preview_cyl", "Preview", r, h, center,
-                                   plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+            feat = make_feature("preview_cyl", "Preview", r, h, center,
+                                plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
             try:
                 solid = feat.build_solid()
                 dlg.lbl_problem.clear()
             except Exception as exc:
                 from omacad import applog
-                applog.log(f"Cylinder preview error: {exc}")
+                applog.log(f"{label} preview error: {exc}")
                 solid = None
                 dlg.lbl_problem.setText(str(exc))
             self.viewport.set_preview(solid, "new_body")
@@ -824,7 +835,7 @@ class ToolPromptsMixin:
 
         def on_pick_face():
             self.viewport.begin_plane_pick("primitive_face")
-            self.status_label.setText("Cylinder: Click the face or plane where the bottom should start (Esc to cancel).")
+            self.status_label.setText(f"{label}: Click the face or plane where the bottom should start (Esc to cancel).")
 
         def on_face_picked(plane):
             dlg.set_target_plane(plane)
@@ -846,11 +857,15 @@ class ToolPromptsMixin:
             if result:
                 r, h, center, po, pn, pu, pv = dlg.get_values()
                 smart = dlg.get_smart_params()
-                body = self.doc.add_cylinder(r, h, center=center,
-                                            plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+                place = dict(center=center, plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+                if prism:
+                    body = self.doc.add_prism(r, h, sides=dlg.sides(), **place)
+                else:
+                    body = self.doc.add_cylinder(r, h, **place)
                 self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
-                self.status_label.setText(f"Created {body.name} (R={r}, H={h} mm).")
+                size = f"{r:g} across flats" if prism else f"R={r}"
+                self.status_label.setText(f"Created {body.name} ({size}, H={h} mm).")
 
         timer = self._connect_debounced_preview(dlg, refresh_preview, throttle=True)
         dlg.finished.connect(lambda _: timer.stop())
@@ -858,7 +873,7 @@ class ToolPromptsMixin:
         self.viewport.primitive_face_picked.connect(on_face_picked)
         dlg.finished.connect(on_finished)
         from omacad.ui.primitive_handles import attach_primitive_handles
-        attach_primitive_handles(self.viewport, dlg, "cylinder")
+        attach_primitive_handles(self.viewport, dlg, "prism" if prism else "cylinder")
         self.dock(dlg)
         refresh_preview()
 

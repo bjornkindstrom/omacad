@@ -10,7 +10,7 @@ import functools
 import numpy as np
 import manifold3d as m3d
 from omacad.model.timeline import (
-    PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
+    PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature, PrismFeature,
     SphereFeature, ExtrudeFeature, EmbossFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
     ImportMeshFeature, ThreadFeature, OffsetFaceFeature
 )
@@ -277,6 +277,19 @@ class Document:
                                plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
                                wall_thickness=wall_thickness, outer_round=outer_round, outer_round_kind=outer_round_kind,
                                inner_round=inner_round, inner_round_kind=inner_round_kind, taper_angle=taper_angle)
+        feat.execute(self)
+        self.timeline.add_feature(feat)
+        self.notify_changed()
+        return self.bodies[f"body_{feat_id}"]
+
+    @undoable("Prism")
+    def add_prism(self, across_flats: float, height: float, sides: int = 6, center: Any = False,
+                  name: Optional[str] = None, **params) -> Body:
+        """A regular prism (hexagon by default), with the same options as `add_cylinder`."""
+        feat_id = f"prism_{len(self.timeline.features) + 1}"
+        label = "Hexagon" if int(sides) == 6 else "Prism"
+        feat_name = name or f"{label} {len([f for f in self.timeline.features if f.feature_type == 'prism']) + 1}"
+        feat = PrismFeature(feat_id, feat_name, across_flats, height, center, sides=sides, **params)
         feat.execute(self)
         self.timeline.add_feature(feat)
         self.notify_changed()
@@ -696,6 +709,8 @@ class Document:
                 "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
         "cylinder": ("radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
                      "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
+        "prism": ("across_flats", "sides", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
+                  "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
         "sphere": ("radius",),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation"),
         "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),

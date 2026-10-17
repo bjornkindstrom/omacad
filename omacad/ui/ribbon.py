@@ -120,6 +120,7 @@ class Ribbon(QWidget):
     parameters_clicked = Signal()
     box_clicked = Signal()
     cylinder_clicked = Signal()
+    hexagon_clicked = Signal()
     shelled_box_clicked = Signal()
     shelled_cylinder_clicked = Signal()
     sphere_clicked = Signal()
@@ -334,7 +335,7 @@ class Ribbon(QWidget):
         # Primitives: Box, Cylinder, Sphere, Thread/Coil
         if group_primitives:
             btn_primitives = RibbonButton("Primitives\n▾", "📦")
-            btn_primitives.setToolTip("Create Box, Cylinder, Shelled Box, Shelled Cylinder, Sphere, Thread & Coil")
+            btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Shelled Box, Shelled Cylinder, Sphere, Thread & Coil")
             btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             prim_menu = QMenu(btn_primitives)
             theme.style_menu(prim_menu)
@@ -342,6 +343,8 @@ class Ribbon(QWidget):
             act_box.triggered.connect(self.box_clicked)
             act_cyl = prim_menu.addAction(theme.tool_icon("🥫", 18), "Cylinder")
             act_cyl.triggered.connect(self.cylinder_clicked)
+            act_hex = prim_menu.addAction(theme.tool_icon("⬢", 18), "Hexagon")
+            act_hex.triggered.connect(self.hexagon_clicked)
             act_shell_box = prim_menu.addAction(theme.tool_icon("📦", 18), "Shelled Box")
             act_shell_box.triggered.connect(self.shelled_box_clicked)
             act_shell_cyl = prim_menu.addAction(theme.tool_icon("🥫", 18), "Shelled Cylinder")
@@ -362,6 +365,11 @@ class Ribbon(QWidget):
             btn_cyl.setToolTip("Create a 3D cylinder solid")
             btn_cyl.clicked.connect(self.cylinder_clicked)
             h_layout.addWidget(btn_cyl)
+
+            btn_hex = RibbonButton("Hexagon", "⬢")
+            btn_hex.setToolTip("Create a hexagonal (or other regular) prism, sized across flats")
+            btn_hex.clicked.connect(self.hexagon_clicked)
+            h_layout.addWidget(btn_hex)
 
             for label, icon, signal in [
                 ("Shelled Box", "📦", self.shelled_box_clicked),

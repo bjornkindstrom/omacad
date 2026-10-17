@@ -27,6 +27,7 @@ class FeatureNodeWidget(QFrame):
     FEATURE_ICONS = {
         "box": "📦",
         "cylinder": "🥫",
+        "prism": "⬢",
         "sphere": "⚽",
         "sketch": "✏️",
         "extrude": "⬆️",
@@ -111,6 +112,8 @@ class FeatureNodeWidget(QFrame):
             return f"{f.name}\n{f.length:g} x {f.width:g} x {f.height:g} mm"
         if t == "cylinder":
             return f"{f.name}\nRadius {f.radius:g}, height {f.height:g} mm"
+        if t == "prism":
+            return f"{f.name}\n{f.sides} sides, {f.across_flats:g} across flats, height {f.height:g} mm"
         if t == "sphere":
             return f"{f.name}\nRadius {f.radius:g} mm"
         if t == "pattern":

@@ -36,14 +36,14 @@ class PatternDialog(BaseFeatureDialog):
             feats = feats[:feats.index(feature)]
         non_pat = [(i, f) for i, f in enumerate(feats) if f.feature_type != "pattern"]
         sketches = [i for i, f in non_pat if f.feature_type == "sketch"]
-        if sketches and (not non_pat or non_pat[-1][1].feature_type not in ("box", "cylinder", "sphere", "thread")):
+        if sketches and (not non_pat or non_pat[-1][1].feature_type not in ("box", "cylinder", "prism", "sphere", "thread")):
             start_idx = max(sketches)
         elif non_pat:
             start_idx = non_pat[-1][0]
             if non_pat[-1][1].feature_type == "fillet":
                 for i, f in reversed(non_pat):
                     start_idx = i
-                    if f.feature_type in ("box", "cylinder", "sphere", "extrude", "emboss", "revolve"):
+                    if f.feature_type in ("box", "cylinder", "prism", "sphere", "extrude", "emboss", "revolve"):
                         break
         else:
             start_idx = 0

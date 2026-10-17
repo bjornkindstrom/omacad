@@ -6,9 +6,9 @@
 
 Verktygspanelens måttfält har sliders; du kan fortfarande skriva exakta värden och formler.
 
-Box och cylinder har **Taper angle**: positiv vinkel smalnar av uppåt, negativ vinkel vidgar, 0° ger raka väggar. Fungerar även med shell.
+Box, cylinder och hexagon har **Taper angle**: positiv vinkel smalnar av uppåt, negativ vinkel vidgar, 0° ger raka väggar. Fungerar även med shell.
 
-Primitiver: dra de blå måtthandtagen i förhandsvisningen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie. Måttfälten följer med; OK skapar och Esc avbryter. **Shelled Box** och **Shelled Cylinder** skapar öppna skal med justerbar vägg-/bottentjocklek (standard 2 mm, ändras under Settings → Sketch & View → Primitive shell thickness).
+Primitiver: dra de blå måtthandtagen i förhandsvisningen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie (hexagon: mått över planen och höjd). Måttfälten följer med; OK skapar och Esc avbryter. **Hexagon** har samma val som Cylinder (Shell Wall, Outer/Inner Edge, Taper, placering på yta) och väggen, rundningen och lutningen mäts vinkelrätt mot planen. **Shelled Box** och **Shelled Cylinder** skapar öppna skal med justerbar vägg-/bottentjocklek (standard 2 mm, ändras under Settings → Sketch & View → Primitive shell thickness).
 
 **Version 0.7.6** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 
@@ -41,7 +41,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inst
 - **Text i skissen** (som Fusion): ram eller **Text On Path** längs en cirkel, båge eller linje; typsnitt, fet/kursiv, höjd, teckenavstånd, justering, flip. Bokstäverna är riktiga profiler (hål i O/A/B blir hål) som kan extruderas, spegla, flyttas och sparas. Högerklick: Edit Text / Explode Text.
 - **Emboss**: upphöjd (positivt djup) eller ingraverad (negativt, Deboss) text på en yta, med Flip, Horizontal/Vertical distance och Rotation, live-förhandsvisning och redigerbar i tidslinjen. Kopieras runt en cirkel med Pattern/Mirror.
 - **Revolve**: profil, axel (en konstruktionslinje eller någon linje i skissen, eller skissens X/Y-axel), vinkel (360 = helt varv, negativt vänder), One Side / Symmetric / Two Sides, Auto / New / Join / Cut / Intersect, med förhandsvisning.
-- Box, Cylinder, Sphere, Combine (Join/Cut/Intersect).
+- Box, Cylinder, **Hexagon** (regelbundet prisma, 3–64 sidor, mått över planen), Sphere, Combine (Join/Cut/Intersect).
 - **Split Body**: Dela en solid kropp i två separata kroppar med ett offset-plan eller origin-plan. Klicka på planet i vyn för att välja det, eller högerklicka på ett plan > *Split Body with this Plane*.
 - **Plan i vyn**: planen lyser upp när musen är över dem och har sitt namn i nedre högra hörnet (läsbart från alla håll); högerklick ger Split, Offset Plane, skiss och *Hide Plane*.
 - **Move / Rotate Body (`M`)** (även *Face to face*: klicka en yta på kroppen och sedan ytan eller planet den ska till, med Touch / Flush / Slide): Flytta ($dx, dy, dz$ mm) och rotera ($rx, ry, rz$ grader) solida kroppar parametriskt med realtidsförhandsvisning och formelstöd.

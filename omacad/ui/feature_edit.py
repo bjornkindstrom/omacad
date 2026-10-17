@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from omacad.model import quality
 from omacad.ui.dialogs import (
-    BoxDialog, CylinderDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog, MoveBodyDialog,
+    BoxDialog, CylinderDialog, PrismDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog, MoveBodyDialog,
     ThreadDialog, RevolveDialog, ShellDialog, CombineDialog, SplitBodyDialog
 )
 
@@ -20,7 +20,7 @@ OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as t
 
 def can_edit(feature) -> bool:
     return feature.feature_type in (
-        "box", "cylinder", "sphere", "extrude", "emboss", "revolve",
+        "box", "cylinder", "prism", "sphere", "extrude", "emboss", "revolve",
         "sketch", "fillet", "pattern", "move", "thread", "offset_face", "shell", "combine", "split_body"
     )
 
@@ -238,11 +238,14 @@ def edit_feature(win, doc, index: int) -> bool:
                                 plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
                                 exprs=dlg.get_expressions(), **dlg.get_smart_params())
 
-    if t == "cylinder":
-        from omacad.model.features.primitives import CylinderFeature
-        dlg = CylinderDialog(win)
+    if t in ("cylinder", "prism"):
+        from omacad.model.features.primitives import CylinderFeature, PrismFeature
+        prism = t == "prism"
+        dlg = PrismDialog(win) if prism else CylinderDialog(win)
         dlg.setWindowTitle(f"Edit {feat.name}")
-        dlg.spn_radius.setValue(feat.radius)
+        dlg.spn_radius.setValue(feat.across_flats if prism else feat.radius)
+        if prism:
+            dlg.spn_sides.setValue(feat.sides)
         dlg.spn_height.setValue(feat.height)
         dlg.set_smart_params(feat)
         if getattr(feat, "plane_origin", None) is not None:
@@ -261,7 +264,7 @@ def edit_feature(win, doc, index: int) -> bool:
             idx = dlg.cmb_placement.findData("bottom_center")
             if idx >= 0:
                 dlg.cmb_placement.setCurrentIndex(idx)
-        for key, spin in (("radius", dlg.spn_radius), ("height", dlg.spn_height),
+        for key, spin in (("across_flats" if prism else "radius", dlg.spn_radius), ("height", dlg.spn_height),
                           ("taper_angle", dlg.spn_taper), ("wall_thickness", dlg.spn_wall), ("outer_round", dlg.spn_outer_round),
                           ("inner_round", dlg.spn_inner_round)):
             if feat.exprs.get(key):
@@ -270,14 +273,16 @@ def edit_feature(win, doc, index: int) -> bool:
         def _preview_cylinder():
             r, h, center, po, pn, pu, pv = dlg.get_values()
             smart = dlg.get_smart_params()
-            tmp = CylinderFeature("tmp", "tmp", r, h, center,
-                                  plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+            place = dict(plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+            tmp = (PrismFeature("tmp", "tmp", r, h, center, sides=dlg.sides(), **place) if prism
+                   else CylinderFeature("tmp", "tmp", r, h, center, **place))
             vp.set_preview(tmp.build_solid(), "new_body")
 
         if not _exec_with_preview(win, doc, dlg, _preview_cylinder, [f"body_{feat.feature_id}"]):
             return False
         r, h, center, po, pn, pu, pv = dlg.get_values()
-        return doc.edit_feature(index, radius=r, height=h, center=center,
+        size = {"across_flats": r, "sides": dlg.sides()} if prism else {"radius": r}
+        return doc.edit_feature(index, **size, height=h, center=center,
                                 plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
                                 exprs=dlg.get_expressions(), **dlg.get_smart_params())
 

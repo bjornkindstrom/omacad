@@ -287,6 +287,7 @@ EMOJI_TO_TOOL = {
     "🔁": "pattern",
     "📦": "box",
     "🥫": "cylinder",
+    "⬢": "hexagon",
     "⚽": "sphere",
     "🧮": "parameters",
     "🔩": "thread",

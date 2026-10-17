@@ -1,5 +1,5 @@
 """
-Omacad - Primitive Features (Box, Cylinder, Sphere) and SketchFeature
+Omacad - Primitive Features (Box, Cylinder, Prism, Sphere) and SketchFeature
 """
 
 import math
@@ -121,7 +121,8 @@ def _tapered_primitive(feat, kind):
     def build(half_sizes, height, radius, rounding, top):
         if kind == "box":
             return _rounded_prism(2*half_sizes[0], 2*half_sizes[1], height, radius, rounding, top, taper=slope)
-        return _rounded_cylinder(half_sizes[0], height, radius, rounding, top, taper=slope)
+        return _rounded_cylinder(half_sizes[0], height, radius, rounding, top, taper=slope,
+                                 sides=getattr(feat, "sides", 0))
 
     solid = build(sizes, h, feat.outer_round, feat.outer_round_kind, not hollow)
     if hollow:
@@ -240,15 +241,28 @@ class BoxFeature(Feature):
         }
 
 
-def _rounded_cylinder(radius: float, height: float, r: float, kind: str, round_top: bool = True, taper: float = 0.0) -> m3d.Manifold:
-    """Cylinder of `radius` and `height` (z in 0..height) with bottom (and optionally top) rim rounded/chamfered."""
-    import math
+def _rounded_cylinder(radius: float, height: float, r: float, kind: str, round_top: bool = True, taper: float = 0.0,
+                      sides: int = 0) -> m3d.Manifold:
+    """Cylinder of `radius` and `height` (z in 0..height) with bottom (and optionally top) rim rounded/chamfered.
+    `sides` >= 3 gives a regular prism instead (hexagon ...), `radius` being centre to flat and a flat facing +X:
+    it is revolved with `sides` segments and scaled so every ring's flats sit at the profile's radius, so the wall,
+    the rounds and the taper are measured square to the flats."""
+    from omacad.model import quality
+    if sides < 3:
+        return _revolved_cylinder(radius, height, r, kind, round_top, taper, quality.circle_segments())
+    k = 1.0 / math.cos(math.pi / sides)
+    solid = _revolved_cylinder(radius, height, r, kind, round_top, taper, sides)
+    return solid.rotate((0.0, 0.0, 180.0 / sides)).scale((k, k, 1.0))
+
+
+def _revolved_cylinder(radius: float, height: float, r: float, kind: str, round_top: bool, taper: float,
+                       segments: int) -> m3d.Manifold:
     from omacad.model import quality
     max_r = min(radius - 0.02, radius-height*taper-0.02,
                 (height / 2.0 if round_top else height) - 0.02)
     r = max(0.0, min(float(r), max_r))
     if r <= 1e-4:
-        return m3d.Manifold.cylinder(height, radius, radius-height*taper, circular_segments=quality.circle_segments())
+        return m3d.Manifold.cylinder(height, radius, radius-height*taper, circular_segments=segments)
     n_arc = 1 if kind == "chamfer" else max(6, quality.circle_segments() // 4)
     pts = [(0.0, 0.0), (radius - r, 0.0)]
     if kind == "chamfer":
@@ -269,7 +283,7 @@ def _rounded_cylinder(radius: float, height: float, r: float, kind: str, round_t
     pts.append((0.0, height))
     pts = [(x-z*taper if x > 0 else 0., z) for x, z in pts]
     cs = m3d.CrossSection([pts])
-    return m3d.Manifold.revolve(cs, circular_segments=quality.circle_segments())
+    return m3d.Manifold.revolve(cs, circular_segments=segments)
 
 
 class CylinderFeature(Feature):
@@ -291,6 +305,7 @@ class CylinderFeature(Feature):
         self.inner_round = float(inner_round)
         self.inner_round_kind = str(inner_round_kind or "fillet")
         self.taper_angle = float(taper_angle)
+        self.sides = 0  # round; PrismFeature sets 3+
 
     def build_solid(self) -> m3d.Manifold:
         is_centered = (self.center is True or self.center == "center")
@@ -301,16 +316,17 @@ class CylinderFeature(Feature):
             solid = _tapered_primitive(self, "cylinder")
             if is_centered:
                 solid = solid.translate((0., 0., -self.height/2))
-        elif not has_smart:
+        elif not has_smart and not self.sides:
             solid = CadKernel.create_cylinder(self.radius, self.height, center=is_centered)
         else:
             solid = _rounded_cylinder(self.radius, self.height, self.outer_round, self.outer_round_kind,
-                                      round_top=not hollow)
+                                      round_top=not hollow, sides=self.sides)
             if hollow:
                 t = min(self.wall_thickness, self.radius * 0.9, self.height * 0.9)
                 in_r = max(0.1, self.radius - t)
                 in_h = max(0.2, self.height - t) + 1.0
-                cavity = _rounded_cylinder(in_r, in_h, self.inner_round, self.inner_round_kind, round_top=False)
+                cavity = _rounded_cylinder(in_r, in_h, self.inner_round, self.inner_round_kind, round_top=False,
+                                           sides=self.sides)
                 solid = solid - cavity.translate((0.0, 0.0, t))
             if is_centered:
                 solid = solid.translate((0.0, 0.0, -self.height / 2.0))
@@ -361,6 +377,34 @@ class CylinderFeature(Feature):
             "inner_round_kind": self.inner_round_kind,
         }
 
+
+
+class PrismFeature(CylinderFeature):
+    """A regular prism (hexagon by default) with every Cylinder option: shell, rounds, taper, placement.
+    It is sized across flats; `radius` holds centre to flat, so the Cylinder maths measures to the flats."""
+
+    def __init__(self, feature_id: str, name: str, across_flats: float, height: float, center: Any = False,
+                 sides: int = 6, **kwargs):
+        super().__init__(feature_id, name, float(across_flats) / 2.0, height, center, **kwargs)
+        self.feature_type = "prism"
+        self.sides = int(sides)
+        if self.sides < 3:
+            raise ValueError("A prism needs at least 3 sides.")
+
+    @property
+    def across_flats(self) -> float:
+        return 2.0 * self.radius
+
+    @across_flats.setter
+    def across_flats(self, value: float) -> None:
+        self.radius = float(value) / 2.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        d.pop("radius")
+        d["across_flats"] = self.across_flats
+        d["sides"] = self.sides
+        return d
 
 class SphereFeature(Feature):
     def __init__(self, feature_id: str, name: str, radius: float):

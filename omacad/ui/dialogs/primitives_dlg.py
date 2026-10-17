@@ -1,7 +1,7 @@
-"""Dialogs for primitive 3D solid bodies: Box, Cylinder, Sphere."""
+"""Dialogs for primitive 3D solid bodies: Box, Cylinder, Prism (hexagon), Sphere."""
 
 from typing import Optional, Tuple, Any
-from PySide6.QtWidgets import QFormLayout, QComboBox, QPushButton, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QFormLayout, QComboBox, QPushButton, QHBoxLayout, QLabel, QSpinBox
 from PySide6.QtCore import Signal
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
@@ -18,11 +18,15 @@ def _add_taper(dialog, form):
 
 
 def _accept_primitive(dialog, kind):
-    from omacad.model.features.primitives import BoxFeature, CylinderFeature
-    cls = BoxFeature if kind == "box" else CylinderFeature
+    from omacad.model.features.primitives import BoxFeature, CylinderFeature, PrismFeature
     try:
-        cls("validate", "Validate", *dialog.get_values()[:3 if kind == "box" else 2],
-            **dialog.get_smart_params()).build_solid()
+        if kind == "prism":
+            PrismFeature("validate", "Validate", *dialog.get_values()[:2], sides=dialog.sides(),
+                         **dialog.get_smart_params()).build_solid()
+        else:
+            cls = BoxFeature if kind == "box" else CylinderFeature
+            cls("validate", "Validate", *dialog.get_values()[:3 if kind == "box" else 2],
+                **dialog.get_smart_params()).build_solid()
     except ValueError as exc:
         dialog.lbl_problem.setText(str(exc))
         return
@@ -255,7 +259,7 @@ class CylinderDialog(BaseFeatureDialog):
         self.plane_u = None
         self.plane_v = None
 
-        form = QFormLayout()
+        form = self.form = QFormLayout()
 
         self.spn_radius = ExprDoubleSpinBox()
         self.spn_radius.setRange(0.1, 10000.0)
@@ -441,6 +445,37 @@ class CylinderDialog(BaseFeatureDialog):
             self.plane_u if use_plane else None,
             self.plane_v if use_plane else None
         )
+
+
+class PrismDialog(CylinderDialog):
+    """The Cylinder panel for a regular prism (hexagon by default): `spn_radius` holds the size across flats."""
+
+    def __init__(self, parent=None, embedded: bool = False):
+        super().__init__(parent, embedded)
+        self.setWindowTitle("Create Hexagon")
+        self.form.labelForField(self.spn_radius).setText("Across flats:")
+        self.spn_radius.setValue(20.0)
+        self.spn_radius.setToolTip("Distance between two opposite flat sides (the wrench size for a hexagon).")
+        self.spn_sides = QSpinBox()
+        self.spn_sides.setRange(3, 64)
+        self.spn_sides.setValue(6)
+        self.spn_sides.setToolTip("Number of flat sides (6 = hexagon).")
+        self.spn_sides.valueChanged.connect(lambda _: self.changed.emit())
+        self.form.insertRow(self.form.getWidgetPosition(self.spn_radius)[0] + 1, "Sides:", self.spn_sides)
+        self.btn_face.setToolTip("Klicka på en yta eller plan i 3D-vyn där prismat ska starta.")
+        self.spn_wall.setToolTip("Shell wall thickness, square to the flats (0 = solid; > 0 hollows it with an open top).")
+
+    def sides(self) -> int:
+        return self.spn_sides.value()
+
+    def accept(self):
+        _accept_primitive(self, "prism")
+
+    def get_expressions(self) -> dict:
+        out = super().get_expressions()
+        if "radius" in out:
+            out["across_flats"] = out.pop("radius")
+        return out
 
 
 class SphereDialog(BaseFeatureDialog):

@@ -11,7 +11,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 import trimesh
 from omacad.model.document import Document, Parameter, default_origin_vis
-from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
+from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, PrismFeature, SphereFeature,
                                     ExtrudeFeature, EmbossFeature, RevolveFeature, CombineFeature, FilletFeature,
                                     PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature)
 from omacad.model.sketch import Sketch
@@ -435,6 +435,19 @@ class Exporter:
             elif ft == "cylinder":
                 feat = CylinderFeature(
                     fid, fname, f_data["radius"], f_data["height"], f_data["center"],
+                    plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
+                    plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v"),
+                    taper_angle=f_data.get("taper_angle", 0.0),
+                    wall_thickness=f_data.get("wall_thickness", 0.0),
+                    outer_round=f_data.get("outer_round", 0.0),
+                    outer_round_kind=f_data.get("outer_round_kind", "fillet"),
+                    inner_round=f_data.get("inner_round", 0.0),
+                    inner_round_kind=f_data.get("inner_round_kind", "fillet"),
+                )
+                doc.timeline.add_feature(feat)
+            elif ft == "prism":
+                feat = PrismFeature(
+                    fid, fname, f_data["across_flats"], f_data["height"], f_data["center"], sides=f_data.get("sides", 6),
                     plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
                     plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v"),
                     taper_angle=f_data.get("taper_angle", 0.0),

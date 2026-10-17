@@ -54,9 +54,10 @@ class PrimitiveHandles:
             positions = [middle + np.eye(3)[a] * size/2 for _, a, size, _ in entries]
         else:
             r = d.spn_radius.value()
-            entries = [(d.spn_radius, 0, r, "Radius")]
-            positions = [np.array([r, 0., 0.])]
-            factors = [1.]
+            if self.kind == "prism":  # the field is across flats: the handle sits on the +X flat
+                entries, positions, factors = [(d.spn_radius, 0, r, "Across flats")], [np.array([r/2, 0., 0.])], [.5]
+            else:
+                entries, positions, factors = [(d.spn_radius, 0, r, "Radius")], [np.array([r, 0., 0.])], [1.]
             if self.kind != "sphere":
                 h = d.spn_height.value()
                 z = 0. if mode == "center" else h/2
