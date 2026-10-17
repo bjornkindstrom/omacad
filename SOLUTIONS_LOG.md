@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Circular Feature Pattern för Japandi-ribbor** (0.9.0): Eget menyval, multival av ribba + fillet via tidslinje/lista, totalt antal och full/partiell vinkel. X/Y/Z eller vald cirkelkant/cylinderyta ger rotationsaxel. Cirkulärt mönster komponerar bara markerade stegs booleska differenser; fillet trimmas in i ribbans addition och omarkerade mellansteg kopieras inte. Axeln sparas/redigeras/ångras och dynamiska panelrader behåller sliders. Test: `tests/test_circular_feature_pattern.py`.
+
 - **Valbar pivot vid skissrotation** (0.8.0): Rotate (Shift+R) återanvänder flyttens preview/ångra-transaktion. `sketch_rotate` räknar areacentrum med hål och ytans viktade centrum (sparas med skissen). Ny panel ger pivotval, klick/snappning, exakta koordinater och vinkel. H/V-villkor växlas vid kvartsvarv eller blir relativa parallell/vinkelrät-villkor; Fix och motstridiga axelmått skyddas. Test: `test_sketch_rotate.py`, `test_sketch_rotate_ui.py`.
 
 - **Flärp efter cylindrisk Deboss** (0.7.9.68): Enbart segmenterade profilkanter lämnade långa triangeldiagonaler i verktygets lock. Vid warp skar kordorna genom cylinderytan och lämnade en friliggande materialremsa. `refine_to_length` förtätar även lockens inre före warp. Regression: rapportmodell `tests/data/deboss_slot_flap.omacad`, snittets konturer och analytiska area i `tests/test_emboss_wrap.py`.

@@ -126,8 +126,9 @@ class RenderGLMixin:
             self._end_move(False)
         self.rotation_panel.hide()
         self._rotate_pick = False
-        if tool_name in ("MOVE", "ROTATE") and not self.selected_entities:
-            self.status_message.emit("Move / Rotate: select sketch elements first (click, Ctrl+click, or double-click for a whole figure).")
+        self._move_phase = "base" if (tool_name == "MOVE" and self.selected_entities) else "pick"
+        if tool_name == "ROTATE" and not self.selected_entities:
+            self.status_message.emit("Rotate: select sketch elements first (click, Ctrl+click, or double-click for a whole figure).")
             tool_name = "NONE"
         self.sketch_tool = tool_name
         self.dyn.reset()
@@ -145,6 +146,8 @@ class RenderGLMixin:
         self.sketch_tool_changed.emit(tool_name)
         if tool_name == "ROTATE":
             self.status_message.emit("Rotate: choose a pivot and angle in the sketch palette. OK applies; Esc cancels.")
+        if tool_name == "MOVE":
+            self._move_status()
         if tool_name == "OFFSET":
             self._offset_status()
         if tool_name == "MIRROR":

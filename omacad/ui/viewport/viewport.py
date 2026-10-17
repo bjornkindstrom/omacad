@@ -227,6 +227,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
         # Fillet tool state
         self._mirror_phase = "pick"
+        self._move_phase = "pick"
         self.fillet_first_line = None
         self.fillet_hover_corner = None
         self.fillet_preview = None
@@ -486,6 +487,39 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.constraint_badges.append((rect, c.cid))
 
     # ---- Moving and Rotating sketch elements ---------------------------------
+    def _toggle_pick(self, event, x, y) -> bool:
+        """Mirror/Move picking: a click adds or removes the whole figure, Ctrl/Shift/Alt+click one element."""
+        ent = self._pick_entity(x, y)
+        if ent is None:
+            return False
+        mods = event.modifiers()
+        if mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.AltModifier):
+            self.selected_entities ^= {ent.entity_id}
+        else:
+            ids = self.doc.active_sketch.connected_entities(ent.entity_id)
+            self.selected_entities = (self.selected_entities - ids) if ids <= self.selected_entities else (self.selected_entities | ids)
+        self.selection_changed.emit()
+        self.update()
+        return True
+
+    def _move_status(self):
+        if self._move_phase == "pick":
+            n = len(self.selected_entities)
+            self.status_message.emit(f"Move: {n} element(s) picked. Click more (Ctrl+click = one element, click again removes), "
+                                     "then Enter. Esc cancels.")
+        else:
+            self.status_message.emit("Move: click the base point (it snaps to points), then where it should go. "
+                                     "Type X / Y for exact distances. The elements keep their angle. Esc cancels.")
+
+    def _move_next(self):
+        """Move: picking done, now the base point."""
+        if not self.selected_entities:
+            self.status_message.emit("Move: pick at least one sketch element first.")
+            return
+        self._move_phase = "base"
+        self._move_status()
+        self.update()
+
     def _begin_move(self, ids):
         sk = self.doc.active_sketch
         ids = {i for i in ids if not getattr(sk.get_entity(i), "projected", False)}
@@ -857,8 +891,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         p1 = self.sketch_start_uv
         if self.sketch_tool == "MOVE":
             if self._move:
-                ang = self.dyn_live.get("Angle", 0.0) if hasattr(self, "dyn_live") else 0.0
-                self._apply_move(p2[0] - p1[0], p2[1] - p1[1], angle_deg=ang)
+                self._apply_move(p2[0] - p1[0], p2[1] - p1[1])   # Move only translates; Rotate is its own tool
                 self._end_move(True)
             self.sketch_start_uv = None
             self.dyn.reset()
@@ -1000,8 +1033,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.sketch_current_uv = end
         self.dyn_live = live
         if self.sketch_tool == "MOVE" and self._move:
-            ang = live.get("Angle", 0.0)
-            self._apply_move(end[0] - self.sketch_start_uv[0], end[1] - self.sketch_start_uv[1], angle_deg=ang)
+            self._apply_move(end[0] - self.sketch_start_uv[0], end[1] - self.sketch_start_uv[1])
         self.update()
 
     def _handle_dyn_key(self, event) -> bool:
@@ -1297,7 +1329,6 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         elif tool == "MOVE":
             anchors["X"] = QPointF((sa.x() + sb.x()) / 2, (sa.y() + sb.y()) / 2 + 24)
             anchors["Y"] = QPointF(sb.x() + 52, sb.y())
-            anchors["Angle"] = QPointF(sa.x() - 40, sa.y() - 24)
         elif tool == "CIRCLE":
             anchors["Diameter"] = QPointF(sb.x() + 46, sb.y() - 16)
         elif tool == "POLYGON":
@@ -1737,24 +1768,20 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 return
             if event.button() == Qt.MouseButton.LeftButton:
                 if self._mirror_phase == "pick":
-                    ent = self._pick_entity(x, y)
-                    if ent is not None:
-                        mods = event.modifiers()
-                        single = bool(mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.AltModifier))
-                        if single:
-                            if ent.entity_id in self.selected_entities:
-                                self.selected_entities.remove(ent.entity_id)
-                            else:
-                                self.selected_entities.add(ent.entity_id)
-                        else:
-                            ids = self.doc.active_sketch.connected_entities(ent.entity_id)
-                            self.selected_entities = (self.selected_entities - ids) if ids <= self.selected_entities else (self.selected_entities | ids)
-                        self.selection_changed.emit()
+                    if self._toggle_pick(event, x, y):
                         self._mirror_status()
-                        self.update()
                 else:
                     self._mirror_at(x, y)
                 return
+
+        # Move, step 1: click what to move (several things), Enter goes on to the base point
+        if self.doc.active_sketch and self.sketch_tool == "MOVE" and self._move_phase == "pick":
+            if event.button() == Qt.MouseButton.LeftButton:
+                if self._toggle_pick(event, x, y):
+                    self._move_status()
+            elif event.button() == Qt.MouseButton.RightButton:
+                self._move_next()
+            return
 
         # Handle Trim Tool Click
         if self.doc.active_sketch and self.sketch_tool == "TRIM":
@@ -2854,6 +2881,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._rotate_finish(True)
                 return
+        if (self.doc.active_sketch and self.sketch_tool == "MOVE" and self._move_phase == "pick"
+                and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space)):
+            self._move_next()
+            return
         if self.doc.active_sketch and self.sketch_tool == "OFFSET":
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
                 self._offset_go()

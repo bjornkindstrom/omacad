@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.5 - 2026-10-17
+
+### Changed
+- Sketch Move only moves: the elements no longer turn with the mouse direction and the Angle field is gone (Rotate, Shift+R, still rotates). Pick what to move right in the tool (click a figure, Ctrl+click one element, several at once), press Enter, click the base point, then where it should go; X / Y can be typed. Anything selected beforehand goes straight to the base point.
+
 ## 0.9.4 - 2026-10-17
 
 ### Fixed
