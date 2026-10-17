@@ -8,9 +8,11 @@ Horizontal / Vertical distance and Rotation move the shape on the face.
 import math
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import manifold3d as m3d
 from shapely import affinity
 
+from omacad.model import quality
 from omacad.model.features.base import combine_with_bodies, region_cross_section
 from omacad.model.features.extrude import ExtrudeFeature
 
@@ -49,14 +51,75 @@ class EmbossFeature(ExtrudeFeature):
         if abs(self.dx) > 1e-9 or abs(self.dy) > 1e-9:
             region = affinity.translate(region, self.dx, self.dy)
         cs = region_cross_section(region)
-        lo, hi = (-EPS, self.depth) if self.depth > 0 else (self.depth, EPS)      # along the sketch normal
-        if self.flip:
-            lo, hi = -hi, -lo
-            if self.depth > 0:
-                hi = min(hi, 0.0)       # flipped, the letters go into the body: no hair-thin skin standing on the face
-        solid = m3d.Manifold.extrude(cs, height=float(hi - lo)).translate((0.0, 0.0, float(lo)))
-        solid = solid.transform(sketch.plane.get_transform_matrix_3x4())
-        return solid if not solid.is_empty() else None
+        M = sketch.plane.get_transform_matrix_3x4()
+        surface = None if self.flip else self._surface_behind(doc, M, region)
+        if surface and surface["kind"] == "cylinder":
+            solid = self._wrapped(cs, M, surface)
+        else:
+            z0 = surface["z"] if surface else 0.0      # a flat face behind the sketch plane: the letters start on it
+            lo, hi = (-EPS, self.depth) if self.depth > 0 else (self.depth, EPS)      # along the sketch normal
+            if self.flip:
+                lo, hi = -hi, -lo
+                if self.depth > 0:
+                    hi = min(hi, 0.0)       # flipped, the letters go into the body: no hair-thin skin standing on the face
+            solid = m3d.Manifold.extrude(cs, height=float(hi - lo)).translate((0.0, 0.0, float(lo + z0)))
+            solid = solid.transform(M)
+        return solid if solid is not None and not solid.is_empty() else None
+
+    def _surface_behind(self, doc: Any, M, region) -> Optional[Dict[str, Any]]:
+        """The first outer cylinder or flat face (parallel to the sketch plane) a ray from the letters hits going
+        against the sketch normal, in sketch coordinates: {"kind", "z"} (+ axis data for a cylinder)."""
+        from omacad.model.faces import detect_cylinder_surface, ray_mesh_hit
+        A = np.vstack([np.asarray(M, dtype=float).reshape(3, 4), [0.0, 0.0, 0.0, 1.0]])
+        inv = np.linalg.inv(A)
+        c = region.centroid
+        reach = 1e4
+        origin = (A @ np.array([c.x, c.y, reach, 1.0]))[:3]
+        direction = -A[:3, 2] / np.linalg.norm(A[:3, 2])
+        best = None
+        for body in doc.bodies.values():
+            mesh = body.render_mesh
+            if mesh is None or len(mesh.vertices) == 0:
+                continue
+            hit = ray_mesh_hit(mesh, origin, direction)
+            if hit is not None and (best is None or hit[0] < best[0]):
+                best = (hit[0], mesh, hit[1])
+        if best is None:
+            return None
+        t, mesh, tri = best
+        z = reach - t
+        cyl = detect_cylinder_surface(mesh, tri)
+        if cyl is not None and not cyl["is_internal"]:
+            axis = inv[:3, :3] @ np.asarray(cyl["axis"], dtype=float)
+            pt = np.asarray(cyl["origin"], dtype=float)
+            hit_pt = origin + direction * t
+            centre = pt + ((hit_pt - pt) @ cyl["axis"]) * np.asarray(cyl["axis"], dtype=float)   # on the axis, level with the hit
+            return {"kind": "cylinder", "z": z, "radius": float(cyl["radius"]), "centre": centre,
+                    "axis": np.asarray(cyl["axis"], dtype=float), "zc": float((inv @ np.append(centre, 1.0))[2])}
+        v = np.asarray(mesh.vertices, dtype=float).reshape(-1, 3, 3)[tri]
+        face_n = np.cross(v[1] - v[0], v[2] - v[0])
+        face_n = face_n / max(float(np.linalg.norm(face_n)), 1e-12)
+        if float(face_n @ -direction) > 0.9999:
+            return {"kind": "plane", "z": z}
+        return None
+
+    def _wrapped(self, cs, M, surface) -> m3d.Manifold:
+        """Letters that hug a cylinder: the extruded profile clipped to the coaxial cylinder of radius r + depth
+        (Emboss) or to the shell between r + margin and r - depth (Deboss). Only the side facing the sketch is used."""
+        from omacad.model.features.offset_face import _frame
+        r, d = surface["radius"], self.depth
+        zc = surface["zc"]
+        prism = m3d.Manifold.extrude(cs, height=float(r + abs(d) + 1.0)).translate((0.0, 0.0, float(zc)))
+        prism = prism.transform(M)
+        length = 2.0 * (r + abs(d)) + 2.0 * 1e4
+        frame = _frame(surface["centre"], surface["axis"])
+        def cylinder(radius):
+            cyl = m3d.Manifold.extrude(m3d.CrossSection.circle(radius, quality.circle_segments()), length)
+            return cyl.translate((0.0, 0.0, -length / 2.0)).transform(frame[:3, :])
+        if d > 0:
+            return prism ^ cylinder(r + d)
+        margin = 0.05 * r + 0.01
+        return prism ^ (cylinder(r + margin) - cylinder(max(r + d, 0.01)))
 
     def execute(self, doc: Any) -> None:
         tool = self.build_solid(doc)
