@@ -2200,12 +2200,17 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             menu.addSeparator()
             heading("Make it")
             add("fix", "🔒 Fixed in place", "Locks the circle so it can't move or change.")
+        elif isinstance(ent, SketchArc):
+            heading("Arc - set a dimension")
+            add("arc_radius", "R Radius…", "Type the radius of the arc.")
+        elif isinstance(ent, SketchSlot):
+            heading("Slot - set a dimension")
+            add("slot_length", "📏 Center-to-center length…", "Type the distance between the two slot centres.")
+            add("slot_width", "Ø Width (diameter)…", "Type the width (2 × radius) of the slot.")
         elif isinstance(ent, SketchText):
             heading("Text")
             add("edit_text", "✏️ Edit Text…", "Change the words, the font, the height, the alignment or the path.")
             add("explode_text", "💥 Explode Text", "Turns the text into ordinary lines. It can no longer be edited as text.")
-        else:
-            heading("Arcs and slots can't be dimensioned yet")
         menu.addSeparator()
         add("fillet", "╭ Fillet corner…  (F)", "Rounds a corner between lines with an arc.")
         add("offset", "↔️ Offset…  (O)", "Makes a parallel copy at a distance you type (select several, or double-click, to offset a whole shape).")
@@ -2231,6 +2236,15 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.selected_entities.clear()
             self.doc.record_sketch_change(sk, before)
             self.update()
+            return
+        if key == "arc_radius":
+            self._dim_arc(ent)
+            return
+        if key == "slot_length":
+            self._dim_slot_length(ent)
+            return
+        if key == "slot_width":
+            self._dim_slot_width(ent)
             return
         if key == "p_side":
             self._dim_length(poly_line)
@@ -2267,6 +2281,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.set_sketch_tool("OFFSET")
         elif key == "delete":
             self.delete_selected_entities()
+
 
     def _add_tool_entries(self, menu: QMenu, acts: dict):
         """While a tool panel (Extrude, Fillet, ...) is open: finish or cancel it from the menu."""

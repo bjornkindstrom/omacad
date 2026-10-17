@@ -56,8 +56,9 @@ def test_rounded_rectangle_offset_follows_the_radii(dist):
     radii = sorted(round(math.hypot(e.p_start[0] - c[0], e.p_start[1] - c[1]), 3)
                    for e in new if e.entity_type == "arc" for c in [e.get_circle_params()[0]])
     assert radii == [pytest.approx(3.0 + dist, abs=1e-3)] * 4
-    expected = base.buffer(dist, join_style=1, resolution=256).area
+    expected = base.buffer(dist, join_style=1, quad_segs=256).area
     assert shape_polygon(sk, [e.entity_id for e in new]).area == pytest.approx(expected, rel=2e-3)
+
 
 
 def test_inward_offset_larger_than_the_radius_drops_the_arcs_and_stays_closed():

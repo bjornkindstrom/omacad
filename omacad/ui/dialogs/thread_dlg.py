@@ -364,7 +364,7 @@ class ThreadDialog(BaseFeatureDialog):
             self.chk_follow.setChecked(True)               # a thread on a cylinder follows it by default
         finally:
             self._loading = False
-        kind_desc = "Insida hål" if is_internal else "Utsida cylinder"
+        kind_desc = "Internal hole" if is_internal else "External cylinder"
         self.lbl_face.setText(f"{kind_desc} (Ø{dia:g} mm, L={length:g} mm)")
 
         self.spn_dia.blockSignals(False)
@@ -380,6 +380,15 @@ class ThreadDialog(BaseFeatureDialog):
         best = min(range(self.cmb_taper.count()),
                    key=lambda i: (self.cmb_taper.itemData(i)[0] != on, abs(self.cmb_taper.itemData(i)[1] - turns) if on else 0))
         self.cmb_taper.setCurrentIndex(best)
+
+    def get_expressions(self) -> dict:
+        return self.expressions(
+            diameter=self.spn_dia,
+            pitch=self.spn_pitch,
+            length=self.spn_length,
+            clearance=self.spn_clearance,
+            anchor_gap=self.spn_gap,
+        )
 
     def get_values(self):
         is_female = bool(self.cmb_type.currentData())
@@ -408,3 +417,4 @@ class ThreadDialog(BaseFeatureDialog):
             "follow_host": bool(self.chk_follow.isChecked() and self.chk_follow.isEnabled()),
             "host_offset": (self.spn_dia.value() - self.host_diameter) if self.host_diameter is not None else 0.0,
         }
+

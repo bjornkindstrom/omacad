@@ -227,9 +227,11 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
             values[eid] = (_xy(sys_, pts[(eid, "p1")]), _xy(sys_, pts[(eid, "p2")]))
         else:
             values[eid] = _xy(sys_, pts[(eid, "center")])
-            if getattr(ent, "group", None):   # a polygon's circle: its radius is solved too (corners lie on it)
-                values[f"{eid}#r"] = float(sys_.params(radii[eid].params)[0])
+            solved_r = float(sys_.params(radii[eid].params)[0])
+            if getattr(ent, "group", None) or abs(solved_r - float(ent.radius)) > 1e-6:
+                values[f"{eid}#r"] = solved_r
     return (values, int(sys_.dof())), ""
+
 
 
 def _side_sign(p, a, b) -> float:

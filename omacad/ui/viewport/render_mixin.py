@@ -700,10 +700,29 @@ class RenderGLMixin:
             self.draw_buffer_arrays(GL.GL_LINES, loc_pos, np.array([0.0, 0.0, 0.0, *(100.0 * x for x in d)], dtype=np.float32))
         GL.glUseProgram(0)
 
+    @staticmethod
+    def _delete_gpu_cache_entry(old: dict):
+        try:
+            GL.glDeleteVertexArrays(1, [old["vao_solid"]])
+            GL.glDeleteBuffers(2, [old["vbo_pos"], old["vbo_norm"]])
+            if old.get("vao_lines") is not None:
+                GL.glDeleteVertexArrays(1, [old["vao_lines"]])
+            if old.get("vbo_lines") is not None:
+                GL.glDeleteBuffers(1, [old["vbo_lines"]])
+        except Exception:
+            pass
+
     def render_bodies(self, mvp: np.ndarray):
         """Renders shaded CAD bodies with sharp silhouette edges."""
         if not self.prog_solid or not self.prog_flat:
             return
+
+        gpu_cache = getattr(self, "_body_gpu_cache", None)
+        if gpu_cache is not None:
+            live_bids = set(self.doc.bodies.keys())
+            for k in list(gpu_cache.keys()):
+                if k[0] not in live_bids:
+                    self._delete_gpu_cache_entry(gpu_cache.pop(k))
 
         for body in self.doc.bodies.values():
             if not body.visible or not body.render_mesh:
@@ -718,30 +737,22 @@ class RenderGLMixin:
             is_selected = body.selected
 
             # Fetch or build GPU VAO/VBO for this body mesh
-            gpu_cache = getattr(self, "_body_gpu_cache", None)
             cache_entry = None
-            mesh_key = (body.body_id, id(mesh))
+            mesh_key = (body.body_id, id(mesh), len(mesh.vertices), len(mesh.sharp_lines))
             if gpu_cache is not None:
                 cache_entry = gpu_cache.get(mesh_key)
                 if cache_entry is None:
                     # Clean up old entries for this body
                     for k in list(gpu_cache.keys()):
                         if k[0] == body.body_id:
-                            old = gpu_cache.pop(k)
-                            try:
-                                GL.glDeleteVertexArrays(1, [old["vao_solid"]])
-                                GL.glDeleteBuffers(2, [old["vbo_pos"], old["vbo_norm"]])
-                                if "vao_lines" in old:
-                                    GL.glDeleteVertexArrays(1, [old["vao_lines"]])
-                                    GL.glDeleteBuffers(1, [old["vbo_lines"]])
-                            except Exception:
-                                pass
+                            self._delete_gpu_cache_entry(gpu_cache.pop(k))
 
                     # Build solid VAO/VBO
                     vao_solid = GL.glGenVertexArrays(1)
                     vbo_pos = GL.glGenBuffers(1)
                     vbo_norm = GL.glGenBuffers(1)
                     GL.glBindVertexArray(vao_solid)
+
 
                     pos_data = np.ascontiguousarray(mesh.vertices, dtype=np.float32)
                     GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_pos)

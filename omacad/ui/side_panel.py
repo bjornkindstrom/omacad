@@ -250,9 +250,9 @@ class InspectorPanel(QWidget):
 
             if selected_entities:
                 n_sel = len(selected_entities)
-                lbl_sel = QLabel(f"{n_sel} element markerade")
+                lbl_sel = QLabel(f"{n_sel} element(s) selected")
                 style(lbl_sel, "color: #42A5F5; font-weight: bold; border: none; background: transparent;")
-                form.addRow("Markering:", lbl_sel)
+                form.addRow("Selection:", lbl_sel)
 
             self.info_layout.addWidget(self._make_card(f"✏️ Sketch: {sk.name}", form))
             return
@@ -274,23 +274,23 @@ class InspectorPanel(QWidget):
 
             lbl_vol = QLabel(f"{vol:,.1f} mm³".replace(",", " "))
             style(lbl_vol, "color: #E0E0E0; font-weight: bold; border: none; background: transparent;")
-            form.addRow("Volym:", lbl_vol)
+            form.addRow("Volume:", lbl_vol)
 
             lbl_area = QLabel(f"{area:,.1f} mm²".replace(",", " "))
-            form.addRow("Yta:", lbl_area)
+            form.addRow("Area:", lbl_area)
 
-            form.addRow("Storlek:", QLabel(f"{dx:.1f} × {dy:.1f} × {dz:.1f} mm"))
+            form.addRow("Size:", QLabel(f"{dx:.1f} × {dy:.1f} × {dz:.1f} mm"))
             form.addRow("Flat faces:", QLabel(f"{len(body.faces)}"))
             form.addRow("Edges:", QLabel(f"{len(body.edges)}"))
 
-            self.info_layout.addWidget(self._make_card(f"📦 Kropp: {body.name}", form))
+            self.info_layout.addWidget(self._make_card(f"📦 Body: {body.name}", form))
             return
 
         # D. Document Overview (Nothing specifically selected)
         form_doc = QFormLayout()
         form_doc.setContentsMargins(0, 4, 0, 0)
         form_doc.setSpacing(6)
-        form_doc.addRow("Dokument:", QLabel(self.doc.name))
+        form_doc.addRow("Document:", QLabel(self.doc.name))
         form_doc.addRow("Bodies:", QLabel(f"{len(self.doc.bodies)}"))
         form_doc.addRow("Sketches:", QLabel(f"{len(self.doc.sketches)}"))
         form_doc.addRow("Features:", QLabel(f"{len(self.doc.timeline.features)}"))
@@ -304,10 +304,10 @@ class InspectorPanel(QWidget):
         v_tips.setContentsMargins(0, 4, 0, 0)
         v_tips.setSpacing(4)
         tips = [
-            "E - Extrudera profil",
-            "F - Fit View / Centrera",
+            "E - Extrude profile",
+            "F - Fit View / Center",
             "I - Measure tool",
-            "Ctrl+P - Parametrar",
+            "Ctrl+P - Parameters",
             "Right-click face - Sketch / Extrude",
             "Right-click plane - Split body / Sketch",
         ]
@@ -316,3 +316,4 @@ class InspectorPanel(QWidget):
             style(lbl, "color: #8E95A0; font-size: 11px; border: none; background: transparent;")
             v_tips.addWidget(lbl)
         self.info_layout.addWidget(self._make_card("⚡ Shortcuts", v_tips))
+

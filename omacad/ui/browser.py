@@ -279,7 +279,7 @@ class BrowserTree(QWidget):
 
     def on_item_renamed(self, item: QTreeWidgetItem, column: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
-        if column != 0 or not data or data[0] not in ("sketch", "body", "section", "canvas"):
+        if column != 0 or not data or data[0] not in ("sketch", "body", "section", "canvas", "cplane"):
             return
         kind, item_id = data
         if kind == "canvas":
@@ -287,6 +287,7 @@ class BrowserTree(QWidget):
             return
         if not self.doc.rename_item(kind, item_id, item.text(0)):
             self.refresh_tree()  # empty or invalid name: put the old one back
+
 
     def toggle_visibility(self, item_type: str, item_id: str) -> bool:
         """Show/hide whatever the tree item stands for (eye click, V, right-click menu). False: nothing to toggle."""

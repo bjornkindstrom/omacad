@@ -187,20 +187,30 @@ class ProfileRefs:
 
     profile_sigs = None
     _sigs_for = None
+    _follows_text: Optional[bool] = None
 
     def resolve_profile_refs(self, sketch) -> None:
         profiles = sketch.profiles
         idxs = [self.profile_idx] + list(self.extra_profiles)
         current = (self.profile_idx, tuple(self.extra_profiles))
+        text_idxs = sketch.text_profile_indices() if hasattr(sketch, "text_profile_indices") else []
+
         if self.profile_sigs is None or self._sigs_for != current or len(self.profile_sigs) != len(idxs):
+            if text_idxs and set(idxs) == set(text_idxs):
+                self._follows_text = True
+            elif self._follows_text is None:
+                self._follows_text = False
             if all(0 <= i < len(profiles) for i in idxs):   # first sight (or edited): remember what they look like
                 self.profile_sigs = [profile_signature(profiles[i]) for i in idxs]
                 self._sigs_for = current
             return
+
         new, taken = [], set()
+        unmatched = 0
         for i, sig in zip(idxs, self.profile_sigs):
             if 0 <= i < len(profiles) and i not in taken and _profile_matches(profiles[i], sig):
                 new.append(i)
+                taken.add(i)
             else:
                 best, best_d = None, float("inf")
                 for j, pr in enumerate(profiles):
@@ -215,6 +225,24 @@ class ProfileRefs:
                     taken.add(best)
                 else:
                     new.append(i)
+                    unmatched += 1
+
+        # If this feature follows SketchText (or all/most stored signatures failed to match after editing a sketch
+        # whose profiles come from SketchText, e.g. changing text height/font/string), refresh to text_profile_indices().
+        if text_idxs and (
+            self._follows_text
+            or (unmatched > 0 and len(idxs) >= 2 and set(idxs).issubset(set(range(len(profiles) + 10))) and len(text_idxs) >= 2)
+        ):
+            non_text_kept = [i for i in new if i not in text_idxs and 0 <= i < len(profiles)
+                             and any(_profile_matches(profiles[i], s) for s in self.profile_sigs)]
+            merged = list(text_idxs) + [i for i in non_text_kept if i not in text_idxs]
+            if merged:
+                self._follows_text = True
+                self.profile_idx, self.extra_profiles = merged[0], merged[1:]
+                self.profile_sigs = [profile_signature(profiles[i]) for i in merged]
+                self._sigs_for = (self.profile_idx, tuple(self.extra_profiles))
+                return
+
         if new != idxs:
             self.profile_idx, self.extra_profiles = new[0], new[1:]
             self._sigs_for = (self.profile_idx, tuple(self.extra_profiles))
@@ -222,11 +250,17 @@ class ProfileRefs:
     def profile_refs_dict(self) -> dict:
         if self.profile_sigs is None:
             return {}
-        return {"profile_sigs": [list(s) for s in self.profile_sigs],
-                "profile_sigs_for": [self.profile_idx, list(self.extra_profiles)]}
+        out = {"profile_sigs": [list(s) for s in self.profile_sigs],
+               "profile_sigs_for": [self.profile_idx, list(self.extra_profiles)]}
+        if self._follows_text is not None:
+            out["follows_text"] = bool(self._follows_text)
+        return out
 
     def load_profile_refs(self, data: dict) -> None:
         sigs, for_ = data.get("profile_sigs"), data.get("profile_sigs_for")
         if sigs and for_:
             self.profile_sigs = [tuple(float(x) for x in s) for s in sigs]
             self._sigs_for = (int(for_[0]), tuple(int(i) for i in for_[1]))
+        if "follows_text" in data:
+            self._follows_text = bool(data["follows_text"])
+

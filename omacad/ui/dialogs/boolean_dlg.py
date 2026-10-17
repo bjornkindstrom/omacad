@@ -13,13 +13,18 @@ class CombineDialog(BaseFeatureDialog):
 
     changed = Signal()
 
-    def __init__(self, doc: Document, parent=None, preselected_target_id: Optional[str] = None):
+    def __init__(self, doc: Document, parent=None, preselected_target_id: Optional[str] = None,
+                 preselected_tool_id: Optional[str] = None, body_names_override: Optional[dict] = None):
         super().__init__("Combine Bodies", parent)
         self.doc = doc
         form = QFormLayout()
 
-        self.body_ids = list(doc.bodies.keys())
-        names = [doc.bodies[bid].name for bid in self.body_ids]
+        if body_names_override:
+            self.body_ids = list(body_names_override.keys())
+            names = [body_names_override[bid] for bid in self.body_ids]
+        else:
+            self.body_ids = list(doc.bodies.keys())
+            names = [doc.bodies[bid].name for bid in self.body_ids]
 
         self.cmb_target = QComboBox()
         self.cmb_target.addItems(names)
@@ -33,7 +38,9 @@ class CombineDialog(BaseFeatureDialog):
         self.cmb_tool = QComboBox()
         self.cmb_tool.addItems(names)
         t_idx = self.cmb_target.currentIndex()
-        if len(names) > 1:
+        if preselected_tool_id and preselected_tool_id in self.body_ids:
+            self.cmb_tool.setCurrentIndex(self.body_ids.index(preselected_tool_id))
+        elif len(names) > 1:
             tool_idx = 1 if t_idx == 0 else 0
             self.cmb_tool.setCurrentIndex(tool_idx)
         self.cmb_tool.currentIndexChanged.connect(lambda _: self.changed.emit())
@@ -46,7 +53,7 @@ class CombineDialog(BaseFeatureDialog):
 
         # Keep Tool Bodies checkbox (Fusion 360 style)
         from PySide6.QtWidgets import QCheckBox
-        self.chk_keep_tool = QCheckBox("Keep tool bodies (Behåll verktygskropp)")
+        self.chk_keep_tool = QCheckBox("Keep tool bodies")
         self.chk_keep_tool.setChecked(False)
         self.chk_keep_tool.toggled.connect(lambda _: self.changed.emit())
         form.addRow("", self.chk_keep_tool)
@@ -87,14 +94,22 @@ class CombineDialog(BaseFeatureDialog):
 class SplitBodyDialog(BaseFeatureDialog):
     """Dialog to split a body using an offset (construction) plane or origin plane into two bodies."""
 
-    def __init__(self, doc: Document, parent=None, preselected_body_id: Optional[str] = None, preselected_plane_id: Optional[str] = None):
+    changed = Signal()
+
+    def __init__(self, doc: Document, parent=None, preselected_body_id: Optional[str] = None,
+                 preselected_plane_id: Optional[str] = None, body_manifolds_override: Optional[dict] = None):
         super().__init__("Split Body", parent)
         self.doc = doc
+        self._body_manifolds_override = body_manifolds_override
         form = QFormLayout()
 
         # Target Body
-        self.body_ids = list(doc.bodies.keys())
-        body_names = [doc.bodies[bid].name for bid in self.body_ids]
+        if body_manifolds_override is not None:
+            self.body_ids = list(body_manifolds_override.keys())
+            body_names = [doc.bodies[bid].name if bid in doc.bodies else bid for bid in self.body_ids]
+        else:
+            self.body_ids = list(doc.bodies.keys())
+            body_names = [doc.bodies[bid].name for bid in self.body_ids]
         self.cmb_target = QComboBox()
         self.cmb_target.addItems(body_names)
         if preselected_body_id and preselected_body_id in self.body_ids:
@@ -102,6 +117,7 @@ class SplitBodyDialog(BaseFeatureDialog):
         elif doc.selected_body_ids and doc.selected_body_ids[0] in self.body_ids:
             self.cmb_target.setCurrentIndex(self.body_ids.index(doc.selected_body_ids[0]))
         form.addRow("Target Body:", self.cmb_target)
+
 
         # Splitting Plane
         self.plane_keys = []
@@ -138,6 +154,7 @@ class SplitBodyDialog(BaseFeatureDialog):
             self.cmb_plane.setCurrentIndex(self.plane_keys.index(plane_id))
 
     def _update_status(self):
+        self.changed.emit()
         body_id, plane_id = self.get_values()
         if not body_id or not plane_id:
             self.lbl_status.setText("Select a body and a plane to split.")
@@ -145,8 +162,13 @@ class SplitBodyDialog(BaseFeatureDialog):
                 self.btn_ok.setEnabled(False)
             return
 
-        body = self.doc.bodies.get(body_id)
-        if not body:
+        manifold = None
+        if self._body_manifolds_override is not None and body_id in self._body_manifolds_override:
+            manifold = self._body_manifolds_override[body_id]
+        elif body_id in self.doc.bodies:
+            manifold = self.doc.bodies[body_id].manifold
+
+        if manifold is None:
             self.lbl_status.setText("Body not found.")
             if hasattr(self, "btn_ok"):
                 self.btn_ok.setEnabled(False)
@@ -177,8 +199,8 @@ class SplitBodyDialog(BaseFeatureDialog):
         d = float(np.dot(normal, origin))
 
         # Check cut
-        p1 = body.manifold.trim_by_plane(normal, d)
-        p2 = body.manifold.trim_by_plane(-normal, -d)
+        p1 = manifold.trim_by_plane(normal, d)
+        p2 = manifold.trim_by_plane(-normal, -d)
         if p1.is_empty() or p2.is_empty() or p1.volume() < 1e-6 or p2.volume() < 1e-6:
             self.lbl_status.setText("⚠️ Warning: Plane does not cut through the body.")
             self.lbl_status.setStyleSheet("color: #E57373;")
@@ -195,6 +217,7 @@ class SplitBodyDialog(BaseFeatureDialog):
             self.cmb_target.setCurrentIndex(self.body_ids.index(body_id))
             if hasattr(self, "update_preview"):
                 self.update_preview()
+
 
     def get_values(self):
         b_idx = self.cmb_target.currentIndex()

@@ -39,6 +39,10 @@ class FeatureNodeWidget(QFrame):
         "pattern": "🔁",
         "thread": "🔩",
         "offset_face": "↔️",
+        "shell": "🐚",
+        "split_body": "🪚",
+        "move": "🧭",
+        "import_mesh": "📥",
     }
 
     def __init__(self, index: int, feature: Feature, is_active: bool, parent: Optional[QWidget] = None,
@@ -101,6 +105,8 @@ class FeatureNodeWidget(QFrame):
             return f"{f.name}\nDistance {f.distance:g} mm, {f.direction.replace('_', ' ')}, {f.operation.replace('_', ' ')}"
         if t == "emboss":
             return f"{f.name}\n{f.effect.title()} {abs(f.depth):g} mm" + (", flipped" if f.flip else "")
+        if t == "revolve":
+            return f"{f.name}\nAngle {f.angle:g}°, {f.operation.replace('_', ' ')}"
         if t == "box":
             return f"{f.name}\n{f.length:g} x {f.width:g} x {f.height:g} mm"
         if t == "cylinder":
@@ -111,7 +117,18 @@ class FeatureNodeWidget(QFrame):
             return f"{f.name}\n{f.kind} of {len(f.source_ids)} step(s), {f.copies} copies"
         if t == "fillet":
             return f"{f.name}\n{f.kind.title()} {f.size:g} mm on {len(f.edges)} edge(s)"
+        if t == "shell":
+            return f"{f.name}\nThickness {f.thickness:g} mm ({len(getattr(f, 'open_faces', ()) or ())} open face(s))"
+        if t == "offset_face":
+            return f"{f.name}\nOffset {f.distance:g} mm on {len(getattr(f, 'faces', ()) or ())} face(s)"
+        if t == "thread":
+            return f"{f.name}\nØ{f.diameter:g} × {f.pitch:g} mm, L={f.length:g} mm"
+        if t == "split_body":
+            return f"{f.name}\nPlane {f.plane_id}"
+        if t == "move":
+            return f"{f.name}\nΔ({f.dx:g}, {f.dy:g}, {f.dz:g}) mm, ∠({f.rx:g}°, {f.ry:g}°, {f.rz:g}°)"
         return f.name + ("  (suppressed)" if f.suppressed else "")
+
 
     def enterEvent(self, event):
         self.lbl_name.setVisible(True)

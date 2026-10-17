@@ -16,6 +16,22 @@ from omacad.model.faces import ray_hit_face, tangent_chain
 
 class PickerMixin:
     """Mixin providing body, edge, and plane picking operations for Viewport3D."""
+
+    @staticmethod
+    def _ray_hits_body_aabb(body, origin: np.ndarray, ray_dir: np.ndarray, max_t: float = float("inf"), margin: float = 1e-3) -> bool:
+        """Fast slab test against a body's 3D bounding box to skip all faces/triangles when the ray misses the body."""
+        mesh = getattr(body, "render_mesh", None)
+        if mesh is None or getattr(mesh, "bounds_min", None) is None or getattr(mesh, "bounds_max", None) is None:
+            return True
+        bmin = np.asarray(mesh.bounds_min, dtype=float) - margin
+        bmax = np.asarray(mesh.bounds_max, dtype=float) + margin
+        inv_d = np.where(np.abs(ray_dir) > 1e-12, 1.0 / np.where(np.abs(ray_dir) > 1e-12, ray_dir, 1.0), np.inf)
+        t1 = (bmin - origin) * inv_d
+        t2 = (bmax - origin) * inv_d
+        tmin = float(np.max(np.minimum(t1, t2)))
+        tmax = float(np.min(np.maximum(t1, t2)))
+        return tmax >= max(0.0, tmin) and tmin <= max_t
+
     def pick_body(self, x: float, y: float) -> Optional[str]:
         """Returns the body_id of the nearest 3D solid body under the cursor."""
         from omacad.model.faces import ray_mesh_hit
@@ -23,6 +39,8 @@ class PickerMixin:
         origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
         best_t, best_id = float("inf"), None
         for bid, body in self.doc.bodies.items():
+            if not self._ray_hits_body_aabb(body, origin, ray_dir, best_t):
+                continue
             mesh = body.render_mesh
             if mesh is not None and len(mesh.vertices) > 0:
                 hit = ray_mesh_hit(mesh, origin, ray_dir)
@@ -85,8 +103,11 @@ class PickerMixin:
                 direction = mid - origin
                 dist = float(np.linalg.norm(direction))
                 direction = direction / dist if dist > 1e-9 else direction
-                blocked = (not xray) and any((t := ray_hit_face(f, origin, direction)) is not None and t < dist - 1e-3
-                                             for bd in self.doc.bodies.values() if bd.visible for f in bd.faces)
+                blocked = (not xray) and any(
+                    self._ray_hits_body_aabb(bd, origin, direction, dist)
+                    and any((t := ray_hit_face(f, origin, direction)) is not None and t < dist - 1e-3 for f in bd.faces)
+                    for bd in self.doc.bodies.values() if bd.visible
+                )
                 if not blocked:
                     loop_beats_circ = getattr(e, "kind", "") == "loop" and getattr(best, "kind", "") == "circle"
                     circ_beats_loop = getattr(best, "kind", "") == "loop" and getattr(e, "kind", "") == "circle"
@@ -126,13 +147,14 @@ class PickerMixin:
         origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
         best, best_t = None, float("inf")
         for body in self.doc.bodies.values():
-            if not body.visible:
+            if not body.visible or not self._ray_hits_body_aabb(body, origin, ray_dir, best_t):
                 continue
             for face in body.faces:
                 t = ray_hit_face(face, origin, ray_dir)
                 if t is not None and t < best_t:
                     best, best_t = (body, face), t
         return best
+
 
     def _edges_of_face(self, face, body) -> list:
         """All edges forming the boundary and holes of a planar face."""

@@ -746,11 +746,11 @@ class Ribbon(QWidget):
             self.tabs.setCurrentIndex(1)
         else:
             self.tabs.setCurrentIndex(0)
-            self.btn_line.setChecked(False)
-            self.btn_rect.setChecked(False)
-            self.btn_circle.setChecked(False)
-            self.btn_arc.setChecked(False)
-            self.btn_slot.setChecked(False)
-            self.btn_text.setChecked(False)
-            self.btn_dim.setChecked(False)
-            self.btn_construct.setChecked(False)
+            for btn in (
+                self.btn_line, self.btn_rect, self.btn_circle, self.btn_arc,
+                self.btn_slot, self.btn_polygon, self.btn_text, self.btn_fillet_sk,
+                self.btn_trim_sk, self.btn_mirror_sk, self.btn_offset_sk,
+                self.btn_dim, self.btn_move, self.btn_construct,
+            ):
+                btn.setChecked(False)
+

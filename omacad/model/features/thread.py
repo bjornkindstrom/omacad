@@ -239,6 +239,8 @@ class ThreadFeature(Feature):
             "feature_id": self.feature_id,
             "feature_type": "thread",
             "name": self.name,
+            "suppressed": self.suppressed,
+            "exprs": dict(self.exprs),
             "diameter": self.diameter,
             "pitch": self.pitch,
             "length": self.length,
@@ -263,7 +265,7 @@ class ThreadFeature(Feature):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ThreadFeature":
-        return cls(
+        feat = cls(
             feature_id=data["feature_id"],
             name=data.get("name", "Thread"),
             diameter=data["diameter"],
@@ -287,3 +289,7 @@ class ThreadFeature(Feature):
             follow_host=data.get("follow_host", False),
             host_offset=data.get("host_offset", 0.0),
         )
+        feat.suppressed = bool(data.get("suppressed", False))
+        feat.exprs = dict(data.get("exprs") or {})
+        return feat
+

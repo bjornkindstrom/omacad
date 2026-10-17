@@ -3,6 +3,22 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.57 - 2026-10-17
+
+### Fixed
+- **Missing or swapped letter parts (`e`, `o`, `a`, `å`, `ä`, `ö`) after editing sketch text** (#44): when a `SketchText`'s height, font, spacing or string content was edited, `solve_profiles()` could reorder profiles so a letter's outer profile and its counter-hole swapped indices or changed count, causing `Emboss` / `Extrude` / `Revolve` to pick the inner hole instead of the letter. `ProfileRefs` now tracks `_follows_text` and automatically synchronizes with `sketch.text_profile_indices()` whenever text is edited.
+- **UI responsiveness & anti-freeze during live 3D previews**: added 50–60 ms `QTimer` debouncing and interactive quality mode (`quality.set_interactive_mode(True)`) to live previews in `feature_edit.py` and `tool_prompts.py`, precomputed fillet edge resolution outside the spinbox callback in `feature_edit.py`, added fast Ray–AABB bounding-box rejection in `picker_mixin.py`, and cleaned up stale OpenGL VAO/VBO cache entries in `render_mixin.py`.
+- **`EQUAL` constraint between circles**: `solve_sketch()` now writes back solved radii for all `SketchCircle` entities whenever the solver changes their radius (not only polygon group circles).
+
+### Added
+- **Dimensioning for Arcs and Slots (`D` tool & right-click menu)**: clicking a `SketchArc` with the Dimension tool sets its **Radius (`R`)**; clicking a `SketchSlot`'s side sets its **Center-to-Center Length**, and clicking its rounded end cap sets its **Slot Width (`Ø`)**. Both are also available in the right-click context menu.
+- **Complete Timeline Editing for `Split Body`, `Shell`, `Combine` and `Thread`**:
+  - Added full timeline editing + live 3D split-plane preview for `Split Body`.
+  - `Shell` timeline editing now preserves and allows changing open faces (`open_faces`).
+  - `Combine` timeline editing now updates `target_body_id` and `tool_body_id` with historical body names from before the step.
+  - `ThreadFeature` now persists `exprs` and `suppressed` across save/load and timeline edits.
+- **Browser & Ribbon polish**: enabled renaming construction planes (`cplane`) in the Browser, unchecked all 14 sketch tool buttons when leaving sketch mode, added missing timeline icons/tooltips, and translated remaining Swedish UI strings in `side_panel.py`, `tool_prompts.py`, `boolean_dlg.py` and `thread_dlg.py` to English.
+
 ## 0.7.9.56 - 2026-10-17
 
 ### Added

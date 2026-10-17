@@ -824,6 +824,35 @@ class OverlayMixin:
         else:
             self._dim_create("DIAMETER", circ.entity_id, circ.radius * 2.0, label="Diameter (mm):")
 
+    def _dim_arc(self, arc):
+        sk = self.doc.active_sketch
+        existing = next((d for d in sk.dimensions
+                         if d.target_entity_id == arc.entity_id and d.dim_type in ("RADIUS", "DIAMETER")), None)
+        if existing:
+            self.prompt_edit_dimension(sk.sketch_id, existing.dim_id, existing.value)
+            return
+        params = arc.get_circle_params()
+        if params:
+            self._dim_create("RADIUS", arc.entity_id, float(params[1]), label="Radius (mm):")
+
+    def _dim_slot_length(self, slot):
+        sk = self.doc.active_sketch
+        existing = self._dim_existing("LENGTH", slot.entity_id)
+        if existing:
+            self.prompt_edit_dimension(sk.sketch_id, existing.dim_id, existing.value)
+        else:
+            L = math.hypot(slot.center2[0] - slot.center1[0], slot.center2[1] - slot.center1[1])
+            self._dim_create("LENGTH", slot.entity_id, L, label="Slot center-to-center length (mm):")
+
+    def _dim_slot_width(self, slot):
+        sk = self.doc.active_sketch
+        existing = next((d for d in sk.dimensions
+                         if d.target_entity_id == slot.entity_id and d.dim_type in ("DIAMETER", "RADIUS")), None)
+        if existing:
+            self.prompt_edit_dimension(sk.sketch_id, existing.dim_id, existing.value)
+        else:
+            self._dim_create("DIAMETER", slot.entity_id, slot.radius * 2.0, label="Slot width / diameter (mm):")
+
     def _dim_length(self, line):
         sk = self.doc.active_sketch
         existing = self._dim_existing("LENGTH", line.entity_id)
@@ -998,8 +1027,8 @@ class OverlayMixin:
         self.update()
 
     def handle_dimension_tool_click(self, u: float, v: float) -> bool:
-        """Dimension tool: circle = diameter; line + click away = length; line + line = angle;
-        point + point = distance (click again to place); point + line = distance to line.
+        """Dimension tool: circle = diameter; arc = radius; slot = length/width; line + click away = length;
+        line + line = angle; point + point = distance (click again to place); point + line = distance to line.
         Clicking a dimension that already exists edits it. Always consumes the click."""
         if not self.doc.active_sketch:
             return False
@@ -1011,12 +1040,23 @@ class OverlayMixin:
         pend = self._dim_pending
         if not pend:
             if pick is None:
-                self.status_message.emit("Dimension: click a line, circle or end point.")
+                self.status_message.emit("Dimension: click a line, circle, arc, slot or end point.")
             elif pick[0] == "ent" and isinstance(pick[1], SketchCircle):
                 pend.append(pick)
                 self.status_message.emit(
                     "Dimension: click away for the diameter, or click an edge/line to measure to the circle's edge "
                     "(click the centre point instead to measure from the centre).")
+            elif pick[0] == "ent" and isinstance(pick[1], SketchArc):
+                self._dim_arc(pick[1])
+            elif pick[0] == "ent" and isinstance(pick[1], SketchSlot):
+                slot = pick[1]
+                # Clicking near the rounded ends edits width/diameter; clicking along the middle edits center-to-center length
+                d1 = math.hypot(u - slot.center1[0], v - slot.center1[1])
+                d2 = math.hypot(u - slot.center2[0], v - slot.center2[1])
+                if min(d1, d2) < slot.radius * 1.15:
+                    self._dim_slot_width(slot)
+                else:
+                    self._dim_slot_length(slot)
             elif pick[0] == "ent" and not isinstance(pick[1], SketchLine):
                 self.status_message.emit("Dimension: this element type can't be dimensioned here yet.")
             elif pick[0] == "ref":
@@ -1030,6 +1070,7 @@ class OverlayMixin:
                     "Dimension: click a second end point (distance) or a line (distance to line).")
             self.update()
             return True
+
 
         first = pend[0]
         self._dim_pending = []

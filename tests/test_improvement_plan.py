@@ -286,3 +286,95 @@ def test_request_43_extrude_start_offset(tmp_path):
     assert bb2[2] == pytest.approx(-10.0, abs=1e-4)
     assert bb2[5] == pytest.approx(10.0, abs=1e-4)
 
+
+def test_request_44_sketch_text_profile_sync_on_edit(qapp, tmp_path):
+    """Regression test for Request #44: editing SketchText height or content must not drop parts of letters like 'e'."""
+    from omacad.model.sketch import SketchText
+    import numpy as np
+
+    doc = Document()
+    cyl = doc.add_cylinder(radius=25.0, height=30.0)
+
+    sk = doc.start_sketch("XZ")
+    sk.plane.origin = np.array([0.0, -30.0, 15.0], dtype=np.float32)
+    txt = sk.add_text("Text som är lång", anchor=(-20.0, -5.0), height=10.0)
+    doc.finish_sketch()
+
+    initial_text_indices = sk.text_profile_indices()
+    assert len(initial_text_indices) >= 14
+    doc.add_emboss(
+        sketch_id=sk.sketch_id,
+        profile_idx=initial_text_indices[0],
+        extra_profiles=initial_text_indices[1:],
+        depth=1.5,
+    )
+
+    emboss_feat = [f for f in doc.timeline.features if f.feature_type == "emboss"][0]
+    assert [emboss_feat.profile_idx] + list(emboss_feat.extra_profiles) == initial_text_indices
+
+    # Now edit text height from 10.0 -> 8.0 (triggers profile re-ordering in solve_profiles where 'e' and its hole swap indices)
+    txt.height = 8.0
+    sk.solve_profiles()
+    doc.timeline.recompute(doc)
+
+    new_text_indices = sk.text_profile_indices()
+    resolved = [emboss_feat.profile_idx] + list(emboss_feat.extra_profiles)
+    assert sorted(resolved) == sorted(new_text_indices), (
+        f"Expected emboss profiles {new_text_indices}, got {resolved}"
+    )
+
+    # Also edit the text string so the number of glyphs changes completely
+    txt.text = "Text med flera eee"
+    sk.solve_profiles()
+    doc.timeline.recompute(doc)
+
+    changed_indices = sk.text_profile_indices()
+    resolved_after_str_change = [emboss_feat.profile_idx] + list(emboss_feat.extra_profiles)
+    assert sorted(resolved_after_str_change) == sorted(changed_indices)
+
+
+def test_wave2_circle_equal_constraint_and_edit_features(tmp_path):
+    """Verify EQUAL constraint between two regular SketchCircles, plus SplitBody/Shell/Combine/Thread/cplane improvements."""
+    from omacad.model.sketch import SketchCircle, SketchPlane
+
+    doc = Document()
+    sk = doc.start_sketch("XY")
+    c1 = sk.add_circle((0.0, 0.0), 12.0)
+    c2 = sk.add_circle((30.0, 0.0), 5.0)
+    assert doc.add_constraints(sk.sketch_id, [("EQUAL", [c1.entity_id, c2.entity_id], [])])
+    c1_ent = sk.get_entity(c1.entity_id)
+    c2_ent = sk.get_entity(c2.entity_id)
+    assert isinstance(c1_ent, SketchCircle) and isinstance(c2_ent, SketchCircle)
+    assert c1_ent.radius == pytest.approx(c2_ent.radius, abs=1e-4)
+    doc.finish_sketch()
+
+    # Verify split_body is editable and cplane can be renamed
+    assert can_edit(SimpleNamespace(feature_type="split_body"))
+    assert "split_body" in Document.EDITABLE
+    assert "combine" in Document.EDITABLE
+    assert "shell" in Document.EDITABLE
+
+    pid = doc.add_construction_plane(SketchPlane.create_named("XY"), 15.0, name="OldPlane")
+    assert doc.rename_item("cplane", pid, "NewPlane")
+    assert doc.construction_planes[pid]["name"] == "NewPlane"
+
+    # Verify ThreadFeature preserves exprs and suppressed in to_dict/from_dict
+    cyl = doc.add_cylinder(radius=5.0, height=20.0)
+    doc.add_thread(
+        diameter=10.0,
+        pitch=1.5,
+        length=15.0,
+        target_body_id=cyl.body_id,
+        operation="join",
+        exprs={"length": "15"},
+    )
+    th_feat = [f for f in doc.timeline.features if f.feature_type == "thread"][0]
+    th_feat.suppressed = True
+    save_file = tmp_path / "thread_exprs.omacad"
+    Exporter.save_project(doc, str(save_file))
+    doc2 = Exporter.load_project(str(save_file))
+    th2 = [f for f in doc2.timeline.features if f.feature_type == "thread"][0]
+    assert th2.suppressed is True
+    assert th2.exprs == {"length": "15"}
+
+

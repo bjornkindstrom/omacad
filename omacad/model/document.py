@@ -313,6 +313,7 @@ class Document:
         host_length: Optional[float] = None,
         follow_host: bool = False,
         host_offset: float = 0.0,
+        exprs: Optional[Dict[str, str]] = None,
     ) -> Optional[Body]:
         feat_id = f"thread_{len(self.timeline.features) + 1}"
         feat_name = name or f"Thread {len([f for f in self.timeline.features if f.feature_type == 'thread']) + 1}"
@@ -339,6 +340,8 @@ class Document:
             follow_host=follow_host,
             host_offset=host_offset,
         )
+        if exprs:
+            feat.exprs = {k: v for k, v in exprs.items() if v}
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
@@ -346,6 +349,7 @@ class Document:
             return self.bodies[target_body_id]
         body_id = f"body_{feat_id}"
         return self.bodies.get(body_id)
+
 
     def refresh_sketch_references(self, sketch: Sketch) -> None:
         """Face outlines of the bodies that exist now, so regions bounded by them can be profiles."""
@@ -689,13 +693,13 @@ class Document:
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation"),
         "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
-        "combine": ("operation", "keep_tool"),
+        "combine": ("target_body_id", "tool_body_id", "operation", "keep_tool"),
         "fillet": ("size", "kind"),
         "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length", "grow", "follow_host", "host_offset"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
                     "mirror_mode", "about", "angle"),
-        "split_body": ("target_body_id", "plane_id"),
-        "shell": ("thickness", "direction", "thickness2"),
+        "split_body": ("target_body_id", "plane_id", "plane_origin", "plane_normal"),
+        "shell": ("thickness", "direction", "thickness2", "open_faces"),
         "offset_face": ("distance",),
         "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle"),
         "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot"),
@@ -748,17 +752,20 @@ class Document:
         return feat.suppressed
 
     def dependents_of(self, index: int) -> list:
-        """Indices of later steps that need step `index` (extrudes of a sketch, combines of its bodies)."""
+        """Indices of later steps that need step `index` (extrudes of a sketch, combines/modifies of its bodies)."""
         feats = self.timeline.features
         feat = feats[index]
         out = []
+        body_ids = {f"body_{feat.feature_id}"}
         for j in range(index + 1, len(feats)):
             other = feats[j]
             uses_sketch = (isinstance(feat, SketchFeature)
                            and getattr(other, "sketch_id", None) == feat.sketch.sketch_id)
-            body_ids = {f"body_{feat.feature_id}"}
-            uses_body = (other.feature_type == "combine"
-                         and (other.target_body_id in body_ids or other.tool_body_id in body_ids))
+            uses_body = (
+                getattr(other, "target_body_id", None) in body_ids
+                or getattr(other, "tool_body_id", None) in body_ids
+                or (other.feature_type == "pattern" and feat.feature_id in (getattr(other, "source_ids", None) or []))
+            )
             if uses_sketch or uses_body:
                 out.append(j)
         return out
@@ -789,7 +796,7 @@ class Document:
 
     @undoable("Rename")
     def rename_item(self, kind: str, item_id: str, name: str) -> bool:
-        """Renames a sketch or body. The creating feature is renamed too, so the name survives
+        """Renames a sketch, body, section or construction plane. The creating feature is renamed too, so the name survives
         recompute, save and load."""
         name = name.strip()
         if not name:
@@ -806,6 +813,10 @@ class Document:
             if item_id not in self.sections:
                 return False
             self.sections[item_id]["name"] = name
+        elif kind == "cplane":
+            if item_id not in self.construction_planes:
+                return False
+            self.construction_planes[item_id]["name"] = name
         elif kind == "body":
             body = self.bodies.get(item_id)
             if not body:
@@ -820,6 +831,7 @@ class Document:
             return False
         self.notify_changed()
         return True
+
 
     @undoable("Combine")
     def combine_bodies(self, target_id: str, tool_id: str, operation: str = "join", keep_tool: bool = False):

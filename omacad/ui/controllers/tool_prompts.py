@@ -22,6 +22,27 @@ from omacad.ui.canvas_dialog import CanvasEditorDialog
 
 class ToolPromptsMixin:
     """Mixin providing all prompt_* methods for MainWindow."""
+
+    def _connect_debounced_preview(self, dlg, preview_fn, interval_ms: int = 50):
+        """Connects `dlg.changed` to `preview_fn` via a single-shot QTimer (debounced) while running `preview_fn`
+        in interactive quality mode so typing numbers into spinboxes never blocks the UI thread."""
+        from omacad.model import quality
+        timer = QTimer(dlg)
+        timer.setSingleShot(True)
+        timer.setInterval(interval_ms)
+
+        def _fire():
+            prev = quality.is_interactive_mode()
+            quality.set_interactive_mode(True)
+            try:
+                preview_fn()
+            finally:
+                quality.set_interactive_mode(prev)
+
+        timer.timeout.connect(_fire)
+        dlg.changed.connect(timer.start)
+        return timer
+
     def prompt_round_edges(self, kind: str = "fillet", edges=None):
         """Fillet / Chamfer: click edges (outside or inside corners), type the size, OK."""
         if getattr(self, "_round_dlg", None) is not None:
@@ -131,12 +152,13 @@ class ToolPromptsMixin:
         self.viewport.edges_selection_changed.connect(preview)
         self.viewport.edge_pick_cancelled.connect(on_cancel_pick)
         self.viewport.extrude_handle_dragged.connect(on_handle_drag)
-        dlg.changed.connect(preview)
+        self._connect_debounced_preview(dlg, preview)
         dlg.finished.connect(on_finished)
         dlg.show()
         if edges:   # started from a right-click on an edge or face
             self.viewport.selected_edges = list(edges)
             self.viewport.edges_selection_changed.emit()
+
 
     def prompt_offset_face(self, face=None):
         """Offset Face: move flat faces, or change the radius of holes and pins (tolerances for threads and fits)."""
@@ -266,7 +288,7 @@ class ToolPromptsMixin:
             self.status_label.setText(f"Pattern: {feat.name} is {'no longer' if state == Qt.CheckState.Unchecked else 'now'} part of the copy "
                                       "(click it again to toggle).")
 
-        dlg.changed.connect(preview)
+        self._connect_debounced_preview(dlg, preview)
         self.dock(dlg)
         self.viewport.pick_step_mode = True
         self.viewport.step_point_clicked.connect(on_step_clicked)
@@ -594,7 +616,7 @@ class ToolPromptsMixin:
                     self.viewport.zoom_fit()
                     self.status_label.setText(f"Extruded profile by {dist} mm ({op}).")
 
-        dlg.changed.connect(refresh_preview)
+        self._connect_debounced_preview(dlg, refresh_preview)
         dlg.pick_face_requested.connect(on_pick_face)
         self.viewport.extrude_handle_dragged.connect(on_handle_dragged)
         self.viewport.target_plane_picked.connect(on_target_plane)
@@ -673,7 +695,7 @@ class ToolPromptsMixin:
                     self.status_label.setText(new.problem or f"{new.name}: {new.angle:g}° ({new.operation}).")
             self.viewport.update()
 
-        dlg.changed.connect(refresh_preview)
+        self._connect_debounced_preview(dlg, refresh_preview)
         self.viewport.profile_picked.connect(on_pick)
         dlg.finished.connect(on_finished)
         dlg.show()
@@ -699,7 +721,7 @@ class ToolPromptsMixin:
 
         def on_pick_face():
             self.viewport.begin_plane_pick("primitive_face")
-            self.status_label.setText("Box: Klicka på ytan eller planet där undersidan ska starta (Esc avbryter).")
+            self.status_label.setText("Box: Click the face or plane where the bottom should start (Esc to cancel).")
 
         def on_face_picked(plane):
             dlg.set_target_plane(plane)
@@ -707,7 +729,6 @@ class ToolPromptsMixin:
 
         def on_finished(result):
             for sig, slot in (
-                (dlg.changed, refresh_preview),
                 (dlg.pick_face_requested, on_pick_face),
                 (self.viewport.primitive_face_picked, on_face_picked),
             ):
@@ -728,7 +749,7 @@ class ToolPromptsMixin:
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
 
-        dlg.changed.connect(refresh_preview)
+        self._connect_debounced_preview(dlg, refresh_preview)
         dlg.pick_face_requested.connect(on_pick_face)
         self.viewport.primitive_face_picked.connect(on_face_picked)
         dlg.finished.connect(on_finished)
@@ -755,7 +776,7 @@ class ToolPromptsMixin:
 
         def on_pick_face():
             self.viewport.begin_plane_pick("primitive_face")
-            self.status_label.setText("Cylinder: Klicka på ytan eller planet där undersidan ska starta (Esc avbryter).")
+            self.status_label.setText("Cylinder: Click the face or plane where the bottom should start (Esc to cancel).")
 
         def on_face_picked(plane):
             dlg.set_target_plane(plane)
@@ -763,7 +784,6 @@ class ToolPromptsMixin:
 
         def on_finished(result):
             for sig, slot in (
-                (dlg.changed, refresh_preview),
                 (dlg.pick_face_requested, on_pick_face),
                 (self.viewport.primitive_face_picked, on_face_picked),
             ):
@@ -784,7 +804,7 @@ class ToolPromptsMixin:
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} (R={r}, H={h} mm).")
 
-        dlg.changed.connect(refresh_preview)
+        self._connect_debounced_preview(dlg, refresh_preview)
         dlg.pick_face_requested.connect(on_pick_face)
         self.viewport.primitive_face_picked.connect(on_face_picked)
         dlg.finished.connect(on_finished)
@@ -810,12 +830,18 @@ class ToolPromptsMixin:
         preview_timer.setInterval(60)
 
         def do_refresh_preview():
-            vals = dlg.get_values()
-            feat = ThreadFeature("preview_thread", "Preview", **vals)
+            from omacad.model import quality
+            prev = quality.is_interactive()
+            quality.set_interactive_mode(True)
             try:
-                solid = feat.build_solid()
-            except Exception:
-                solid = None
+                vals = dlg.get_values()
+                feat = ThreadFeature("preview_thread", "Preview", **vals)
+                try:
+                    solid = feat.build_solid()
+                except Exception:
+                    solid = None
+            finally:
+                quality.set_interactive_mode(prev)
             op = "cut" if vals.get("operation") == "cut" else "new_body"
             self.viewport.set_preview(solid, op)
             self.viewport.update()
@@ -827,7 +853,7 @@ class ToolPromptsMixin:
 
         def on_pick_face():
             self.viewport.begin_plane_pick("thread_surface")
-            self.status_label.setText("Thread / Coil: Klicka på en plan yta eller direkt på utsidan/insidan av en cylinder (Esc avbryter).")
+            self.status_label.setText("Thread / Coil: Click a flat face or directly on the outside/inside of a cylinder (Esc to cancel).")
 
         def on_face_picked(plane):
             dlg.set_plane(plane)
@@ -855,7 +881,7 @@ class ToolPromptsMixin:
             self.viewport.update()
             if result:
                 vals = dlg.get_values()
-                body = self.doc.add_thread(**vals)
+                body = self.doc.add_thread(exprs=dlg.get_expressions(), **vals)
                 self.viewport.zoom_fit()
                 if body:
                     self.status_label.setText(f"Created {body.name} (D={vals['diameter']}, P={vals['pitch']} mm).")
@@ -1221,7 +1247,7 @@ class ToolPromptsMixin:
                 self.status_label.setText("Move cancelled.")
                 self.viewport.update()
 
-        dlg.changed.connect(refresh_preview)
+        self._connect_debounced_preview(dlg, refresh_preview, interval_ms=30)
         dlg.btn_f2f.toggled.connect(on_face_to_face_toggled)
         dlg.f2f_changed.connect(apply_face_to_face)
         dlg.axis_changed.connect(on_axis_changed)
@@ -1236,6 +1262,7 @@ class ToolPromptsMixin:
 
         refresh_preview()
         dlg.show()
+
 
     def prompt_insert_canvas(self, preselected_plane_id: str = ""):
         """Insert reference image onto a plane, edit/crop/calibrate with tape measure."""
