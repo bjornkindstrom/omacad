@@ -21,11 +21,13 @@ class InspectorPanel(QWidget):
     """Right-hand side panel hosting active tool dialogs and live model/sketch properties."""
 
     tool_action_requested = Signal(str, object)  # e.g. ("extrude", body_id), ("fillet", None)
+    width_fitted = Signal(int)                   # the panel's new width (the ViewCube keeps clear of it)
+
+    MIN_WIDTH, MAX_WIDTH, EDGE_GAP = 200, 380, 10
 
     def __init__(self, doc: Document, parent=None):
         super().__init__(parent)
         self.doc = doc
-        self.setFixedWidth(380)
         self.max_height = 10_000          # set by the main window: the room the panel may use
 
         main_layout = QVBoxLayout(self)
@@ -95,19 +97,28 @@ class InspectorPanel(QWidget):
 
     def eventFilter(self, obj, event):
         if obj is self.content_widget and event.type() == QEvent.Type.LayoutRequest:
-            QTimer.singleShot(0, self.fit_height)
+            QTimer.singleShot(0, self.fit_to_content)
         return super().eventFilter(obj, event)
 
     def set_max_height(self, h: int):
         self.max_height = int(h)
-        self.fit_height()
+        self.fit_to_content()
 
-    def fit_height(self):
-        """As tall as what is shown needs (so nothing has to be scrolled), but never taller than the room."""
-        want = self.header.sizeHint().height() + 8 + self.content_widget.sizeHint().height()
-        h = max(100, min(want, self.max_height))
-        if h != self.height():
-            self.resize(self.width(), h)
+    def fit_to_content(self):
+        """As tall and as wide as what is shown needs (so nothing has to be scrolled), but never taller than
+        the room; the panel stays anchored to the right edge of the view it floats on."""
+        content = self.content_widget.sizeHint()
+        want_h = self.header.sizeHint().height() + 8 + content.height()
+        h = max(100, min(want_h, self.max_height))
+        w = max(content.width(), self.header.sizeHint().width())
+        if want_h > h:                                   # it scrolls: leave room for the scroll bar
+            w += self.scroll.verticalScrollBar().sizeHint().width()
+        w = max(self.MIN_WIDTH, min(w, self.MAX_WIDTH))
+        x = self.parentWidget().width() - w - self.EDGE_GAP if self.parentWidget() else self.x()
+        x = max(self.EDGE_GAP, x)
+        if (x, w, h) != (self.x(), self.width(), self.height()):
+            self.setGeometry(x, self.y(), w, h)
+        self.width_fitted.emit(w)
 
     def set_palette(self, palette):
         """Host the sketch palette at the top of the panel (it hides itself outside sketch mode)."""

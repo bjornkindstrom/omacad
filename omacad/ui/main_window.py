@@ -107,7 +107,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
 
         # Right Inspector overlay floating on viewport
         self.inspector = InspectorPanel(self.doc, self.viewport)
-        self.inspector.setFixedWidth(380)
+        self.inspector.width_fitted.connect(self._keep_viewcube_clear)
         self.inspector.set_palette(self.viewport.sketch_palette)
         _dialogs.SIDE_HOST = self
         self.doc.add_change_listener(self.inspector.refresh_info)
@@ -121,10 +121,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
             bottom_pad = 10
             h = max(100, size.height() - top_pad - bottom_pad)
             self.browser.setGeometry(10, top_pad, 260, h)
-            self.inspector.move(max(10, size.width() - 390), top_pad)
-            self.inspector.set_max_height(h)          # the panel is only as tall as its content needs
-            # ViewCube sits just to the left of the Inspector panel
-            self.viewport.viewcube.right_margin = 405
+            self.inspector.move(self.inspector.x(), top_pad)
+            self.inspector.set_max_height(h)          # the panel fits its content and anchors to the right edge
 
         self.viewport._on_viewport_resized = _update_overlays
         _update_overlays()
@@ -988,9 +986,15 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
             pass
         return self._state_of(Document())
 
+    def _keep_viewcube_clear(self, inspector_width: int):
+        """The ViewCube sits just to the left of the Inspector, whatever width the panel fitted to."""
+        self.viewport.viewcube.right_margin = inspector_width + 25
+        self.viewport.update()
+
     def grab_with_overlay(self, view_shot):
         """Window screenshot where the 3D view includes its painter overlay (dimensions, banner, ViewCube):
-        `QWidget.grab` renders only the GL scene of a QOpenGLWidget, so the framebuffer grab is painted on top."""
+        `QWidget.grab` renders only the GL scene of a QOpenGLWidget, so the framebuffer grab is painted on top,
+        and then the panels floating on the view (Browser, Inspector, ...) on top of that."""
         from PySide6.QtCore import QRectF
         from PySide6.QtGui import QPainter
         shot = self.grab()
@@ -998,6 +1002,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         try:
             top_left = self.viewport.mapTo(self, self.viewport.rect().topLeft())
             painter.drawImage(QRectF(top_left.x(), top_left.y(), self.viewport.width(), self.viewport.height()), view_shot)
+            for child in self.viewport.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
+                if child.isVisible():
+                    painter.drawPixmap(child.mapTo(self, child.rect().topLeft()), child.grab())
         finally:
             painter.end()
         return shot

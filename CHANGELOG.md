@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.39 - 2026-10-17
+
+### Fixed
+- The Inspector (Design overview, Shortcuts, tool panels) is as wide as what it shows instead of a fixed 380 px, stays at the right edge, and the ViewCube moves along with it.
+- The window screenshot in a problem report (F9) now includes the Browser and Inspector panels that float on the 3D view.
+
 ## 0.7.9.38 - 2026-10-17
 
 ### Fixed
