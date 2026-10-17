@@ -43,3 +43,33 @@ def lay_on_ground_values(face_normal, face_origin, centre, about_centre: bool = 
     pivot = np.asarray(centre, dtype=float) if about_centre else np.zeros(3)
     moved = pivot + R @ (np.asarray(face_origin, dtype=float) - pivot)
     return 0.0, 0.0, -float(moved[2]), rx, ry, rz
+
+
+def face_centroid(face) -> np.ndarray:
+    """Area-weighted centre of a PlanarFace's triangles."""
+    tris = np.asarray(face.tris, dtype=float).reshape(-1, 3, 3)
+    area = 0.5 * np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+    if float(area.sum()) < 1e-12:
+        return np.asarray(face.origin, dtype=float)
+    return (tris.mean(axis=1) * area[:, None]).sum(axis=0) / float(area.sum())
+
+
+def face_to_face_values(src_normal, src_point, dst_normal, dst_point, centre, about_centre: bool = True,
+                        mode: str = "touch", centre_on: bool = True) -> tuple:
+    """(dx, dy, dz, rx, ry, rz) for a Move step that brings a body's face onto another face or plane.
+    mode "touch": turn the body so the faces meet (normals opposite, like parts being assembled);
+         "flush": turn it so the faces look the same way and lie in one plane;
+         "slide": no turning, only move along the target's normal until the planes coincide.
+    centre_on: also slide the face's point onto the target's point (src_point/dst_point are the face centres);
+    otherwise the body only moves along the target normal. Rotation is about `centre` or the world origin."""
+    sn = np.asarray(src_normal, dtype=float)
+    sn = sn / np.linalg.norm(sn)
+    dn = np.asarray(dst_normal, dtype=float)
+    dn = dn / np.linalg.norm(dn)
+    R = np.eye(3) if mode == "slide" else rotation_aligning(sn, -dn if mode == "touch" else dn)
+    pivot = np.asarray(centre, dtype=float) if about_centre else np.zeros(3)
+    moved = pivot + R @ (np.asarray(src_point, dtype=float) - pivot)
+    gap = np.asarray(dst_point, dtype=float) - moved
+    shift = gap if centre_on else dn * float(gap @ dn)
+    rx, ry, rz = euler_xyz_degrees(R)
+    return float(shift[0]), float(shift[1]), float(shift[2]), rx, ry, rz

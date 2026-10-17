@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.42 - 2026-10-17
+
+### Added
+- Move / Rotate: **Face to face**. Press *Pick two faces…*, click a face on the body, then the face or plane it should go to; the movement and turning are filled in (live preview). *Direction*: **Touch** (turn so the faces meet, like assembling parts), **Flush** (both faces look the same way, in one plane) or **Slide** (no turning, along the target's normal). *Centre on target* puts the face's centre on the target's centre, off keeps the sideways position. Changing the choices recomputes from the same two clicks.
+
 ## 0.7.9.41 - 2026-10-17
 
 ### Added

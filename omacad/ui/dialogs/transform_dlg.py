@@ -3,7 +3,7 @@
 from typing import Dict
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QFormLayout, QComboBox, QHBoxLayout, QPushButton
+    QFormLayout, QComboBox, QHBoxLayout, QPushButton, QCheckBox
 )
 from omacad.model.document import Document
 from omacad.ui.expr_spin import ExprDoubleSpinBox
@@ -13,6 +13,7 @@ from omacad.ui.dialogs.base import BaseFeatureDialog
 class MoveBodyDialog(BaseFeatureDialog):
     changed = Signal()
     axis_changed = Signal(str)
+    f2f_changed = Signal()       # direction or centring changed after the two faces were clicked
 
     def __init__(self, doc: Document, parent=None, preselected_body_id=None):
         super().__init__("Move / Rotate Body", parent)
@@ -115,6 +116,27 @@ class MoveBodyDialog(BaseFeatureDialog):
         self.btn_lay.setToolTip("Then click the face in the 3D view that should rest on the ground (XY plane). "
                                 "The rotation and height are filled in below; adjust them or press OK.")
         form.addRow("Lay on plane:", self.btn_lay)
+
+        # Face to face: click a face of the body, then the face or plane it should go to
+        self.btn_f2f = QPushButton("Pick two faces…")
+        self.btn_f2f.setCheckable(True)
+        self.btn_f2f.setToolTip("Click a face on the body, then click the face or plane it should move to. "
+                                "The movement is filled in below; change the choices here or adjust the numbers.")
+        form.addRow("Face to face:", self.btn_f2f)
+        self.cmb_f2f = QComboBox()
+        self.cmb_f2f.addItem("Touch", "touch")
+        self.cmb_f2f.addItem("Flush", "flush")
+        self.cmb_f2f.addItem("Slide", "slide")
+        self.cmb_f2f.setToolTip("Touch: turn the body so the two faces meet (like parts being assembled).\n"
+                                "Flush: turn it so both faces look the same way, in one plane.\n"
+                                "Slide: no turning, move along the target's normal until the planes coincide.")
+        form.addRow("Direction:", self.cmb_f2f)
+        self.chk_f2f_centre = QCheckBox("Centre on target")
+        self.chk_f2f_centre.setChecked(True)
+        self.chk_f2f_centre.setToolTip("Off: the body only moves along the target's normal, sideways position stays.")
+        form.addRow("", self.chk_f2f_centre)
+        self.cmb_f2f.currentIndexChanged.connect(lambda *_: self.f2f_changed.emit())     # the prompt recomputes
+        self.chk_f2f_centre.toggled.connect(lambda *_: self.f2f_changed.emit())
 
         self.main_layout.addLayout(form)
         self.add_buttons()

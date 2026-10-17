@@ -1146,8 +1146,43 @@ class ToolPromptsMixin:
         def on_gizmo_axis_selected(axis: str):
             dlg.set_active_axis(axis)
 
+        f2f = {"src": None, "dst": None}      # the two clicks of "Move a face to another face"
+
+        def apply_face_to_face():
+            from omacad.model.geometry import face_centroid, face_to_face_values
+            src, dst = f2f["src"], f2f["dst"]
+            if src is None or dst is None or src.body_id not in self.doc.bodies:
+                return
+            dst_face = getattr(dst, "face", None)
+            dst_point = face_centroid(dst_face) if dst_face is not None else np.asarray(dst.origin, dtype=float)
+            vals = face_to_face_values(
+                src.normal, face_centroid(src), dst.normal, dst_point, get_body_center(self.doc.bodies[src.body_id]),
+                about_centre=dlg.cmb_pivot.currentIndex() == 0, mode=dlg.cmb_f2f.currentData(),
+                centre_on=dlg.chk_f2f_centre.isChecked())
+            for spn, v in zip((dlg.spn_dx, dlg.spn_dy, dlg.spn_dz, dlg.spn_rx, dlg.spn_ry, dlg.spn_rz), vals):
+                spn.setValue(round(v, 4))
+
+        def on_face_to_face_toggled(on):
+            if on:
+                f2f["src"] = f2f["dst"] = None
+                self.status_label.setText("Face to face: click the face on the body that should move.")
+
         def on_face_picked(plane):
             face = getattr(plane, "face", None)
+            if dlg.btn_f2f.isChecked():
+                if f2f["src"] is None:
+                    if face is None or not hasattr(face, "body_id"):
+                        self.status_label.setText("Face to face: first click a face on the body (not a plane).")
+                        return
+                    f2f["src"] = face
+                    dlg.select_body(face.body_id)
+                    self.status_label.setText("Face to face: now click the face or plane it should move to.")
+                else:
+                    f2f["dst"] = plane
+                    dlg.btn_f2f.setChecked(False)
+                    apply_face_to_face()
+                    self.status_label.setText("Face to face: done. Change the direction or the numbers, then OK.")
+                return
             if face is not None and hasattr(face, "body_id"):
                 dlg.select_body(face.body_id)
                 if dlg.btn_lay.isChecked() and face.body_id in self.doc.bodies:
@@ -1202,6 +1237,8 @@ class ToolPromptsMixin:
                 self.viewport.update()
 
         dlg.changed.connect(refresh_preview)
+        dlg.btn_f2f.toggled.connect(on_face_to_face_toggled)
+        dlg.f2f_changed.connect(apply_face_to_face)
         dlg.axis_changed.connect(on_axis_changed)
         dlg.finished.connect(on_finished)
         self.viewport.move_gizmo_dragged.connect(on_gizmo_drag)
