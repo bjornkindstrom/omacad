@@ -303,6 +303,8 @@ class Document:
         anchor: str = "bottom",
         anchor_gap: float = 0.0,
         host_length: Optional[float] = None,
+        follow_host: bool = False,
+        host_offset: float = 0.0,
     ) -> Optional[Body]:
         feat_id = f"thread_{len(self.timeline.features) + 1}"
         feat_name = name or f"Thread {len([f for f in self.timeline.features if f.feature_type == 'thread']) + 1}"
@@ -326,6 +328,8 @@ class Document:
             anchor=anchor,
             anchor_gap=anchor_gap,
             host_length=host_length,
+            follow_host=follow_host,
+            host_offset=host_offset,
         )
         self.timeline.add_feature(feat)
         feat.execute(self)
@@ -659,7 +663,7 @@ class Document:
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
         "combine": ("operation",),
         "fillet": ("size", "kind"),
-        "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length", "grow"),
+        "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length", "grow", "follow_host", "host_offset"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
                     "mirror_mode", "about", "angle"),
         "split_body": ("target_body_id", "plane_id"),

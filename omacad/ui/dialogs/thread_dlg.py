@@ -177,13 +177,38 @@ class ThreadDialog(BaseFeatureDialog):
         anchor_row.addWidget(self.cmb_anchor, 1)
         anchor_row.addWidget(self.spn_gap)
         form.addRow("Place at:", anchor_row)
+        self.host_diameter = None          # the picked cylinder's diameter (None: no cylinder)
+        self.chk_follow = QCheckBox("Follow the cylinder's diameter")
+        self.chk_follow.setToolTip("The thread keeps sitting on the cylinder when an earlier step (Offset Face ...) changes "
+                                   "its diameter. The difference between the typed diameter and the cylinder's is kept.")
+        self.chk_follow.toggled.connect(self._follow_toggled)
+        form.addRow("", self.chk_follow)
         self._update_anchor_enabled()
 
         self.main_layout.addLayout(form)
         self.add_buttons()
 
+    def _follow_toggled(self, on: bool):
+        if on and self.host_diameter is not None and abs(self.spn_dia.value() - self.host_diameter) > 1e-6 \
+                and not getattr(self, "_loading", False):
+            self.spn_dia.setValue(self.host_diameter)       # switching it on: take the cylinder's diameter as it is now
+        self.changed.emit()
+
+    def set_host(self, diameter, follow: bool):
+        """Used when editing an existing thread: the cylinder's diameter as it is now, and whether the thread follows it."""
+        self.host_diameter = diameter
+        self._loading = True
+        try:
+            self.chk_follow.setChecked(bool(follow) and diameter is not None)
+        finally:
+            self._loading = False
+        self._update_anchor_enabled()
+
     def _update_anchor_enabled(self):
         known = self.host_length is not None
+        self.chk_follow.setEnabled(known and self.host_diameter is not None)
+        if not (known and self.host_diameter is not None):
+            self.chk_follow.setChecked(False)
         for w in (self.cmb_anchor, self.spn_gap):
             w.setEnabled(known)
             w.setToolTip("Pick a cylinder (outside or inside) to choose which end the thread starts from." if not known
@@ -245,6 +270,7 @@ class ThreadDialog(BaseFeatureDialog):
     def set_plane(self, plane):
         if plane is None:
             self.host_length = None
+            self.host_diameter = None
             self._update_anchor_enabled()
             self.plane_origin = None
             self.plane_normal = None
@@ -255,6 +281,7 @@ class ThreadDialog(BaseFeatureDialog):
             return
 
         self.host_length = None            # a plain face has no "other end"
+        self.host_diameter = None
         self._update_anchor_enabled()
         self.plane_origin = list(map(float, plane.origin))
         self.plane_normal = list(map(float, plane.normal))
@@ -330,7 +357,13 @@ class ThreadDialog(BaseFeatureDialog):
         self.plane_v = list(map(float, info.get("v_axis", [0, 1, 0])))
 
         self.host_length = length
+        self.host_diameter = dia
         self._update_anchor_enabled()
+        self._loading = True
+        try:
+            self.chk_follow.setChecked(True)               # a thread on a cylinder follows it by default
+        finally:
+            self._loading = False
         kind_desc = "Insida hål" if is_internal else "Utsida cylinder"
         self.lbl_face.setText(f"{kind_desc} (Ø{dia:g} mm, L={length:g} mm)")
 
@@ -372,4 +405,6 @@ class ThreadDialog(BaseFeatureDialog):
             "anchor": str(self.cmb_anchor.currentData() or "bottom"),
             "anchor_gap": self.spn_gap.value(),
             "host_length": self.host_length,
+            "follow_host": bool(self.chk_follow.isChecked() and self.chk_follow.isEnabled()),
+            "host_offset": (self.spn_dia.value() - self.host_diameter) if self.host_diameter is not None else 0.0,
         }

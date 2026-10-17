@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.45 - 2026-10-17
+
+### Added
+- A thread on a cylinder now follows the cylinder's diameter (#37): it is measured when the Thread step runs, so an Offset Face (or any earlier step) that changes the cylinder carries the thread along; the difference you typed (for example -0.01 mm) is kept. New threads on a cylinder follow by default; in *Edit Thread* the checkbox **Follow the cylinder's diameter** switches it on for an older thread (it then takes the cylinder's diameter as it is now).
+
 ## 0.7.9.44 - 2026-10-17
 
 ### Fixed

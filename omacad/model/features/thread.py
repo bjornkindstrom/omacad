@@ -37,6 +37,8 @@ class ThreadFeature(Feature):
         anchor_gap: float = 0.0,
         host_length: Optional[float] = None,
         grow: float = 0.0,
+        follow_host: bool = False,
+        host_offset: float = 0.0,
     ):
         super().__init__(feature_id, "thread", name)
         # Where along a cylinder the thread sits: `anchor` "bottom"/"top" is the end it starts from, `anchor_gap` the
@@ -45,6 +47,11 @@ class ThreadFeature(Feature):
         self.anchor_gap = float(anchor_gap)
         self.host_length = float(host_length) if host_length is not None else None
         self.grow = float(grow)       # profile offset in mm (set by Offset Face on a thread surface)
+        # follow_host: the thread's diameter is the diameter of the cylinder it sits on (as it is when this step runs,
+        # so an earlier Offset Face on the cylinder carries the thread along) plus host_offset (e.g. -0.01 clearance)
+        self.follow_host = bool(follow_host)
+        self.host_offset = float(host_offset)
+        self._effective = None        # the diameter used the last time this step ran
         self.diameter = float(diameter)
         self.pitch = float(pitch)
         self.length = float(length)
@@ -59,6 +66,40 @@ class ThreadFeature(Feature):
         self.plane_normal = [float(x) for x in plane_normal] if plane_normal is not None else None
         self.plane_u = [float(x) for x in plane_u] if plane_u is not None else None
         self.plane_v = [float(x) for x in plane_v] if plane_v is not None else None
+
+    @property
+    def used_diameter(self) -> float:
+        """The diameter the thread was built with the last time it ran (the typed one when it does not follow)."""
+        return self._effective if (self.follow_host and self._effective is not None) else self.diameter
+
+    def measure_host(self, manifold) -> Optional[float]:
+        """Diameter of the cylinder this thread sits on or in, measured on `manifold` (the target body as it is when
+        this step runs) halfway along the threaded length. Male: the outer wall around the axis; female: the hole."""
+        mat = self.placement()
+        if mat is None:
+            return None
+        full = np.vstack([mat, [0.0, 0.0, 0.0, 1.0]])
+        local = manifold.transform(np.linalg.inv(full)[:3])
+        try:
+            loops = local.slice(self.start_z() + 0.5 * self.length).to_polygons()
+        except Exception:
+            return None
+        best = None
+        for loop in loops:
+            pts = np.asarray(loop, dtype=float)
+            if len(pts) < 8:
+                continue
+            lo, hi = pts.min(axis=0), pts.max(axis=0)
+            if not (lo[0] <= 0.0 <= hi[0] and lo[1] <= 0.0 <= hi[1]):          # must surround the axis
+                continue
+            area = 0.5 * abs(float(np.dot(pts[:, 0], np.roll(pts[:, 1], 1)) - np.dot(pts[:, 1], np.roll(pts[:, 0], 1))))
+            if best is None or (area < best[0] if self.is_female else area > best[0]):
+                best = (area, float(np.linalg.norm(pts, axis=1).mean()))
+        return None if best is None else 2.0 * best[1]
+
+    def start_z(self) -> float:
+        """The thread's start along its own axis: placement() already includes start_offset, so 0."""
+        return 0.0
 
     def start_offset(self) -> float:
         """Distance from the stored plane origin (the cylinder's bottom) to where the thread starts, along its axis."""
@@ -108,7 +149,7 @@ class ThreadFeature(Feature):
         n = n / max(float(np.linalg.norm(n)), 1e-12)
         a = np.asarray(ref["axis"], dtype=float)
         a = a / max(float(np.linalg.norm(a)), 1e-12)
-        if np.linalg.norm(np.cross(a, n)) > 0.01 or abs(float(ref["radius"]) - 0.5 * self.diameter) > 0.6 * self.pitch:
+        if np.linalg.norm(np.cross(a, n)) > 0.01 or abs(float(ref["radius"]) - 0.5 * self.used_diameter) > 0.6 * self.pitch:
             return 0, None
         start = np.asarray(self.plane_origin, dtype=float) + n * self.start_offset()
         for shift in shifts:
@@ -140,11 +181,11 @@ class ThreadFeature(Feature):
         origin = np.array(self.plane_origin, dtype=float) + n * self.start_offset()
         return np.column_stack([u, v, n, origin]).astype(float)
 
-    def build_solid(self, grow: Optional[float] = None) -> m3d.Manifold:
+    def build_solid(self, grow: Optional[float] = None, diameter: Optional[float] = None) -> m3d.Manifold:
         include_core = (self.operation == "new_body" or not self.target_body_id) and not self.is_female
         attached = bool(self.target_body_id and self.operation == "join" and not self.is_female)
         solid = CadKernel.create_thread(
-            diameter=self.diameter,
+            diameter=self.used_diameter if diameter is None else diameter,
             pitch=self.pitch,
             length=self.length,
             is_female=self.is_female,
@@ -162,13 +203,18 @@ class ThreadFeature(Feature):
     def zone(self, extra: float) -> m3d.Manifold:
         """The threaded region (coil + the cylinder it sits on or in) grown by `extra` on every side, radially; used
         by Offset Face to give one body clearance against the other without touching the Thread step."""
-        r = 0.5 * self.diameter + extra
+        r = 0.5 * self.used_diameter + extra
         core = m3d.Manifold.cylinder(self.length, r, r, circular_segments=quality.circle_segments())
         mat = self.placement()
         core = core if mat is None else core.transform(mat)
         return self.build_solid(grow=self.grow + extra) + core
 
     def execute(self, doc: Any) -> None:
+        self._effective = None
+        if self.follow_host and self.target_body_id in doc.bodies and self.operation in ("join", "cut"):
+            host = self.measure_host(doc.bodies[self.target_body_id].manifold)
+            if host is not None:
+                self._effective = host + self.host_offset
         tool = self.build_solid()
 
         if self.target_body_id and self.target_body_id in doc.bodies:
@@ -211,6 +257,8 @@ class ThreadFeature(Feature):
             "anchor_gap": self.anchor_gap,
             "host_length": self.host_length,
             "grow": self.grow,
+            "follow_host": self.follow_host,
+            "host_offset": self.host_offset,
         }
 
     @classmethod
@@ -236,4 +284,6 @@ class ThreadFeature(Feature):
             anchor_gap=data.get("anchor_gap", 0.0),
             host_length=data.get("host_length"),
             grow=data.get("grow", 0.0),
+            follow_host=data.get("follow_host", False),
+            host_offset=data.get("host_offset", 0.0),
         )
