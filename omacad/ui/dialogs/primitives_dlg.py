@@ -7,6 +7,28 @@ from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
 
 
+def _add_taper(dialog, form):
+    dialog.spn_taper = ExprDoubleSpinBox()
+    dialog.spn_taper.setRange(-85., 85.)
+    dialog.spn_taper.setDecimals(2)
+    dialog.spn_taper.setSuffix("°")
+    dialog.spn_taper.setToolTip("Positive narrows the top; negative widens it. The bottom dimensions stay fixed.")
+    dialog.spn_taper.valueChanged.connect(lambda _: dialog.changed.emit())
+    form.addRow("Taper angle:", dialog.spn_taper)
+
+
+def _accept_primitive(dialog, kind):
+    from omacad.model.features.primitives import BoxFeature, CylinderFeature
+    cls = BoxFeature if kind == "box" else CylinderFeature
+    try:
+        cls("validate", "Validate", *dialog.get_values()[:3 if kind == "box" else 2],
+            **dialog.get_smart_params()).build_solid()
+    except ValueError as exc:
+        dialog.lbl_problem.setText(str(exc))
+        return
+    BaseFeatureDialog.accept(dialog)
+
+
 class BoxDialog(BaseFeatureDialog):
     """Dialog for creating a primitive box/block."""
 
@@ -42,6 +64,8 @@ class BoxDialog(BaseFeatureDialog):
         self.spn_height.setSuffix(" mm")
         self.spn_height.valueChanged.connect(lambda _: self.changed.emit())
         form.addRow("Height (Z):", self.spn_height)
+
+        _add_taper(self, form)
 
         # Placement mode
         self.cmb_placement = QComboBox()
@@ -112,9 +136,15 @@ class BoxDialog(BaseFeatureDialog):
         form.addRow("Inner Edge:", inner_row)
 
         self.main_layout.addLayout(form)
+        self.lbl_problem = QLabel("")
+        self.lbl_problem.setWordWrap(True)
+        self.main_layout.addWidget(self.lbl_problem)
         self.add_buttons()
         self._update_face_row_visibility()
         self._update_inner_enabled()
+
+    def accept(self):
+        _accept_primitive(self, "box")
 
     def _on_wall_changed(self, *_):
         self._update_inner_enabled()
@@ -160,6 +190,7 @@ class BoxDialog(BaseFeatureDialog):
             "length": self.spn_length.expression(),
             "width": self.spn_width.expression(),
             "height": self.spn_height.expression(),
+            "taper_angle": self.spn_taper.expression(),
             "wall_thickness": self.spn_wall.expression(),
             "outer_round": self.spn_outer_round.expression(),
             "inner_round": self.spn_inner_round.expression(),
@@ -168,6 +199,7 @@ class BoxDialog(BaseFeatureDialog):
 
     def get_smart_params(self) -> dict:
         return {
+            "taper_angle": self.spn_taper.value(),
             "wall_thickness": self.spn_wall.value(),
             "outer_round": self.spn_outer_round.value(),
             "outer_round_kind": self.cmb_outer_kind.currentData(),
@@ -176,6 +208,7 @@ class BoxDialog(BaseFeatureDialog):
         }
 
     def set_smart_params(self, feat) -> None:
+        self.spn_taper.setValue(getattr(feat, "taper_angle", 0.0))
         self.spn_wall.setValue(getattr(feat, "wall_thickness", 0.0))
         self.spn_outer_round.setValue(getattr(feat, "outer_round", 0.0))
         idx_o = self.cmb_outer_kind.findData(getattr(feat, "outer_round_kind", "fillet"))
@@ -237,6 +270,8 @@ class CylinderDialog(BaseFeatureDialog):
         self.spn_height.setSuffix(" mm")
         self.spn_height.valueChanged.connect(lambda _: self.changed.emit())
         form.addRow("Height:", self.spn_height)
+
+        _add_taper(self, form)
 
         # Placement mode
         self.cmb_placement = QComboBox()
@@ -306,9 +341,15 @@ class CylinderDialog(BaseFeatureDialog):
         form.addRow("Inner Edge:", inner_row)
 
         self.main_layout.addLayout(form)
+        self.lbl_problem = QLabel("")
+        self.lbl_problem.setWordWrap(True)
+        self.main_layout.addWidget(self.lbl_problem)
         self.add_buttons()
         self._update_face_row_visibility()
         self._update_inner_enabled()
+
+    def accept(self):
+        _accept_primitive(self, "cylinder")
 
     def _on_wall_changed(self, *_):
         self._update_inner_enabled()
@@ -353,6 +394,7 @@ class CylinderDialog(BaseFeatureDialog):
         out = {
             "radius": self.spn_radius.expression(),
             "height": self.spn_height.expression(),
+            "taper_angle": self.spn_taper.expression(),
             "wall_thickness": self.spn_wall.expression(),
             "outer_round": self.spn_outer_round.expression(),
             "inner_round": self.spn_inner_round.expression(),
@@ -361,6 +403,7 @@ class CylinderDialog(BaseFeatureDialog):
 
     def get_smart_params(self) -> dict:
         return {
+            "taper_angle": self.spn_taper.value(),
             "wall_thickness": self.spn_wall.value(),
             "outer_round": self.spn_outer_round.value(),
             "outer_round_kind": self.cmb_outer_kind.currentData(),
@@ -369,6 +412,7 @@ class CylinderDialog(BaseFeatureDialog):
         }
 
     def set_smart_params(self, feat) -> None:
+        self.spn_taper.setValue(getattr(feat, "taper_angle", 0.0))
         self.spn_wall.setValue(getattr(feat, "wall_thickness", 0.0))
         self.spn_outer_round.setValue(getattr(feat, "outer_round", 0.0))
         idx_o = self.cmb_outer_kind.findData(getattr(feat, "outer_round_kind", "fillet"))

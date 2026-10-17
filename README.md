@@ -1,6 +1,10 @@
 # Omacad ⚡
 
-Primitiver: dra de blå måtthandtagen i förhandsvisningen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie. Måttfälten följer med; OK skapar och Esc avbryter.
+Verktygspanelens måttfält har sliders; du kan fortfarande skriva exakta värden och formler.
+
+Box och cylinder har **Taper angle**: positiv vinkel smalnar av uppåt, negativ vinkel vidgar, 0° ger raka väggar. Fungerar även med shell.
+
+Primitiver: dra de blå måtthandtagen i förhandsvisningen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie. Måttfälten följer med; OK skapar och Esc avbryter. **Shelled Box** och **Shelled Cylinder** skapar öppna skal med justerbar vägg-/bottentjocklek (standard 2 mm, ändras under Settings → Sketch & View → Primitive shell thickness).
 
 **Version 0.7.6** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 

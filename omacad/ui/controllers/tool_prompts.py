@@ -704,9 +704,20 @@ class ToolPromptsMixin:
         dlg.show()
         refresh_preview()
 
-    def prompt_box(self):
+    def prompt_shelled_box(self):
+        self.prompt_box(shelled=True)
+
+    def prompt_shelled_cylinder(self):
+        self.prompt_cylinder(shelled=True)
+
+    def prompt_box(self, shelled=False):
         from omacad.model.features.primitives import BoxFeature
         dlg = BoxDialog(self)
+        if shelled:
+            from omacad.ui.settings import get_settings
+            dlg.setWindowTitle("Create Shelled Box")
+            dlg.spn_wall.setValue(float(get_settings().get("primitive_shell_thickness", 2.0)))
+
 
         def refresh_preview():
             l, w, h, center, po, pn, pu, pv = dlg.get_values()
@@ -715,10 +726,12 @@ class ToolPromptsMixin:
                               plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
             try:
                 solid = feat.build_solid()
+                dlg.lbl_problem.clear()
             except Exception as exc:
                 from omacad import applog
                 applog.log(f"Box preview error: {exc}")
                 solid = None
+                dlg.lbl_problem.setText(str(exc))
             self.viewport.set_preview(solid, "new_body")
             self.viewport.update()
 
@@ -762,9 +775,14 @@ class ToolPromptsMixin:
         self.dock(dlg)
         refresh_preview()
 
-    def prompt_cylinder(self):
+    def prompt_cylinder(self, shelled=False):
         from omacad.model.features.primitives import CylinderFeature
         dlg = CylinderDialog(self)
+        if shelled:
+            from omacad.ui.settings import get_settings
+            dlg.setWindowTitle("Create Shelled Cylinder")
+            dlg.spn_wall.setValue(float(get_settings().get("primitive_shell_thickness", 2.0)))
+
 
         def refresh_preview():
             r, h, center, po, pn, pu, pv = dlg.get_values()
@@ -773,10 +791,12 @@ class ToolPromptsMixin:
                                    plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
             try:
                 solid = feat.build_solid()
+                dlg.lbl_problem.clear()
             except Exception as exc:
                 from omacad import applog
                 applog.log(f"Cylinder preview error: {exc}")
                 solid = None
+                dlg.lbl_problem.setText(str(exc))
             self.viewport.set_preview(solid, "new_body")
             self.viewport.update()
 

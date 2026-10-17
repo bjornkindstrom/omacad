@@ -373,6 +373,19 @@ class SettingsDialog(QDialog):
         primitive_row.addStretch()
         lay_sketch.addLayout(primitive_row)
 
+        shell_row = QHBoxLayout()
+        shell_row.addWidget(QLabel("Primitive shell thickness:"))
+        self.spn_primitive_shell = QDoubleSpinBox()
+        self.spn_primitive_shell.setRange(0.1, 5000.0)
+        self.spn_primitive_shell.setDecimals(2)
+        self.spn_primitive_shell.setSingleStep(0.5)
+        self.spn_primitive_shell.setSuffix(" mm")
+        self.spn_primitive_shell.setValue(float(self.settings.get("primitive_shell_thickness", 2.0)))
+        self.spn_primitive_shell.setToolTip("Default wall and floor thickness for Shelled Box and Shelled Cylinder. Each shape can override it using Shell Wall.")
+        shell_row.addWidget(self.spn_primitive_shell)
+        shell_row.addStretch()
+        lay_sketch.addLayout(shell_row)
+
         # The extrude arrow
         arrow_row = QHBoxLayout()
         lbl_arrow = QLabel("Extrude arrow size:")
@@ -580,6 +593,7 @@ class SettingsDialog(QDialog):
             self.cmb_pos.setCurrentIndex(idx_p)
         self.chk_autohide.setChecked(True)
         self.chk_invert_zoom.setChecked(False)
+        self.spn_primitive_shell.setValue(2.0)
         self.cmb_primitive_decimals.setCurrentIndex(0)
         self.spn_guide_gap.setValue(6.0)
         self.spn_grid.setValue(5.0)
@@ -615,6 +629,7 @@ class SettingsDialog(QDialog):
             "palette_position": self.cmb_pos.currentData(),
             "autohide_palette_on_measure": self.chk_autohide.isChecked(),
             "invert_zoom": self.chk_invert_zoom.isChecked(),
+            "primitive_shell_thickness": self.spn_primitive_shell.value(),
             "primitive_drag_decimals": self.cmb_primitive_decimals.currentData(),
             "guide_line_gap": self.spn_guide_gap.value(),
             "grid_step": self.spn_grid.value(),

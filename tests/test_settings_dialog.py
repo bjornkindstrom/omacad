@@ -37,12 +37,17 @@ def test_primitive_precision_save_reload_and_reset(monkeypatch):
     monkeypatch.setattr(theme, "set_fixed_theme", lambda *_: None)
     dlg = SettingsDialog()
     assert dlg.cmb_primitive_decimals.currentData() == 0
+    assert dlg.spn_primitive_shell.value() == 2
+    dlg.spn_primitive_shell.setValue(3.5)
     dlg.cmb_primitive_decimals.setCurrentIndex(2)
     dlg.save_and_close()
     assert SettingsManager(get_settings().config_file).get("primitive_drag_decimals") == 2
 
+    assert SettingsManager(get_settings().config_file).get("primitive_shell_thickness") == 3.5
     dlg = SettingsDialog()
+    assert dlg.spn_primitive_shell.value() == 3.5
     assert dlg.cmb_primitive_decimals.currentData() == 2
     dlg.reset_all()
+    assert dlg.spn_primitive_shell.value() == 2
     assert dlg.cmb_primitive_decimals.currentData() == 0
     dlg.close()

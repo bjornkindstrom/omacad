@@ -162,6 +162,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.emboss_clicked.connect(self.prompt_emboss)
         self.ribbon.box_clicked.connect(self.prompt_box)
         self.ribbon.cylinder_clicked.connect(self.prompt_cylinder)
+        self.ribbon.shelled_box_clicked.connect(self.prompt_shelled_box)
+        self.ribbon.shelled_cylinder_clicked.connect(self.prompt_shelled_cylinder)
         self.ribbon.sphere_clicked.connect(self.prompt_sphere)
         self.ribbon.thread_clicked.connect(self.prompt_thread)
         self.ribbon.combine_clicked.connect(self.prompt_combine)
@@ -310,6 +312,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         menu_create.addSeparator()
         menu_create.addAction("Box", self.prompt_box)
         menu_create.addAction("Cylinder", self.prompt_cylinder)
+        menu_create.addAction("Shelled Box", self.prompt_shelled_box)
+        menu_create.addAction("Shelled Cylinder", self.prompt_shelled_cylinder)
         menu_create.addAction("Sphere", self.prompt_sphere)
         menu_create.addAction("Thread / Coil…", self.prompt_thread)
 

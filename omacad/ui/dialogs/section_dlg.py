@@ -24,6 +24,7 @@ class SectionDialog(BaseFeatureDialog):
         self.main_layout.addWidget(self.slider)
         form = QFormLayout()
         self.spn_offset = ExprDoubleSpinBox()
+        self.spn_offset.setProperty("has_tool_slider", True)
         self.spn_offset.setRange(-100000.0, 100000.0)
         self.spn_offset.setDecimals(2)
         self.spn_offset.setSuffix(" mm")

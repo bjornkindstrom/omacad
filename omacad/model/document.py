@@ -254,15 +254,15 @@ class Document:
     def add_box(self, length: float, width: float, height: float, center: Any = False, name: Optional[str] = None,
                 plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                 wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                inner_round: float = 0.0, inner_round_kind: str = "fillet") -> Body:
+                inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0) -> Body:
         feat_id = f"box_{len(self.timeline.features) + 1}"
         feat_name = name or f"Box {len([f for f in self.timeline.features if f.feature_type == 'box']) + 1}"
         feat = BoxFeature(feat_id, feat_name, length, width, height, center,
                           plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
                           wall_thickness=wall_thickness, outer_round=outer_round, outer_round_kind=outer_round_kind,
-                          inner_round=inner_round, inner_round_kind=inner_round_kind)
-        self.timeline.add_feature(feat)
+                          inner_round=inner_round, inner_round_kind=inner_round_kind, taper_angle=taper_angle)
         feat.execute(self)
+        self.timeline.add_feature(feat)
         self.notify_changed()
         return self.bodies[f"body_{feat_id}"]
 
@@ -270,15 +270,15 @@ class Document:
     def add_cylinder(self, radius: float, height: float, center: Any = False, name: Optional[str] = None,
                      plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                      wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                     inner_round: float = 0.0, inner_round_kind: str = "fillet") -> Body:
+                     inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0) -> Body:
         feat_id = f"cylinder_{len(self.timeline.features) + 1}"
         feat_name = name or f"Cylinder {len([f for f in self.timeline.features if f.feature_type == 'cylinder']) + 1}"
         feat = CylinderFeature(feat_id, feat_name, radius, height, center,
                                plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
                                wall_thickness=wall_thickness, outer_round=outer_round, outer_round_kind=outer_round_kind,
-                               inner_round=inner_round, inner_round_kind=inner_round_kind)
-        self.timeline.add_feature(feat)
+                               inner_round=inner_round, inner_round_kind=inner_round_kind, taper_angle=taper_angle)
         feat.execute(self)
+        self.timeline.add_feature(feat)
         self.notify_changed()
         return self.bodies[f"body_{feat_id}"]
 
@@ -688,9 +688,9 @@ class Document:
     # ---- Editing the history (timeline) ----------------------------------------------
     EDITABLE = {
         "box": ("length", "width", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
-                "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind"),
+                "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
         "cylinder": ("radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
-                     "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind"),
+                     "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
         "sphere": ("radius",),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation"),
         "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),

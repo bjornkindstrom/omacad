@@ -3,6 +3,24 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.66 - 2026-10-17
+
+### Added
+- Taper angle for Box and Cylinder, including shelled versions, with numeric/slider input, live preview, timeline editing and project persistence. Positive angles narrow the top; negative angles widen it.
+- Tapered shells preserve normal wall thickness and floor thickness. Invalid angles or closed openings are rejected before creation.
+
+## 0.7.9.65 - 2026-10-17
+
+### Added
+- Sliders alongside numeric fields throughout docked tool panels, including integer controls. Numeric entry, formulas, live change signals and field limits remain available.
+- Adaptive slider ranges keep small values usable while typed values retain the field's full range. Primitive dimension sliders follow the primitive drag precision preference.
+
+## 0.7.9.64 - 2026-10-17
+
+### Added
+- Shelled Box and Shelled Cylinder in Primitives and Create, with open tops, live dimension handles and per-shape Shell Wall thickness.
+- Settings → Sketch & View → Primitive shell thickness: saved default wall and floor thickness for shelled primitives (2 mm by default).
+
 ## 0.7.9.63 - 2026-10-17
 
 ### Changed

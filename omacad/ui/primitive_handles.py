@@ -8,6 +8,16 @@ from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QPen, QFont
 
 
+def primitive_drag_value(field, value):
+    """Shared precision for primitive sliders and canvas handles."""
+    decimals = max(0, min(2, int(get_settings().get("primitive_drag_decimals", 0))))
+    step = 10.0 ** -decimals
+    minimum = math.ceil(field.minimum() / step) * step
+    maximum = math.floor(field.maximum() / step) * step
+    snapped = max(minimum, min(maximum, round(value, decimals)))
+    return f"{snapped:.{decimals}f}"
+
+
 class PrimitiveHandles:
     def __init__(self, viewport, dialog, kind):
         self.viewport = viewport
@@ -54,6 +64,12 @@ class PrimitiveHandles:
                 entries.append((d.spn_height, 2, h, "Height"))
                 positions.append(np.array([0., 0., h/2 if mode == "center" else h]))
                 factors.append(.5 if mode == "center" else 1.)
+        if self.kind != "sphere" and hasattr(d, "spn_taper"):
+            inset = d.spn_height.value()/2 * math.tan(math.radians(d.spn_taper.value()))
+            # Side handles stay on the sloping walls; dimensions refer to the base.
+            for i, (_, axis, _, _) in enumerate(entries):
+                if axis < 2:
+                    positions[i][axis] -= inset
         return [(field, origin + basis @ pos, basis[:, axis] * factor, label)
                 for (field, axis, _, label), pos, factor in zip(entries, positions, factors)]
 
@@ -91,12 +107,7 @@ class PrimitiveHandles:
         if self.drag is not None:
             field, start, tangent, value = self.drag
             delta = np.dot(np.array([x, y]) - start, tangent) / np.dot(tangent, tangent)
-            decimals = max(0, min(2, int(get_settings().get("primitive_drag_decimals", 0))))
-            step = 10.0 ** -decimals
-            minimum = math.ceil(field.minimum() / step) * step
-            maximum = math.floor(field.maximum() / step) * step
-            snapped = max(minimum, min(maximum, round(value + delta, decimals)))
-            field.set_expression(f"{snapped:.{decimals}f}")
+            field.set_expression(primitive_drag_value(field, value + delta))
             return True
         hover = self.hit(x, y)
         if hover != self.hover:
@@ -138,6 +149,8 @@ class PrimitiveHandles:
 
 def attach_primitive_handles(viewport, dialog, kind):
     handles = PrimitiveHandles(viewport, dialog, kind)
+    for field, *_ in handles.specs():
+        field.setProperty("primitive_dimension", True)
     viewport.primitive_handles = handles
 
     def clear(*_):

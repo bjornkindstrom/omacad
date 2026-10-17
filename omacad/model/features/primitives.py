@@ -2,6 +2,8 @@
 Omacad - Primitive Features (Box, Cylinder, Sphere) and SketchFeature
 """
 
+import math
+
 from typing import Dict, Any
 import numpy as np
 import manifold3d as m3d
@@ -41,15 +43,17 @@ def _rect_cross_section(lx: float, wy: float, r: float, kind: str) -> m3d.CrossS
     return m3d.CrossSection([pts])
 
 
-def _rounded_prism(lx: float, wy: float, hz: float, r: float, kind: str, round_top: bool = True) -> m3d.Manifold:
+def _rounded_prism(lx: float, wy: float, hz: float, r: float, kind: str, round_top: bool = True, taper: float = 0.0) -> m3d.Manifold:
     """Prism centered in XY, z in [0, hz], with vertical corners and bottom (plus optionally top) edges rounded/chamfered."""
     import math
     from omacad.model import quality
     hx, hy = lx / 2.0, wy / 2.0
-    max_r = min(hx - 0.02, hy - 0.02, (hz / 2.0 if round_top else hz) - 0.02)
+    max_r = min(hx - 0.02, hy - 0.02, hx-hz*taper-0.02, hy-hz*taper-0.02,
+                (hz / 2.0 if round_top else hz) - 0.02)
     r = max(0.0, min(float(r), max_r))
     if r <= 1e-4:
-        return m3d.Manifold.extrude(_rect_cross_section(lx, wy, 0.0, kind), hz)
+        return m3d.Manifold.extrude(_rect_cross_section(lx, wy, 0.0, kind), hz,
+                                   scale_top=((lx-2*hz*taper)/lx, (wy-2*hz*taper)/wy))
     n_steps = 1 if kind == "chamfer" else max(6, quality.circle_segments() // 4)
     z_levels = [0.0]
     for k in range(1, n_steps + 1):
@@ -89,23 +93,57 @@ def _rounded_prism(lx: float, wy: float, hz: float, r: float, kind: str, round_t
         if z1 - z0 < 1e-6:
             continue
         ins0, ins1 = inset_at(z0), inset_at(z1)
-        if abs(ins0 - ins1) < 1e-6:
+        if abs(ins0 - ins1) < 1e-6 and abs(taper) < 1e-12:
             cs = _rect_cross_section(lx - 2 * ins0, wy - 2 * ins0, max(0.0, r - ins0), kind)
             slabs.append(m3d.Manifold.extrude(cs, z1 - z0).translate((0.0, 0.0, z0)))
         else:
-            cs0 = _rect_cross_section(lx - 2 * ins0, wy - 2 * ins0, max(0.0, r - ins0), kind)
-            cs1 = _rect_cross_section(lx - 2 * ins1, wy - 2 * ins1, max(0.0, r - ins1), kind)
+            cs0 = _rect_cross_section(lx - 2 * ins0 - 2*z0*taper, wy - 2 * ins0 - 2*z0*taper, max(0.0, r - ins0), kind)
+            cs1 = _rect_cross_section(lx - 2 * ins1 - 2*z1*taper, wy - 2 * ins1 - 2*z1*taper, max(0.0, r - ins1), kind)
             p0 = m3d.Manifold.extrude(cs0, eps).translate((0.0, 0.0, z0))
             p1 = m3d.Manifold.extrude(cs1, eps).translate((0.0, 0.0, z1 - eps))
             slabs.append((p0 + p1).hull())
     return m3d.Manifold.batch_boolean(slabs, m3d.OpType.Add) if len(slabs) > 1 else slabs[0]
 
 
+
+def _tapered_primitive(feat, kind):
+    """Inward draft from the bottom, with constant normal wall and floor thickness."""
+    angle = feat.taper_angle
+    if not math.isfinite(angle) or abs(angle) >= 89:
+        raise ValueError("Taper angle must be between -89 and 89 degrees.")
+    slope = math.tan(math.radians(angle))
+    h = feat.height
+    sizes = [feat.length/2, feat.width/2] if kind == "box" else [feat.radius]
+    if min(min(sizes), min(size-h*slope for size in sizes)) <= 0.001:
+        raise ValueError("Taper closes the top. Reduce the angle or height.")
+    hollow = feat.wall_thickness > 1e-4
+
+    def build(half_sizes, height, radius, rounding, top):
+        if kind == "box":
+            return _rounded_prism(2*half_sizes[0], 2*half_sizes[1], height, radius, rounding, top, taper=slope)
+        return _rounded_cylinder(half_sizes[0], height, radius, rounding, top, taper=slope)
+
+    solid = build(sizes, h, feat.outer_round, feat.outer_round_kind, not hollow)
+    if hollow:
+        t = feat.wall_thickness
+        if t >= h:
+            raise ValueError("Shell thickness must be smaller than the height.")
+        offset = t / math.cos(math.radians(angle))
+        inner = [size-t*slope-offset for size in sizes]
+        # Extend the cavity just beyond the top to guarantee a clean opening.
+        cavity_h = h-t+0.001
+        if min(min(inner), min(size-cavity_h*slope for size in inner)) <= 0.001:
+            raise ValueError("Shell thickness and taper leave no opening. Reduce the thickness or angle.")
+        cavity = build(inner, cavity_h, feat.inner_round, feat.inner_round_kind, False)
+        solid -= cavity.translate((0., 0., t))
+    return solid
+
+
 class BoxFeature(Feature):
     def __init__(self, feature_id: str, name: str, length: float, width: float, height: float, center: Any = False,
                  plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                  wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                 inner_round: float = 0.0, inner_round_kind: str = "fillet"):
+                 inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0):
         super().__init__(feature_id, "box", name)
         self.length = float(length)
         self.width = float(width)
@@ -120,6 +158,7 @@ class BoxFeature(Feature):
         self.outer_round_kind = str(outer_round_kind or "fillet")
         self.inner_round = float(inner_round)
         self.inner_round_kind = str(inner_round_kind or "fillet")
+        self.taper_angle = float(taper_angle)
 
     def build_solid(self) -> m3d.Manifold:
         is_centered = (self.center is True or self.center == "center")
@@ -127,7 +166,13 @@ class BoxFeature(Feature):
         hollow = self.wall_thickness > 1e-4
         has_smart = hollow or self.outer_round > 1e-4 or self.inner_round > 1e-4
 
-        if not has_smart:
+        if self.taper_angle != 0.0:
+            solid = _tapered_primitive(self, "box")
+            if is_centered:
+                solid = solid.translate((0., 0., -self.height/2))
+            elif not is_bottom:
+                solid = solid.translate((self.length/2, self.width/2, 0.))
+        elif not has_smart:
             solid = CadKernel.create_box(self.length, self.width, self.height, is_centered)
             if is_bottom:
                 solid = solid.translate((-self.length / 2.0, -self.width / 2.0, 0.0))
@@ -186,6 +231,7 @@ class BoxFeature(Feature):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "taper_angle": self.taper_angle,
             "wall_thickness": self.wall_thickness,
             "outer_round": self.outer_round,
             "outer_round_kind": self.outer_round_kind,
@@ -194,14 +240,15 @@ class BoxFeature(Feature):
         }
 
 
-def _rounded_cylinder(radius: float, height: float, r: float, kind: str, round_top: bool = True) -> m3d.Manifold:
+def _rounded_cylinder(radius: float, height: float, r: float, kind: str, round_top: bool = True, taper: float = 0.0) -> m3d.Manifold:
     """Cylinder of `radius` and `height` (z in 0..height) with bottom (and optionally top) rim rounded/chamfered."""
     import math
     from omacad.model import quality
-    max_r = min(radius - 0.02, (height / 2.0 if round_top else height) - 0.02)
+    max_r = min(radius - 0.02, radius-height*taper-0.02,
+                (height / 2.0 if round_top else height) - 0.02)
     r = max(0.0, min(float(r), max_r))
     if r <= 1e-4:
-        return CadKernel.create_cylinder(radius, height, center=False)
+        return m3d.Manifold.cylinder(height, radius, radius-height*taper, circular_segments=quality.circle_segments())
     n_arc = 1 if kind == "chamfer" else max(6, quality.circle_segments() // 4)
     pts = [(0.0, 0.0), (radius - r, 0.0)]
     if kind == "chamfer":
@@ -220,6 +267,7 @@ def _rounded_cylinder(radius: float, height: float, r: float, kind: str, round_t
     else:
         pts.append((radius, height))
     pts.append((0.0, height))
+    pts = [(x-z*taper if x > 0 else 0., z) for x, z in pts]
     cs = m3d.CrossSection([pts])
     return m3d.Manifold.revolve(cs, circular_segments=quality.circle_segments())
 
@@ -228,7 +276,7 @@ class CylinderFeature(Feature):
     def __init__(self, feature_id: str, name: str, radius: float, height: float, center: Any = False,
                  plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                  wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                 inner_round: float = 0.0, inner_round_kind: str = "fillet"):
+                 inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0):
         super().__init__(feature_id, "cylinder", name)
         self.radius = float(radius)
         self.height = float(height)
@@ -242,13 +290,18 @@ class CylinderFeature(Feature):
         self.outer_round_kind = str(outer_round_kind or "fillet")
         self.inner_round = float(inner_round)
         self.inner_round_kind = str(inner_round_kind or "fillet")
+        self.taper_angle = float(taper_angle)
 
     def build_solid(self) -> m3d.Manifold:
         is_centered = (self.center is True or self.center == "center")
         hollow = self.wall_thickness > 1e-4
         has_smart = hollow or self.outer_round > 1e-4 or self.inner_round > 1e-4
 
-        if not has_smart:
+        if self.taper_angle != 0.0:
+            solid = _tapered_primitive(self, "cylinder")
+            if is_centered:
+                solid = solid.translate((0., 0., -self.height/2))
+        elif not has_smart:
             solid = CadKernel.create_cylinder(self.radius, self.height, center=is_centered)
         else:
             solid = _rounded_cylinder(self.radius, self.height, self.outer_round, self.outer_round_kind,
@@ -300,6 +353,7 @@ class CylinderFeature(Feature):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "taper_angle": self.taper_angle,
             "wall_thickness": self.wall_thickness,
             "outer_round": self.outer_round,
             "outer_round_kind": self.outer_round_kind,

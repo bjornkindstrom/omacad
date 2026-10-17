@@ -219,7 +219,7 @@ def edit_feature(win, doc, index: int) -> bool:
             if idx >= 0:
                 dlg.cmb_placement.setCurrentIndex(idx)
         for key, spin in (("length", dlg.spn_length), ("width", dlg.spn_width), ("height", dlg.spn_height),
-                          ("wall_thickness", dlg.spn_wall), ("outer_round", dlg.spn_outer_round),
+                          ("taper_angle", dlg.spn_taper), ("wall_thickness", dlg.spn_wall), ("outer_round", dlg.spn_outer_round),
                           ("inner_round", dlg.spn_inner_round)):
             if feat.exprs.get(key):
                 spin.set_expression(feat.exprs[key])
@@ -262,7 +262,7 @@ def edit_feature(win, doc, index: int) -> bool:
             if idx >= 0:
                 dlg.cmb_placement.setCurrentIndex(idx)
         for key, spin in (("radius", dlg.spn_radius), ("height", dlg.spn_height),
-                          ("wall_thickness", dlg.spn_wall), ("outer_round", dlg.spn_outer_round),
+                          ("taper_angle", dlg.spn_taper), ("wall_thickness", dlg.spn_wall), ("outer_round", dlg.spn_outer_round),
                           ("inner_round", dlg.spn_inner_round)):
             if feat.exprs.get(key):
                 spin.set_expression(feat.exprs[key])

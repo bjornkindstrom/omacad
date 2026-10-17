@@ -135,6 +135,9 @@ class InspectorPanel(QWidget):
         if self.current_tool_dlg is not None:
             self.undock_tool(self.current_tool_dlg)
 
+        from omacad.ui.numeric_slider import add_numeric_sliders
+        add_numeric_sliders(dlg)
+
         self.current_tool_dlg = dlg
         dlg._embedded = False
         dlg._is_docked = True
