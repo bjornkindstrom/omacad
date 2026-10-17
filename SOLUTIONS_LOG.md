@@ -112,3 +112,5 @@
 
 ## Kända begränsningar
 Fillet saknas för koner och delbågar. Mönster, ytskisser och offset-plan är absoluta (följer inte kroppen, se S8 i planen). Bågar och slots finns inte i skisslösaren. Hole har modell men ännu ingen dialog. Se `PLAN.md` för vad som kommer.
+
+- **Svart tooltip i tidslinjen, klippta knappar och städad Settings** (0.7.9.53–0.7.9.54, #39/#41): `TimelineBar.scroll_area`, `BrowserWidget` och `InspectorPanel` hade selektorlösa `style(..., "border: none; background: transparent;")`. I Qt gäller en selektorlös QSS-regel på *alla* underliggande widgets — även `QTipLabel` (tooltip-fönstret skapas med den hovrade widgeten som parent) — vilket gav `RGBA(0,0,0,0)` på en top-level popup och därmed en kolsvart ruta. Scopade till `QScrollArea`, `QWidget#BrowserWidget`, `QWidget#InspectorPanel`, `QFrame#TimelineChip` och `QWidget#TimelineBar`, samt lade `QToolTip` i `_MENU_CSS`/`_BASE_CSS`. Minskade `QPushButton`-padding så dialogknappar inte klipps vid hög DPI, tog bort dubletten av `Toolbar button size` i `SettingsDialog` och gjorde *Theme Editor* till en knapp (`ThemeEditorDialog`) under *Appearance*.

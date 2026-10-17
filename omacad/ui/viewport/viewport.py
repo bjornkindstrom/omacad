@@ -211,7 +211,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.highlighted_faces: list = []  # list of faces or dicts to highlight (e.g. Shell open faces)
 
         # ViewCube overlay
-        self.viewcube = ViewCube(size=90, on_face_clicked=self.set_view)
+        self.viewcube = ViewCube(size=110, on_face_clicked=self.set_view,
+                                 on_orbit=self._orbit_viewcube)
 
         # Floating Sketch Palette
         self.sketch_palette = SketchPalette(self)
@@ -1606,7 +1607,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         y = event.position().y()
 
         # Check ViewCube click first
-        if self.viewcube.handle_mouse_press(int(x), int(y), self.width()):
+        if (event.button() == Qt.MouseButton.LeftButton
+                and self.viewcube.handle_mouse_press(int(x), int(y), self.width())):
             self.update()
             return
 
@@ -1968,6 +1970,11 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         y = event.position().y()
         if self._rubber is not None:
             self._rubber["p1"] = event.position()
+            self.update()
+            return
+
+        if self.viewcube._press is not None:
+            self.viewcube.handle_mouse_move(int(x), int(y), self.width())
             self.update()
             return
 
@@ -2569,6 +2576,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self._run_general(*chosen)
 
     def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self.viewcube.handle_mouse_release():
+            self.update()
+            return
         if self._rubber is not None and event.button() == Qt.MouseButton.LeftButton:
             self._finish_rubber(event)
             return

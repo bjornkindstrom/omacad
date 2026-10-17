@@ -1,13 +1,13 @@
 """
 Omacad - 3D ViewCube Navigation Widget
-Renders an interactive orientation cube in the corner with clickable faces (TOP, FRONT, RIGHT, etc.).
+Renders an orientation cube with face, edge and corner targets and drag rotation.
 """
 
 import math
-from typing import Tuple, Optional, Callable
+from typing import Optional, Callable
 import numpy as np
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPolygonF, QFont, QRegion
+from PySide6.QtGui import QPainter, QPen, QBrush, QPolygonF, QFont, QTransform
 from omacad.ui.theme import qcolor
 
 
@@ -23,8 +23,13 @@ class ViewCube:
         ("LEFT", np.array([-1, 0, 0]), [(0,0,0), (0,0,1), (0,1,1), (0,1,0)]),
     ]
 
-    def __init__(self, size: int = 90, on_face_clicked: Optional[Callable[[str], None]] = None):
+    def __init__(self, size: int = 110, on_face_clicked: Optional[Callable[[str], None]] = None,
+                 on_orbit=None):
         self.size = size
+        self.on_orbit = on_orbit
+        self._press = None
+        self._dragged = False
+        self.hit_regions = []
         self.right_margin = 25
         self.on_face_clicked = on_face_clicked
         self.hovered_face: Optional[str] = None
@@ -32,48 +37,51 @@ class ViewCube:
         self.rendered_faces = []  # List of (face_name, QPolygonF, z_depth)
         self.home_hovered = False
 
+    def home_rect(self, viewport_w):
+        return QRectF(viewport_w - self.size - self.right_margin - 12, 23, 22, 22)
+
+    def target_at(self, x, y, viewport_w):
+        if self.home_rect(viewport_w).contains(x, y):
+            return "HOME"
+        pt = QPointF(x, y)
+        for name, poly in reversed(self.hit_regions):
+            if poly.containsPoint(pt, Qt.FillRule.OddEvenFill):
+                return name
+        return None
+
     def handle_mouse_move(self, local_x: int, local_y: int, viewport_w: int) -> bool:
-        """Updates hover states and returns True if cursor is over ViewCube."""
-        cube_x = viewport_w - self.size - self.right_margin
-        cube_y = 25
-        rect = QRectF(cube_x - 15, cube_y - 15, self.size + 30, self.size + 30)
-
-        # Check Home button
-        home_rect = QRectF(cube_x - 12, cube_y - 10, 22, 22)
-        old_home = self.home_hovered
-        self.home_hovered = home_rect.contains(local_x, local_y)
-
-        old_hover = self.hovered_face
-        self.hovered_face = None
-
-        if rect.contains(local_x, local_y) and not self.home_hovered:
-            pt = QPointF(local_x, local_y)
-            # Find closest visible face that contains point
-            # rendered_faces is sorted by depth (front first)
-            for face_name, poly, _ in sorted(self.rendered_faces, key=lambda x: x[2], reverse=True):
-                if poly.containsPoint(pt, Qt.FillRule.OddEvenFill):
-                    self.hovered_face = face_name
-                    break
-
-        return (old_hover != self.hovered_face) or (old_home != self.home_hovered)
+        if self._press is not None:
+            x, y, target = self._press
+            dx, dy = local_x - x, local_y - y
+            if self._dragged or abs(dx) + abs(dy) >= 4:
+                self._dragged = True
+                if self.on_orbit:
+                    self.on_orbit(dx, dy)
+                self._press = (local_x, local_y, target)
+            return True
+        target = self.target_at(local_x, local_y, viewport_w)
+        changed = self.hovered_face != target or self.home_hovered != (target == "HOME")
+        self.hovered_face = target
+        self.home_hovered = target == "HOME"
+        return changed
 
     def handle_mouse_press(self, local_x: int, local_y: int, viewport_w: int) -> bool:
-        """Returns True if click was handled by ViewCube."""
-        cube_x = viewport_w - self.size - self.right_margin
-        cube_y = 25
+        target = self.target_at(local_x, local_y, viewport_w)
+        if target is None:
+            return False
+        self._press = (local_x, local_y, target)
+        self._dragged = False
+        return True
 
-        # Check Home button
-        home_rect = QRectF(cube_x - 12, cube_y - 10, 22, 22)
-        if home_rect.contains(local_x, local_y):
-            if self.on_face_clicked:
-                self.on_face_clicked("HOME")
-            return True
-
-        if self.hovered_face and self.on_face_clicked:
-            self.on_face_clicked(self.hovered_face)
-            return True
-
-        return False
+    def handle_mouse_release(self) -> bool:
+        if self._press is None:
+            return False
+        _, _, target = self._press
+        self._press = None
+        if not self._dragged and self.on_face_clicked:
+            self.on_face_clicked(target)
+        self._dragged = False
+        return True
 
     def draw(self, painter: QPainter, viewport_w: int, viewport_h: int, azimuth: float, elevation: float):
         """Draws the 3D cube rotated according to camera azimuth and elevation."""
@@ -84,7 +92,7 @@ class ViewCube:
         self.cube_center = (center_x, center_y)
 
         # 1. Draw Home Button
-        home_rect = QRectF(cube_x - 12, cube_y - 12, 22, 22)
+        home_rect = self.home_rect(viewport_w)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(QPen(qcolor(60, 65, 75), 1))
         painter.setBrush(QBrush(qcolor(226, 109, 40) if self.home_hovered else qcolor(45, 50, 58, 220)))
@@ -116,16 +124,16 @@ class ViewCube:
 
         # Up and right vectors
         up = np.array([0.0, 0.0, 1.0], dtype=float)
-        right = np.cross(eye, up)
+        right = np.cross(-eye, up)
         norm_r = np.linalg.norm(right)
         if norm_r < 1e-4:
             right = np.array([1.0, 0.0, 0.0], dtype=float)
         else:
             right /= norm_r
-        cam_up = np.cross(right, eye)
+        cam_up = np.cross(eye, right)
 
         # Project a unit cube centered at origin [-0.5..0.5]
-        scale = self.size * 0.42
+        scale = self.size * 0.64
 
         def project(pt):
             # Center cube
@@ -144,41 +152,60 @@ class ViewCube:
                 pts_2d = [project(c) for c in corners]
                 avg_depth = sum(p[2] for p in pts_2d) / 4.0
                 poly = QPolygonF([QPointF(p[0], p[1]) for p in pts_2d])
-                faces_to_render.append((name, poly, avg_depth, vis))
+                faces_to_render.append((name, poly, avg_depth, vis, corners))
 
         # Sort back to front (largest depth first)
-        faces_to_render.sort(key=lambda x: x[2])
+        faces_to_render.sort(key=lambda x: x[2], reverse=True)
         self.rendered_faces = []
+        self.hit_regions = []
 
         font = QFont("sans-serif", 9, QFont.Weight.Bold)
         painter.setFont(font)
 
-        for name, poly, depth, vis in faces_to_render:
+        for name, poly, depth, vis, corners in faces_to_render:
             self.rendered_faces.append((name, poly, depth))
 
-            is_hovered = (self.hovered_face == name)
-
-            if is_hovered:
-                fill_color = qcolor(226, 109, 40, 240)  # Fusion Orange
-                text_color = qcolor(255, 255, 255)
-            else:
-                # Shading based on normal angle
-                shade = int(55 + 40 * max(0.0, vis))
-                fill_color = qcolor(shade, shade + 5, shade + 12, 235)
-                text_color = qcolor(220, 225, 230)
-
-            # Draw face
-            painter.setPen(QPen(qcolor(85, 92, 102), 1.2))
-            painter.setBrush(QBrush(fill_color))
+            # Split each face into centre, edge and corner targets. Coordinates
+            # remain world directions, shared by neighbouring faces.
+            corners = np.asarray(corners, dtype=float)
+            cuts = (0.0, 0.22, 0.78, 1.0)
+            for i in range(3):
+                for j in range(3):
+                    def world(u, v):
+                        return corners[0] + u * (corners[1] - corners[0]) + v * (corners[3] - corners[0])
+                    region = QPolygonF([
+                        QPointF(*project(world(u, v))[:2])
+                        for u, v in [(cuts[i], cuts[j]), (cuts[i+1], cuts[j]),
+                                     (cuts[i+1], cuts[j+1]), (cuts[i], cuts[j+1])]
+                    ])
+                    direction = np.rint(2 * world(i / 2, j / 2) - 1).astype(int)
+                    labels = [label for label, normal, _ in self.FACES if np.dot(normal, direction) > 0]
+                    target = "_".join(labels)
+                    self.hit_regions.append((target, region))
+                    hovered = self.hovered_face == target
+                    shade = int(160 + 65 * vis)
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(qcolor(70, 155, 220) if hovered else qcolor(shade, shade + 3, min(255, shade + 8)))
+                    painter.drawPolygon(region)
+            painter.setPen(QPen(qcolor(95, 105, 120), 1.2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPolygon(poly)
 
-            # Draw label only if face is clearly oriented towards camera
+            # Map label axes onto the face rather than drawing floating text.
             if vis >= 0.28:
-                cx = sum(p.x() for p in poly) / 4.0
-                cy = sum(p.y() for p in poly) / 4.0
-                painter.setPen(QPen(text_color))
-                label_rect = QRectF(cx - 30, cy - 12, 60, 24)
+                normal = next(n for label, n, _ in self.FACES if label == name)
+                horizontal = np.cross([0, 0, 1], normal).astype(float)
+                if np.linalg.norm(horizontal) == 0:
+                    horizontal = np.array([1., 0., 0.])
+                vertical = np.cross(normal, horizontal)
+                center = corners.mean(axis=0)
+                c = project(center)
+                a = project(center + horizontal)
+                b = project(center - vertical)
                 painter.save()
-                painter.setClipRegion(QRegion(poly.toPolygon()))
-                painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, name)
+                painter.setTransform(QTransform(
+                    (a[0]-c[0])/70, (a[1]-c[1])/70,
+                    (b[0]-c[0])/70, (b[1]-c[1])/70, c[0], c[1]), True)
+                painter.setPen(qcolor(35, 45, 60))
+                painter.drawText(QRectF(-35, -12, 70, 24), Qt.AlignmentFlag.AlignCenter, name)
                 painter.restore()

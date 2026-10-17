@@ -1132,6 +1132,11 @@ class OverlayMixin:
 
     # ------------------ Mouse & Navigation ------------------
 
+    def _orbit_viewcube(self, dx, dy):
+        self.azimuth = (self.azimuth - dx * 0.5) % 360.0
+        self.elevation = max(-89.9, min(89.9, self.elevation + dy * 0.5))
+        self.update()
+
     def set_view(self, view_name: str):
         """Snaps camera to preset orthographic or isometric views."""
         v = view_name.upper()
@@ -1156,6 +1161,15 @@ class OverlayMixin:
         elif v == "LEFT":
             self.azimuth = -90.0
             self.elevation = 0.0
+        elif "_" in v:
+            directions = {"TOP": (0, 0, 1), "BOTTOM": (0, 0, -1),
+                          "FRONT": (0, -1, 0), "BACK": (0, 1, 0),
+                          "RIGHT": (1, 0, 0), "LEFT": (-1, 0, 0)}
+            parts = v.split("_")
+            if all(part in directions for part in parts):
+                x, y, z = np.sum([directions[part] for part in parts], axis=0)
+                self.azimuth = math.degrees(math.atan2(x, -y))
+                self.elevation = math.degrees(math.atan2(z, math.hypot(x, y)))
         self.update()
 
     def zoom_to_points(self, pts) -> None:

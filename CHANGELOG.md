@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.61 - 2026-10-17
+
+### Added
+- Larger navigation cube with face-aligned labels, hover highlighting, 26 face/edge/corner views and drag-to-orbit navigation, inspired by Layerling.
+
+### Fixed
+- Correct mirrored cube orientation and align the Home button hit area with its drawing; resolve clicks from their actual position.
+
 ## 0.7.9.60 - 2026-10-17
 
 ### Added
