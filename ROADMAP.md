@@ -15,7 +15,7 @@ This file lists what has been built, step by step, and what is left. (Swedish fe
 - Fusion-style UI: ribbon (SOLID / SKETCH), browser tree, timeline bar, ViewCube, OpenGL canvas with edge lines, themed from the active Omarchy theme and font.
 - Parametric taper angle for Box/Cylinder, including constant-thickness shells and timeline editing.
 - Numeric sliders throughout docked tool panels, retaining exact numeric and formula entry.
-- Shelled Box and Shelled Cylinder presets with configurable default wall/floor thickness.
+- Hollow primitives through Shell Wall in the Box / Cylinder / Hexagon panels (the separate Shelled Box / Shelled Cylinder presets were removed in 0.9.9.9).
 - Direct dimension handles with live previews for box, cylinder and sphere creation.
 - Primitives (box, cylinder, sphere), Combine (join / cut / intersect), STL/OBJ export, `.omacad` project files (JSON, atomic save).
 

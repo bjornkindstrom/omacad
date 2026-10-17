@@ -77,7 +77,7 @@ def test_invalid_taper_leaves_document_unchanged(kind, args):
 def test_dialog_taper_slider_validation_and_edit(kind):
     app = QApplication.instance() or QApplication([])
     w = MainWindow()
-    getattr(w, "prompt_shelled_"+kind)()
+    getattr(w, "prompt_"+kind)()
     dlg = w.viewport.primitive_handles.dialog
     assert isinstance(dlg.spn_taper.parentWidget(), NumericSlider)
     dlg.spn_taper.setValue(85)

@@ -29,7 +29,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "rect_default_tool": "RECT",        # what the rectangle button draws: RECT, CENTER_RECT, ROUNDED_RECT
     "curve_segments": 96,               # flat pieces around a full circle: lower = lighter and faster, higher = smoother
     "arrow_size": 1.0,                  # scale of the extrude/move arrow in the 3D view
-    "primitive_shell_thickness": 2.0,   # default wall and floor thickness for shelled primitives
     "primitive_drag_decimals": 0,       # decimal places when resizing primitives with handles
     "guide_line_gap": 6.0,             # screen pixels between construction-line dashes
     "hover_line_width": 3.5,            # px thickness of the edge/line under the cursor (normal edges are thinner)

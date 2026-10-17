@@ -8,7 +8,7 @@ Verktygspanelens måttfält har sliders; du kan fortfarande skriva exakta värde
 
 Box, cylinder och hexagon har **Taper angle**: positiv vinkel smalnar av uppåt, negativ vinkel vidgar, 0° ger raka väggar. Fungerar även med shell.
 
-Primitiver: dra de blå måtthandtagen i förhandsvisningen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie (hexagon: mått över planen och höjd). Måttfälten följer med; OK skapar och Esc avbryter. **Hexagon** har samma val som Cylinder (Shell Wall, Outer/Inner Edge, Taper, placering på yta) och väggen, rundningen och lutningen mäts vinkelrätt mot planen. **Shelled Box** och **Shelled Cylinder** skapar öppna skal med justerbar vägg-/bottentjocklek (standard 2 mm, ändras under Settings → Sketch & View → Primitive shell thickness).
+Primitiver: dra de blå måtthandtagen i förhandsvisningen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie (hexagon: mått över planen och höjd). Måttfälten följer med; OK skapar och Esc avbryter. **Hexagon** har samma val som Cylinder (Shell Wall, Outer/Inner Edge, Taper, placering på yta) och väggen, rundningen och lutningen mäts vinkelrätt mot planen. Ihåliga former gör du med **Shell Wall** direkt i Box-, Cylinder- och Hexagon-panelen (0 = massiv, öppen topp när väggen är större än 0).
 
 **Version 0.7.6** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 

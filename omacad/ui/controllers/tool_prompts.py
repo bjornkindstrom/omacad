@@ -726,20 +726,9 @@ class ToolPromptsMixin:
         dlg.show()
         refresh_preview()
 
-    def prompt_shelled_box(self):
-        self.prompt_box(shelled=True)
-
-    def prompt_shelled_cylinder(self):
-        self.prompt_cylinder(shelled=True)
-
-    def prompt_box(self, shelled=False):
+    def prompt_box(self):
         from omacad.model.features.primitives import BoxFeature
         dlg = BoxDialog(self)
-        if shelled:
-            from omacad.ui.settings import get_settings
-            dlg.setWindowTitle("Create Shelled Box")
-            dlg.spn_wall.setValue(float(get_settings().get("primitive_shell_thickness", 2.0)))
-
 
         def refresh_preview():
             l, w, h, center, po, pn, pu, pv = dlg.get_values()
@@ -801,7 +790,7 @@ class ToolPromptsMixin:
         """Hexagon (any regular prism): the Cylinder flow with flat sides, sized across flats."""
         self.prompt_cylinder(prism=True)
 
-    def prompt_cylinder(self, shelled=False, prism=False):
+    def prompt_cylinder(self, prism=False):
         from omacad.model.features.primitives import CylinderFeature, PrismFeature
         dlg = PrismDialog(self) if prism else CylinderDialog(self)
         label = "Hexagon" if prism else "Cylinder"
@@ -810,11 +799,6 @@ class ToolPromptsMixin:
             if prism:
                 return PrismFeature(fid, name, size, h, center, sides=dlg.sides(), **params)
             return CylinderFeature(fid, name, size, h, center, **params)
-
-        if shelled:
-            from omacad.ui.settings import get_settings
-            dlg.setWindowTitle("Create Shelled Cylinder")
-            dlg.spn_wall.setValue(float(get_settings().get("primitive_shell_thickness", 2.0)))
 
 
         def refresh_preview():

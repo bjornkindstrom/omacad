@@ -121,8 +121,6 @@ class Ribbon(QWidget):
     box_clicked = Signal()
     cylinder_clicked = Signal()
     hexagon_clicked = Signal()
-    shelled_box_clicked = Signal()
-    shelled_cylinder_clicked = Signal()
     sphere_clicked = Signal()
     combine_clicked = Signal()
     delete_clicked = Signal()
@@ -335,7 +333,7 @@ class Ribbon(QWidget):
         # Primitives: Box, Cylinder, Sphere, Thread/Coil
         if group_primitives:
             btn_primitives = RibbonButton("Primitives\n▾", "📦")
-            btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Shelled Box, Shelled Cylinder, Sphere, Thread & Coil")
+            btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Sphere, Thread & Coil (Shell Wall in each panel hollows them)")
             btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             prim_menu = QMenu(btn_primitives)
             theme.style_menu(prim_menu)
@@ -345,10 +343,6 @@ class Ribbon(QWidget):
             act_cyl.triggered.connect(self.cylinder_clicked)
             act_hex = prim_menu.addAction(theme.tool_icon("⬢", 18), "Hexagon")
             act_hex.triggered.connect(self.hexagon_clicked)
-            act_shell_box = prim_menu.addAction(theme.tool_icon("📦", 18), "Shelled Box")
-            act_shell_box.triggered.connect(self.shelled_box_clicked)
-            act_shell_cyl = prim_menu.addAction(theme.tool_icon("🥫", 18), "Shelled Cylinder")
-            act_shell_cyl.triggered.connect(self.shelled_cylinder_clicked)
             act_sph = prim_menu.addAction(theme.tool_icon("⚽", 18), "Sphere")
             act_sph.triggered.connect(self.sphere_clicked)
             act_thr = prim_menu.addAction(theme.tool_icon("🔩", 18), "Thread / Coil")
@@ -370,15 +364,6 @@ class Ribbon(QWidget):
             btn_hex.setToolTip("Create a hexagonal (or other regular) prism, sized across flats")
             btn_hex.clicked.connect(self.hexagon_clicked)
             h_layout.addWidget(btn_hex)
-
-            for label, icon, signal in [
-                ("Shelled Box", "📦", self.shelled_box_clicked),
-                ("Shelled Cylinder", "🥫", self.shelled_cylinder_clicked),
-            ]:
-                button = RibbonButton(label, icon)
-                button.setToolTip("Create an open-top hollow primitive with adjustable wall thickness")
-                button.clicked.connect(signal)
-                h_layout.addWidget(button)
 
             btn_sph = RibbonButton("Sphere", "⚽")
             btn_sph.setToolTip("Create a spherical 3D solid")

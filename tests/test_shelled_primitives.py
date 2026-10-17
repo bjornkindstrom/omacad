@@ -1,4 +1,4 @@
-"""Shelled primitive presets reuse parametric geometry and undo history."""
+"""Hollow primitives come from Shell Wall in the Box / Cylinder / Hexagon panels (no separate Shelled commands)."""
 import math
 
 import pytest
@@ -15,14 +15,11 @@ def app():
 
 
 @pytest.mark.parametrize("kind", ["box", "cylinder"])
-def test_shelled_preset_thickness_volume_and_undo(app, kind):
-    get_settings().set("primitive_shell_thickness", 3.0)
+def test_shell_wall_in_the_panel_volume_and_undo(app, kind):
     w = MainWindow()
-    getattr(w, "prompt_shelled_"+kind)()
-    handles = w.viewport.primitive_handles
-    dlg = handles.dialog
-    assert dlg.windowTitle() == "Create Shelled "+kind.title()
-    assert dlg.spn_wall.value() == 3
+    getattr(w, "prompt_"+kind)()
+    dlg = w.viewport.primitive_handles.dialog
+    assert dlg.spn_wall.value() == 0
     assert w.viewport.preview_mesh is not None
     assert not w.doc.bodies
     dlg.spn_wall.setValue(4)
@@ -40,25 +37,15 @@ def test_shelled_preset_thickness_volume_and_undo(app, kind):
     assert not w.doc.bodies
     w.doc.redo()
     assert next(iter(w.doc.bodies.values())).manifold.volume() == pytest.approx(expected, rel=1e-6)
-    getattr(w, "prompt_"+kind)()
-    assert w.viewport.primitive_handles.dialog.spn_wall.value() == 0
-    w.viewport.primitive_handles.dialog.reject()
     w.close()
 
 
 @pytest.mark.parametrize("grouped", [True, False])
-def test_shelled_commands_in_both_ribbon_layouts(app, grouped):
+def test_no_separate_shelled_commands_in_either_ribbon_layout(app, grouped):
     get_settings().set("group_primitives", grouped)
     w = MainWindow()
-    if grouped:
-        menu = next(menu for menu in w.ribbon.findChildren(QMenu)
-                    if any(a.text() == "Shelled Box" for a in menu.actions()))
-        command = next(a for a in menu.actions() if a.text() == "Shelled Cylinder")
-        command.trigger()
-    else:
-        button = next(b for b in w.ribbon.findChildren(QToolButton) if b.text() == "Shelled Cylinder")
-        button.click()
-    assert w.viewport.primitive_handles.kind == "cylinder"
-    assert w.viewport.primitive_handles.dialog.spn_wall.value() == 2
-    w.viewport.primitive_handles.dialog.reject()
+    texts = [a.text() for m in w.ribbon.findChildren(QMenu) for a in m.actions()]
+    texts += [b.text() for b in w.ribbon.findChildren(QToolButton)]
+    assert "Hexagon" in texts
+    assert not [t for t in texts if t.startswith("Shelled")]
     w.close()
