@@ -139,6 +139,13 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.preview_mesh = None
         self.preview_op: str = "new_body"
 
+        # The status line, the sketch status and the busy mark are painted into the view (no status bar)
+        from omacad.ui.hud_text import HudText
+        self.hud_status = HudText(self, logged=True, text="Ready")
+        self.hud_sketch = HudText(self)
+        self.hud_busy = HudText(self)
+        self.hud_busy.setVisible(False)
+
         # Sketch element selection (click / Ctrl+click, Delete)
         self.selected_entities: set = set()
         self.hover_entity_id: Optional[str] = None

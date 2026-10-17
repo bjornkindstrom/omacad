@@ -326,6 +326,23 @@ class OverlayMixin:
         painter.setFont(font_small)
         cam_info = f"Azimuth: {self.azimuth:.1f}° | Elevation: {self.elevation:.1f}° | Zoom: {self.distance:.0f} mm"
         painter.drawText(16, h - 16, cam_info)
+        self._draw_status_text(painter, w, h)
+
+    def _draw_status_text(self, painter: QPainter, w: int, h: int):
+        """The status message above the camera line (lower left) and the sketch status / units at the lower right."""
+        fm = painter.fontMetrics()
+        message = self.hud_status.text()
+        if self.hud_busy.isVisible():
+            message = f"Working…  {message}"
+        if message:
+            painter.setPen(QPen(qcolor(175, 180, 190)))
+            shown = fm.elidedText(message, Qt.TextElideMode.ElideRight, int(w * 0.62))
+            painter.drawText(16, h - 16 - fm.height() - 2, shown)
+        right = [t for t in (self.hud_sketch.text(), "Units: mm") if t]
+        if right:
+            painter.setPen(QPen(qcolor(140, 145, 155)))
+            text = fm.elidedText("   |   ".join(right), Qt.TextElideMode.ElideLeft, int(w * 0.34))
+            painter.drawText(w - 16 - fm.horizontalAdvance(text), h - 16, text)
 
     def draw_dimensions(self, painter: QPainter):
         """Renders dimension extension lines, arrows, and interactive value badges."""

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.46 - 2026-10-17
+
+### Changed
+- The bar at the bottom of the window is gone, and with it the *Report problem* button (F9 and Help > Report problem still work). The status message now sits in the 3D view above the Azimuth / Elevation / Zoom line, and the sketch status and the units at the lower right, as plain text that takes no room of its own. A running background job shows "Working…" in the same line. The view is about 50 px taller.
+
 ## 0.7.9.45 - 2026-10-17
 
 ### Added

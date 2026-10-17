@@ -54,15 +54,6 @@ from omacad.ui.dialogs import (
 from omacad.io.exporter import Exporter
 
 
-class _LoggedLabel(QLabel):
-    """The status line; everything shown there also goes into the log that travels with problem reports."""
-
-    def setText(self, text):
-        from omacad import applog
-        applog.log("status", text)
-        super().setText(text)
-
-
 class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
     """Main Fusion 360 style window for Omacad."""
 
@@ -133,27 +124,12 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
 
         self.setCentralWidget(central_container)
 
-        # 4. Status Bar
-        self.status_label = _LoggedLabel("Ready")
-        self.statusBar().addWidget(self.status_label)
-        self.lbl_sketch_status = QLabel("")
-        self.statusBar().addPermanentWidget(self.lbl_sketch_status)
+        # 4. Status line: no status bar; the message, the sketch status and "busy" are painted into the 3D view
+        self.status_label = self.viewport.hud_status
+        self.lbl_sketch_status = self.viewport.hud_sketch
+        self.progress_bar = self.viewport.hud_busy
         self.doc.add_change_listener(self.sync_sketch_status)
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)  # Indeterminate spinner
-        self.progress_bar.setMaximumWidth(120)
-        self.progress_bar.setMaximumHeight(14)
-        self.progress_bar.setVisible(False)
-        self.statusBar().addWidget(self.progress_bar)
-
         self.thread_pool = QThreadPool.globalInstance()
-
-        btn_report = QPushButton("🐞 Report problem (F9)")
-        btn_report.setFlat(True)
-        btn_report.setToolTip("Something wrong? Describe it: the AI gets a screenshot, the model and the log and fixes it")
-        btn_report.clicked.connect(self.on_report_problem)
-        self.statusBar().addPermanentWidget(btn_report)
-        self.statusBar().addPermanentWidget(QLabel("Units: mm  |  Omarchy Wayland Native"))
 
         # Setup Menus & Actions
         self.setup_menu_bar()
