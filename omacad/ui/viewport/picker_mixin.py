@@ -118,7 +118,7 @@ class PickerMixin:
     def _edge_loop(self, e, other_face: bool = False):
         """Double-click: the edges joined end to end around one flat face (e.g. the whole top of a box).
         Of the two faces an edge borders, the one facing the camera is used."""
-        if e.kind in ("circle", "loop"):
+        if e.kind in ("circle", "loop", "wrapped"):
             return [e]
         proj, view, _ = self.get_matrices()
         eye = np.linalg.inv(view)[:3, 3]
@@ -149,15 +149,23 @@ class PickerMixin:
         for body in self.doc.bodies.values():
             if not body.visible or not self._ray_hits_body_aabb(body, origin, ray_dir, best_t):
                 continue
-            for face in body.faces:
+            faces = list(body.faces)
+            if getattr(self, "edge_pick_mode", False):
+                from dataclasses import replace
+                patches = {p.index: p for e in body.edges if e.kind == "wrapped" for p in e.patches}
+                faces += [replace(p, body_id=body.body_id) for p in patches.values()]
+            for face in faces:
                 t = ray_hit_face(face, origin, ray_dir)
-                if t is not None and t < best_t:
+                if t is not None and (t < best_t or (face.index < 0 and t <= best_t+1e-6)):
                     best, best_t = (body, face), t
         return best
 
 
     def _edges_of_face(self, face, body) -> list:
         """All edges forming the boundary and holes of a planar face."""
+        if face.index < 0:
+            return [e for e in body.edges if e.kind == "wrapped"
+                    and any(p.index == face.index for p in e.patches)]
         n = np.asarray(face.normal, dtype=float)
         orig = np.asarray(face.origin, dtype=float)
         loops = [e for e in body.edges if getattr(e, "kind", "") == "loop"

@@ -124,3 +124,5 @@ Fillet saknas för koner och delbågar. Mönster, ytskisser och offset-plan är 
 - **Inställbart glapp för guide lines** (0.7.9.60, via F9): `guide_line_gap` sparas i användarinställningarna och läses av `dash_segments`; Settings → Sketch & View har 1–50 px (standard 6), med återställning. Streckberäkningen snäpper fasen exakt vid gränser så decimalglapp inte kan låsa renderingen. Test: `tests/test_dashed_construction.py`.
 
 - **Navigeringskub som i Layerling** (0.7.9.61, via F9): Större kub med sidornas text projicerad på ytorna, hover på 26 sid-/kant-/hörnvyer och dragrotation. Rättade spegelvänd kamerabas (fel tecken i kryssprodukten), förskjuten Home-klickyta och klick som litade på gammal hover. Test: `tests/test_viewcube.py`.
+
+- **Dra storleken på primitiver** (0.7.9.62): Box får handtag för längd/bredd/höjd, cylinder för radie/höjd och sfär för radie i förhandsvisningen. Följer placering/valt plan, synkar måttfält och uppdaterar modellen löpande med throttlad preview. Esc backar draget/avbryter; OK är ett ångra-steg. Stoppar preview-timers vid avslut och rättar saknat returvärde i add_sphere. Test: `tests/test_primitive_handles.py`.

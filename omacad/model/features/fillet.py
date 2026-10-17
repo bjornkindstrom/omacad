@@ -28,6 +28,8 @@ class FilletFeature(Feature):
 
     @staticmethod
     def _norm_ref(e):
+        if e and e[0] == "wrapped":
+            return ("wrapped", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]), bool(e[4]))
         if e and e[0] == "circle":
             return ("circle", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]))
         if e and e[0] == "arc":
@@ -75,6 +77,16 @@ class FilletFeature(Feature):
         """Limits the rounding/bevel size on a convex straight edge so that it does not cut past
         adjacent face boundaries, holes, or opposite walls on either adjacent face. At the foot of a wall (concave)
         the fillet touches each face `size / tan(half the angle)` from the edge, so that reach is what must fit."""
+        if getattr(edge, "kind", "") == "wrapped":
+            limit = min(requested_size, edge.radius*.1)
+            patch_ids = {p.index for p in edge.patches}
+            for other in body.edges:
+                if (other.kind == "wrapped" and other is not edge
+                        and patch_ids.intersection(p.index for p in other.patches)):
+                    gap = abs(edge.radius-other.radius)
+                    if gap > 1e-3:
+                        limit = min(limit, .49*gap)
+            return limit
         if getattr(edge, "kind", "") != "line" or requested_size <= 1e-6:
             return requested_size
         t = (edge.p1 - edge.p0) / max(float(np.linalg.norm(edge.p1 - edge.p0)), 1e-12)

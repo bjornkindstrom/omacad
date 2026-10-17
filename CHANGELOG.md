@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.67 - 2026-10-17
+
+### Fixed
+- Wrapped Emboss/Deboss contours on cylinders can now be selected and rounded/chamfered, including face selection in Fillet/Chamfer mode (request #63).
+- Recognize nonplanar cylindrical contour loops, preserve their references through rebuild/save/undo, and limit rounding to the available rim depth. Subdivide flat rounding tools before wrapping them around the cylinder.
+
 ## 0.7.9.66 - 2026-10-17
 
 ### Added

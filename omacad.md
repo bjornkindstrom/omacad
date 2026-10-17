@@ -14,8 +14,10 @@ Ett native parametriskt 3D-CAD för Omarchy Linux (Python 3.14, PySide6/Qt6 + Op
 ## Köra, testa, släppa
 ```bash
 ./run.sh                                   # kör appen (.venv/bin/python app.py)
-.venv/bin/python -m pytest tests -q        # testsviten, ca 20 s, måste vara grön före varje commit
+.venv/bin/python -m pytest tests/test_<feature>.py -q --tb=short  # berörda moduler under arbete och före commit
+.venv/bin/python -m pytest tests -q        # helsvit vid genomgripande ändringar eller inför release
 ```
+- Kör GUI-tester en i taget; överlappande testfönster kan ge falska renderingsfel. Upprepa inte gröna kontroller utan ny ändring eller kvarstående osäkerhet.
 - Version: `omacad/__init__.py` (0.x tills "komplett CAD" = 1.0). Höj patch för rättningar, minor för funktioner, skriv i `CHANGELOG.md` och uppdatera `README.md`/`ROADMAP.md`/`PLAN.md`.
 - Push till `main` kör CI: testjobb (`tests/`), sedan Windows-EXE och en release `v<version>` (+ `latest`). Push med `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
 - Sajtsidan `/omacad/` ligger i `~/Work/kindstrom-site` (databas + `Publicera`), uppdateras per minor-version.
@@ -58,8 +60,8 @@ En guide = mappen `omacad/guides/<id>/` med `guide.json` (`id`, `title`, `steps`
 Kör på den riktiga skärmen (Wayland); offscreen ger ingen GL-kontext. Sätt `QSurfaceFormat` med depth 24 före `QApplication`, vänta ~1,5 s efter `show()`, använd små former (vyn är bara ca 410 px bred eftersom inspektören tar resten) och rikta vyn med `align_to_plane` före musklick. `QTest.mouseMove` är opålitlig här: anropa `mouseMoveEvent` direkt vid behov. Ändra aldrig det riktiga temat i tester (peka `theme.COLORS_FILE` på en tema-fil i stället). Modal dialog som blockerar: ersätt `prompt_dimension_value` med en lambda.
 
 ## Lösningslogg (5 senaste; äldre historik i `SOLUTIONS_LOG.md` — sök med `grep_search`, läs inte hela!)
+- **Fillet efter cylindrisk Emboss/Deboss** (0.7.9.67, request #63): Kantlistan saknade spårets icke-plana 3D-konturer. `wrapped_edges` hittar slutna konturer på cylindriska smooth-patches, möjliggör ytval i Fillet/Chamfer-läge och vecklar ut/rundar/återkröker verktyget. Verktygets plana trianglar förtätas innan warp så långa kordor inte skär tvärs genom cylindern; radien begränsas av spårdjupet. Referenser följer save/rebuild/ångra. Test: `tests/test_wrapped_fillet.py`, rapportmodell i `tests/data/wrapped_deboss_fillet.omacad`.
 - **Taper angle på Box/Cylinder** (0.7.9.66): Positiv vinkel smalnar toppen, negativ vidgar. Parametrisk `taper_angle` följer preview, edit, formler, export/import och ångra; shell-hålrummet offsettas med t/cos(vinkel) för bibehållen normal väggtjocklek. Fillet/chamfer följer taper; validering stoppar stängd topp och ogiltig öppning innan dokumentet ändras. Test: `tests/test_primitive_taper.py`.
 - **Sliders i verktygspanelen** (0.7.9.65): `numeric_slider.add_numeric_sliders` kopplar sliders till befintliga spinboxar vid dockning, även nästlade/heltalsfält. Text/formler behålls tills slidern används; lokalt sliderintervall följer stora inskrivna mått, inaktiverade/dolda fält följs, Section får ingen dublett. Primitivsliders delar precision med handtagen. Test: `tests/test_numeric_slider.py`.
 - **Shelled Box och Shelled Cylinder** (0.7.9.64): Egna menyval i båda ribbon-lägen och Create återanvänder Box/Cylinder med förvald `wall_thickness`. Öppen topp, samma vägg-/bottentjocklek, justerbart Shell Wall per form; standard via `primitive_shell_thickness` i Settings → Sketch & View (2 mm). Test: `tests/test_shelled_primitives.py`, `tests/test_settings_dialog.py`.
 - **Precision och färre primitivhandtag** (0.7.9.63): `primitive_drag_decimals` under Settings → Sketch & View styr 0/1/2 decimaler vid dragning (standard 0, hela mm). Cylinder har en radie och en höjd, sfär en radie. Måttfält kan fortfarande ta exakta värden. Test: `tests/test_primitive_handles.py`, `tests/test_settings_dialog.py`.
-- **Dra storleken på primitiver** (0.7.9.62): Box får handtag för längd/bredd/höjd, cylinder för radie/höjd och sfär för radie i förhandsvisningen. Följer placering/valt plan, synkar måttfält och uppdaterar modellen löpande med throttlad preview. Esc backar draget/avbryter; OK är ett ångra-steg. Stoppar preview-timers vid avslut och rättar saknat returvärde i add_sphere. Test: `tests/test_primitive_handles.py`.

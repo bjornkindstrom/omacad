@@ -164,6 +164,9 @@ class CadKernel:
     @staticmethod
     def round_tool(edge, size: float, kind: str, extend=0.0) -> m3d.Manifold:
         """Tool body for a straight or circular edge."""
+        if getattr(edge, "kind", "") == "wrapped":
+            from omacad.model.wrapped_edges import wrapped_round_tool
+            return wrapped_round_tool(edge, size, kind)
         if getattr(edge, "kind", "line") == "circle":
             return CadKernel.circle_round_tool(edge, size, kind)
         if getattr(edge, "kind", "line") == "loop":

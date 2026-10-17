@@ -46,6 +46,6 @@ def describe_edge(edge) -> Optional[Info]:
         if edge.is_arc:
             return "Arc edge", [("Radius", _mm(r)), ("Angle", _deg(edge.sweep)), ("Length", _mm(r * edge.sweep))]
         return "Circular edge", [("Radius", _mm(r)), ("Diameter", _mm(2 * r)), ("Length", _mm(2 * np.pi * r))]
-    if kind == "loop":
+    if kind in ("loop", "wrapped"):
         return "Outline", [("Length", _mm(edge.perimeter))]
     return None
