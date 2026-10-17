@@ -28,10 +28,14 @@ def dash_lines(flat_segments, project, dash_px: float = 9.0, gap_px: float = 6.0
             continue
         d = 0.0
         while d < length:
-            end = min(length, d + (dash_px if pos < dash_px else period) - pos)
+            boundary = dash_px if pos < dash_px else period
+            remaining = boundary - pos
+            step = min(length - d, remaining)
+            end = d + step
             if pos < dash_px:
                 out.extend([*(a + (b - a) * (d / length)), *(a + (b - a) * (end / length))])
-            pos = (pos + end - d) % period
+            # Snap to the boundary: float cancellation must never stall the loop.
+            pos = (0.0 if boundary == period else dash_px) if step == remaining else pos + step
             d = end
     return out
 
@@ -879,8 +883,11 @@ class RenderGLMixin:
                     self.draw_buffer_arrays(GL.GL_LINES, loc_pos, mesh.sharp_lines)
                 GL.glUseProgram(0)
 
-    def dash_segments(self, flat_segments, dash_px: float = 9.0, gap_px: float = 6.0):
+    def dash_segments(self, flat_segments, dash_px: float = 9.0, gap_px: Optional[float] = None):
         """Construction lines are dashed: see `dash_lines`."""
+        from omacad.ui.settings import get_settings
+        if gap_px is None:
+            gap_px = float(get_settings().get("guide_line_gap", 6.0))
         return dash_lines(flat_segments, self.world_to_screen, dash_px, gap_px)
 
     def draw_thick_lines(self, mvp: np.ndarray, flat_segments, rgba, width_px: float, halo: bool = True):

@@ -333,6 +333,21 @@ class SettingsDialog(QDialog):
         grid_row.addStretch()
         lay_sketch.addLayout(grid_row)
 
+        guide_gap_row = QHBoxLayout()
+        lbl_guide_gap = QLabel("Guide line gap:")
+        lbl_guide_gap.setMinimumWidth(200)
+        self.spn_guide_gap = QDoubleSpinBox()
+        self.spn_guide_gap.setRange(1.0, 50.0)
+        self.spn_guide_gap.setDecimals(1)
+        self.spn_guide_gap.setSingleStep(1.0)
+        self.spn_guide_gap.setSuffix(" px")
+        self.spn_guide_gap.setValue(float(self.settings.get("guide_line_gap", 6.0)))
+        self.spn_guide_gap.setToolTip("Space between guide (construction) line dashes in screen pixels, independent of zoom.")
+        guide_gap_row.addWidget(lbl_guide_gap)
+        guide_gap_row.addWidget(self.spn_guide_gap)
+        guide_gap_row.addStretch()
+        lay_sketch.addLayout(guide_gap_row)
+
         # Default fillet radius
         fillet_row = QHBoxLayout()
         lbl_fillet = QLabel("Default radius for Sketch Fillet:")
@@ -553,6 +568,7 @@ class SettingsDialog(QDialog):
             self.cmb_pos.setCurrentIndex(idx_p)
         self.chk_autohide.setChecked(True)
         self.chk_invert_zoom.setChecked(False)
+        self.spn_guide_gap.setValue(6.0)
         self.spn_grid.setValue(5.0)
         self.spn_fillet.setValue(2.0)
         self.chk_auto_restart.setChecked(True)
@@ -586,6 +602,7 @@ class SettingsDialog(QDialog):
             "palette_position": self.cmb_pos.currentData(),
             "autohide_palette_on_measure": self.chk_autohide.isChecked(),
             "invert_zoom": self.chk_invert_zoom.isChecked(),
+            "guide_line_gap": self.spn_guide_gap.value(),
             "grid_step": self.spn_grid.value(),
             "fillet_default_radius": self.spn_fillet.value(),
             "arrow_size": self.spn_arrow_size.value(),

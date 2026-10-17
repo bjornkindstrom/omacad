@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.60 - 2026-10-17
+
+### Added
+- Settings → Sketch & View: adjustable guide line gap (1–50 screen pixels, default 6), saved between sessions.
+
+### Fixed
+- Prevent floating-point rounding from stalling dashed guide line rendering with fractional gap values.
+
 ## 0.7.9.59 - 2026-10-17
 
 ### Fixed
