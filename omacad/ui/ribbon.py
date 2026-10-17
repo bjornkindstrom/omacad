@@ -274,72 +274,29 @@ class Ribbon(QWidget):
         h_layout.setContentsMargins(4, 1, 4, 1)
         h_layout.setSpacing(2)
 
-        # CREATE Group
+        # CREATE: sketch and standalone solids first
         btn_sketch = RibbonButton("Create\nSketch", "✏️")
         btn_sketch.setToolTip("Create a new sketch on a plane or face (L, C, R)")
         btn_sketch.clicked.connect(self.create_sketch_clicked)
         h_layout.addWidget(btn_sketch)
 
-        btn_plane = RibbonButton("Offset\nPlane", "📐")
-        btn_plane.setToolTip("A new plane at a distance from a plane or face, or touching any surface (even a cylinder)")
-        btn_plane.clicked.connect(self.offset_plane_clicked)
-        h_layout.addWidget(btn_plane)
-
-        btn_canvas = RibbonButton("Canvas\n(Bild)", "🖼️")
-        btn_canvas.setToolTip("Insert a reference image on a plane, calibrate with tape measure and trace over it")
-        btn_canvas.clicked.connect(self.canvas_clicked)
-        h_layout.addWidget(btn_canvas)
-
-        btn_extrude = RibbonButton("Extrude\n(E)", "⬆️")
-        btn_extrude.setToolTip("Extrude closed sketch profiles or faces into 3D bodies or cuts (E)")
-        btn_extrude.clicked.connect(self.extrude_clicked)
-        h_layout.addWidget(btn_extrude)
-
-        btn_revolve = RibbonButton("Revolve", "🔄")
-        btn_revolve.setToolTip("Revolve a sketch profile around an axis or edge to create a solid body")
-        btn_revolve.clicked.connect(self.revolve_clicked)
-        h_layout.addWidget(btn_revolve)
-
-        btn_emboss = RibbonButton("Emboss", "🔖")
-        btn_emboss.setToolTip("Emboss or deboss text (any sketch profile) on a face, as in Fusion: a positive depth raises it, "
-                              "a negative depth presses it in")
-        btn_emboss.clicked.connect(self.emboss_clicked)
-        h_layout.addWidget(btn_emboss)
-
-        btn_fillet = RibbonButton("Fillet", "🔘")
-        btn_fillet.setToolTip("Round edges (outside and inside corners): select edges, type a radius")
-        btn_fillet.clicked.connect(self.fillet_clicked)
-        h_layout.addWidget(btn_fillet)
-
-        btn_chamfer = RibbonButton("Chamfer", "◢")
-        btn_chamfer.setToolTip("Bevel edges (outside and inside corners): select edges, type a size")
-        btn_chamfer.clicked.connect(self.chamfer_clicked)
-        h_layout.addWidget(btn_chamfer)
-
-        btn_pattern = RibbonButton("Pattern\nMirror", "🔁")
-        btn_pattern.setToolTip("Pattern features together (for example a rib and its fillets): linear, circular, mirrored or fill")
-        btn_pattern.clicked.connect(self.pattern_clicked)
-        btn_pattern.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        patterns = QMenu(btn_pattern)
-        theme.style_menu(patterns)
-        for label, kind in [("Linear Pattern", "linear"), ("Circular Pattern (Features)", "circular"),
-                            ("Mirror", "mirror"), ("Fill Face Pattern", "fill")]:
-            action = patterns.addAction(label)
-            action.triggered.connect(lambda checked=False, kind=kind: self.pattern_kind_clicked.emit(kind))
-        btn_pattern.setMenu(patterns)
-        h_layout.addWidget(btn_pattern)
-
-        # Primitives: Box, Cylinder, Hexagon, Thread/Coil
+        # CREATE: common primitive tools stay visible; less common ones use the menu
         if group_primitives:
             btn_primitives = RibbonButton("Primitives\n▾", "📦")
             btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Thread & Coil (Shell Wall in each panel hollows them)")
             btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             prim_menu = QMenu(btn_primitives)
             theme.style_menu(prim_menu)
-            act_box = prim_menu.addAction(theme.tool_icon("📦", 18), "Box")
-            act_box.triggered.connect(self.box_clicked)
-            act_cyl = prim_menu.addAction(theme.tool_icon("🥫", 18), "Cylinder")
-            act_cyl.triggered.connect(self.cylinder_clicked)
+            btn_box = RibbonButton("Box", "📦")
+            btn_box.setToolTip("Create a rectangular 3D box solid")
+            btn_box.clicked.connect(self.box_clicked)
+            h_layout.addWidget(btn_box)
+
+            btn_cyl = RibbonButton("Cylinder", "🥫")
+            btn_cyl.setToolTip("Create a 3D cylinder solid")
+            btn_cyl.clicked.connect(self.cylinder_clicked)
+            h_layout.addWidget(btn_cyl)
+
             act_hex = prim_menu.addAction(theme.tool_icon("⬢", 18), "Hexagon")
             act_hex.triggered.connect(self.hexagon_clicked)
             act_thr = prim_menu.addAction(theme.tool_icon("🔩", 18), "Thread / Coil")
@@ -367,11 +324,63 @@ class Ribbon(QWidget):
             btn_thread.clicked.connect(self.thread_clicked)
             h_layout.addWidget(btn_thread)
 
+        # BUILD FROM SKETCH
+        btn_extrude = RibbonButton("Extrude\n(E)", "⬆️")
+        btn_extrude.setToolTip("Extrude closed sketch profiles or faces into 3D bodies or cuts (E)")
+        btn_extrude.clicked.connect(self.extrude_clicked)
+        h_layout.addWidget(btn_extrude)
+
+        btn_revolve = RibbonButton("Revolve", "🔄")
+        btn_revolve.setToolTip("Revolve a sketch profile around an axis or edge to create a solid body")
+        btn_revolve.clicked.connect(self.revolve_clicked)
+        h_layout.addWidget(btn_revolve)
+
+        btn_emboss = RibbonButton("Emboss", "🔖")
+        btn_emboss.setToolTip("Emboss or deboss text (any sketch profile) on a face, as in Fusion: a positive depth raises it, "
+                              "a negative depth presses it in")
+        btn_emboss.clicked.connect(self.emboss_clicked)
+        h_layout.addWidget(btn_emboss)
+
+        # PLACE REFERENCES
+        btn_plane = RibbonButton("Offset\nPlane", "📐")
+        btn_plane.setToolTip("A new plane at a distance from a plane or face, or touching any surface (even a cylinder)")
+        btn_plane.clicked.connect(self.offset_plane_clicked)
+        h_layout.addWidget(btn_plane)
+
+        btn_canvas = RibbonButton("Canvas\n(Bild)", "🖼️")
+        btn_canvas.setToolTip("Insert a reference image on a plane, calibrate with tape measure and trace over it")
+        btn_canvas.clicked.connect(self.canvas_clicked)
+        h_layout.addWidget(btn_canvas)
+
         # Separator
         sep1 = QFrame()
         sep1.setFrameShape(QFrame.Shape.VLine)
         style(sep1, "color: #353940;")
         h_layout.addWidget(sep1)
+
+        # MODIFY: edge finishing, patterns, and body operations
+        btn_fillet = RibbonButton("Fillet", "🔘")
+        btn_fillet.setToolTip("Round edges (outside and inside corners): select edges, type a radius")
+        btn_fillet.clicked.connect(self.fillet_clicked)
+        h_layout.addWidget(btn_fillet)
+
+        btn_chamfer = RibbonButton("Chamfer", "◢")
+        btn_chamfer.setToolTip("Bevel edges (outside and inside corners): select edges, type a size")
+        btn_chamfer.clicked.connect(self.chamfer_clicked)
+        h_layout.addWidget(btn_chamfer)
+
+        btn_pattern = RibbonButton("Pattern\nMirror", "🔁")
+        btn_pattern.setToolTip("Pattern features together (for example a rib and its fillets): linear, circular, mirrored or fill")
+        btn_pattern.clicked.connect(self.pattern_clicked)
+        btn_pattern.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        patterns = QMenu(btn_pattern)
+        theme.style_menu(patterns)
+        for label, kind in [("Linear Pattern", "linear"), ("Circular Pattern (Features)", "circular"),
+                            ("Mirror", "mirror"), ("Fill Face Pattern", "fill")]:
+            action = patterns.addAction(label)
+            action.triggered.connect(lambda checked=False, kind=kind: self.pattern_kind_clicked.emit(kind))
+        btn_pattern.setMenu(patterns)
+        h_layout.addWidget(btn_pattern)
 
         # MODIFY Group
         if group_modify:
