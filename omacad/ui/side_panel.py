@@ -51,16 +51,18 @@ class InspectorPanel(QWidget):
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        style(self.scroll, "background: transparent; border: none;")
+        style(self.scroll, "QScrollArea { background: transparent; border: none; }")
 
         self.content_widget = QWidget()
+        self.content_widget.setObjectName("InspectorContent")
         self.content_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        style(self.content_widget, "background: transparent;")
+        style(self.content_widget, "QWidget#InspectorContent { background: transparent; }")
         self.content_layout = QVBoxLayout(self.content_widget)
         self.content_layout.setContentsMargins(6, 6, 6, 6)
         self.content_layout.setSpacing(8)
 
-        style(self, "background: transparent;")
+        self.setObjectName("InspectorPanel")
+        style(self, "QWidget#InspectorPanel { background: transparent; }")
 
         # 1. Tool Dock Container (when a tool/dialog is active)
         self.tool_container = QWidget()

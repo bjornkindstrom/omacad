@@ -3,10 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.54 - 2026-10-17
+
+### Fixed
+- **Black tooltip box on timeline steps, Browser and Inspector** (#39): `TimelineBar.scroll_area`, `BrowserWidget` and `InspectorPanel` had selector-less stylesheets (`border: none; background: transparent;`) which cascaded to every descendant widget—including Qt's `QTipLabel` popup window—turning the tooltip background `RGBA(0, 0, 0, 0)` (solid black on Windows and Wayland). Scoped those stylesheets to their container classes/IDs (`QScrollArea`, `QWidget#BrowserWidget`, `QWidget#InspectorPanel`).
+
 ## 0.7.9.53 - 2026-10-17
 
 ### Fixed
-- **Tooltips and button margins**: styled `QToolTip` globally (without `border-radius`, which caused a black popup box on Windows/Wayland when hovering timeline chips), scoped `TimelineChip` frame styles so they do not bleed into child tooltips, and reduced `QPushButton` horizontal padding so dialog buttons (*Yes*, *No*, *Send request*) never clip text on high-DPI / low-resolution screens.
+- **Tooltips and button margins**: styled `QToolTip` globally, scoped `TimelineChip` frame styles, and reduced `QPushButton` horizontal padding so dialog buttons (*Yes*, *No*, *Send request*) never clip text on high-DPI / low-resolution screens.
 - **Settings dialog cleanup**: removed duplicate *Toolbar button size* control, organized preferences into clear tabs (*Appearance*, *Interface*, *Sketch & View*, *General*), and integrated *Theme Editor* as a button inside *Appearance*.
 
 ## 0.7.9.52 - 2026-10-17

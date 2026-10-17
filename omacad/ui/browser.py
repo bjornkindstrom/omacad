@@ -108,7 +108,8 @@ class BrowserTree(QWidget):
         sc.setContext(Qt.ShortcutContext.WidgetShortcut)
         sc.activated.connect(self.toggle_selected_visibility)
 
-        style(self, "background: transparent; border: none;")
+        self.setObjectName("BrowserWidget")
+        style(self, "QWidget#BrowserWidget { background: transparent; border: none; }")
         self.refresh_tree()
 
     def refresh_tree(self):

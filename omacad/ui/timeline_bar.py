@@ -217,7 +217,7 @@ class TimelineBar(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        style(self.scroll_area, "border: none; background: transparent;")
+        style(self.scroll_area, "QScrollArea { border: none; background: transparent; }")
 
         self.nodes_container = QWidget()
         self.nodes_layout = QHBoxLayout(self.nodes_container)
