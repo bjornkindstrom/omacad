@@ -121,7 +121,6 @@ class Ribbon(QWidget):
     box_clicked = Signal()
     cylinder_clicked = Signal()
     hexagon_clicked = Signal()
-    sphere_clicked = Signal()
     combine_clicked = Signal()
     delete_clicked = Signal()
     split_body_clicked = Signal()
@@ -330,10 +329,10 @@ class Ribbon(QWidget):
         btn_pattern.setMenu(patterns)
         h_layout.addWidget(btn_pattern)
 
-        # Primitives: Box, Cylinder, Sphere, Thread/Coil
+        # Primitives: Box, Cylinder, Hexagon, Thread/Coil
         if group_primitives:
             btn_primitives = RibbonButton("Primitives\n▾", "📦")
-            btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Sphere, Thread & Coil (Shell Wall in each panel hollows them)")
+            btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Thread & Coil (Shell Wall in each panel hollows them)")
             btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             prim_menu = QMenu(btn_primitives)
             theme.style_menu(prim_menu)
@@ -343,8 +342,6 @@ class Ribbon(QWidget):
             act_cyl.triggered.connect(self.cylinder_clicked)
             act_hex = prim_menu.addAction(theme.tool_icon("⬢", 18), "Hexagon")
             act_hex.triggered.connect(self.hexagon_clicked)
-            act_sph = prim_menu.addAction(theme.tool_icon("⚽", 18), "Sphere")
-            act_sph.triggered.connect(self.sphere_clicked)
             act_thr = prim_menu.addAction(theme.tool_icon("🔩", 18), "Thread / Coil")
             act_thr.triggered.connect(self.thread_clicked)
             btn_primitives.setMenu(prim_menu)
@@ -364,11 +361,6 @@ class Ribbon(QWidget):
             btn_hex.setToolTip("Create a hexagonal (or other regular) prism, sized across flats")
             btn_hex.clicked.connect(self.hexagon_clicked)
             h_layout.addWidget(btn_hex)
-
-            btn_sph = RibbonButton("Sphere", "⚽")
-            btn_sph.setToolTip("Create a spherical 3D solid")
-            btn_sph.clicked.connect(self.sphere_clicked)
-            h_layout.addWidget(btn_sph)
 
             btn_thread = RibbonButton("Thread\nCoil", "🔩")
             btn_thread.setToolTip("3D-printable threads and helical coils (trapezoidal 45°, clearance, lead-in taper)")

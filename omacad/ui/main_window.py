@@ -164,7 +164,6 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.box_clicked.connect(self.prompt_box)
         self.ribbon.cylinder_clicked.connect(self.prompt_cylinder)
         self.ribbon.hexagon_clicked.connect(self.prompt_prism)
-        self.ribbon.sphere_clicked.connect(self.prompt_sphere)
         self.ribbon.thread_clicked.connect(self.prompt_thread)
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
@@ -314,7 +313,6 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         menu_create.addAction("Box", self.prompt_box)
         menu_create.addAction("Cylinder", self.prompt_cylinder)
         menu_create.addAction("Hexagon", self.prompt_prism)
-        menu_create.addAction("Sphere", self.prompt_sphere)
         menu_create.addAction("Thread / Coil…", self.prompt_thread)
 
         # Modify Menu
@@ -394,7 +392,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         icons = {
             "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
             "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️", "Emboss": "🔖", "Insert Canvas": "🖼️",
-            "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚", "Offset Face": "↔️",
+            "Box": "📦", "Cylinder": "🥫", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚", "Offset Face": "↔️",
             "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
             "Fit View": "🔲", "Section View": "✂️", "Measure": "📏", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
             "Settings": "⚙️",
