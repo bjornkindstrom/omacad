@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.4 - 2026-10-17
+
+### Added
+- Move steps can carry a body point to point (from a snap point on it to a point on another body or a fixed spot) and rotate about a picked point. The points are stored in the step and found again after a rebuild, so the move follows when a radius or size before it changes. Not yet in the Move panel.
+
 ## 0.9.9.3 - 2026-10-17
 
 ### Added

@@ -709,7 +709,7 @@ class Document:
         "shell": ("thickness", "direction", "thickness2", "open_faces"),
         "offset_face": ("distance",),
         "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle"),
-        "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot"),
+        "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot", "from_point", "to_point"),
     }
 
     @undoable("Edit Feature")
@@ -964,14 +964,17 @@ class Document:
         rz: float = 0.0,
         pivot: str = "center",
         exprs: Optional[dict] = None,
+        from_point: Optional[dict] = None,
+        to_point: Optional[dict] = None,
     ) -> Optional[MoveFeature]:
-        """Translates and rotates a 3D solid body parametrically."""
+        """Translates and rotates a 3D solid body parametrically (optionally point to point, see MoveFeature)."""
         if body_id not in self.bodies:
             return None
         n = len([f for f in self.timeline.features if f.feature_type == "move"]) + 1
         feat_id = f"move_{len(self.timeline.features) + 1}"
         target_name = self.bodies[body_id].name
-        feat = MoveFeature(feat_id, f"Move {target_name} ({n})", body_id, dx, dy, dz, rx, ry, rz, pivot=pivot)
+        feat = MoveFeature(feat_id, f"Move {target_name} ({n})", body_id, dx, dy, dz, rx, ry, rz, pivot=pivot,
+                           from_point=from_point, to_point=to_point)
         if exprs:
             feat.exprs = exprs
         self.timeline.add_feature(feat)

@@ -21,6 +21,15 @@ def rotation_aligning(a, b) -> np.ndarray:
     return np.eye(3) + k + k @ k / (1.0 + c)
 
 
+def euler_xyz_matrix(rx: float, ry: float, rz: float) -> np.ndarray:
+    """Rz @ Ry @ Rx for angles in degrees: the rotation Manifold.rotate([rx, ry, rz]) applies."""
+    a, b, c = (math.radians(v) for v in (rx, ry, rz))
+    rot_x = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
+    rot_y = np.array([[math.cos(b), 0, math.sin(b)], [0, 1, 0], [-math.sin(b), 0, math.cos(b)]])
+    rot_z = np.array([[math.cos(c), -math.sin(c), 0], [math.sin(c), math.cos(c), 0], [0, 0, 1]])
+    return rot_z @ rot_y @ rot_x
+
+
 def euler_xyz_degrees(R) -> tuple:
     """(rx, ry, rz) in degrees such that R = Rz(rz) @ Ry(ry) @ Rx(rx): the order Manifold.rotate applies
     (first about X, then Y, then Z)."""
