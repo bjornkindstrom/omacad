@@ -19,3 +19,21 @@ def isolated_settings(tmp_path, monkeypatch):
     yield
     from omacad.model import quality
     quality.set_circle_segments(quality.DEFAULT_SEGMENTS)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Close every window the tests left open while Qt is still fully alive: Python tearing down live widgets at
+    interpreter exit can segfault after all tests have passed (seen in CI)."""
+    try:
+        from PySide6.QtCore import QEvent
+        from PySide6.QtWidgets import QApplication
+    except Exception:
+        return
+    app = QApplication.instance()
+    if app is None:
+        return
+    for w in app.topLevelWidgets():
+        w.close()
+        w.deleteLater()
+    app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
