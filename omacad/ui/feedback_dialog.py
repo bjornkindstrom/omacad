@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
-                               QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+                               QFileDialog, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 MARK_COLOUR = QColor(255, 45, 45)
 MARK_WIDTH = 5.0           # in screenshot pixels, so marks look the same at any zoom
@@ -77,6 +77,14 @@ class MarkableImage(QWidget):
         self.scale = max(0.05, min(40.0, self.scale * factor))
         self.offset = QPointF(pos.x() - anchor.x() * self.scale, pos.y() - anchor.y() * self.scale)
         self.update()
+
+    def set_pixmap(self, pixmap: QPixmap) -> None:
+        """Shows another picture (marks belong to the old one, so they go)."""
+        self.pixmap = QPixmap(pixmap)
+        self.pixmap.setDevicePixelRatio(1.0)
+        self.marks.clear()
+        self._fitted = False
+        self.fit()
 
     # ---- marks --------------------------------------------------------------------
     def undo(self) -> None:
@@ -191,8 +199,11 @@ class FeedbackDialog(QDialog):
                 b.clicked.connect(lambda _=False, k=key: setattr(self.image, "tool", k))
                 group.addButton(b)
                 tools.addWidget(b)
+            self._builtin = QPixmap(screenshot)
+            self.own = False
             for label, slot in (("Undo mark", lambda: self.image.undo()), ("Clear marks", lambda: self.image.clear()),
-                                ("Fit", lambda: self.image.fit())):
+                                ("Fit", lambda: self.image.fit()), ("Use my own image…", self.choose_own_image),
+                                ("Use the screenshot", self.use_builtin_image)):
                 b = QPushButton(label)
                 b.clicked.connect(slot)
                 tools.addWidget(b)
@@ -252,6 +263,26 @@ class FeedbackDialog(QDialog):
         buttons.rejected.connect(self.reject)
         lay.addWidget(buttons)
         self.note.setFocus()
+
+    def choose_own_image(self) -> None:
+        """Replaces the built-in screenshot with a picture from the user's computer (marks can be drawn on it)."""
+        path, _ = QFileDialog.getOpenFileName(self, "Choose an image", "", "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)")
+        if not path:
+            return
+        pix = QPixmap(path)
+        if pix.isNull():
+            self._note_label.setText("<b>That file could not be read as an image.</b> Choose a PNG or JPEG.")
+            return
+        self.image.set_pixmap(pix)
+        self.own = True
+
+    def use_builtin_image(self) -> None:
+        self.image.set_pixmap(self._builtin)
+        self.own = False
+
+    def own_image(self) -> Optional[QImage]:
+        """The user's own picture (with the drawing on it), or None while the built-in screenshot is used."""
+        return self.image.annotated_image() if self.image is not None and self.own else None
 
     def selected_agent(self) -> str:
         return str(self.cmb_agent.currentData() or "omarchy")

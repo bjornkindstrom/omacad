@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.52 - 2026-10-17
+
+### Added
+- **Your own image in Request a change / Report problem**: the dialog has *Use my own image…* (pick a PNG/JPEG from your computer; you can zoom and draw on it) and *Use the screenshot* to go back. With your own image, it is sent instead of the built-in screenshots (`screenshot_own.png`).
+
 ## 0.7.9.51 - 2026-10-17
 
 ### Fixed
