@@ -38,7 +38,7 @@ Everything about the moment is in this folder ({folder}):
 2. Look at the screenshots, then reproduce the problem in a script from `document.omacad` (see the testing section of omacad.md).
 3. Find the root cause. Fix it in the code in `{root}`: lean, clean, no workaround on top of a workaround.
 4. Add a regression test in `{root}/tests/` (use the document from this report when it is small enough).
-5. Run `.venv/bin/python -m pytest tests -q`. Nothing may break; if a test fails, fix it or revert.
+5. Run `.venv/bin/python tools/pick_tests.py` (your new test plus the 3-4 test files that cover the change; not the whole suite, CI runs that on push). If a test fails, fix it or revert.
 6. Add an entry to the "Solutions log" in `omacad.md` and a line in `CHANGELOG.md` (bump the patch version in `omacad/__init__.py`).
 7. Commit (do not push). Then tell the user in one or two sentences what was wrong. The running app restarts itself on the new commit (work saved and restored), so only commit when the tests are green.
 
