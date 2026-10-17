@@ -394,7 +394,7 @@ class CadKernel:
             diag = float(np.linalg.norm(np.ptp(v, axis=0))) or 1.0
             areas = tm.area_faces
             fa = tm.face_adjacency
-            sharp_mask &= (areas[fa[:, 0]] > 1e-11 * diag * diag) & (areas[fa[:, 1]] > 1e-11 * diag * diag)
+            sharp_mask &= (areas[fa[:, 0]] > 1e-7 * diag * diag) & (areas[fa[:, 1]] > 1e-7 * diag * diag)
             sharp_edges = tm.face_adjacency_edges[sharp_mask]
             
             # Also include single-face boundary edges (if open mesh)
