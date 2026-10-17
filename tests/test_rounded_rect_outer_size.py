@@ -26,8 +26,8 @@ def _extent(sk):
 def test_dimensions_are_the_overall_size():
     _, sk, _ = _make()
     by = {x.name: x for x in sk.dimensions}
-    assert by["Width"].dim_type == "HORIZ_DIST" and by["Width"].value == pytest.approx(60)
-    assert by["Height"].dim_type == "VERT_DIST" and by["Height"].value == pytest.approx(40)
+    assert by["Width"].dim_type == "PT_LINE_DIST" and by["Width"].value == pytest.approx(60)    # wall to wall,
+    assert by["Height"].dim_type == "PT_LINE_DIST" and by["Height"].value == pytest.approx(40)  # also when turned
     assert not [x for x in sk.dimensions if x.dim_type == "LENGTH"]
 
 

@@ -1315,10 +1315,7 @@ class Document:
         if dim.dim_type == "ANGLE":
             return {"fixed_ids": [dim.target_entity_id]}
         if dim.dim_type == "PT_LINE_DIST" and dim.refs:
-            ref = dim.refs[0]
-            if not ref.startswith("ref:"):
-                return {"pinned": [(ref, "p1")]}
-            return {}
+            return {"fixed_ids": [dim.refs[0]]}   # the line measured from stays put (also its direction)
         if dim.dim_type in ("DISTANCE", "HORIZ_DIST", "VERT_DIST") and dim.pts:
             return {"pinned": [(dim.target_entity_id, "center" if dim.pts[0] in ("edge_near", "edge_far") else dim.pts[0])]}
         if dim.dim_type == "LENGTH":

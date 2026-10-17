@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9 - 2026-10-17
+
+### Fixed
+- Rounded rectangles can be rotated to any angle. Their Width and Height were horizontal/vertical distances, which blocked every rotation that is not a quarter turn; they now measure wall to opposite wall, square to the walls, so they stay right when the rectangle is turned. Changing a point-to-line distance keeps the line it is measured from in place, so a turned rectangle keeps its angle when you change its size.
+- Plain rectangles keep their Horizontal/Vertical constraints (as in Fusion 360): Rotate already turns them into relative constraints, and without them a rectangle would twist when its size is changed.
+
 ## 0.9.8 - 2026-10-17
 
 ### Changed

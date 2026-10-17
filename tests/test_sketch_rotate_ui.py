@@ -192,3 +192,25 @@ def test_text_rotates_about_picked_coordinates_and_path_text_is_protected(scene)
     assert not panel.ok.isEnabled()
     panel.cancel.click()
     assert sk.to_dict() == before
+
+
+def test_rounded_rectangle_rotates_and_keeps_its_size_dimensions(scene):
+    import math
+    from omacad.model.sketch import SketchLine
+    doc, sk, vp, _, _ = scene
+    lines = sk.add_rounded_rect((0, 0), (30, 20), 4)
+    vp.selected_entities = set(sk.connected_entities(lines[0].entity_id))
+    vp.set_sketch_tool("ROTATE")
+    vp.rotation_panel.angle.setValue(30)
+    assert vp.rotation_panel.ok.isEnabled()          # used to be blocked by horizontal/vertical size dimensions
+    vp.rotation_panel.ok.click()
+    bottom = sk.get_entity(lines[0].entity_id)
+    assert math.degrees(math.atan2(bottom.p2[1] - bottom.p1[1], bottom.p2[0] - bottom.p1[0])) == pytest.approx(30, abs=1e-3)
+    width = next(d for d in sk.dimensions if d.name == "Width" and d.dim_type == "PT_LINE_DIST")   # not the slot's
+    assert doc.update_dimension(sk.sketch_id, width.dim_id, 40)
+    bottom, left, right = (sk.get_entity(lines[i].entity_id) for i in (0, 3, 1))
+    assert math.degrees(math.atan2(bottom.p2[1] - bottom.p1[1], bottom.p2[0] - bottom.p1[0])) == pytest.approx(30, abs=1e-3)
+    ux, uy = math.cos(math.radians(30)), math.sin(math.radians(30))   # along the bottom wall
+    assert abs((right.p1[0] - left.p1[0]) * ux + (right.p1[1] - left.p1[1]) * uy) == pytest.approx(40, abs=1e-3)
+    guides = [e for e in sk.entities if isinstance(e, SketchLine) and e.is_construction]
+    assert len({(round(g.p2[0], 4), round(g.p2[1], 4)) for g in guides}) == 4   # still meeting at four corners

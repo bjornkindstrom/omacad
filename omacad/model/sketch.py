@@ -1367,10 +1367,11 @@ class Sketch:
         old = [d for d in self.dimensions if d.target_entity_id in (bottom.entity_id, right.entity_id) and d.dim_type == "LENGTH"]
         offsets = {d.target_entity_id: d.offset_distance for d in old}
         self.dimensions = [d for d in self.dimensions if not any(d is o for o in old)]
-        self.add_dimension("HORIZ_DIST", left.entity_id, abs(right.p1[0] - left.p1[0]), offset_distance=offsets.get(bottom.entity_id, 10.0),
-                           name="Width", refs=[right.entity_id], pts=["p1", "p1"])
-        self.add_dimension("VERT_DIST", bottom.entity_id, abs(top.p1[1] - bottom.p1[1]), offset_distance=offsets.get(right.entity_id, 10.0),
-                           name="Height", refs=[top.entity_id], pts=["p1", "p1"])
+        # wall to opposite wall, square to them: right also when the rectangle is turned
+        self.add_dimension("PT_LINE_DIST", right.entity_id, abs(right.p1[0] - left.p1[0]), offset_distance=offsets.get(bottom.entity_id, 10.0),
+                           name="Width", refs=[left.entity_id], pts=["p1"])
+        self.add_dimension("PT_LINE_DIST", top.entity_id, abs(top.p1[1] - bottom.p1[1]), offset_distance=offsets.get(right.entity_id, 10.0),
+                           name="Height", refs=[bottom.entity_id], pts=["p1"])
 
     def add_center_rect(self, center: Tuple[float, float], corner: Tuple[float, float], is_construction: bool = False) -> List[SketchLine]:
         cx, cy = center
