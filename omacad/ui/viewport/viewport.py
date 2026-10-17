@@ -269,6 +269,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.plane_pick_mode = False
         self.plane_pick_purpose = "sketch"
         self.sketch_tool = "NONE"
+        self.sketch_palette.set_tool("NONE")
         self.rotation_panel.hide()
         self._rotate_drag = None
         self.sketch_start_uv = self.sketch_second_uv = self.sketch_current_uv = None
@@ -308,6 +309,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.sketch_palette.place_default(self.size())
         else:
             self.sketch_palette.hide()
+            self.sketch_palette.set_tool("NONE")
             self.rotation_panel.hide()
             self._rotate_drag = None
             self.active_snap = None
@@ -650,6 +652,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.measure = {"mode": "sketch" if self.doc.active_sketch else "model", "picks": [], "text": [], "segs": []}
         self.selected_entities.clear()
         self.sketch_tool = "NONE" if self.doc.active_sketch else self.sketch_tool
+        self.sketch_palette.set_tool(self.sketch_tool)
         from omacad.ui.settings import get_settings
         if self.sketch_palette and get_settings().get("autohide_palette_on_measure", True):
             self.sketch_palette.hide()

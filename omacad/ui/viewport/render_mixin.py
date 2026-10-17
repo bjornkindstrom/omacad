@@ -144,6 +144,7 @@ class RenderGLMixin:
         self.sketch_current_uv = None
         if tool_name == "ROTATE" and not self._rotate_begin():
             self.sketch_tool = tool_name = "NONE"
+        self.sketch_palette.set_tool(tool_name)
         self.sketch_tool_changed.emit(tool_name)
         if tool_name == "ROTATE":
             self.status_message.emit("Rotate: " + ROTATE_INFO)

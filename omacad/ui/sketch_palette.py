@@ -117,7 +117,9 @@ class SketchPalette(QFrame):
         self.chk_show_profiles.stateChanged.connect(self.settings_changed)
         content_layout.addWidget(self.chk_show_profiles)
 
-        sides_row = QHBoxLayout()
+        # Tool options: only shown while the tool that uses them is active (set_tool)
+        self.sides_row = QWidget()
+        sides_row = QHBoxLayout(self.sides_row)
         sides_row.setContentsMargins(0, 0, 0, 0)
         sides_row.addWidget(QLabel("Polygon sides"))
         self.spn_sides = QSpinBox()
@@ -126,9 +128,10 @@ class SketchPalette(QFrame):
         self.spn_sides.setToolTip("Number of sides for the Polygon tool (3 = triangle, 6 = hexagon). Tab while drawing also sets it.")
         self.spn_sides.valueChanged.connect(self.settings_changed)
         sides_row.addWidget(self.spn_sides)
-        content_layout.addLayout(sides_row)
+        content_layout.addWidget(self.sides_row)
 
-        radius_row = QHBoxLayout()
+        self.radius_row = QWidget()
+        radius_row = QHBoxLayout(self.radius_row)
         radius_row.setContentsMargins(0, 0, 0, 0)
         radius_row.addWidget(QLabel("Corner radius"))
         self.spn_corner_radius = QDoubleSpinBox()
@@ -138,7 +141,8 @@ class SketchPalette(QFrame):
         self.spn_corner_radius.setToolTip("Corner radius for the Rounded Rect tool (capped at half the shorter side).")
         self.spn_corner_radius.valueChanged.connect(self.settings_changed)
         radius_row.addWidget(self.spn_corner_radius)
-        content_layout.addLayout(radius_row)
+        content_layout.addWidget(self.radius_row)
+        self.set_tool("NONE")
 
         content_layout.addSpacing(4)
 
@@ -207,6 +211,12 @@ class SketchPalette(QFrame):
         content_layout.addWidget(btn_finish)
 
         layout.addWidget(self.content_widget)
+
+    def set_tool(self, tool_name: str) -> None:
+        """Show Polygon sides / Corner radius only for the tools that use them."""
+        self.sides_row.setVisible(tool_name == "POLYGON")
+        self.radius_row.setVisible(tool_name in ("ROUNDED_RECT", "CENTER_ROUNDED_RECT"))
+        self.adjustSize()
 
     def set_has_text(self, has_text: bool) -> None:
         """Show or hide the Edit Text button based on whether the active sketch has SketchText."""

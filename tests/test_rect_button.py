@@ -34,3 +34,21 @@ def test_default_is_remembered_and_drives_the_button(ribbon):
 def test_dropdown_lists_every_kind(ribbon):
     labels = [a.text() for a in ribbon.btn_rect.menu().actions() if a.text()]
     assert all(t.replace("\n", " ") in labels for t, _ in RECT_TOOLS.values())
+
+
+def test_palette_shows_sides_and_corner_radius_only_for_their_tools():
+    from PySide6.QtWidgets import QApplication
+    from omacad.model.document import Document
+    from omacad.ui.viewport import Viewport3D
+    app = QApplication.instance() or QApplication([])
+    doc = Document()
+    doc.start_sketch()
+    vp = Viewport3D(doc)
+    pal = vp.sketch_palette
+    for tool, sides, radius in (("NONE", False, False), ("POLYGON", True, False), ("ROUNDED_RECT", False, True),
+                                ("CENTER_ROUNDED_RECT", False, True), ("LINE", False, False), ("RECT", False, False)):
+        vp.set_sketch_tool(tool)
+        assert (pal.sides_row.isHidden(), pal.radius_row.isHidden()) == (not sides, not radius), tool
+    vp.close()
+    vp.deleteLater()
+    app.processEvents()

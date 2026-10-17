@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.7 - 2026-10-17
+
+### Added
+- A rounded rectangle gets construction guide lines from its straight sides out to each sharp corner, where they meet, so you can snap a rotation pivot, a dimension or a line to the corner. They follow when the width, height or a corner radius changes, and they are not part of the profile.
+
+### Changed
+- The sketch palette shows Polygon sides only while the Polygon tool is active, and Corner radius only for the rounded rectangles.
+
 ## 0.9.6 - 2026-10-17
 
 ### Changed

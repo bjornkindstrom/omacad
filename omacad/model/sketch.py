@@ -1331,9 +1331,33 @@ class Sketch:
         r = self.corner_radius_limit(p1, p2, radius)
         if r > 0.001:
             for pt, la, lb, _ea, _eb in self.find_corners(lines):
-                self.fillet_corner(la, lb, r, pt)
+                arc, _msg = self.fillet_corner(la, lb, r, pt)
+                if arc is not None:
+                    self._corner_guides(arc)
             self._outer_size_dimensions(lines)
         return lines
+
+    def _corner_guides(self, arc: "SketchArc") -> List[SketchLine]:
+        """Construction lines that carry both sides of a rounded corner on to the sharp corner, where
+        they meet: a point to snap a pivot, a dimension or a line to. The fillet owns them
+        (fillet_info["guides"]) and _update_fillet_arc re-seats them with the arc."""
+        guides = []
+        for _ in range(2):
+            guides.append(SketchLine(self._new_entity_id("line"), (0.0, 0.0), (0.0, 0.0), is_construction=True))
+            self.entities.append(guides[-1])
+        arc.fillet_info["guides"] = [g.entity_id for g in guides]
+        self._seat_corner_guides(arc)
+        self.solve_profiles()
+        return guides
+
+    def _seat_corner_guides(self, arc: "SketchArc") -> None:
+        info = arc.fillet_info
+        corner = (float(info["corner"][0]), float(info["corner"][1]))
+        for gid, side_key, end_key in zip(info.get("guides", ()), ("line_a", "line_b"), ("end_a", "end_b")):
+            guide, side = self.get_entity(gid), self.get_entity(info[side_key])
+            if isinstance(guide, SketchLine) and isinstance(side, SketchLine):
+                guide.p1 = tuple(getattr(side, info[end_key]))
+                guide.p2 = corner
 
     def _outer_size_dimensions(self, lines) -> None:
         """After the corners are rounded the width/height dimensions of the straight pieces would measure the flats,
@@ -1452,6 +1476,7 @@ class Sketch:
         arc.p_start = Ta
         arc.p_mid = M
         arc.p_end = Tb
+        self._seat_corner_guides(arc)
 
         # Update length dimensions on trimmed lines
         for line in (line_a, line_b):
