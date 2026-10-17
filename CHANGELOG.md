@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.6 - 2026-10-17
+
+### Changed
+- Sketch Rotate is driven by the mouse: click in the sketch to set the pivot (it snaps to points and the grid), then drag around it to turn the selection; Shift turns in 15° steps and full turns keep counting. Typing an angle and the pivot list still work; Enter / OK applies, Esc cancels. The "Pick pivot" button is gone, a click does it.
+
 ## 0.9.5 - 2026-10-17
 
 ### Changed

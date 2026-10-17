@@ -8,7 +8,6 @@ from omacad.ui.expr_spin import ExprDoubleSpinBox
 
 class SketchRotationPanel(QGroupBox):
     changed = Signal()
-    pick_requested = Signal()
     accepted = Signal()
     cancelled = Signal()
 
@@ -17,10 +16,6 @@ class SketchRotationPanel(QGroupBox):
         form = QFormLayout(self)
         self.pivot = QComboBox()
         form.addRow("Pivot", self.pivot)
-        self.pick = QPushButton("Pick pivot in sketch")
-        self.pick.setAutoDefault(False)
-        self.pick.clicked.connect(self.pick_requested)
-        form.addRow(self.pick)
         self.x, self.y, self.angle = (ExprDoubleSpinBox() for _ in range(3))
         for spin in (self.x, self.y, self.angle):
             spin.setRange(-100000, 100000)
@@ -33,7 +28,7 @@ class SketchRotationPanel(QGroupBox):
         form.addRow("Pivot X", self.x)
         form.addRow("Pivot Y", self.y)
         form.addRow("Angle", self.angle)
-        self.info = QLabel("Preview: type an angle. OK applies; Esc cancels. Axis relations follow the rotation.")
+        self.info = QLabel()
         self.info.setWordWrap(True)
         form.addRow(self.info)
         row = QHBoxLayout()

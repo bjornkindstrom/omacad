@@ -58,23 +58,66 @@ def test_preview_pivot_changes_cancel_commit_undo_redo_and_save(scene):
     assert loaded.sketches[sk.sketch_id].get_entity(eid).to_dict() == sk.get_entity(eid).to_dict()
 
 
-def test_custom_pivot_can_be_picked_and_escape_restores_everything(scene, monkeypatch):
+def _mouse(vp, kind, pos, mods=Qt.KeyboardModifier.NoModifier):
+    p = QPointF(*pos)
+    types = {"press": QEvent.Type.MouseButtonPress, "move": QEvent.Type.MouseMove, "release": QEvent.Type.MouseButtonRelease}
+    buttons = Qt.MouseButton.NoButton if kind == "release" else Qt.MouseButton.LeftButton
+    event = QMouseEvent(types[kind], p, p, Qt.MouseButton.LeftButton, buttons, mods)
+    {"press": vp.mousePressEvent, "move": vp.mouseMoveEvent, "release": vp.mouseReleaseEvent}[kind](event)
+
+
+def test_click_sets_custom_pivot_and_escape_restores_everything(scene, monkeypatch):
     doc, sk, vp, eid, _ = scene
     before = sk.to_dict()
     vp.set_sketch_tool("ROTATE")
     vp.rotation_panel.angle.setValue(90)
     vp.sketch_palette.chk_snap_grid.setChecked(False)
     vp.sketch_palette.chk_snap_points.setChecked(False)
-    vp.rotation_panel.pick.click()
     monkeypatch.setattr(vp, "get_sketch_plane_uv", lambda x, y: (1.0, 1.0))
-    p = QPointF(10, 10)
-    vp.mousePressEvent(QMouseEvent(QEvent.Type.MouseButtonPress, p, p, Qt.MouseButton.LeftButton,
-                                  Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+    _mouse(vp, "press", (10, 10))
+    _mouse(vp, "release", (10, 10))
+    assert vp.rotation_panel.pivot.currentData() == "custom"
     assert vp._move["pivot"] == pytest.approx((1, 1))
     assert sk.get_entity(eid).center1 == pytest.approx((0, 2))
     vp.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier))
     assert sk.to_dict() == before
     assert vp.sketch_tool == "NONE"
+
+
+def test_drag_around_pivot_rotates_shift_snaps_and_enter_is_one_undo_step(scene, monkeypatch):
+    doc, sk, vp, eid, _ = scene
+    before = sk.to_dict()
+    undo_count = len(doc.undo_stack)
+    vp.set_sketch_tool("ROTATE")
+    assert vp._move["pivot"] == pytest.approx((5, 2))       # figure area centre
+    # screen x/y stand for sketch u/v here: the pivot is at (5, 2)
+    monkeypatch.setattr(vp, "get_sketch_plane_uv", lambda x, y: (float(x), float(y)))
+    _mouse(vp, "press", (10, 2))
+    _mouse(vp, "move", (5, 7))                                # a quarter turn counter-clockwise
+    assert vp.rotation_panel.angle.value() == pytest.approx(90)
+    assert sk.get_entity(eid).center1 == pytest.approx((5, -1))
+    _mouse(vp, "move", (5 + 10 * 0.643, 2 + 10 * 0.766), Qt.KeyboardModifier.ShiftModifier)   # 50° -> 45° step
+    assert vp.rotation_panel.angle.value() == pytest.approx(45)
+    for x, y in ((0, 2), (5, -3), (10, 2), (5 + 10 * 0.643, 2 + 10 * 0.766)):   # once more around: 360 + 50°
+        _mouse(vp, "move", (x, y))
+    assert vp.rotation_panel.angle.value() == pytest.approx(410)
+    _mouse(vp, "move", (5 + 10 * 0.643, 2 + 10 * 0.766), Qt.KeyboardModifier.ShiftModifier)
+    assert vp.rotation_panel.angle.value() == pytest.approx(405)
+    _mouse(vp, "release", (5 + 10 * 0.643, 2 + 10 * 0.766))
+    assert vp._move["pivot"] == pytest.approx((5, 2))       # a drag does not move the pivot
+    assert len(doc.undo_stack) == undo_count                # still only a preview
+    vp.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier))
+    assert vp.sketch_tool == "NONE"
+    assert len(doc.undo_stack) == undo_count + 1
+    doc.undo()
+    assert sk.to_dict() == before
+
+
+def test_drag_angle_wraps_to_half_turn():
+    from omacad.ui.viewport.sketch_rotate_mixin import drag_angle
+    assert drag_angle((0, 0), (1, 0), (0, 1)) == pytest.approx(90)
+    assert drag_angle((0, 0), (0, 1), (1, 0)) == pytest.approx(-90)
+    assert drag_angle((0, 0), (-1, 0.01), (-1, -0.01)) == pytest.approx(1.146, abs=1e-3)
 
 
 def test_fixed_and_projected_geometry_are_protected(scene):

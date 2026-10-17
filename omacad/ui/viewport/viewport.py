@@ -270,7 +270,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.plane_pick_purpose = "sketch"
         self.sketch_tool = "NONE"
         self.rotation_panel.hide()
-        self._rotate_pick = False
+        self._rotate_drag = None
         self.sketch_start_uv = self.sketch_second_uv = self.sketch_current_uv = None
         self.active_snap = None
         self._drag = self._move = self._dim_drag = None
@@ -309,7 +309,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         else:
             self.sketch_palette.hide()
             self.rotation_panel.hide()
-            self._rotate_pick = False
+            self._rotate_drag = None
             self.active_snap = None
             self.sketch_tool = "NONE"
             self.sketch_start_uv = None
@@ -1693,7 +1693,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
         if self.doc.active_sketch and self.sketch_tool == "ROTATE":
             if event.button() == Qt.MouseButton.LeftButton:
-                self._rotate_click(x, y)
+                self._rotate_press(event, x, y)
                 return
             if event.button() == Qt.MouseButton.RightButton:
                 self.set_sketch_tool("NONE")
@@ -2019,6 +2019,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             return
         if self._rubber is not None:
             self._rubber["p1"] = event.position()
+            self.update()
+            return
+        if self.sketch_tool == "ROTATE" and self._rotate_drag is not None:
+            self._rotate_drag_to(event, x, y)
             self.update()
             return
 
@@ -2634,6 +2638,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             return
         if self._rubber is not None and event.button() == Qt.MouseButton.LeftButton:
             self._finish_rubber(event)
+            return
+        if self.sketch_tool == "ROTATE" and self._rotate_drag is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._rotate_release(event.position().x(), event.position().y())
             return
         if (self.measure is not None and self.measure["mode"] == "model" and event.button() == Qt.MouseButton.LeftButton
                 and self._press_pos is not None and (event.position() - self._press_pos).manhattanLength() < 4):

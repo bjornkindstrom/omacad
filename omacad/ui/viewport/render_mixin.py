@@ -7,6 +7,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from OpenGL import GL
 from omacad.ui import theme
+from omacad.ui.viewport.sketch_rotate_mixin import INFO as ROTATE_INFO
 from omacad.model.timeline import profile_cross_section
 from omacad.model.sketch import Sketch, SketchArc, SketchSlot
 
@@ -125,7 +126,7 @@ class RenderGLMixin:
         if self._move:
             self._end_move(False)
         self.rotation_panel.hide()
-        self._rotate_pick = False
+        self._rotate_drag = None
         self._move_phase = "base" if (tool_name == "MOVE" and self.selected_entities) else "pick"
         if tool_name == "ROTATE" and not self.selected_entities:
             self.status_message.emit("Rotate: select sketch elements first (click, Ctrl+click, or double-click for a whole figure).")
@@ -145,7 +146,7 @@ class RenderGLMixin:
             self.sketch_tool = tool_name = "NONE"
         self.sketch_tool_changed.emit(tool_name)
         if tool_name == "ROTATE":
-            self.status_message.emit("Rotate: choose a pivot and angle in the sketch palette. OK applies; Esc cancels.")
+            self.status_message.emit("Rotate: " + ROTATE_INFO)
         if tool_name == "MOVE":
             self._move_status()
         if tool_name == "OFFSET":
