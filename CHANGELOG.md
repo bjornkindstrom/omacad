@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.58 - 2026-10-17
+
+### Fixed
+- **Emboss turned into a flat extrude after editing the text** (#60): `EmbossFeature._surface_behind` only cast one ray from the text's centroid to find the cylinder behind it, so a longer string whose centroid ended up beside the cylinder missed it and the letters were extruded flat at the sketch plane. It now tries the centroid first and then points spread across the text, so the letters keep wrapping the cylinder.
+- **Offset Plane and construction planes were drawn far too large**: the preview and the finished plane are now drawn at the same size as the origin plane markers, centred on the plane, and the click area matches.
+
+### Added
+- **Settings for the line under the cursor** (#52): *Settings → Appearance* has a new colour (*Line under the cursor*, default white) and thickness (*Line under cursor, thickness*, 1-12 px, default 3.5) for the edge or sketch line you hover over.
+
 ## 0.7.9.57 - 2026-10-17
 
 ### Fixed
