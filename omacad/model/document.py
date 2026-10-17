@@ -704,7 +704,7 @@ class Document:
         "fillet": ("size", "kind"),
         "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length", "grow", "follow_host", "host_offset"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
-                    "mirror_mode", "about", "angle"),
+                    "mirror_mode", "about", "angle", "rotation_axis", "axis_origin", "axis_direction"),
         "split_body": ("target_body_id", "plane_id", "plane_origin", "plane_normal"),
         "shell": ("thickness", "direction", "thickness2", "open_faces"),
         "offset_face": ("distance",),

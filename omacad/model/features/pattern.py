@@ -3,6 +3,8 @@ Omacad - Pattern Features (Linear, Circular, Mirror, Fill)
 Copies history steps parametrically (linear, circular, mirror or fill lattice).
 """
 
+import math
+
 from typing import Dict, Any, List
 import numpy as np
 from shapely.geometry import Polygon
@@ -134,6 +136,9 @@ class PatternFeature(Feature):
         self.mirror_mode = params.get("mirror_mode", "auto")   # auto, x, y, xy
         self.about = params.get("about", "body")                # body (its centre) or origin
         self.angle = float(params.get("angle", 360.0))
+        self.rotation_axis = params.get("rotation_axis", "z")
+        self.axis_origin = list(map(float, params["axis_origin"])) if params.get("axis_origin") is not None else None
+        self.axis_direction = list(map(float, params["axis_direction"])) if params.get("axis_direction") is not None else None
         self.copies = 0
 
     def _transforms(self, centre, feature_centre, size):
@@ -179,10 +184,25 @@ class PatternFeature(Feature):
                 out.append(lambda m: my(mx(m)))
         elif self.kind == "circular":
             n = max(2, int(round(self.count1)))
-            step = self.angle / n if abs(self.angle - 360.0) < 1e-6 else self.angle / (n - 1)
+            step = self.angle / n if abs(abs(self.angle) - 360.0) < 1e-6 else self.angle / (n - 1)
+            if self.rotation_axis == "picked":
+                if self.axis_origin is None or self.axis_direction is None:
+                    raise ValueError("Choose a circular edge or cylindrical face for the pattern axis.")
+                c = np.asarray(self.axis_origin, dtype=float)
+                axis = np.asarray(self.axis_direction, dtype=float)
+            else:
+                axis = np.asarray(self.AXES.get(self.rotation_axis, self.AXES["z"]), dtype=float)
+            length = np.linalg.norm(axis)
+            if not np.isfinite(length) or length < 1e-9:
+                raise ValueError("The pattern axis must have a nonzero direction.")
+            axis = axis/length
+            x, y, z = axis
+            skew = np.array([[0., -z, y], [z, 0., -x], [-y, x, 0.]])
             for k in range(1, n):
-                deg = k * step
-                out.append(lambda m, deg=deg: m.translate(tuple(-c)).rotate((0.0, 0.0, deg)).translate(tuple(c)))
+                angle = math.radians(k*step)
+                rotation = np.eye(3)*math.cos(angle) + (1-math.cos(angle))*np.outer(axis, axis) + math.sin(angle)*skew
+                matrix = np.column_stack((rotation, np.zeros(3)))
+                out.append(lambda m, matrix=matrix, c=c.copy(): m.translate(tuple(-c)).transform(matrix).translate(tuple(c)))
         return out
 
     def _source_plane(self, doc, before=None, removed=None, added=None):
@@ -559,6 +579,18 @@ class PatternFeature(Feature):
                 keep.append(part)
         return m3d.Manifold.batch_boolean(keep, m3d.OpType.Add) if keep else m3d.Manifold()
 
+    def _selected_changes(self, doc, positions, body_id):
+        """Compose only selected deltas: a fillet trims its rib instead of copying an unfilleted rib too."""
+        removed, added = m3d.Manifold(), m3d.Manifold()
+        empty = m3d.Manifold()
+        for index in positions:
+            before = doc.step_states.get(index, {}).get(body_id, empty)
+            after = doc.step_states.get(index+1, {}).get(body_id, empty)
+            cut, join = before-after, after-before
+            removed, added = ((removed-join)+(cut-added),
+                              (added-cut)+(join-removed))
+        return removed, added
+
     def compute(self, doc, body_id: str):
         """(removed copies, added copies) for one body, or None if there is nothing to copy."""
         idx = doc.timeline.features.index(self) if self in doc.timeline.features else len(doc.timeline.features)
@@ -570,7 +602,12 @@ class PatternFeature(Feature):
         if after is None:
             return None
         whole_body = False
-        if before is None or before.is_empty():
+        if self.kind == "circular":
+            removed, added = self._selected_changes(doc, pos, body_id)
+            whole_body = before is None or before.is_empty()
+            if whole_body:
+                before = after
+        elif before is None or before.is_empty():
             voids = self._enclosed_voids(after)
             if not voids.is_empty():
                 removed, added = voids, m3d.Manifold()
@@ -642,4 +679,6 @@ class PatternFeature(Feature):
             "axis1": self.axis1, "count1": self.count1, "spacing1": self.spacing1,
             "axis2": self.axis2, "count2": self.count2, "spacing2": self.spacing2,
             "mirror_mode": self.mirror_mode, "about": self.about, "angle": self.angle,
+            "rotation_axis": self.rotation_axis, "axis_origin": self.axis_origin,
+            "axis_direction": self.axis_direction,
         }

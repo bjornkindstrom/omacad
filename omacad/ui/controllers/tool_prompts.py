@@ -241,19 +241,37 @@ class ToolPromptsMixin:
             dlg.toggle(plane_face_ref(face), face.body_id)
         dlg.show()
 
-    def prompt_pattern(self):
+    def prompt_pattern(self, kind=None):
         """Copy what some steps did: evenly spaced, mirrored around the body, or around an axis."""
         from omacad.model.timeline import PatternFeature
+        existing = getattr(self, "_pattern_dlg", None)
+        if existing is not None:
+            if kind in existing.KINDS:
+                existing.cmb_kind.setCurrentIndex(existing.KINDS.index(kind))
+            existing.raise_()
+            return
         if not any(f.feature_type != "pattern" for f in self.doc.timeline.features):
             QMessageBox.information(self, "Pattern / Mirror", "Make something first (for example a hole), then copy it.")
             return
         self.doc.timeline.recompute(self.doc)  # fresh before/after states of every step
         dlg = PatternDialog(self.doc, self)
+        self._pattern_dlg = dlg
+        if kind in dlg.KINDS:
+            dlg.cmb_kind.setCurrentIndex(dlg.KINDS.index(kind))
+        if kind == "circular":
+            dlg.setWindowTitle("Circular Feature Pattern")
+            dlg.spn_count1.setValue(12)
+        dlg.bind_axis_picker(self.viewport)
+        dlg.bind_timeline(self.timeline_bar)
 
         def preview():
             ids = dlg.source_ids()
             if not ids:
                 dlg.lbl_info.setText("Tick the steps to copy (for example the hole's sketch, cut and chamfer).")
+                self.viewport.set_preview(None)
+                return
+            if dlg.kind() == "circular" and dlg.cmb_rotation.currentIndex() == 3 and dlg.picked_direction is None:
+                dlg.lbl_info.setText("Pick a circular edge or cylinder for the rotation axis.")
                 self.viewport.set_preview(None)
                 return
             feat = PatternFeature("tmp", "tmp", ids, dlg.kind(), **dlg.get_params())
@@ -291,7 +309,7 @@ class ToolPromptsMixin:
             self.status_label.setText(f"Pattern: {feat.name} is {'no longer' if state == Qt.CheckState.Unchecked else 'now'} part of the copy "
                                       "(click it again to toggle).")
 
-        self._connect_debounced_preview(dlg, preview)
+        timer = self._connect_debounced_preview(dlg, preview)
         self.dock(dlg)
         self.viewport.pick_step_mode = True
         self.viewport.step_point_clicked.connect(on_step_clicked)
@@ -310,10 +328,14 @@ class ToolPromptsMixin:
                     it.setCheckState(Qt.CheckState.Unchecked if cur == Qt.CheckState.Checked else Qt.CheckState.Checked)
 
         self.viewport.body_clicked.connect(on_body_clicked)
-        self.status_label.setText("Pattern / Mirror: click the thing you want to copy in the 3D view, or tick steps in the list.")
+        self.status_label.setText("Circular Pattern: choose the rib and its fillet in the timeline or list; set the axis and total quantity."
+                                  if kind == "circular" else
+                                  "Pattern / Mirror: click features in the timeline or 3D view, or tick steps in the list.")
         preview()
 
         def on_finished(ok):
+            timer.stop()
+            self._pattern_dlg = None
             self.viewport.pick_step_mode = False
             try:
                 self.viewport.step_point_clicked.disconnect(on_step_clicked)

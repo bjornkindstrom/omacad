@@ -3,6 +3,16 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.0 - 2026-10-17
+
+### Added
+- Circular Feature Pattern in Create and the Pattern dropdown. Select a rib and its fillets together in the timeline or feature list, choose the total quantity (including the original) and full/partial signed angle.
+- Rotate around X, Y or Z, or pick a circular edge/cylindrical face to define an arbitrary axis. Axis settings persist and remain editable in the timeline.
+
+### Fixed
+- Circular feature groups compose only the checked feature changes; unchecked intermediate holes or other edits are not repeated. Fillet removal is combined with the added rib before copying.
+- Pattern type changes preserve synchronized numeric sliders.
+
 ## 0.8.0 - 2026-10-17
 
 ### Added

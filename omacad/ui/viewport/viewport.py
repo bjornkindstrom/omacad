@@ -2677,7 +2677,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.is_panning = False
             self.select_entity_at(event.position().x(), event.position().y(), additive)
             return
-        if was_click and self.pick_step_mode:
+        if was_click and self.pick_step_mode and not self.plane_pick_mode:
             self._press_pos = None
             self.is_orbiting = False
             self.is_panning = False
@@ -2731,6 +2731,16 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 return
             if self.plane_pick_purpose == "offset_face":
                 self._offset_face_click(event.position().x(), event.position().y())
+                return
+            if self.plane_pick_purpose == "pattern_axis":
+                edge = self._pick_edge(event.position().x(), event.position().y())
+                if edge is not None and edge.kind == "circle":
+                    cylinder = {"origin": edge.center, "axis": edge.axis}
+                else:
+                    cylinder = self._pick_cylinder_surface(event.position().x(), event.position().y())
+                if cylinder is not None:
+                    self.end_plane_pick()
+                    self.cylinder_picked.emit(cylinder)
                 return
             if self.plane_pick_purpose == "thread_surface":
                 cyl = self._pick_cylinder_surface(event.position().x(), event.position().y())

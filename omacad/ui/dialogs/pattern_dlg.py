@@ -3,7 +3,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFormLayout, QComboBox, QListWidget, QListWidgetItem, QSpinBox,
-    QCheckBox, QLabel
+    QCheckBox, QLabel, QPushButton
 )
 from omacad.model.document import Document
 from omacad.ui.expr_spin import ExprDoubleSpinBox
@@ -32,12 +32,19 @@ class PatternDialog(BaseFeatureDialog):
         self.lst = QListWidget()
         self.lst.setFixedHeight(120)
         feats = doc.timeline.features
+        if feature is not None and feature in feats:
+            feats = feats[:feats.index(feature)]
         non_pat = [(i, f) for i, f in enumerate(feats) if f.feature_type != "pattern"]
         sketches = [i for i, f in non_pat if f.feature_type == "sketch"]
         if sketches and (not non_pat or non_pat[-1][1].feature_type not in ("box", "cylinder", "sphere", "thread")):
             start_idx = max(sketches)
         elif non_pat:
             start_idx = non_pat[-1][0]
+            if non_pat[-1][1].feature_type == "fillet":
+                for i, f in reversed(non_pat):
+                    start_idx = i
+                    if f.feature_type in ("box", "cylinder", "sphere", "extrude", "emboss", "revolve"):
+                        break
         else:
             start_idx = 0
         for i, f in non_pat:
@@ -46,7 +53,8 @@ class PatternDialog(BaseFeatureDialog):
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Checked if i >= start_idx else Qt.CheckState.Unchecked)
             self.lst.addItem(item)
-        form.addRow("Copy these steps:", self.lst)
+        self.lbl_features = QLabel("Copy these steps:")
+        form.addRow(self.lbl_features, self.lst)
 
         # linear
         self.cmb_axis1 = QComboBox(); self.cmb_axis1.addItems(["X", "Y", "Z"])
@@ -67,7 +75,15 @@ class PatternDialog(BaseFeatureDialog):
         self.cmb_mplane = QComboBox(); self.cmb_mplane.addItems(plane_labels)
         self.cmb_mplane.setCurrentIndex(self.plane_keys.index("YZ"))
         # circular
-        self.spn_angle = ExprDoubleSpinBox(); self.spn_angle.setRange(1, 360); self.spn_angle.setSuffix(" °"); self.spn_angle.setValue(360)
+        self.cmb_rotation = QComboBox()
+        self.cmb_rotation.addItems(["X", "Y", "Z", "Picked axis"])
+        self.cmb_rotation.setCurrentIndex(2)
+        self.picked_origin = self.picked_direction = None
+        self.btn_axis = QPushButton("Pick circular edge / cylinder")
+        self.btn_axis.setAutoDefault(False)
+        self.lbl_axis = QLabel("No axis picked")
+        self.lbl_axis.setWordWrap(True)
+        self.spn_angle = ExprDoubleSpinBox(); self.spn_angle.setRange(-360, 360); self.spn_angle.setSuffix(" °"); self.spn_angle.setValue(360)
         self.cmb_about = QComboBox(); self.cmb_about.addItems(["Centre of the body", "Origin"])
         # fill
         self.spn_gap = ExprDoubleSpinBox(); self.spn_gap.setRange(0.1, 10000); self.spn_gap.setSuffix(" mm"); self.spn_gap.setValue(5.0)
@@ -81,7 +97,8 @@ class PatternDialog(BaseFeatureDialog):
             "linear": [("Direction:", self.cmb_axis1), ("Copies:", self.spn_count1), ("Spacing:", self.spn_space1),
                        ("", self.chk_second), ("Direction 2:", self.cmb_axis2), ("Copies 2:", self.spn_count2), ("Spacing 2:", self.spn_space2)],
             "mirror": [("Mirror:", self.cmb_mirror), ("About:", self.cmb_about)],
-            "circular": [("Copies:", self.spn_count1), ("Angle:", self.spn_angle), ("About:", self.cmb_about)],
+            "circular": [("Quantity (incl. original):", self.spn_count1), ("Axis:", self.cmb_rotation),
+                         ("", self.btn_axis), ("", self.lbl_axis), ("Angle:", self.spn_angle), ("About:", self.cmb_about)],
             "fill": [("Gap between copies:", self.spn_gap), ("Margin to the edge:", self.spn_margin), ("Layout:", self.cmb_layout), ("Smallest cut piece:", self.spn_partial)],
         }
         self._kind_form = QFormLayout()
@@ -102,6 +119,7 @@ class PatternDialog(BaseFeatureDialog):
         self.round_body = any(PatternFeature._is_round(b.manifold) for b in doc.bodies.values())
         if self.round_body and feature is None:
             self.spn_count1.setValue(2)   # a copy on the other end of the diameter, until you ask for more
+        self.cmb_rotation.currentIndexChanged.connect(lambda *_: (self._show_kind(), self.changed.emit()))
         self.cmb_mirror.currentIndexChanged.connect(self._show_kind)
         self._show_kind()
         if feature is not None:
@@ -125,11 +143,73 @@ class PatternDialog(BaseFeatureDialog):
             rows.insert(1, ("Copies (even spacing):", self.spn_count1))   # round body: count them out around the circle
         if kind == "mirror" and mode == "plane":
             rows = [("Mirror:", self.cmb_mirror), ("Plane:", self.cmb_mplane)]
+        self.lbl_features.setText("Features (rib + fillet):" if kind == "circular" else "Copy these steps:")
         for text, widget in rows:
+            if kind == "circular":
+                picked = self.cmb_rotation.currentIndex() == 3
+                if widget is self.lbl_axis and not picked:
+                    continue
+                if widget is self.cmb_about and picked:
+                    continue
             if kind == "linear" and widget in (self.cmb_axis2, self.spn_count2, self.spn_space2) and not self.chk_second.isChecked():
                 continue
-            self._kind_form.addRow(QLabel(text), widget)
+            parent = widget.parentWidget()
+            host = parent if getattr(parent, "field", None) is widget else widget
+            self._kind_form.addRow(QLabel(text), host)
+            host.setVisible(True)
             widget.setVisible(True)
+        if getattr(self, "_is_docked", False):
+            from omacad.ui.numeric_slider import add_numeric_sliders
+            add_numeric_sliders(self)
+
+    def toggle_feature(self, feature_id):
+        for i in range(self.lst.count()):
+            item = self.lst.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == feature_id:
+                item.setCheckState(Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked)
+                return
+
+    def bind_timeline(self, timeline):
+        handler = self.toggle_feature
+        previous = timeline.feature_pick_handler
+        timeline.feature_pick_handler = handler
+        def clear(*_):
+            if timeline.feature_pick_handler == handler:
+                timeline.feature_pick_handler = previous
+        self.finished.connect(clear)
+
+    def bind_axis_picker(self, viewport):
+        def begin():
+            viewport.begin_plane_pick("pattern_axis")
+            viewport.status_message.emit("Circular Pattern: click a circular edge or cylindrical face for the rotation axis.")
+
+        def picked(info):
+            self.picked_origin = list(map(float, info["origin"]))
+            self.picked_direction = list(map(float, info["axis"]))
+            self.lbl_axis.setText("Picked cylinder axis")
+            self.cmb_rotation.setCurrentIndex(3)
+            self.changed.emit()
+
+        def clear(*_):
+            viewport.cylinder_picked.disconnect(picked)
+            if viewport.plane_pick_mode and viewport.plane_pick_purpose == "pattern_axis":
+                viewport.end_plane_pick()
+        self.btn_axis.clicked.connect(begin)
+        viewport.cylinder_picked.connect(picked)
+        self.finished.connect(clear)
+
+    def accept(self):
+        if self.kind() == "circular":
+            if not self.source_ids():
+                self.lbl_info.setText("Select the rib feature and its fillet in the list or timeline.")
+                return
+            if self.cmb_rotation.currentIndex() == 3 and self.picked_direction is None:
+                self.lbl_info.setText("Pick a circular edge or cylinder to define the axis.")
+                return
+            if abs(self.spn_angle.value()) < 1e-6:
+                self.lbl_info.setText("Enter a nonzero pattern angle.")
+                return
+        super().accept()
 
     def load(self, f):
         """Fill the dialog from an existing step (editing)."""
@@ -151,6 +231,12 @@ class PatternDialog(BaseFeatureDialog):
             self.cmb_mirror.setCurrentIndex(self.MIRROR_MODES.index(f.mirror_mode))
         self.cmb_about.setCurrentIndex(0 if f.about == "body" else 1)
         self.spn_angle.setValue(f.angle)
+        axis = getattr(f, "rotation_axis", "z")
+        self.picked_origin = getattr(f, "axis_origin", None)
+        self.picked_direction = getattr(f, "axis_direction", None)
+        self.cmb_rotation.setCurrentIndex(["x", "y", "z", "picked"].index(axis))
+        if self.picked_origin is not None:
+            self.lbl_axis.setText("Saved cylinder axis")
         if f.kind == "fill":
             self.spn_gap.setValue(f.spacing1); self.spn_margin.setValue(f.spacing2); self.spn_partial.setValue(int(round(f.count1)))
             if f.mirror_mode == "triangular":
@@ -189,6 +275,8 @@ class PatternDialog(BaseFeatureDialog):
             "axis2": self.AXES[self.cmb_axis2.currentIndex()], "count2": self.spn_count2.value() if second else 1,
             "spacing2": self.spn_space2.value(), "mirror_mode": mmode,
             "about": "body" if self.cmb_about.currentIndex() == 0 else "origin", "angle": self.spn_angle.value(),
+            "rotation_axis": ["x", "y", "z", "picked"][self.cmb_rotation.currentIndex()],
+            "axis_origin": self.picked_origin, "axis_direction": self.picked_direction,
         }
 
     def get_expressions(self) -> dict:

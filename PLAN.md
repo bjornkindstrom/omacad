@@ -1,5 +1,7 @@
 # Omacad – färdplan
 
+Genomfört 0.9.0: cirkulära featuregrupper för t.ex. Japandi-ribbor med fillet; val av features i tidslinjen samt cirkel-/cylinderyta som rotationsaxel.
+
 Genomfört 2026-10-17 (0.8.0): Rotate i skiss med valbar pivot (figurens areacentrum, markeringens mitt, kroppsytans centrum, origo eller egen punkt), förhandsvisning och ångra/gör om.
 
 Genomfört 2026-10-17: direkt storleksändring av Box/Cylinder/Sphere via måtthandtag i förhandsvisningen, med ångra och avbryt. Alla numeriska fält i dockade verktyg har sliders med fortsatt text-/formelinmatning. Box/Cylinder har parametrisk taper angle, även med shell. Shelled Box/Cylinder finns som egna menyval med sparad standardtjocklek för väggar och botten.

@@ -492,7 +492,7 @@ class Exporter:
             elif ft == "pattern":
                 feat = PatternFeature(fid, fname, f_data.get("source_ids", []), f_data.get("kind", "linear"),
                                       **{k: f_data[k] for k in ("axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
-                                                                 "mirror_mode", "about", "angle") if k in f_data})
+                                                                 "mirror_mode", "about", "angle", "rotation_axis", "axis_origin", "axis_direction") if k in f_data})
                 doc.timeline.add_feature(feat)
             elif ft == "combine":
                 feat = CombineFeature(fid, fname, f_data["target_body_id"], f_data["tool_body_id"],

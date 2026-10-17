@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+**Circular Feature Pattern:** öppna Pattern-pilen → Circular Pattern (Features), välj ribban och dess fillet i tidslinjen/listan, välj rotationsaxel och totalantal. Välj X/Y/Z eller klicka en cirkelkant/cylinderyta. Originalet ingår i antalet; 360° ger ett helt varv.
+
 **Rotera skisselement:** markera en figur (dubbelklick) eller flera element (Ctrl+klick), välj **Rotate (Shift+R)** och ange vinkel. Välj pivot i figurens areacentrum, markeringens mitt, kroppsytans centrum, skissens origo eller en egen punkt med klick/exakta koordinater. Förhandsvisning, OK och Esc; hela rotationen är ett ångra-steg. Text som följer en bana behöver först kopplas loss från banan för fri rotation.
 
 Verktygspanelens måttfält har sliders; du kan fortfarande skriva exakta värden och formler.

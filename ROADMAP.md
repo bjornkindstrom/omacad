@@ -1,5 +1,7 @@
 # Omacad – progress and roadmap
 
+- Circular Feature Pattern: selected rib + fillet groups, picked/world axes, partial/full circles and timeline selection/editing (0.9.0).
+
 Current version: **0.8.0** (see `CHANGELOG.md`). Goal: behave like Fusion 360 wherever it makes sense; 1.0 = a complete, dependable CAD.
 
 Native parametric 3D CAD for Omarchy (Hyprland/Wayland). Python 3.14, PySide6 + OpenGL, manifold3d, shapely, SolveSpace.

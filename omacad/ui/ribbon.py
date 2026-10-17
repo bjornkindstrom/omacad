@@ -113,6 +113,7 @@ class Ribbon(QWidget):
     project_clicked = Signal()
     chamfer_clicked = Signal()
     pattern_clicked = Signal()
+    pattern_kind_clicked = Signal(str)
     offset_plane_clicked = Signal()
     section_clicked = Signal()
     measure_clicked = Signal()
@@ -318,8 +319,16 @@ class Ribbon(QWidget):
         h_layout.addWidget(btn_chamfer)
 
         btn_pattern = RibbonButton("Pattern\nMirror", "🔁")
-        btn_pattern.setToolTip("Copy a hole (and its chamfers) with even spacing, mirrored to all corners, or around an axis")
+        btn_pattern.setToolTip("Pattern features together (for example a rib and its fillets): linear, circular, mirrored or fill")
         btn_pattern.clicked.connect(self.pattern_clicked)
+        btn_pattern.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        patterns = QMenu(btn_pattern)
+        theme.style_menu(patterns)
+        for label, kind in [("Linear Pattern", "linear"), ("Circular Pattern (Features)", "circular"),
+                            ("Mirror", "mirror"), ("Fill Face Pattern", "fill")]:
+            action = patterns.addAction(label)
+            action.triggered.connect(lambda checked=False, kind=kind: self.pattern_kind_clicked.emit(kind))
+        btn_pattern.setMenu(patterns)
         h_layout.addWidget(btn_pattern)
 
         # Primitives: Box, Cylinder, Sphere, Thread/Coil

@@ -304,7 +304,7 @@ class PickerMixin:
         half = quad / 2      # construction planes are drawn at this size, centred
         only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_origin_only"
         shell_pick = self.plane_pick_mode and self.plane_pick_purpose in ("shell_face", "offset_face")
-        thread_pick = self.plane_pick_mode and self.plane_pick_purpose == "thread_surface"
+        thread_pick = self.plane_pick_mode and self.plane_pick_purpose in ("thread_surface", "pattern_axis")
         if shell_pick or thread_pick:
             candidates = []
         else:
@@ -494,7 +494,7 @@ class PickerMixin:
         """The origin and construction planes drawn right now: (key, name, four world corners, rgb). Origin planes
         are their first quadrant; while a plane is being picked all three origin planes show."""
         out = []
-        picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface", "offset_face")
+        picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface", "offset_face", "pattern_axis")
         q = self._origin_quadrant_size()
         for name, plane in self.doc.origin_planes.items():
             if (picking or (not self.plane_pick_mode and self.doc.origin_visible("plane", name))):

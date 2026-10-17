@@ -161,6 +161,7 @@ class TimelineBar(QWidget):
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self.feature_pick_handler = None
         self.doc = document
         self._highlighted: Optional[int] = None   # step number whose changes are coloured in the view
         self._hovering: Optional[int] = None      # step number under the mouse (its changes are shown while it is there)
@@ -330,6 +331,9 @@ class TimelineBar(QWidget):
     def on_node_clicked(self, step_index: int):
         """A click colours what that step changed in the model (green = added, red = removed); a second click
         on the same step clears it. Rolling back is done with the arrows or the right-click menu."""
+        if self.feature_pick_handler is not None:
+            self.feature_pick_handler(self.doc.timeline.features[step_index-1].feature_id)
+            return
         if self._highlighted == step_index:
             self._highlighted = None
             self.highlight_changed.emit(None, None)
@@ -342,6 +346,9 @@ class TimelineBar(QWidget):
         """Double-click: edit that step (a sketch opens in sketch mode)."""
         idx = step_index - 1
         feat = self.doc.timeline.features[idx]
+        if self.feature_pick_handler is not None:
+            self.feature_pick_handler(feat.feature_id)
+            return
         if feat.feature_type == "sketch":
             self.edit_sketch_requested.emit(feat.sketch.sketch_id)
         elif feature_edit.can_edit(feat):

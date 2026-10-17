@@ -466,6 +466,8 @@ def edit_feature(win, doc, index: int) -> bool:
     if t == "pattern":
         from omacad.model.timeline import PatternFeature
         dlg = PatternDialog(doc, win, feat)
+        dlg.bind_axis_picker(vp)
+        dlg.bind_timeline(win.timeline_bar)
         dlg.setWindowTitle(f"Edit {feat.name}")
 
         def _preview_pattern():
