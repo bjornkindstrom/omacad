@@ -318,6 +318,17 @@ class Ribbon(QWidget):
             btn_thread.clicked.connect(self.thread_clicked)
             h_layout.addWidget(btn_thread)
 
+        # EDGE FINISHING: right after the primitives
+        btn_fillet = RibbonButton("Fillet", "🔘")
+        btn_fillet.setToolTip("Round edges (outside and inside corners): select edges, type a radius")
+        btn_fillet.clicked.connect(self.fillet_clicked)
+        h_layout.addWidget(btn_fillet)
+
+        btn_chamfer = RibbonButton("Chamfer", "◢")
+        btn_chamfer.setToolTip("Bevel edges (outside and inside corners): select edges, type a size")
+        btn_chamfer.clicked.connect(self.chamfer_clicked)
+        h_layout.addWidget(btn_chamfer)
+
         # BUILD FROM SKETCH
         btn_extrude = RibbonButton("Extrude\n(E)", "⬆️")
         btn_extrude.setToolTip("Extrude closed sketch profiles or faces into 3D bodies or cuts (E)")
@@ -352,17 +363,7 @@ class Ribbon(QWidget):
         style(sep1, "color: #353940;")
         h_layout.addWidget(sep1)
 
-        # MODIFY: edge finishing, patterns, and body operations
-        btn_fillet = RibbonButton("Fillet", "🔘")
-        btn_fillet.setToolTip("Round edges (outside and inside corners): select edges, type a radius")
-        btn_fillet.clicked.connect(self.fillet_clicked)
-        h_layout.addWidget(btn_fillet)
-
-        btn_chamfer = RibbonButton("Chamfer", "◢")
-        btn_chamfer.setToolTip("Bevel edges (outside and inside corners): select edges, type a size")
-        btn_chamfer.clicked.connect(self.chamfer_clicked)
-        h_layout.addWidget(btn_chamfer)
-
+        # MODIFY: patterns and body operations
         btn_pattern = RibbonButton("Pattern\nMirror", "🔁")
         btn_pattern.setToolTip("Pattern features together (for example a rib and its fillets): linear, circular, mirrored or fill")
         btn_pattern.clicked.connect(self.pattern_clicked)
