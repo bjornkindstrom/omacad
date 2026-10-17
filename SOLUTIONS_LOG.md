@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Fillet efter cylindrisk Emboss/Deboss** (0.7.9.67, request #63): Kantlistan saknade spårets icke-plana 3D-konturer. `wrapped_edges` hittar slutna konturer på cylindriska smooth-patches, möjliggör ytval i Fillet/Chamfer-läge och vecklar ut/rundar/återkröker verktyget. Verktygets plana trianglar förtätas innan warp så långa kordor inte skär tvärs genom cylindern; radien begränsas av spårdjupet. Referenser följer save/rebuild/ångra. Test: `tests/test_wrapped_fillet.py`, rapportmodell i `tests/data/wrapped_deboss_fillet.omacad`.
+
 - **Taper angle på Box/Cylinder** (0.7.9.66): Positiv vinkel smalnar toppen, negativ vidgar. Parametrisk `taper_angle` följer preview, edit, formler, export/import och ångra; shell-hålrummet offsettas med t/cos(vinkel) för bibehållen normal väggtjocklek. Fillet/chamfer följer taper; validering stoppar stängd topp och ogiltig öppning innan dokumentet ändras. Test: `tests/test_primitive_taper.py`.
 
 - **Shelled Box och Shelled Cylinder** (0.7.9.64): Egna menyval i båda ribbon-lägen och Create återanvänder Box/Cylinder med förvald `wall_thickness`. Öppen topp, samma vägg-/bottentjocklek, justerbart Shell Wall per form; standard via `primitive_shell_thickness` i Settings → Sketch & View (2 mm). Test: `tests/test_shelled_primitives.py`, `tests/test_settings_dialog.py`.

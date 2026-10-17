@@ -37,42 +37,49 @@ class ShellFeature(Feature):
         return self.thickness, 0.0
 
     @staticmethod
-    def _grow(m, t):
-        """The body with every surface moved outward by t. Convex bodies keep sharp corners (planes moved out
-        and intersected); anything else is grown with a ball, which rounds its outer edges."""
-        from omacad.model.faces import compute_planar_faces
+    def _facet_planes(m):
+        """(unit normals, offsets) of a convex body's distinct facet planes, or None if it is not convex.
+        Every facet counts, not merged faces: a cylinder's side facets are one curved face but many planes."""
         try:
-            hull = m.hull() if hasattr(m, "hull") else None
+            hull = m.hull()
         except Exception:
-            hull = None
-        if hull is not None and not hull.is_empty() and abs(hull.volume() - m.volume()) < 1e-6 * max(1.0, m.volume()):
+            return None
+        if hull.is_empty() or abs(hull.volume() - m.volume()) >= 1e-6 * max(1.0, m.volume()):
+            return None
+        mesh = m.to_mesh()
+        v = np.asarray(mesh.vert_properties, dtype=float)[:, :3][np.asarray(mesh.tri_verts)]
+        n = np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
+        ln = np.linalg.norm(n, axis=1)
+        ok = ln > 1e-12
+        n = n[ok] / ln[ok, None]
+        d = np.einsum("ij,ij->i", n, v[ok, 0])
+        _, keep = np.unique(np.round(np.column_stack((n, d)), 6), axis=0, return_index=True)
+        return n[keep], d[keep]
+
+    @classmethod
+    def _grow(cls, m, t):
+        """The body with every surface moved outward by t. Convex bodies keep sharp corners (facet planes moved
+        out and intersected); anything else is grown with a ball, which rounds its outer edges."""
+        planes = cls._facet_planes(m)
+        if planes is not None:
             bb = np.array(m.bounding_box())
             size = float(np.max(bb[3:] - bb[:3])) + 4 * t + 10
-            ctr = (bb[:3] + bb[3:]) / 2.0
-            out = m3d.Manifold.cube((size, size, size), True).translate(tuple(ctr))
-            for f in compute_planar_faces(m):
-                n = np.asarray(f.normal, dtype=float)
-                d = float(n @ np.asarray(f.origin, dtype=float)) + t
-                out = out.trim_by_plane(tuple(-n), -d)   # keeps the side where -n.x >= -d, i.e. n.x <= d
+            out = m3d.Manifold.cube((size, size, size), True).translate(tuple((bb[:3] + bb[3:]) / 2.0))
+            for n, d in zip(*planes):
+                out = out.trim_by_plane(tuple(-n), -(d + t))   # keeps the side where n.x <= d + t
             if not out.is_empty():
                 return out
         return m.minkowski_sum(m3d.Manifold.sphere(t, 12))
 
-    @staticmethod
-    def _shrink(m, t):
-        """Erodes the body inward by t. For convex/planar bodies (cubes, prisms, etc.), sharp plane trims
-        are 20-50x faster than 3D Minkowski difference."""
-        from omacad.model.faces import compute_planar_faces
-        try:
-            hull = m.hull() if hasattr(m, "hull") else None
-        except Exception:
-            hull = None
-        if hull is not None and not hull.is_empty() and abs(hull.volume() - m.volume()) < 1e-6 * max(1.0, m.volume()):
+    @classmethod
+    def _shrink(cls, m, t):
+        """Erodes the body inward by t. For convex bodies (cubes, prisms, cylinders) facet-plane trims are
+        exact and 20-50x faster than a 3D Minkowski difference."""
+        planes = cls._facet_planes(m)
+        if planes is not None:
             cav = m
-            for f in compute_planar_faces(m):
-                n = np.asarray(f.normal, dtype=float)
-                d = float(n @ np.asarray(f.origin, dtype=float)) - t
-                cav = cav.trim_by_plane(tuple(-n), -d)
+            for n, d in zip(*planes):
+                cav = cav.trim_by_plane(tuple(-n), -(d - t))
             if not cav.is_empty() and cav.volume() > 1e-6:
                 return cav
         return m.minkowski_difference(m3d.Manifold.sphere(t, 12))

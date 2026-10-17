@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.2 - 2026-10-17
+
+### Fixed
+- Shell works on cylinders and other round convex bodies: Inside keeps the side wall (it used to leave only the top and bottom discs), and Outside stays round instead of growing into a box.
+
 ## 0.9.1 - 2026-10-17
 
 ### Fixed
