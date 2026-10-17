@@ -7,3 +7,5 @@ dist/
 build/
 *.spec.bak
 omacad/_rfc_secret.py
+video/timeline_hot/
+
