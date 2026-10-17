@@ -212,10 +212,11 @@ class CadKernel:
         if len(parts) <= 1:
             return solid
         total = max(abs(p.volume()) for p in parts)
-        keep = [p for p in parts if abs(p.volume()) > max(1e-5 * total, 1e-3)]
-        if len(keep) == len(parts) or not keep:
+        loose = [p for p in parts if 0.0 <= p.volume() <= max(1e-5 * total, 1e-3)]
+        if not loose or len(loose) == len(parts):
             return solid
-        return m3d.Manifold.compose(keep) if len(keep) > 1 else keep[0]
+        # Subtract the flakes; rebuilding from the kept parts would lose a closed inner void (a negative part).
+        return solid - (m3d.Manifold.compose(loose) if len(loose) > 1 else loose[0])
 
     @staticmethod
     def round_tool(edge, size: float, kind: str, extend=0.0) -> m3d.Manifold:

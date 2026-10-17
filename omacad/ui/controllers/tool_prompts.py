@@ -1067,8 +1067,8 @@ class ToolPromptsMixin:
                 dlg.clear_faces()
                 return
 
-            shelled = ShellFeature.compute_shell(body.manifold, thickness, dlg.direction(),
-                                                 dlg.spn_thickness2.value(), open_faces)
+            shelled = ShellFeature.shell_body(self.doc, bid, len(self.doc.timeline.features), body.manifold, thickness,
+                                              dlg.direction(), dlg.spn_thickness2.value(), open_faces)
             if shelled is not None:
                 self.viewport.set_preview(shelled, "new_body")
             else:

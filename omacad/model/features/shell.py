@@ -5,6 +5,7 @@ import numpy as np
 import manifold3d as m3d
 
 from omacad.model.features.base import Feature
+from omacad.model.kernel import CadKernel
 
 
 class ShellFeature(Feature):
@@ -152,11 +153,46 @@ class ShellFeature(Feature):
             print(f"ShellFeature boolean subtraction error: {e}")
         return None
 
+    @classmethod
+    def _convex_base(cls, doc, body_id: str, upto: int, body):
+        """(last earlier convex state of the body, what was only added onto it since), or (None, None).
+        A cylinder with embossed ribs is shelled as the cylinder (exact facet planes, fast) with the ribs put
+        back outside, instead of eroding every rib triangle with a sphere (minutes on a wrapped emboss)."""
+        if cls._facet_planes(body) is not None:
+            return None, None              # convex already: the plain path is exact
+        for j in range(upto - 1, -1, -1):
+            state = getattr(doc, "step_states", {}).get(j, {}).get(body_id)
+            if state is None or state.is_empty():
+                return None, None
+            if cls._facet_planes(state) is None:
+                continue
+            removed = CadKernel.drop_slivers(CadKernel.clean_difference(state, body))
+            if removed.volume() > 1e-6 * state.volume():
+                return None, None          # something was cut or moved since: erode the real body
+            return state, CadKernel.drop_slivers(CadKernel.clean_difference(body, state))
+        return None, None
+
+    @classmethod
+    def shell_body(cls, doc, body_id: str, upto: int, body, thickness: float, direction: str = "inside",
+                   thickness2: float = 2.0, open_faces: Optional[list] = None):
+        """`body` shelled where step `upto` stands, its history before that step in `doc.step_states`
+        (the preview, the edit preview and the step use this)."""
+        if direction == "inside":
+            base, added = cls._convex_base(doc, body_id, upto, body)
+            if base is not None:
+                shelled = cls.compute_shell(base, thickness, direction, thickness2, open_faces)
+                if shelled is not None:
+                    return CadKernel.drop_slivers(shelled + added) if not added.is_empty() else shelled
+        return cls.compute_shell(body, thickness, direction, thickness2, open_faces)
+
     def execute(self, doc: Any) -> None:
         target = doc.bodies.get(self.target_body_id)
         if not target:
             return
-        shelled = self.compute_shell(target.manifold, self.thickness, self.direction, self.thickness2, self.open_faces)
+        feats = doc.timeline.features
+        upto = feats.index(self) if self in feats else len(feats)
+        shelled = self.shell_body(doc, self.target_body_id, upto, target.manifold, self.thickness, self.direction, self.thickness2,
+                                  self.open_faces)
         if shelled is not None:
             target.manifold = shelled
             target.update_render_mesh()

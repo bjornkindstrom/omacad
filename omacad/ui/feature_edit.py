@@ -359,11 +359,12 @@ def edit_feature(win, doc, index: int) -> bool:
         dlg.setWindowTitle(f"Edit {feat.name}")
         dlg.spn_thickness.setValue(feat.thickness)
         dlg.spn_thickness2.setValue(getattr(feat, "thickness2", 2.0))
-        idx_d = dlg.cmb_direction.findData(getattr(feat, "direction", "inside"))
-        if idx_d >= 0:
-            dlg.cmb_direction.setCurrentIndex(idx_d)
+        direction = getattr(feat, "direction", "inside")
+        if direction in dlg.DIRS:
+            dlg.cmb_dir.setCurrentIndex(dlg.DIRS.index(direction))
         dlg.open_faces = list(feat.open_faces or [])
-        dlg._update_faces_label()
+        n_open = len(dlg.open_faces)
+        dlg.lbl_faces.setText(f"{n_open} open face{'s' if n_open != 1 else ''} selected.\n(Click again to deselect)")
         for key, spn in (("thickness", dlg.spn_thickness), ("thickness2", dlg.spn_thickness2)):
             if feat.exprs.get(key):
                 spn.set_expression(feat.exprs[key])
@@ -371,8 +372,8 @@ def edit_feature(win, doc, index: int) -> bool:
 
         def _preview_shell():
             if base_m is not None:
-                res = ShellFeature.compute_shell(base_m, dlg.spn_thickness.value(), dlg.direction(),
-                                                 dlg.spn_thickness2.value(), dlg.open_faces)
+                res = ShellFeature.shell_body(doc, feat.target_body_id, index, base_m, dlg.spn_thickness.value(),
+                                              dlg.direction(), dlg.spn_thickness2.value(), dlg.open_faces)
                 vp.set_preview(res if res is not None else base_m, "new_body")
 
         if not _exec_with_preview(win, doc, dlg, _preview_shell, [feat.target_body_id]):
