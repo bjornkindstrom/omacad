@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.68 - 2026-10-17
+
+### Fixed
+- Subdivide wrapped Emboss/Deboss tool interiors before bending them around cylinders, preventing detached material flaps in long slots.
+
 ## 0.7.9.67 - 2026-10-17
 
 ### Fixed

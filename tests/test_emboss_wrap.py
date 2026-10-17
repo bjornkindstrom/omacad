@@ -52,3 +52,21 @@ def test_long_text_with_centroid_beside_the_cylinder_still_wraps():
     mesh = doc.bodies[body].manifold
     assert len(doc.bodies) == 1
     assert mesh.bounding_box()[3] == pytest.approx(R + 1.0, abs=0.05)
+
+
+def test_reported_deboss_slot_leaves_no_detached_skin():
+    """Long cap diagonals must not sag through the outer surface when wrapped."""
+    from pathlib import Path
+    from omacad.io.exporter import Exporter
+
+    doc = Exporter.load_project(str(Path(__file__).parent / 'data' / 'deboss_slot_flap.omacad'))
+    solid = next(iter(doc.bodies.values())).manifold
+    section = solid.slice(30.0)
+    # One outer loop and the original bore, with no third loop for a loose flap.
+    assert len(section.to_polygons()) == 2
+    radius = doc.sketches['sketch_1'].entities[0].radius
+    expected_area = np.pi * (5.0**2 - 3.0**2) - (2 * radius / 5.0) * (5.0**2 - 4.0**2) / 2
+    assert section.area() == pytest.approx(expected_area, abs=0.04)
+    loaded = Document()
+    Exporter.apply_dict(loaded, Exporter.document_to_dict(doc))
+    assert next(iter(loaded.bodies.values())).manifold.volume() == pytest.approx(solid.volume())

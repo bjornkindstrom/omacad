@@ -142,6 +142,10 @@ class EmbossFeature(ExtrudeFeature):
                 margin = 0.05 * r + 0.02
                 r_in, r_out = (max(0.01, r - EPS), r + d) if d > 0 else (max(0.01, r + d), r + margin)
                 prism = m3d.Manifold.extrude(cs_fine, height=1.0, n_divisions=2)
+                # Boundary segmentation alone leaves long diagonals across the caps.
+                # After wrapping, those chords can dip inside the cylinder and leave
+                # a detached skin over a deboss. Refine the cap interiors as well.
+                prism = prism.refine_to_length(max(0.25, r * math.radians(3.0)))
 
                 def _warp_batch(pts):
                     du = pts[:, 0] - u0

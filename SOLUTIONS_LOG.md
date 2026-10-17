@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Precision och färre primitivhandtag** (0.7.9.63): `primitive_drag_decimals` under Settings → Sketch & View styr 0/1/2 decimaler vid dragning (standard 0, hela mm). Cylinder har en radie och en höjd, sfär en radie. Måttfält kan fortfarande ta exakta värden. Test: `tests/test_primitive_handles.py`, `tests/test_settings_dialog.py`.
+
 - **Egen bild i RFC/F9-dialogen** (0.7.9.52, önskemål): `FeedbackDialog.choose_own_image/use_builtin_image/own_image` (+ `MarkableImage.set_pixmap`); `MainWindow.on_request_change` och rapportfunktionen skickar då bara `screenshot_own.png` (med ritade markeringar) i stället för de inbyggda skärmbilderna. Test: `tests/test_feedback_own_image.py`.
 - **Emboss omslöt inte cylindern** (0.7.9.51, via F9): `EmbossFeature` extruderade från skissplanet, så text på ett plan framför en cylinder (23,5 mm från YZ, R=20) hängde i luften. Nu `_surface_behind` strålar från texten mot skissnormalen (`faces.ray_mesh_hit` mot alla kroppar) och hittar yttre cylinder (`detect_cylinder_surface`) eller plan yta parallell med skissen. Cylinder: `_wrapped` = prisma från axelns nivå ∩ koaxial cylinder r+djup (Emboss) eller skalet r+marginal..r-djup (Deboss); plan yta: bokstäverna startar på ytan. Gäller inte flip och inte hål (invändig cylinder) eller sneda ytor: de faller tillbaka på gamla beteendet. Test: `tests/test_emboss_wrap.py`.
 
