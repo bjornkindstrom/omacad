@@ -789,6 +789,31 @@ class Document:
         self.notify_changed()
         return True
 
+    @undoable("Combine")
+    def combine_bodies(self, target_id: str, tool_id: str, operation: str = "join", keep_tool: bool = False):
+        """Join / Cut / Intersect two bodies as one history step (the tool body goes away unless `keep_tool`)."""
+        from omacad.model.features.boolean import CombineFeature
+        if target_id == tool_id or target_id not in self.bodies or tool_id not in self.bodies:
+            return None
+        feat = CombineFeature(f"combine_{len(self.timeline.features) + 1}", f"Combine ({operation})", target_id, tool_id,
+                              operation, keep_tool=keep_tool)
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
+    @undoable("Join")
+    def join_bodies(self, body_ids: List[str]):
+        """Joins all the given bodies into the first one (a right-click with several bodies selected)."""
+        ids = [b for b in dict.fromkeys(body_ids) if b in self.bodies]
+        if len(ids) < 2:
+            return None
+        target = ids[0]
+        for other in ids[1:]:
+            self.combine_bodies(target, other, "join")
+        self.select_body(target)
+        return self.bodies.get(target)
+
     @undoable("Split Body")
     def split_body(self, body_id: str, plane_id: str, new_body_name: Optional[str] = None) -> Optional[SplitBodyFeature]:
         """Splits an existing body using an offset (construction) plane or origin plane into two separate bodies."""

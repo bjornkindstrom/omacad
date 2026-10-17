@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from omacad.model.timeline import (
-    ExtrudeFeature, CombineFeature, SplitBodyFeature, ShellFeature, MoveFeature
+    ExtrudeFeature, SplitBodyFeature, ShellFeature, MoveFeature
 )
 from omacad.ui.dialogs import (
     RoundEdgesDialog, PatternDialog, OffsetPlaneDialog,
@@ -899,11 +899,7 @@ class ToolPromptsMixin:
             if result:
                 target_id, tool_id, op, keep = dlg.get_values()
                 if target_id and tool_id:
-                    feat_id = f"combine_{len(self.doc.timeline.features) + 1}"
-                    feat = CombineFeature(feat_id, f"Combine ({op})", target_id, tool_id, op, keep_tool=keep)
-                    self.doc.timeline.add_feature(feat)
-                    feat.execute(self.doc)
-                    self.doc.notify_changed()
+                    self.doc.combine_bodies(target_id, tool_id, op, keep)       # one undo step
                     self.status_label.setText(f"Combined bodies with operation: {op}.")
 
         dlg.finished.connect(on_finished)

@@ -180,6 +180,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.ribbon.thread_clicked.connect(self.prompt_thread)
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
+        self.viewport.join_bodies_requested.connect(self.on_join_bodies)
         self.viewport.split_plane_requested.connect(lambda pid: self.prompt_split_body(plane_id=pid))
         self.ribbon.shell_clicked.connect(self.prompt_shell)
         self.ribbon.offset_face_clicked.connect(lambda: self.prompt_offset_face())
@@ -1081,6 +1082,11 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         buf.open(QIODevice.OpenModeFlag.WriteOnly)
         image.save(buf, "PNG")
         return bytes(data)
+
+    def on_join_bodies(self, body_ids) -> None:
+        body = self.doc.join_bodies(list(body_ids))
+        if body is not None:
+            self.status_label.setText(f"Joined {len(body_ids)} bodies into {body.name}.")
 
     def show_guide(self, guide_id: str) -> None:
         """Opens a guide (omacad/guides/<id>) in a small window that stays beside the work."""

@@ -28,6 +28,13 @@ THREAD_PRESETS = [
 ]
 
 
+LEAD_INS = (   # (label, taper on, turns the thread fades in and out over)
+    ("Smooth lead-in & runout", True, 0.75),
+    ("Smooth lead-in & runout, short", True, 0.3),
+    ("None (full thread to the ends)", False, 0.75),
+)
+
+
 class ThreadDialog(BaseFeatureDialog):
     """Dialog for creating 3D-printable or CAD threads and coils."""
 
@@ -127,11 +134,16 @@ class ThreadDialog(BaseFeatureDialog):
         clr_layout.addWidget(self.spn_clearance)
         grp_lay.addLayout(clr_layout)
 
-        self.chk_taper = QCheckBox("Smooth Lead-in & Runout Taper")
-        self.chk_taper.setChecked(True)
-        self.chk_taper.setToolTip("Fasar in och ut gängans start och slut så bulten glider i muttern utan att skära snett.")
-        self.chk_taper.toggled.connect(lambda _: self.changed.emit())
-        grp_lay.addWidget(self.chk_taper)
+        lead_row = QHBoxLayout()
+        lead_row.addWidget(QLabel("Lead-in:"))
+        self.cmb_taper = QComboBox()
+        for label, on, turns in LEAD_INS:
+            self.cmb_taper.addItem(label, (on, turns))
+        self.cmb_taper.setToolTip("Fasar in och ut gängans start och slut så bulten glider i muttern utan att skära snett. "
+                                  "Short fasar på en tredjedels varv i stället för tre kvarts.")
+        self.cmb_taper.currentIndexChanged.connect(lambda _: self.changed.emit())
+        lead_row.addWidget(self.cmb_taper, 1)
+        grp_lay.addLayout(lead_row)
 
         form.addRow(grp_3d)
 
@@ -330,6 +342,12 @@ class ThreadDialog(BaseFeatureDialog):
         self._on_dim_changed()
         self.changed.emit()
 
+    def set_lead_in(self, on: bool, turns: float) -> None:
+        """Selects the lead-in entry that matches a thread step's settings (the nearest length when it was edited)."""
+        best = min(range(self.cmb_taper.count()),
+                   key=lambda i: (self.cmb_taper.itemData(i)[0] != on, abs(self.cmb_taper.itemData(i)[1] - turns) if on else 0))
+        self.cmb_taper.setCurrentIndex(best)
+
     def get_values(self):
         is_female = bool(self.cmb_type.currentData())
         target_bid = self.cmb_target.currentData()
@@ -343,8 +361,8 @@ class ThreadDialog(BaseFeatureDialog):
             "is_female": is_female,
             "clearance": self.spn_clearance.value(),
             "profile": profile_type,
-            "taper_lead_in": self.chk_taper.isChecked(),
-            "taper_turns": 0.75,
+            "taper_lead_in": bool(self.cmb_taper.currentData()[0]),
+            "taper_turns": float(self.cmb_taper.currentData()[1]),
             "target_body_id": target_bid,
             "operation": op,
             "plane_origin": self.plane_origin,

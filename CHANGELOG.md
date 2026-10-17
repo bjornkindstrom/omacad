@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.41 - 2026-10-17
+
+### Added
+- Right-click with two or more bodies selected: **Join N Bodies** (joins them into the first one, one undo step), in every right-click menu outside sketch mode.
+- Thread / Coil: the lead-in is now a choice: *Smooth lead-in & runout* (0.75 turn), *Smooth lead-in & runout, short* (0.3 turn) to try, or *None*. Editing an existing thread selects the matching entry.
+
+### Fixed
+- Combine (the dialog) was not an undo step; it is now (`Document.combine_bodies`).
+
 ## 0.7.9.40 - 2026-10-17
 
 ### Added

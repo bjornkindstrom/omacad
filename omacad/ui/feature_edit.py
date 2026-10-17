@@ -174,7 +174,7 @@ def edit_feature(win, doc, index: int) -> bool:
         prof_idx = dlg.cmb_profile.findData(getattr(feat, "profile", "trapezoidal_45"))
         if prof_idx >= 0:
             dlg.cmb_profile.setCurrentIndex(prof_idx)
-        dlg.chk_taper.setChecked(feat.taper_lead_in)
+        dlg.set_lead_in(feat.taper_lead_in, feat.taper_turns)
         idx_type = 1 if feat.is_female else 0
         dlg.cmb_type.setCurrentIndex(idx_type)
         if getattr(feat, "plane_origin", None) is not None:

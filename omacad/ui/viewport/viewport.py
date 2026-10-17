@@ -87,6 +87,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     move_gizmo_axis_selected = Signal(str)
     body_clicked = Signal(str)  # body_id of clicked 3D body
     plane_clicked = Signal(str)  # an origin plane ("XY") or construction plane id clicked without a tool
+    join_bodies_requested = Signal(object)    # right-click with two or more bodies selected > Join
     split_plane_requested = Signal(str)   # right-click on a plane > Split Body with this plane
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
     edge_pick_cancelled = Signal()
@@ -2228,7 +2229,12 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         menu.addSeparator()
 
     def _add_history_and_view(self, menu: QMenu, acts: dict, sketch: bool):
-        """The entries every right-click menu ends with: undo/redo and view options."""
+        """The entries every right-click menu ends with: undo/redo and view options (and Join with 2+ bodies selected)."""
+        chosen = [b for b in self.doc.selected_body_ids if b in self.doc.bodies]
+        if len(chosen) >= 2 and not sketch and not self.active_tool_title():
+            names = ", ".join(self.doc.bodies[b].name for b in chosen)
+            acts[theme.action_with_icon(menu, f"🔗 Join {len(chosen)} Bodies ({names})")] = ("join_bodies", list(chosen))
+            menu.addSeparator()
         u, r = self.doc.undo_label(), self.doc.redo_label()
         a = theme.action_with_icon(menu, f"↩️ Undo {u}" if u else "↩️ Undo")
         a.setEnabled(u is not None)
@@ -2275,6 +2281,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.offset_face_requested.emit(arg)
         elif kind == "offset_plane":
             self.offset_base_picked.emit(arg)
+        elif kind == "join_bodies":
+            self.join_bodies_requested.emit(arg)
         elif kind == "split_plane":
             self.split_plane_requested.emit(arg)
         elif kind == "sketch_plane":
