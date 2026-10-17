@@ -17,6 +17,7 @@ from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeat
 from omacad.model.sketch import Sketch
 from omacad.model.timeline import ProfileRefs
 from omacad.model import quality
+from omacad.io.step_mesh import DECIMALS, clean_for_step, step_str
 
 
 class Exporter:
@@ -83,7 +84,7 @@ class Exporter:
         lines.append("ISO-10303-21;")
         lines.append("HEADER;")
         lines.append("FILE_DESCRIPTION(('Omacad STEP AP214 Export'),'2;1');")
-        lines.append(f"FILE_NAME('{os.path.basename(filepath)}','2026-10-11T00:00:00',('Omacad User'),('Omacad CAD'),'Omacad','Omacad','');")
+        lines.append(f"FILE_NAME('{step_str(os.path.basename(filepath))}','2026-10-11T00:00:00',('Omacad User'),('Omacad CAD'),'Omacad','Omacad','');")
         lines.append("FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));")
         lines.append("ENDSEC;")
         lines.append("DATA;")
@@ -125,12 +126,13 @@ class Exporter:
         solid_brep_ids = []
 
         for b_name, verts, tris in body_tuples:
+            verts, tris = clean_for_step(verts, tris)
             if len(verts) == 0 or len(tris) == 0:
                 continue
             pt_ids = []
             for v in verts:
                 pid = nid()
-                lines.append(f"#{pid}=CARTESIAN_POINT('',({float(v[0]):.6f},{float(v[1]):.6f},{float(v[2]):.6f}));")
+                lines.append(f"#{pid}=CARTESIAN_POINT('',({float(v[0]):.{DECIMALS}f},{float(v[1]):.{DECIMALS}f},{float(v[2]):.{DECIMALS}f}));")
                 pt_ids.append(pid)
 
             face_ids = []
@@ -174,12 +176,13 @@ class Exporter:
             faces_str = ",".join(f"#{f}" for f in face_ids)
             lines.append(f"#{shell_id}=CLOSED_SHELL('',({faces_str}));")
             brep_id = nid()
-            lines.append(f"#{brep_id}=MANIFOLD_SOLID_BREP('{b_name}',#{shell_id});")
+            lines.append(f"#{brep_id}=MANIFOLD_SOLID_BREP('{step_str(b_name)}',#{shell_id});")
             solid_brep_ids.append(brep_id)
 
         if not solid_brep_ids:
             return False
 
+        title = step_str(title)
         solids_str = ",".join(f"#{b}" for b in solid_brep_ids)
         shape_rep_id = nid()
         lines.append(f"#{shape_rep_id}=ADVANCED_BREP_SHAPE_REPRESENTATION('{title}',({solids_str},#{id_world_axis}),#{id_geom_ctx});")

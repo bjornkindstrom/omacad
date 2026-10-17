@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.4 - 2026-10-17
+
+### Fixed
+- STEP export of threaded and other detailed bodies opens in Bambu Studio, FreeCAD and other OpenCASCADE-based programs again. Points at the same spot are welded and paper-thin facets removed before writing, so readers no longer reject the solid. Body and file names with å/ä/ö or apostrophes are written as valid STEP text.
+
 ## 0.9.3 - 2026-10-17
 
 ### Fixed
