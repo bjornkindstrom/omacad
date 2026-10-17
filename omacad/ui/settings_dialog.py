@@ -361,6 +361,18 @@ class SettingsDialog(QDialog):
         fillet_row.addStretch()
         lay_sketch.addLayout(fillet_row)
 
+        primitive_row = QHBoxLayout()
+        primitive_row.addWidget(QLabel("Primitive drag decimals:"))
+        self.cmb_primitive_decimals = QComboBox()
+        for decimals, label in [(0, "0 — whole millimetres"), (1, "1 — 0.1 mm"), (2, "2 — 0.01 mm")]:
+            self.cmb_primitive_decimals.addItem(label, decimals)
+        self.cmb_primitive_decimals.setCurrentIndex(max(0, self.cmb_primitive_decimals.findData(
+            int(self.settings.get("primitive_drag_decimals", 0)))))
+        self.cmb_primitive_decimals.setToolTip("Precision when dragging primitive size handles. Exact values can still be typed in the dimension fields.")
+        primitive_row.addWidget(self.cmb_primitive_decimals)
+        primitive_row.addStretch()
+        lay_sketch.addLayout(primitive_row)
+
         # The extrude arrow
         arrow_row = QHBoxLayout()
         lbl_arrow = QLabel("Extrude arrow size:")
@@ -568,6 +580,7 @@ class SettingsDialog(QDialog):
             self.cmb_pos.setCurrentIndex(idx_p)
         self.chk_autohide.setChecked(True)
         self.chk_invert_zoom.setChecked(False)
+        self.cmb_primitive_decimals.setCurrentIndex(0)
         self.spn_guide_gap.setValue(6.0)
         self.spn_grid.setValue(5.0)
         self.spn_fillet.setValue(2.0)
@@ -602,6 +615,7 @@ class SettingsDialog(QDialog):
             "palette_position": self.cmb_pos.currentData(),
             "autohide_palette_on_measure": self.chk_autohide.isChecked(),
             "invert_zoom": self.chk_invert_zoom.isChecked(),
+            "primitive_drag_decimals": self.cmb_primitive_decimals.currentData(),
             "guide_line_gap": self.spn_guide_gap.value(),
             "grid_step": self.spn_grid.value(),
             "fillet_default_radius": self.spn_fillet.value(),

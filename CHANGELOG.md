@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.63 - 2026-10-17
+
+### Changed
+- Primitive handles now snap to whole millimetres by default. Settings → Sketch & View → Primitive drag decimals offers 0, 1 or 2 decimal places, saved between sessions.
+- Cylinder previews have two handles (radius and height); sphere previews have one radius handle.
+
 ## 0.7.9.62 - 2026-10-17
 
 ### Added

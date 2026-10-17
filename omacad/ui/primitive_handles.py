@@ -1,5 +1,9 @@
 """Direct dimension handles for primitive previews, with no document mutations."""
+import math
+
 import numpy as np
+
+from omacad.ui.settings import get_settings
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QPen, QFont
 
@@ -40,14 +44,10 @@ class PrimitiveHandles:
             positions = [middle + np.eye(3)[a] * size/2 for _, a, size, _ in entries]
         else:
             r = d.spn_radius.value()
-            entries = [(d.spn_radius, 0, r, "Radius"), (d.spn_radius, 1, r, "Radius")]
-            positions = [np.array([r, 0., 0.]), np.array([0., r, 0.])]
-            factors = [1., 1.]
-            if self.kind == "sphere":
-                entries.append((d.spn_radius, 2, r, "Radius"))
-                positions.append(np.array([0., 0., r]))
-                factors.append(1.)
-            else:
+            entries = [(d.spn_radius, 0, r, "Radius")]
+            positions = [np.array([r, 0., 0.])]
+            factors = [1.]
+            if self.kind != "sphere":
                 h = d.spn_height.value()
                 z = 0. if mode == "center" else h/2
                 positions = [p + [0, 0, z] for p in positions]
@@ -91,7 +91,12 @@ class PrimitiveHandles:
         if self.drag is not None:
             field, start, tangent, value = self.drag
             delta = np.dot(np.array([x, y]) - start, tangent) / np.dot(tangent, tangent)
-            field.set_expression(str(round(max(field.minimum(), min(field.maximum(), value + delta)), 1)))
+            decimals = max(0, min(2, int(get_settings().get("primitive_drag_decimals", 0))))
+            step = 10.0 ** -decimals
+            minimum = math.ceil(field.minimum() / step) * step
+            maximum = math.floor(field.maximum() / step) * step
+            snapped = max(minimum, min(maximum, round(value + delta, decimals)))
+            field.set_expression(f"{snapped:.{decimals}f}")
             return True
         hover = self.hit(x, y)
         if hover != self.hover:

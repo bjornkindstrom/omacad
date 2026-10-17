@@ -27,3 +27,22 @@ def test_settings_dialog_fits_and_scrolls_on_small_screens():
     save_y = save_btn.mapTo(dlg, save_btn.rect().topLeft()).y()
     assert 0 < save_y < dlg.height()
     dlg.close()
+
+
+def test_primitive_precision_save_reload_and_reset(monkeypatch):
+    from omacad.ui import theme
+    from omacad.ui.settings import get_settings, SettingsManager
+
+    QApplication.instance() or QApplication([])
+    monkeypatch.setattr(theme, "set_fixed_theme", lambda *_: None)
+    dlg = SettingsDialog()
+    assert dlg.cmb_primitive_decimals.currentData() == 0
+    dlg.cmb_primitive_decimals.setCurrentIndex(2)
+    dlg.save_and_close()
+    assert SettingsManager(get_settings().config_file).get("primitive_drag_decimals") == 2
+
+    dlg = SettingsDialog()
+    assert dlg.cmb_primitive_decimals.currentData() == 2
+    dlg.reset_all()
+    assert dlg.cmb_primitive_decimals.currentData() == 0
+    dlg.close()

@@ -34,7 +34,7 @@ def test_drag_fields_and_clamp(app, kind, cls):
     field, tip, tangent, _ = handles.geometry()[0]
     assert handles.press(*tip)
     handles.move(*(tip - tangent*100000))
-    assert field.value() == field.minimum()
+    assert field.value() == 1
     handles.release()
     assert not handles.press(-10000, -10000)
     d.close()
@@ -115,4 +115,30 @@ def test_cancel_drag_restores_formula(app):
     assert field.value() == 50
     assert field.expression() == "2*(20+5)"
     assert handles.drag is None
+    d.close()
+
+
+@pytest.mark.parametrize("kind,cls,count", [("box", BoxDialog, 3), ("cylinder", CylinderDialog, 2), ("sphere", SphereDialog, 1)])
+def test_one_handle_per_dimension(app, kind, cls, count):
+    d = cls()
+    specs = PrimitiveHandles(SimpleNamespace(), d, kind).specs()
+    assert len(specs) == count
+    assert len({id(field) for field, *_ in specs}) == count
+    d.close()
+
+
+@pytest.mark.parametrize("decimals,expected", [(0, 51), (1, 51.3), (2, 51.26)])
+def test_drag_precision_setting(app, decimals, expected):
+    from omacad.ui.settings import get_settings
+    get_settings().set("primitive_drag_decimals", decimals)
+    d = BoxDialog()
+    vp = SimpleNamespace(plane_pick_mode=None, update=lambda: None,
+                         world_to_screen=lambda p: (200 + 3*p[0] - 2*p[1], 200 + p[0] + p[1] - 3*p[2]))
+    handles = PrimitiveHandles(vp, d, "box")
+    field, tip, tangent, _ = handles.geometry()[0]
+    assert handles.press(*tip)
+    handles.move(*(tip+tangent*1.256))
+    assert field.value() == pytest.approx(expected)
+    handles.cancel_drag()
+    assert field.value() == 50
     d.close()
