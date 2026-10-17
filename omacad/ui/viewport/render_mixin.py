@@ -11,6 +11,30 @@ from omacad.model.timeline import profile_cross_section
 from omacad.model.sketch import Sketch, SketchArc, SketchSlot
 
 
+
+def dash_lines(flat_segments, project, dash_px: float = 9.0, gap_px: float = 6.0):
+    """Cuts consecutive segments [x1,y1,z1,x2,y2,z2,...] into dashes of a constant screen size.
+    `project` maps a world point to screen pixels (or None). The dash phase carries on across
+    segments, so a circle or arc made of many short pieces dashes evenly."""
+    segs = np.asarray(flat_segments, dtype=float).reshape(-1, 2, 3)
+    out = []
+    period = dash_px + gap_px
+    pos = 0.0                           # distance into the current dash+gap period (px)
+    for a, b in segs:
+        sa, sb = project(a), project(b)
+        length = float(np.hypot(sb[0] - sa[0], sb[1] - sa[1])) if sa and sb else 0.0
+        if length < 1e-6:
+            out.extend([*a, *b])        # off screen or degenerate: keep it solid
+            continue
+        d = 0.0
+        while d < length:
+            end = min(length, d + (dash_px if pos < dash_px else period) - pos)
+            if pos < dash_px:
+                out.extend([*(a + (b - a) * (d / length)), *(a + (b - a) * (end / length))])
+            pos = (pos + end - d) % period
+            d = end
+    return out
+
 class RenderGLMixin:
     """Mixin providing 3D OpenGL drawing methods for Viewport3D."""
     def render_profile_fills(self, mvp: np.ndarray):
@@ -855,6 +879,10 @@ class RenderGLMixin:
                     self.draw_buffer_arrays(GL.GL_LINES, loc_pos, mesh.sharp_lines)
                 GL.glUseProgram(0)
 
+    def dash_segments(self, flat_segments, dash_px: float = 9.0, gap_px: float = 6.0):
+        """Construction lines are dashed: see `dash_lines`."""
+        return dash_lines(flat_segments, self.world_to_screen, dash_px, gap_px)
+
     def draw_thick_lines(self, mvp: np.ndarray, flat_segments, rgba, width_px: float, halo: bool = True):
         """Draws line segments (flat [x1,y1,z1,x2,y2,z2,...]) as screen-space quads.
         A dark halo under the coloured core keeps them readable on light faces and dark grid alike."""
@@ -974,7 +1002,7 @@ class RenderGLMixin:
             if construction_lines:
                 from omacad.ui.settings import get_settings
                 ccol = get_settings().sketch_construction_color_rgb01()
-                self.draw_thick_lines(mvp, construction_lines, (*ccol, 1.0), 1.6)
+                self.draw_thick_lines(mvp, self.dash_segments(construction_lines), (*ccol, 1.0), 1.6)
 
         GL.glEnable(GL.GL_DEPTH_TEST)
 

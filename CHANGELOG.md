@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.59 - 2026-10-17
+
+### Fixed
+- Construction (guide) lines in a sketch are now drawn dashed instead of solid.
+
 ## 0.7.9.58 - 2026-10-17
 
 ### Fixed
