@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Taper angle på Box/Cylinder** (0.7.9.66): Positiv vinkel smalnar toppen, negativ vidgar. Parametrisk `taper_angle` följer preview, edit, formler, export/import och ångra; shell-hålrummet offsettas med t/cos(vinkel) för bibehållen normal väggtjocklek. Fillet/chamfer följer taper; validering stoppar stängd topp och ogiltig öppning innan dokumentet ändras. Test: `tests/test_primitive_taper.py`.
+
 - **Shelled Box och Shelled Cylinder** (0.7.9.64): Egna menyval i båda ribbon-lägen och Create återanvänder Box/Cylinder med förvald `wall_thickness`. Öppen topp, samma vägg-/bottentjocklek, justerbart Shell Wall per form; standard via `primitive_shell_thickness` i Settings → Sketch & View (2 mm). Test: `tests/test_shelled_primitives.py`, `tests/test_settings_dialog.py`.
 
 - **Precision och färre primitivhandtag** (0.7.9.63): `primitive_drag_decimals` under Settings → Sketch & View styr 0/1/2 decimaler vid dragning (standard 0, hela mm). Cylinder har en radie och en höjd, sfär en radie. Måttfält kan fortfarande ta exakta värden. Test: `tests/test_primitive_handles.py`, `tests/test_settings_dialog.py`.

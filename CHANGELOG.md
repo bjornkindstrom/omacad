@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.1 - 2026-10-17
+
+### Fixed
+- Circular pattern on a round body no longer leaves paper-thin skin strips and shards over the copied cuts (for example wrapped deboss slots with a fillet). When the body is round about the axis, the result is what every rotated copy keeps, so cuts land cleanly even when the angle is not a whole number of facets.
+
 ## 0.9.0 - 2026-10-17
 
 ### Added

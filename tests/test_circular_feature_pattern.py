@@ -140,7 +140,9 @@ def test_circular_pattern_dialog_timeline_sliders_and_axis_pick():
     assert win.timeline_bar.feature_pick_handler is None
     assert not vp.pick_step_mode
     assert win._pattern_dlg is None
-    assert next(iter(doc.bodies.values())).manifold.volume() == pytest.approx(expected_volume(12), rel=1e-5)
+    # Interactive tessellation: 30 degrees is not a whole number of facets, so the copies shave the
+    # chords' sag (< 0.1 mm skin) off the round walls.
+    assert next(iter(doc.bodies.values())).manifold.volume() == pytest.approx(expected_volume(12), rel=1e-4)
     win.close()
 
 
@@ -162,3 +164,35 @@ def test_circular_pattern_cancel_preserves_document_and_clears_picking():
     assert not win.viewport.pick_step_mode
     assert win.viewport.preview_mesh is None
     win.close()
+
+
+def test_circular_pattern_of_wrapped_slot_leaves_no_skin_strips():
+    """Report: 9 wrapped slots (deboss + floor fillet) around a 192-facet cylinder left paper-thin skin
+    strips, because 40 degrees is not a whole number of facets. Every slice must be one clean loop with
+    the area of the cylinder minus nine single-slot cuts."""
+    doc = Exporter.load_project("tests/data/circular_pattern_wrapped_slot.omacad")
+    before, after = doc.step_states[2]["body_cylinder_1"], doc.step_states[4]["body_cylinder_1"]
+    body = doc.bodies["body_cylinder_1"].manifold
+
+    def area(m, z):
+        return sum(Polygon(p).area for p in m.slice(z).to_polygons())
+    for z in np.linspace(0.5, 78.5, 40):
+        assert len(body.slice(z).to_polygons()) == 1, z
+    for z in (20.0, 37.5, 60.0):
+        expected = area(before, z) - 9*(area(before, z) - area(after, z))
+        assert area(body, z) == pytest.approx(expected, abs=0.25)
+
+
+def test_circular_pattern_on_square_body_keeps_its_corners():
+    """A body that is not round about the axis must not be cut down to what every rotation keeps."""
+    doc = Document()
+    doc.add_box(40, 40, 10)
+    sk = doc.start_sketch("XY")
+    sk.add_rect((34, 19), (36, 21))
+    doc.finish_sketch()
+    index = next(i for i, p in enumerate(sk.profiles) if abs(Polygon(p.exterior_pts).area-4) < 1e-4)
+    doc.extrude_profile(sk.sketch_id, index, 10, operation="cut")
+    cut = doc.timeline.features[-1]
+    doc.add_pattern([cut.feature_id], kind="circular", count1=3, angle=360.0, rotation_axis="z")
+    body = next(iter(doc.bodies.values())).manifold
+    assert body.volume() == pytest.approx(40*40*10 - 3*4*10, abs=1e-3)

@@ -140,6 +140,7 @@ class PatternFeature(Feature):
         self.axis_origin = list(map(float, params["axis_origin"])) if params.get("axis_origin") is not None else None
         self.axis_direction = list(map(float, params["axis_direction"])) if params.get("axis_direction") is not None else None
         self.copies = 0
+        self._keep = None   # circular pattern on a round body: the intersection the body is cut down to
 
     def _transforms(self, centre, feature_centre, size):
         """Functions turning the changed region into each copy."""
@@ -185,17 +186,7 @@ class PatternFeature(Feature):
         elif self.kind == "circular":
             n = max(2, int(round(self.count1)))
             step = self.angle / n if abs(abs(self.angle) - 360.0) < 1e-6 else self.angle / (n - 1)
-            if self.rotation_axis == "picked":
-                if self.axis_origin is None or self.axis_direction is None:
-                    raise ValueError("Choose a circular edge or cylindrical face for the pattern axis.")
-                c = np.asarray(self.axis_origin, dtype=float)
-                axis = np.asarray(self.axis_direction, dtype=float)
-            else:
-                axis = np.asarray(self.AXES.get(self.rotation_axis, self.AXES["z"]), dtype=float)
-            length = np.linalg.norm(axis)
-            if not np.isfinite(length) or length < 1e-9:
-                raise ValueError("The pattern axis must have a nonzero direction.")
-            axis = axis/length
+            c, axis = self._circular_axis(c)
             x, y, z = axis
             skew = np.array([[0., -z, y], [z, 0., -x], [-y, x, 0.]])
             for k in range(1, n):
@@ -204,6 +195,40 @@ class PatternFeature(Feature):
                 matrix = np.column_stack((rotation, np.zeros(3)))
                 out.append(lambda m, matrix=matrix, c=c.copy(): m.translate(tuple(-c)).transform(matrix).translate(tuple(c)))
         return out
+
+    def _circular_axis(self, centre):
+        """(point, unit direction) of the circular pattern's rotation axis."""
+        c = np.asarray(centre, dtype=float)
+        if self.rotation_axis == "picked":
+            if self.axis_origin is None or self.axis_direction is None:
+                raise ValueError("Choose a circular edge or cylindrical face for the pattern axis.")
+            c = np.asarray(self.axis_origin, dtype=float)
+            axis = np.asarray(self.axis_direction, dtype=float)
+        else:
+            axis = np.asarray(self.AXES.get(self.rotation_axis, self.AXES["z"]), dtype=float)
+        length = np.linalg.norm(axis)
+        if not np.isfinite(length) or length < 1e-9:
+            raise ValueError("The pattern axis must have a nonzero direction.")
+        return c, axis/length
+
+    @staticmethod
+    def _radial_scale(m, c, axis, factor):
+        """`m` scaled by `factor` away from the axis (lengths along the axis unchanged)."""
+        proj = np.outer(axis, axis)
+        mat = proj + factor * (np.eye(3) - proj)
+        return m.translate(tuple(-c)).transform(np.column_stack((mat, np.zeros(3)))).translate(tuple(c))
+
+    @staticmethod
+    def _round_about(body, funcs, c, axis):
+        """True when every rotation maps the body onto itself up to tessellation: what one rotation leaves
+        uncovered is then only a skin thinner than 1 % of the radius (a chord's sag), never a corner."""
+        r = np.linalg.norm((body.to_mesh().vert_properties[:, :3] - c) @ (np.eye(3) - np.outer(axis, axis)), axis=1)
+        limit = 0.01 * float(r.max())
+        for f in funcs:
+            gap = body - f(body)
+            if not gap.is_empty() and 2.0 * gap.volume() / max(gap.surface_area(), 1e-12) > limit:
+                return False
+        return True
 
     def _source_plane(self, doc, before=None, removed=None, added=None):
         for f in doc.timeline.features:
@@ -640,6 +665,18 @@ class PatternFeature(Feature):
         if not funcs:
             self.copies = 0
             return None
+        self._keep = None
+        if self.kind == "circular" and not whole_body and pos == list(range(min(pos), idx)):
+            c, axis = self._circular_axis(centre)
+            if self._round_about(before, funcs, c, axis):
+                # Rotated cuts never land exactly on the round body's facets and leave paper-thin skin strips.
+                # On a round body the result is instead what every rotated copy keeps; bosses sink a hair into it.
+                kept = before ^ after
+                self._keep = m3d.Manifold.batch_boolean([kept] + [f(kept) for f in funcs], m3d.OpType.Intersect)
+                if not added.is_empty():
+                    r = np.linalg.norm((added.to_mesh().vert_properties[:, :3] - c) @ (np.eye(3) - np.outer(axis, axis)), axis=1)
+                    added = added + (self._radial_scale(added, c, axis, 1.0 - 0.03 / max(float(r.max()), 1e-6)) ^ before)
+                    self._keep = self._keep + added   # the original boss stays
         rem = add = None
         if not removed.is_empty():
             parts = [f(removed) for f in funcs]
@@ -664,7 +701,9 @@ class PatternFeature(Feature):
                 continue
             rem, add = res
             result = body.manifold
-            if rem is not None:
+            if self._keep is not None:
+                result = result ^ self._keep
+            elif rem is not None:
                 result = result - rem
             if add is not None:
                 result = result + add
