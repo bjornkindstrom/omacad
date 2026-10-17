@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.56 - 2026-10-17
+
+### Added
+- **Start Offset in mm for Extrude** (#43): added a **Start Offset** field (`mm`, with formula and parameter support) in *Extrude* so extrusions (*One Side*, *Symmetric*, *Two Sides*) can begin at a signed offset distance from the sketch plane, with live 3D handle positioning and timeline editing support.
+
+### Changed
+- **Offset Face dialog**: removed the embedded thread-fit guide box from the *Offset Face* panel.
+
 ## 0.7.9.55 - 2026-10-17
 
 ### Added

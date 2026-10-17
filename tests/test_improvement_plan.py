@@ -252,3 +252,37 @@ def test_request_31_feature_edit_support_and_live_preview(qapp):
     assert win.viewport.previews[0][0] is cube
     assert win.viewport.previews[-1] == (None, None)
     assert body.visible is True
+
+
+def test_request_43_extrude_start_offset(tmp_path):
+    doc = Document()
+    sk = doc.start_sketch("XY")
+    sk.add_rect((-5.0, -5.0), (5.0, 5.0))
+    doc.finish_sketch()
+
+    # Extrude 20 mm starting 15 mm above the XY sketch plane -> Z spans [15, 35]
+    doc.extrude_profile(sk.sketch_id, 0, distance=20.0, operation="new_body", start_offset=15.0)
+    body = list(doc.bodies.values())[0]
+    bb = body.manifold.bounding_box()
+    assert bb[2] == pytest.approx(15.0, abs=1e-4)
+    assert bb[5] == pytest.approx(35.0, abs=1e-4)
+
+    # Edit start_offset to -10 mm via edit_feature -> Z spans [-10, 10]
+    idx = len(doc.timeline.features) - 1
+    doc.edit_feature(idx, start_offset=-10.0)
+    body = list(doc.bodies.values())[0]
+    bb = body.manifold.bounding_box()
+    assert bb[2] == pytest.approx(-10.0, abs=1e-4)
+    assert bb[5] == pytest.approx(10.0, abs=1e-4)
+
+    # Save & load roundtrip preserves start_offset
+    save_file = tmp_path / "extrude_offset.omacad"
+    Exporter.save_project(doc, str(save_file))
+    doc2 = Exporter.load_project(str(save_file))
+    ext2 = [f for f in doc2.timeline.features if f.feature_type == "extrude"][0]
+    assert ext2.start_offset == pytest.approx(-10.0)
+    body2 = list(doc2.bodies.values())[0]
+    bb2 = body2.manifold.bounding_box()
+    assert bb2[2] == pytest.approx(-10.0, abs=1e-4)
+    assert bb2[5] == pytest.approx(10.0, abs=1e-4)
+

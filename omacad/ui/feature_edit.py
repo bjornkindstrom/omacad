@@ -71,20 +71,25 @@ def edit_feature(win, doc, index: int) -> bool:
         dlg.cmb_dir.setCurrentIndex(DIRECTIONS.index(feat.direction) if feat.direction in DIRECTIONS else 0)
         dlg.spn_dist.setValue(feat.distance)
         dlg.spn_dist2.setValue(abs(feat.distance2))
+        dlg.spn_offset.setValue(getattr(feat, "start_offset", 0.0))
         if feat.exprs.get("distance"):
             dlg.spn_dist.set_expression(feat.exprs["distance"])
         if feat.exprs.get("distance2"):
             dlg.spn_dist2.set_expression(feat.exprs["distance2"])
+        if feat.exprs.get("start_offset"):
+            dlg.spn_offset.set_expression(feat.exprs["start_offset"])
         dlg.cmb_op.setCurrentIndex(OPERATIONS.index(feat.operation) if feat.operation in OPERATIONS else 0)
 
         def _preview_extrude():
             s_id, p_idx, dist, op = dlg.get_values()
             direction, dist2 = dlg.get_direction()
+            start_offset = dlg.get_start_offset()
             if s_id is None:
                 vp.set_preview(None)
                 return
             tmp = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, op, direction, dist2,
-                                 extra_profiles=feat.extra_profiles, extra_refs=feat.extra_refs, holes=feat.holes)
+                                 extra_profiles=feat.extra_profiles, extra_refs=feat.extra_refs, holes=feat.holes,
+                                 start_offset=start_offset)
             solid = tmp.build_solid(doc)
             vp.set_preview(solid, op if op != "auto" else feat.operation)
 
@@ -93,12 +98,15 @@ def edit_feature(win, doc, index: int) -> bool:
             return False
         s_id, p_idx, dist, op = dlg.get_values()
         direction, dist2 = dlg.get_direction()
+        start_offset = dlg.get_start_offset()
         if s_id is None:
             return False
         if op == "auto":  # decide with the step's own parameters, as when it was made
-            op = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, "auto", direction, dist2).resolve_operation(doc)
+            op = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, "auto", direction, dist2,
+                                start_offset=start_offset).resolve_operation(doc)
         return doc.edit_feature(index, sketch_id=s_id, profile_idx=p_idx, distance=dist,
-                                direction=direction, distance2=dist2, operation=op, exprs=dlg.get_expressions())
+                                direction=direction, distance2=dist2, start_offset=start_offset,
+                                operation=op, exprs=dlg.get_expressions())
 
     if t == "emboss":
         from omacad.ui.dialogs import EmbossDialog

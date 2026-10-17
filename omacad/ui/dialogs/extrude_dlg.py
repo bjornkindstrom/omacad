@@ -52,6 +52,14 @@ class ExtrudeDialog(BaseFeatureDialog):
         dist_row.addWidget(self.btn_face)
         form.addRow("Distance:", dist_row)
 
+        # Start Offset (distance from sketch plane before extrusion starts)
+        self.spn_offset = ExprDoubleSpinBox()
+        self.spn_offset.setRange(-10000.0, 10000.0)
+        self.spn_offset.setValue(0.0)
+        self.spn_offset.setSuffix(" mm")
+        self.spn_offset.setToolTip("Start offset along the sketch normal before the extrusion begins (0 = starts at the sketch plane)")
+        form.addRow("Start Offset:", self.spn_offset)
+
         # Direction
         self.cmb_dir = QComboBox()
         self.cmb_dir.addItems(["One Side", "Symmetric", "Two Sides"])
@@ -86,7 +94,8 @@ class ExtrudeDialog(BaseFeatureDialog):
             self.cmb_profile.setCurrentIndex(-1)   # nothing is picked for you when there is a choice
         QTimer.singleShot(0, self.focus_distance)
         for sig in (self.cmb_profile.currentIndexChanged, self.cmb_dir.currentIndexChanged,
-                    self.cmb_op.currentIndexChanged, self.spn_dist.valueChanged, self.spn_dist2.valueChanged):
+                    self.cmb_op.currentIndexChanged, self.spn_dist.valueChanged, self.spn_dist2.valueChanged,
+                    self.spn_offset.valueChanged):
             sig.connect(lambda *_: self.changed.emit())
 
     def reload_profiles(self):
@@ -138,9 +147,16 @@ class ExtrudeDialog(BaseFeatureDialog):
         self.spn_dist.setMinimum(0.1 if idx else -10000.0)
 
     def get_expressions(self) -> dict:
-        """Formulas typed into the distance fields (None-valued entries dropped)."""
-        out = {"distance": self.spn_dist.expression(), "distance2": self.spn_dist2.expression()}
+        """Formulas typed into the distance/offset fields (None-valued entries dropped)."""
+        out = {
+            "distance": self.spn_dist.expression(),
+            "distance2": self.spn_dist2.expression(),
+            "start_offset": self.spn_offset.expression(),
+        }
         return {k: v for k, v in out.items() if v}
+
+    def get_start_offset(self) -> float:
+        return self.spn_offset.value()
 
     def get_direction(self):
         return ["one_side", "symmetric", "two_sides"][self.cmb_dir.currentIndex()], self.spn_dist2.value()

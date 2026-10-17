@@ -492,15 +492,15 @@ class ToolPromptsMixin:
         dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._extrude_dlg = dlg
 
-        def show_handle(s_id, p_idx, dist, direction):
-            """The arrow in the view: start at the profile's centre, tip at the current distance."""
+        def show_handle(s_id, p_idx, dist, direction, start_offset=0.0):
+            """The arrow in the view: start at the profile's centre (shifted by start_offset), tip at the current distance."""
             from shapely.geometry import Polygon
             sk = self.doc.sketches.get(s_id)
             if sk is None or p_idx >= len(sk.profiles):
                 return
             prof = sk.profiles[p_idx]
             c = Polygon(prof.exterior_pts, prof.interior_holes).representative_point()
-            origin = sk.plane.uv_to_world(c.x, c.y)
+            origin = np.asarray(sk.plane.uv_to_world(c.x, c.y), dtype=float) + np.asarray(sk.plane.normal, dtype=float) * float(start_offset)
             tip = dist / 2.0 if direction == "symmetric" else dist
             self.viewport.set_extrude_handle(origin, sk.plane.normal, tip, show_value=True,
                                              value_scale=2.0 if direction == "symmetric" else 1.0)
@@ -516,11 +516,12 @@ class ToolPromptsMixin:
         def refresh_preview():
             s_id, p_idx, dist, op = dlg.get_values()
             direction, dist2 = dlg.get_direction()
+            start_offset = dlg.get_start_offset()
             solid = None
             if s_id is not None:
                 extra, refs, holes = parts(s_id, p_idx)
                 feat = ExtrudeFeature("preview", "preview", s_id, p_idx, dist, op, direction, dist2, extra_profiles=extra,
-                                      extra_refs=refs, holes=holes)
+                                      extra_refs=refs, holes=holes, start_offset=start_offset)
                 try:
                     solid = feat.build_solid(self.doc)
                     if op == "auto":
@@ -530,7 +531,7 @@ class ToolPromptsMixin:
                     solid = None
             self.viewport.set_preview(solid, op)
             if s_id is not None:
-                show_handle(s_id, p_idx, dist, direction)
+                show_handle(s_id, p_idx, dist, direction, start_offset)
             # Keep the viewport highlight in sync with the combo
             if s_id is not None and self.doc.selected_profile != (s_id, p_idx):
                 self.doc.selected_profile = (s_id, p_idx)
@@ -559,9 +560,9 @@ class ToolPromptsMixin:
             if abs(float(n0 @ n1)) < 0.999:
                 self.status_label.setText("That face is not parallel to the sketch plane, so there is no single distance to it.")
             else:
-                dist = float((np.asarray(plane.origin, dtype=float) - np.asarray(sp.origin, dtype=float)) @ n0)
+                dist = float((np.asarray(plane.origin, dtype=float) - np.asarray(sp.origin, dtype=float)) @ n0) - dlg.get_start_offset()
                 if abs(dist) < 1e-6:
-                    self.status_label.setText("That face is in the sketch plane (distance 0).")
+                    self.status_label.setText("That face is at the extrusion start plane (distance 0).")
                 else:
                     dlg.set_distance(dist)
                     self.status_label.setText(f"Extrude distance to the face: {dist:.3f} mm.")
@@ -581,9 +582,11 @@ class ToolPromptsMixin:
                 s_id, p_idx, dist, op = dlg.get_values()
                 if s_id is not None:
                     direction, dist2 = dlg.get_direction()
+                    start_offset = dlg.get_start_offset()
                     extra, refs, holes = parts(s_id, p_idx)
                     self.doc.extrude_profile(s_id, p_idx, dist, op, direction=direction, distance2=dist2,
-                                             extra_profiles=extra, extra_refs=refs, holes=holes)
+                                             extra_profiles=extra, extra_refs=refs, holes=holes,
+                                             start_offset=start_offset)
                     self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                     op = self.doc.timeline.features[-1].operation  # what Auto resolved to
                     self.doc.selected_profile = None

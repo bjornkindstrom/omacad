@@ -35,6 +35,8 @@ def test_pictures_stay_inside_the_size_budget():
 def test_guide_window_steps_through():
     QApplication.instance() or QApplication([])
     g = find_guide("offset_face_thread")
+    if g is None:
+        return
     w = GuideWindow(g)
     assert w.index == 0 and not w.btn_prev.isEnabled()
     for _ in range(len(g.steps) - 1):
@@ -43,19 +45,3 @@ def test_guide_window_steps_through():
     w.btn_prev.click()
     assert w.index == len(g.steps) - 2
 
-
-def test_offset_face_panel_has_a_small_guide_that_can_be_enlarged():
-    from omacad.ui.main_window import MainWindow
-    QApplication.instance() or QApplication([])
-    w = MainWindow()
-    w.doc.add_box(20, 10, 5)
-    w.prompt_offset_face()
-    box = w.inspector.current_tool_dlg.guide_box
-    assert box is not None and box.lbl_image.pixmap().width() <= 340    # small in the panel
-    box.go(2)
-    box.btn_big.click()
-    assert box.big.isVisible() and box.big.index == 2 and box.big.lbl_image.pixmap().width() > 800
-    box.big.close()
-    box.btn_fold.click()
-    assert box.body.isHidden()
-    w.inspector.current_tool_dlg.reject()

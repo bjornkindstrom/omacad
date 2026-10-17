@@ -35,6 +35,7 @@ class ExtrudeFeature(ProfileRefs, Feature):
         extra_profiles=None,
         extra_refs=None,
         holes=None,
+        start_offset: float = 0.0,
     ):
         super().__init__(feature_id, "extrude", name)
         self.sketch_id = sketch_id
@@ -49,6 +50,7 @@ class ExtrudeFeature(ProfileRefs, Feature):
         self.operation = operation
         self.direction = direction
         self.distance2 = float(distance2)
+        self.start_offset = float(start_offset)
 
     def region(self, doc: Any, sketch: Any, idxs) -> Any:
         """What is extruded, as a shapely geometry in the sketch's plane: the chosen profiles (also those of
@@ -113,20 +115,21 @@ class ExtrudeFeature(ProfileRefs, Feature):
     def _z_range(self):
         """Returns (z_min, z_max) of the extrusion in sketch-local coordinates."""
         d = self.distance
+        off = float(getattr(self, "start_offset", 0.0) or 0.0)
         if self.direction == "symmetric":
             h = abs(d) / 2.0
-            return -h, h
+            return off - h, off + h
         if self.direction == "two_sides":
-            return -abs(self.distance2), abs(d)
-        z0, z1 = (0.0, d) if d >= 0 else (d, 0.0)
-        # For cuts starting on a body face, extend slightly into empty air past the sketch
+            return off - abs(self.distance2), off + abs(d)
+        z0, z1 = (off, off + d) if d >= 0 else (off + d, off)
+        # For cuts starting on a body face, extend slightly into empty air past the start
         # plane to prevent CSG from leaving a zero-thickness coplanar skin/cap over the opening.
         if getattr(self, "operation", "") == "cut":
             eps = 0.02
             if d >= 0:
-                z0 = -eps
+                z0 -= eps
             else:
-                z1 = eps
+                z1 += eps
         return z0, z1
 
     def build_solid(self, doc: Any) -> Optional[m3d.Manifold]:
@@ -171,14 +174,15 @@ class ExtrudeFeature(ProfileRefs, Feature):
             from shapely.ops import unary_union
             plane = sketch.plane
             n0 = np.asarray(plane.normal, dtype=float)
-            o0 = np.asarray(plane.origin, dtype=float)
+            off = float(getattr(self, "start_offset", 0.0) or 0.0)
+            o0 = np.asarray(plane.origin, dtype=float) + n0 * off
             ua, va = np.asarray(plane.u_axis, dtype=float), np.asarray(plane.v_axis, dtype=float)
             region = unary_union([Polygon(sketch.profiles[i].exterior_pts, sketch.profiles[i].interior_holes)
                                   for i in [self.profile_idx] + [j for j in self.extra_profiles if j < len(sketch.profiles)]])
             for body in doc.bodies.values():
                 for face in body.faces:
                     if abs(float(np.dot(face.normal, n0))) < 0.999 or abs(float(np.dot(face.origin - o0, n0))) > 1e-3:
-                        continue  # not a face in the sketch plane
+                        continue  # not a face in the extrusion start plane
                     tris = [Polygon([(float(v @ ua), float(v @ va)) for v in tri]) for tri in face.tris]
                     if region.intersection(unary_union([t for t in tris if t.is_valid and t.area > 0])).area > 1e-6:
                         return "join"
@@ -212,6 +216,7 @@ class ExtrudeFeature(ProfileRefs, Feature):
             "operation": self.operation,
             "direction": self.direction,
             "distance2": self.distance2,
+            "start_offset": self.start_offset,
             "extra_refs": [[sid, i, list(sig)] for sid, i, sig in self.extra_refs],
             "holes": [[sid, i, list(sig)] for sid, i, sig in self.holes],
             **self.profile_refs_dict(),
