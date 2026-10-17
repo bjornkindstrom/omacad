@@ -280,23 +280,17 @@ class Ribbon(QWidget):
         btn_sketch.clicked.connect(self.create_sketch_clicked)
         h_layout.addWidget(btn_sketch)
 
-        # CREATE: common primitive tools stay visible; less common ones use the menu
+        # CREATE: standalone solids and primitives
         if group_primitives:
             btn_primitives = RibbonButton("Primitives\n▾", "📦")
             btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Thread & Coil (Shell Wall in each panel hollows them)")
             btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             prim_menu = QMenu(btn_primitives)
             theme.style_menu(prim_menu)
-            btn_box = RibbonButton("Box", "📦")
-            btn_box.setToolTip("Create a rectangular 3D box solid")
-            btn_box.clicked.connect(self.box_clicked)
-            h_layout.addWidget(btn_box)
-
-            btn_cyl = RibbonButton("Cylinder", "🥫")
-            btn_cyl.setToolTip("Create a 3D cylinder solid")
-            btn_cyl.clicked.connect(self.cylinder_clicked)
-            h_layout.addWidget(btn_cyl)
-
+            act_box = prim_menu.addAction(theme.tool_icon("📦", 18), "Box")
+            act_box.triggered.connect(self.box_clicked)
+            act_cyl = prim_menu.addAction(theme.tool_icon("🥫", 18), "Cylinder")
+            act_cyl.triggered.connect(self.cylinder_clicked)
             act_hex = prim_menu.addAction(theme.tool_icon("⬢", 18), "Hexagon")
             act_hex.triggered.connect(self.hexagon_clicked)
             act_thr = prim_menu.addAction(theme.tool_icon("🔩", 18), "Thread / Coil")
