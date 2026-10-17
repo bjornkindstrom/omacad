@@ -500,9 +500,8 @@ def edit_feature(win, doc, index: int) -> bool:
         dlg.spn_rx.setValue(feat.rx)
         dlg.spn_ry.setValue(feat.ry)
         dlg.spn_rz.setValue(feat.rz)
-        if hasattr(dlg, "cmb_pivot") and hasattr(feat, "pivot"):
-            idx = 0 if feat.pivot == "center" else 1
-            dlg.cmb_pivot.setCurrentIndex(idx)
+        dlg.set_points(feat.from_point, feat.to_point)
+        dlg.cmb_pivot.setCurrentIndex(max(0, dlg.cmb_pivot.findData(feat.pivot)))
         for key, spin in (("dx", dlg.spn_dx), ("dy", dlg.spn_dy), ("dz", dlg.spn_dz),
                           ("rx", dlg.spn_rx), ("ry", dlg.spn_ry), ("rz", dlg.spn_rz)):
             if feat.exprs.get(key):
@@ -512,20 +511,20 @@ def edit_feature(win, doc, index: int) -> bool:
         def _preview_move():
             if base_m is None:
                 return
+            from omacad.model.features.transform import MoveFeature
             _, dx, dy, dz, rx, ry, rz, pivot, _ = dlg.get_values()
-            m = base_m
-            bb = m.bounding_box()
-            center = (np.array(bb[:3]) + np.array(bb[3:])) * 0.5
-            if abs(rx) > 1e-4 or abs(ry) > 1e-4 or abs(rz) > 1e-4:
-                m = m.translate(-center).rotate([rx, ry, rz]).translate(center) if pivot == "center" else m.rotate([rx, ry, rz])
-            if abs(dx) > 1e-4 or abs(dy) > 1e-4 or abs(dz) > 1e-4:
-                m = m.translate([dx, dy, dz])
-            vp.set_preview(m, "new_body")
+            frm, to = (MoveFeature.resolve_point(doc, p) for p in dlg.get_points())
+            bb = base_m.bounding_box()
+            centre = (np.array(bb[:3]) + np.array(bb[3:])) * 0.5
+            piv = np.zeros(3) if pivot == "origin" else (frm if pivot == "point" and frm is not None else centre)
+            vp.set_preview(MoveFeature.transform(base_m, (dx, dy, dz), (rx, ry, rz), piv, frm, to), "new_body")
 
         if not _exec_with_preview(win, doc, dlg, _preview_move, [feat.target_body_id]):
             return False
         bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
-        return doc.edit_feature(index, target_body_id=bid, dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz, pivot=pivot, exprs=exprs)
+        frm, to = dlg.get_points()
+        return doc.edit_feature(index, target_body_id=bid, dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz, pivot=pivot, exprs=exprs,
+                                from_point=frm, to_point=to)
 
     if t == "thread":
         from omacad.model.features.thread import ThreadFeature

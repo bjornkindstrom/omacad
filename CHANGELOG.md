@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.5 - 2026-10-17
+
+### Added
+- Move / Rotate: "Pick points…" in the panel. Click a point on the body, the end of a straight edge or the sharp corner a rounding hides (move the mouse near the rounding: dashed guide lines show the corner), then click where it should go: a point on another body or the origin. The first point becomes the rotation pivot ("Picked point"); press Esc after it to rotate about it without moving. Dx/dy/dz and the angles still work on top, and the step follows when a radius or size before it changes.
+
 ## 0.9.9.4 - 2026-10-17
 
 ### Added

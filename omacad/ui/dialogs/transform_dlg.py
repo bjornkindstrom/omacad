@@ -3,7 +3,7 @@
 from typing import Dict
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QFormLayout, QComboBox, QHBoxLayout, QPushButton, QCheckBox
+    QFormLayout, QComboBox, QHBoxLayout, QPushButton, QCheckBox, QLabel
 )
 from omacad.model.document import Document
 from omacad.ui.expr_spin import ExprDoubleSpinBox
@@ -85,8 +85,25 @@ class MoveBodyDialog(BaseFeatureDialog):
 
         # Pivot point for rotation
         self.cmb_pivot = QComboBox()
-        self.cmb_pivot.addItems(["Body Center (Kroppens mitt)", "World Origin (Origo 0,0,0)"])
+        self.cmb_pivot.addItem("Body Center (Kroppens mitt)", "center")
+        self.cmb_pivot.addItem("World Origin (Origo 0,0,0)", "origin")
+        self.cmb_pivot.addItem("Picked point", "point")
+        self.cmb_pivot.setToolTip("Picked point: rotate about the first point picked with 'Pick points' below.")
         form.addRow("Rotations-pivot:", self.cmb_pivot)
+
+        # Point to point: a point on the body (an edge end or a corner a rounding hides), then where it goes
+        self.from_point = self.to_point = None
+        self.btn_points = QPushButton("Pick points…")
+        self.btn_points.setCheckable(True)
+        self.btn_points.setToolTip("Click a point on the body: the end of a straight edge, or the sharp corner a rounding "
+                                   "hides (move near the rounding to see it). It becomes the rotation pivot. Then click "
+                                   "where it should go (a point on another body or the origin), or press Esc to keep "
+                                   "just the pivot. Dx/dy/dz are added on top.")
+        form.addRow("Point to point:", self.btn_points)
+        self.lbl_points = QLabel()
+        self.lbl_points.setWordWrap(True)
+        form.addRow("", self.lbl_points)
+        self._show_points()
 
         # Rotation
         self.spn_rx = ExprDoubleSpinBox()
@@ -207,7 +224,7 @@ class MoveBodyDialog(BaseFeatureDialog):
         if b_idx < 0 or b_idx >= len(self.body_ids):
             return None, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "center", {}
         bid = self.body_ids[b_idx]
-        pivot = "center" if self.cmb_pivot.currentIndex() == 0 else "origin"
+        pivot = self.cmb_pivot.currentData() or "center"
         exprs = {}
         for k, spn in (("dx", self.spn_dx), ("dy", self.spn_dy), ("dz", self.spn_dz),
                        ("rx", self.spn_rx), ("ry", self.spn_ry), ("rz", self.spn_rz)):
@@ -215,6 +232,28 @@ class MoveBodyDialog(BaseFeatureDialog):
                 exprs[k] = spn.expression()
         return (bid, self.spn_dx.value(), self.spn_dy.value(), self.spn_dz.value(),
                 self.spn_rx.value(), self.spn_ry.value(), self.spn_rz.value(), pivot, exprs)
+
+    def set_points(self, from_point=None, to_point=None):
+        """The picked points ({"body", "kind", "xyz"}); a from-point makes it the rotation pivot."""
+        self.from_point, self.to_point = from_point, to_point
+        if from_point is not None:
+            self.cmb_pivot.setCurrentIndex(self.cmb_pivot.findData("point"))
+        elif self.cmb_pivot.currentData() == "point":
+            self.cmb_pivot.setCurrentIndex(0)
+        self._show_points()
+        self.changed.emit()
+
+    def get_points(self):
+        return self.from_point, self.to_point
+
+    def _show_points(self):
+        def text(p):
+            if p is None:
+                return "-"
+            what = {"end": "edge end", "corner": "hidden corner", "fixed": "origin"}.get(p.get("kind"), "point")
+            return f"{what} ({p['xyz'][0]:.2f}, {p['xyz'][1]:.2f}, {p['xyz'][2]:.2f})"
+        self.lbl_points.setText(f"From: {text(self.from_point)}\nTo: {text(self.to_point)}")
+        self.cmb_pivot.model().item(self.cmb_pivot.findData("point")).setEnabled(self.from_point is not None)
 
     def get_expressions(self) -> Dict[str, str]:
         exprs = {}

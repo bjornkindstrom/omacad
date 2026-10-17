@@ -1155,16 +1155,23 @@ class ToolPromptsMixin:
                 return (pts.min(axis=0) + pts.max(axis=0)) * 0.5
             return np.array([0.0, 0.0, 0.0])
 
+        def move_args(body, vals):
+            """(d, r, pivot, from, to) of the dialog's values for MoveFeature.transform / transform_point."""
+            from omacad.model.features.transform import MoveFeature
+            _, dx, dy, dz, rx, ry, rz, pivot, _ = vals
+            frm, to = (MoveFeature.resolve_point(self.doc, p) for p in dlg.get_points())
+            piv = np.zeros(3) if pivot == "origin" else (frm if pivot == "point" and frm is not None else get_body_center(body))
+            return (dx, dy, dz), (rx, ry, rz), piv, frm, to
+
         def update_handle():
-            bid, dx, dy, dz, rx, ry, rz, pivot, _ = dlg.get_values()
+            from omacad.model.features.transform import MoveFeature
+            vals = dlg.get_values()
+            bid = vals[0]
             if not bid or bid not in self.doc.bodies:
                 self.viewport.clear_move_gizmo()
                 return
-
-            body = self.doc.bodies[bid]
-            center = get_body_center(body)
-            moved_center = center + np.array([dx, dy, dz]) if pivot == "center" else np.array([dx, dy, dz])
-            self.viewport.set_move_gizmo(moved_center)
+            d, r, piv, frm, to = move_args(self.doc.bodies[bid], vals)
+            self.viewport.set_move_gizmo(MoveFeature.transform_point(piv, d, r, piv, frm, to))
             if self.viewport.move_gizmo:
                 self.viewport.move_gizmo["active_axis"] = dlg.active_axis
 
@@ -1181,22 +1188,12 @@ class ToolPromptsMixin:
             if current_hidden_id[0] and current_hidden_id[0] != bid and current_hidden_id[0] in self.doc.bodies:
                 self.doc.bodies[current_hidden_id[0]].visible = True
 
+            from omacad.model.features.transform import MoveFeature
             body = self.doc.bodies[bid]
             body.visible = False
             current_hidden_id[0] = bid
-
-            m = body.manifold
-            center = get_body_center(body)
-
-            if abs(rx) > 1e-4 or abs(ry) > 1e-4 or abs(rz) > 1e-4:
-                if pivot == "center":
-                    m = m.translate(-center).rotate([rx, ry, rz]).translate(center)
-                else:
-                    m = m.rotate([rx, ry, rz])
-
-            if abs(dx) > 1e-4 or abs(dy) > 1e-4 or abs(dz) > 1e-4:
-                m = m.translate([dx, dy, dz])
-
+            self.viewport.point_pick_hidden_ok = bid      # its points can still be picked while the preview shows
+            m = MoveFeature.transform(body.manifold, *move_args(body, dlg.get_values()))
             self.viewport.set_preview(m, "new_body")
             if not drag_state["dragging"]:
                 update_handle()
@@ -1243,7 +1240,7 @@ class ToolPromptsMixin:
             dst_point = face_centroid(dst_face) if dst_face is not None else np.asarray(dst.origin, dtype=float)
             vals = face_to_face_values(
                 src.normal, face_centroid(src), dst.normal, dst_point, get_body_center(self.doc.bodies[src.body_id]),
-                about_centre=dlg.cmb_pivot.currentIndex() == 0, mode=dlg.cmb_f2f.currentData(),
+                about_centre=dlg.cmb_pivot.currentData() == "center", mode=dlg.cmb_f2f.currentData(),
                 centre_on=dlg.chk_f2f_centre.isChecked())
             for spn, v in zip((dlg.spn_dx, dlg.spn_dy, dlg.spn_dz, dlg.spn_rx, dlg.spn_ry, dlg.spn_rz), vals):
                 spn.setValue(round(v, 4))
@@ -1273,15 +1270,49 @@ class ToolPromptsMixin:
                 dlg.select_body(face.body_id)
                 if dlg.btn_lay.isChecked() and face.body_id in self.doc.bodies:
                     from omacad.model.geometry import lay_on_ground_values
-                    about_centre = dlg.cmb_pivot.currentIndex() == 0
+                    about_centre = dlg.cmb_pivot.currentData() == "center"
                     vals = lay_on_ground_values(face.normal, face.origin, get_body_center(self.doc.bodies[face.body_id]), about_centre)
                     for spn, v in zip((dlg.spn_dx, dlg.spn_dy, dlg.spn_dz, dlg.spn_rx, dlg.spn_ry, dlg.spn_rz), vals):
                         spn.setValue(round(v, 4))
                     dlg.btn_lay.setChecked(False)
                     self.status_label.setText("Face laid on the ground. Adjust the numbers or press OK.")
 
+        def on_points_toggled(on):
+            if on:
+                dlg.set_points(None, None)
+                self.viewport.begin_point_pick()
+                self.status_label.setText("Point to point: click a point on the body (an edge end, or move near a rounding "
+                                          "for its hidden corner). It becomes the rotation pivot.")
+            else:
+                self.viewport.end_point_pick()
+
+        def on_point_picked(p):
+            frm, _ = dlg.get_points()
+            if p is None:                                   # Esc: keep what was picked so far
+                dlg.btn_points.setChecked(False)
+                self.status_label.setText("Point picking ended." if frm else "Point picking cancelled.")
+                return
+            if frm is None:
+                if p["body"] is None:
+                    self.status_label.setText("Point to point: first click a point on the body that should move.")
+                    return
+                dlg.select_body(p["body"])
+                dlg.set_points(p, None)
+                self.status_label.setText("Point to point: now click where that point should go (a point on another body "
+                                          "or the origin), or press Esc to keep it just as the rotation pivot.")
+                return
+            if p["body"] == frm["body"]:
+                self.status_label.setText("Point to point: the target must be on another body or the origin.")
+                return
+            dlg.set_points(frm, p)
+            dlg.btn_points.setChecked(False)
+            self.status_label.setText("Point to point: done. Rotate about the point or add an offset, then OK.")
+
         def cleanup():
+            self.viewport.end_point_pick()
+            self.viewport.point_pick_hidden_ok = None
             for sig, slot in (
+                (self.viewport.point_picked, on_point_picked),
                 (self.viewport.move_body_picked, on_face_picked),
                 (self.viewport.body_clicked, dlg.select_body),
                 (self.viewport.move_gizmo_dragged, on_gizmo_drag),
@@ -1302,9 +1333,10 @@ class ToolPromptsMixin:
 
         def on_finished(result):
             bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
+            frm, to = dlg.get_points()
             cleanup()
             if result and bid and bid in self.doc.bodies:
-                feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs)
+                feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs, from_point=frm, to_point=to)
                 if feat:
                     b_name = self.doc.bodies[bid].name if bid in self.doc.bodies else bid
                     self.status_label.setText(f"Moved {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
@@ -1315,6 +1347,8 @@ class ToolPromptsMixin:
 
         self._connect_debounced_preview(dlg, refresh_preview, interval_ms=30)
         dlg.btn_f2f.toggled.connect(on_face_to_face_toggled)
+        dlg.btn_points.toggled.connect(on_points_toggled)
+        self.viewport.point_picked.connect(on_point_picked)
         dlg.f2f_changed.connect(apply_face_to_face)
         dlg.axis_changed.connect(on_axis_changed)
         dlg.finished.connect(on_finished)

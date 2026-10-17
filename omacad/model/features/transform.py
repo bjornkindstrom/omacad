@@ -68,20 +68,34 @@ class MoveFeature(Feature):
         return (np.array(bb[:3], dtype=float) + np.array(bb[3:], dtype=float)) * 0.5
 
     @staticmethod
-    def transform(m: m3d.Manifold, d, r, pivot_xyz, from_xyz=None, to_xyz=None) -> m3d.Manifold:
-        """Rotate by r = (rx, ry, rz) degrees about pivot_xyz, then shift by d, plus (to - from) for point to point
-        (the rotated from-point lands on the to-point)."""
+    def _rotate_point(p, r, pivot_xyz) -> np.ndarray:
         from omacad.model.geometry import euler_xyz_matrix
         pivot_xyz = np.asarray(pivot_xyz, dtype=float)
+        return pivot_xyz + euler_xyz_matrix(*r) @ (np.asarray(p, dtype=float) - pivot_xyz)
+
+    @classmethod
+    def _shift(cls, d, r, pivot_xyz, from_xyz, to_xyz) -> np.ndarray:
+        """d, plus (to - rotated from) for point to point: the rotated from-point lands on the to-point."""
         shift = np.asarray(d, dtype=float)
+        if from_xyz is not None and to_xyz is not None:
+            shift = shift + np.asarray(to_xyz, dtype=float) - cls._rotate_point(from_xyz, r, pivot_xyz)
+        return shift
+
+    @classmethod
+    def transform(cls, m: m3d.Manifold, d, r, pivot_xyz, from_xyz=None, to_xyz=None) -> m3d.Manifold:
+        """Rotate by r = (rx, ry, rz) degrees about pivot_xyz, then shift (see _shift)."""
+        pivot_xyz = np.asarray(pivot_xyz, dtype=float)
         if any(abs(a) > 1e-4 for a in r):
             m = m.translate(-pivot_xyz).rotate(list(r)).translate(pivot_xyz)
-        if from_xyz is not None and to_xyz is not None:
-            moved_from = pivot_xyz + euler_xyz_matrix(*r) @ (np.asarray(from_xyz, dtype=float) - pivot_xyz)
-            shift = shift + np.asarray(to_xyz, dtype=float) - moved_from
+        shift = cls._shift(d, r, pivot_xyz, from_xyz, to_xyz)
         if np.any(np.abs(shift) > 1e-9):
             m = m.translate(list(shift))
         return m
+
+    @classmethod
+    def transform_point(cls, p, d, r, pivot_xyz, from_xyz=None, to_xyz=None) -> np.ndarray:
+        """Where the same move takes a single point (e.g. the gizmo at the pivot)."""
+        return cls._rotate_point(p, r, pivot_xyz) + cls._shift(d, r, pivot_xyz, from_xyz, to_xyz)
 
     def pivot_xyz(self, doc: Any, body: Body, from_xyz=None) -> np.ndarray:
         if self.pivot == "origin":

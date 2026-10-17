@@ -9,6 +9,7 @@ from omacad.ui.viewport.picker_mixin import PickerMixin
 from omacad.ui.viewport.overlay_mixin import OverlayMixin
 from omacad.ui.viewport.text_mixin import TextToolMixin
 from omacad.ui.viewport.sketch_rotate_mixin import SketchRotateMixin
+from omacad.ui.viewport.point_pick_mixin import PointPickMixin
 """
 Omacad - 3D CAD OpenGL Viewport
 Interactive 3D canvas with CAD shading, sharp edge outlines, dynamic ground grid,
@@ -57,7 +58,8 @@ from omacad.ui import theme
 from omacad.ui.theme import qcolor
 
 
-class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayMixin, TextToolMixin, SketchRotateMixin):
+class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayMixin, TextToolMixin, SketchRotateMixin,
+                 PointPickMixin):
     """Modern OpenGL 3D CAD canvas with Fusion 360 look and feel."""
 
     selection_changed = Signal()
@@ -78,6 +80,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     cylinder_picked = Signal(object)        # dict with cylinder parameters (radius, length, axis, origin, is_internal)
     shell_face_picked = Signal(object)   # plane/face chosen for hollow shell open face
     move_body_picked = Signal(object)    # plane/face chosen for move body selection
+    point_picked = Signal(object)        # {"body", "kind", "xyz"}: a point picked on a body (or the origin)
     status_message = Signal(str)
     edit_sketch_requested = Signal(str)     # right-click on a sketch > Edit Sketch
     extrude_sketch_requested = Signal(str)  # right-click on a sketch > Extrude
@@ -228,6 +231,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         # Fillet tool state
         self._mirror_phase = "pick"
         self._move_phase = "pick"
+        self.point_pick = False       # picking a point on a body (Move / Rotate), see PointPickMixin
+        self.hover_point = None
+        self._near_points = []
         self.fillet_first_line = None
         self.fillet_hover_corner = None
         self.fillet_preview = None
@@ -272,6 +278,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.sketch_palette.set_tool("NONE")
         self.rotation_panel.hide()
         self._rotate_drag = None
+        self.point_pick = False
+        self.hover_point = None
+        self._near_points = []
         self.sketch_start_uv = self.sketch_second_uv = self.sketch_current_uv = None
         self.active_snap = None
         self._drag = self._move = self._dim_drag = None
@@ -1697,6 +1706,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.update()
             return
 
+        if self.point_pick and event.button() == Qt.MouseButton.LeftButton and self._point_pick_press():
+            return
+
         if self.doc.active_sketch and self.sketch_tool == "ROTATE":
             if event.button() == Qt.MouseButton.LeftButton:
                 self._rotate_press(event, x, y)
@@ -2081,7 +2093,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         if self._drag is not None:
             self._drag_move(event)
             return
-        if self.edge_pick_mode:
+        if self.point_pick:
+            if not self.is_orbiting and not self.is_panning:
+                self._point_pick_hover(x, y)
+        elif self.edge_pick_mode:
             if not self.is_orbiting and not self.is_panning:
                 self._update_edge_hover(x, y)
         elif self.plane_pick_mode:
@@ -2876,6 +2891,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()
+            return
+        if self.point_pick and event.key() == Qt.Key.Key_Escape:
+            self.end_point_pick()
+            self.point_picked.emit(None)     # the tool keeps what was picked so far
             return
         if self.measure is not None and self.measure["mode"] == "model" and event.key() == Qt.Key.Key_D:
             self._measure_set_distance()

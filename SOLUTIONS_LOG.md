@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Hörnlinjer på rundad rektangel + palett** (0.9.7): `Sketch._corner_guides` ger varje hörnrundning två construction-linjer (sidans tangentpunkt → skarpa hörnet) som snäppunkter för pivot. De styrs inte av solvern utan ägs av rundningen (`fillet_info["guides"]`) och läggs om i `_update_fillet_arc` (radie, och via `refit_fillets` efter bredd/höjd/rotation); inga längdmått (skulle låsa storleken). `SketchPalette.set_tool` visar Polygon sides/Corner radius bara för sina verktyg. Test: `tests/test_rounded_rect_corner_guides.py`, `tests/test_rect_button.py`.
+
 - **Rotera skiss med musen** (0.9.6): Rotate krävde knappen "Pick pivot" och ett inskrivet vinkelvärde. `SketchRotateMixin`: vänsterklick utan rörelse = pivot (snäppt, `_rotate_snap_uv`), dragning = vinkel som summeras per musrörelse via `drag_angle` (hela varv hoppar inte), Shift = 15°-steg; allt går via panelens vinkelfält så förhandsvisning, villkorsskydd och ett ångra-steg är som förut. Test: `tests/test_sketch_rotate_ui.py` (klick-pivot, drag 90°/45°/410°/405°, Enter = ett ångra-steg).
 
 - **Skiss-Move roterade** (0.9.5): `DynInput.resolve` för MOVE tog vinkeln ur musens riktning (`Angle` = atan2 av dragningen), så markeringen vreds medan man flyttade. Move har nu bara X/Y; rotation är Rotate-verktygets (Shift+R). Nytt flöde: `_move_phase` "pick" (klick = figur, Ctrl = ett element, delad `_toggle_pick` med Mirror) → Enter/Space/högerklick → "base" (baspunkt, sedan mål). Förvald markering hoppar direkt till "base". Test: `tests/test_sketch_move_tool.py`.

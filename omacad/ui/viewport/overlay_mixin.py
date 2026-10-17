@@ -57,6 +57,7 @@ class OverlayMixin:
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
         self._draw_measure(painter)
         self._draw_handle_value(painter)
+        self._draw_point_pick(painter)
         if self.primitive_handles:
             self.primitive_handles.draw(painter)
 
