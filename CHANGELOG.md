@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.8 - 2026-10-17
+
+### Changed
+- The drag sliders from the primitives are now under every number field: all tool panels (also fields inside group boxes, such as the Thread clearance), the sketch Rotate panel, the sketch palette (Polygon sides, Corner radius), the canvas (reference image) dialog and Settings. Angle sliders cover the field's range up to one full turn each way.
+
 ## 0.9.7 - 2026-10-17
 
 ### Added

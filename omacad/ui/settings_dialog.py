@@ -540,6 +540,8 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(btn_save)
 
         main_lay.addLayout(btn_row)
+        from omacad.ui.numeric_slider import add_numeric_sliders
+        add_numeric_sliders(self)
 
         # Ensure dialog fits comfortably within screen boundaries (e.g. on Windows laptops)
         self.resize(620, 580)

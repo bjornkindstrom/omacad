@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QGroupBox, QFormLayout, QComboBox, QLabel, QPushButton, QHBoxLayout
 from omacad.ui.expr_spin import ExprDoubleSpinBox
+from omacad.ui.numeric_slider import add_numeric_sliders
 
 
 class SketchRotationPanel(QGroupBox):
@@ -45,6 +46,7 @@ class SketchRotationPanel(QGroupBox):
         self._enter = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
         self._enter.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._enter.activated.connect(self._accept)
+        add_numeric_sliders(self)
 
     def _accept(self):
         for spin in (self.x, self.y, self.angle):

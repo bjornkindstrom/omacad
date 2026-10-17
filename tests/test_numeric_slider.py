@@ -100,3 +100,43 @@ def test_primitive_slider_obeys_drag_precision(app):
     assert field.value() != round(field.value())
     w.viewport.primitive_handles.dialog.reject()
     w.close()
+
+
+def test_fields_in_group_boxes_get_sliders_and_angles_span_a_turn(app):
+    from PySide6.QtWidgets import QGroupBox, QVBoxLayout
+    dialog = QDialog()
+    outer = QVBoxLayout(dialog)
+    group = QGroupBox("Inner")
+    inner = QFormLayout(group)
+    angle = QDoubleSpinBox()
+    angle.setRange(-3600, 3600)
+    angle.setSuffix("°")
+    inner.addRow("Angle", angle)
+    outer.addWidget(group)
+    add_numeric_sliders(dialog)
+    wrapper = angle.parentWidget()
+    assert isinstance(wrapper, NumericSlider)
+    wrapper.slider.setValue(1000)
+    assert angle.value() == 360
+    wrapper.slider.setValue(500)
+    assert angle.value() == 0
+    dialog.close()
+
+
+def test_every_number_field_outside_the_tool_panels_has_a_slider(app):
+    from omacad.model.document import Document
+    from omacad.ui.canvas_dialog import CanvasEditorDialog
+    from omacad.ui.dialogs.thread_dlg import ThreadDialog
+    from omacad.ui.settings_dialog import SettingsDialog
+    from omacad.ui.sketch_palette import SketchPalette
+    from omacad.ui.sketch_rotation import SketchRotationPanel
+    doc = Document()
+    doc.add_box(10, 10, 10)
+    thread = ThreadDialog(doc)
+    add_numeric_sliders(thread)          # as the side panel does when it docks a tool
+    for widget in (thread, SettingsDialog(), SketchPalette(), SketchRotationPanel(), CanvasEditorDialog(doc)):
+        fields = widget.findChildren(QDoubleSpinBox) + widget.findChildren(QSpinBox)
+        assert fields
+        bare = [f for f in fields if not isinstance(f.parentWidget(), NumericSlider)]
+        assert not bare, (type(widget).__name__, bare)
+        widget.close()

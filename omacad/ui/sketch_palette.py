@@ -211,6 +211,8 @@ class SketchPalette(QFrame):
         content_layout.addWidget(btn_finish)
 
         layout.addWidget(self.content_widget)
+        from omacad.ui.numeric_slider import add_numeric_sliders
+        add_numeric_sliders(self.content_widget)
 
     def set_tool(self, tool_name: str) -> None:
         """Show Polygon sides / Corner radius only for the tools that use them."""

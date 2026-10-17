@@ -39,7 +39,10 @@ class NumericSlider(QWidget):
         value = self.field.value()
         if self._updating:
             return
-        if rescale or value < self._low or value > self._high or self._low == self._high:
+        if "°" in self.field.suffix():   # angles: the field's own range, at most one turn each way
+            self._low = max(float(self.field.minimum()), -360.)
+            self._high = min(float(self.field.maximum()), 360.)
+        elif rescale or value < self._low or value > self._high or self._low == self._high:
             # A local range keeps small dimensions usable even if the field allows
             # kilometres. Typed values retain the field's complete numeric range.
             span = max(10., 2 * abs(value), 20 * self.field.singleStep())
@@ -74,14 +77,16 @@ class NumericSlider(QWidget):
             self.sync()
 
 
-def add_numeric_sliders(dialog):
-    """Wrap numeric fields in nested layouts once, without replacing the fields."""
-    layout = dialog.layout()
-    if layout is None:
-        return
-    fields = dialog.findChildren(QDoubleSpinBox) + dialog.findChildren(QSpinBox)
+def add_numeric_sliders(widget):
+    """Pair every number field under `widget` with a slider, once, wherever it sits (also in group boxes):
+    the field moves into a NumericSlider in the layout it came from and stays the source of truth."""
+    fields = widget.findChildren(QDoubleSpinBox) + widget.findChildren(QSpinBox)
     for field in fields:
         if field.property("has_tool_slider") or isinstance(field.parentWidget(), NumericSlider):
+            continue
+        owner = field.parentWidget()
+        layout = owner.layout() if owner is not None else None
+        if layout is None:
             continue
         wrapper = NumericSlider(field)
         item = layout.replaceWidget(field, wrapper)

@@ -570,6 +570,8 @@ class CanvasEditorDialog(QDialog):
         tools_layout.addLayout(btn_box)
 
         layout.addWidget(tools_widget)
+        from omacad.ui.numeric_slider import add_numeric_sliders
+        add_numeric_sliders(tools_widget)
 
         self.canvas_view.point_picked.connect(self.on_points_picked)
         self.canvas_view.origin_picked.connect(self.on_origin_picked)
