@@ -244,7 +244,9 @@ class PickerMixin:
         if self.edge_xray:   # every pickable edge, also the hidden ones
             self.draw_thick_lines(mvp, flat([e for b in self.doc.bodies.values() if b.visible for e in b.edges]), (0.75, 0.8, 0.9, 0.55), 1.6)
         if self.hover_edge is not None and not any(self._same_edge(self.hover_edge, s) for s in self.selected_edges):
-            self.draw_thick_lines(mvp, flat([self.hover_edge]), (1.0, 1.0, 1.0, 1.0), 3.5)
+            from omacad.ui.settings import hover_line_style
+            hv_col, hv_w = hover_line_style()
+            self.draw_thick_lines(mvp, flat([self.hover_edge]), hv_col, hv_w)
         if self.selected_edges:
             self.draw_thick_lines(mvp, flat(self.selected_edges), (*theme.palette().highlight01(), 1.0), 4.0)
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -290,8 +292,8 @@ class PickerMixin:
         proj, view, _ = self.get_matrices()
         origin, ray_dir = _vp_pkg.ray_from_screen(x, y, self.width(), self.height(), view, proj)
         best, best_t = None, float("inf")
-        half = self._origin_plane_half_size()
         quad = self._origin_quadrant_size()
+        half = quad / 2      # construction planes are drawn at this size, centred
         only_origin = self.plane_pick_mode and self.plane_pick_purpose == "offset_origin_only"
         shell_pick = self.plane_pick_mode and self.plane_pick_purpose in ("shell_face", "offset_face")
         thread_pick = self.plane_pick_mode and self.plane_pick_purpose == "thread_surface"
@@ -491,7 +493,7 @@ class PickerMixin:
                 corners = [plane.uv_to_world(0, 0), plane.uv_to_world(q, 0), plane.uv_to_world(q, q), plane.uv_to_world(0, q)]
                 out.append((("origin", name), f"{name} Plane", corners, self.PLANE_COLORS[name]))
         if not (self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face", "offset_face")):
-            half = self._origin_plane_half_size()
+            half = self._origin_quadrant_size() / 2     # same size as an origin plane's marker, centred on the plane
             for pid, c in self.doc.construction_planes.items():
                 if c.get("visible", True):
                     plane = self.doc.construction_plane(pid)
@@ -512,7 +514,7 @@ class PickerMixin:
         GL.glUniformMatrix4fv(loc_mvp, 1, GL.GL_TRUE, mvp.flatten())
         GL.glDepthMask(GL.GL_FALSE)
         GL.glDisable(GL.GL_DEPTH_TEST)
-        half = self._origin_plane_half_size()
+        half = self._origin_quadrant_size() / 2
         if self.preview_plane is not None:
             pl = self.preview_plane
             quads = quads + [(None, "", [pl.uv_to_world(-half, -half), pl.uv_to_world(half, -half),

@@ -188,6 +188,24 @@ class SettingsDialog(QDialog):
         self.row_construct = ColorRow("Construction lines:", self.settings.get("sketch_construction_color"), default_hex="#FFCC4D")
         lay_appearance.addWidget(self.row_construct)
 
+        self.row_hover = ColorRow("Line under the cursor:", self.settings.get("hover_line_color"), default_hex="#FFFFFF")
+        lay_appearance.addWidget(self.row_hover)
+
+        hw_row = QHBoxLayout()
+        lbl_hw = QLabel("Line under cursor, thickness:")
+        lbl_hw.setMinimumWidth(200)
+        self.spn_hover_w = QDoubleSpinBox()
+        self.spn_hover_w.setRange(1.0, 12.0)
+        self.spn_hover_w.setSingleStep(0.5)
+        self.spn_hover_w.setDecimals(1)
+        self.spn_hover_w.setSuffix(" px")
+        self.spn_hover_w.setValue(float(self.settings.get("hover_line_width", 3.5)))
+        self.spn_hover_w.setToolTip("How thick the edge or sketch line gets when you hover over it. Normal lines are about 1-1.6 px, so a bigger number makes the difference bigger.")
+        hw_row.addWidget(lbl_hw)
+        hw_row.addWidget(self.spn_hover_w)
+        hw_row.addStretch()
+        lay_appearance.addLayout(hw_row)
+
         self.row_highlight = ColorRow("Highlight:", self.settings.get("highlight_color"), default_hex=None)
         lay_appearance.addWidget(self.row_highlight)
 
@@ -528,6 +546,8 @@ class SettingsDialog(QDialog):
         self.row_sketch.reset_color()
         self.row_construct.reset_color()
         self.row_highlight.reset_color()
+        self.row_hover.reset_color()
+        self.spn_hover_w.setValue(3.5)
         idx_p = self.cmb_pos.findData("bottom_right")
         if idx_p >= 0:
             self.cmb_pos.setCurrentIndex(idx_p)
@@ -561,6 +581,8 @@ class SettingsDialog(QDialog):
             "sketch_line_color": self.row_sketch.current_hex,
             "sketch_construction_color": self.row_construct.current_hex,
             "highlight_color": self.row_highlight.current_hex,
+            "hover_line_color": self.row_hover.current_hex,
+            "hover_line_width": self.spn_hover_w.value(),
             "palette_position": self.cmb_pos.currentData(),
             "autohide_palette_on_measure": self.chk_autohide.isChecked(),
             "invert_zoom": self.chk_invert_zoom.isChecked(),

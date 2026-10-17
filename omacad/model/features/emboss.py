@@ -73,18 +73,30 @@ class EmbossFeature(ExtrudeFeature):
         from omacad.model.faces import detect_cylinder_surface, ray_mesh_hit
         A = np.vstack([np.asarray(M, dtype=float).reshape(3, 4), [0.0, 0.0, 0.0, 1.0]])
         inv = np.linalg.inv(A)
-        c = region.centroid
         reach = 1e4
-        origin = (A @ np.array([c.x, c.y, reach, 1.0]))[:3]
         direction = -A[:3, 2] / np.linalg.norm(A[:3, 2])
+        # Long text can have its centroid beside the body while the letters still sit over it: try the centroid
+        # first, then points spread across the shape, and keep the first ray that hits something.
+        c = region.centroid
+        minx, miny, maxx, maxy = region.bounds
+        cands = [(c.x, c.y)]
+        rp = region.representative_point()
+        cands.append((rp.x, rp.y))
+        cands += [(minx + (maxx - minx) * f, (miny + maxy) / 2) for f in (0.5, 0.25, 0.75, 0.1, 0.9)]
         best = None
-        for body in doc.bodies.values():
-            mesh = body.render_mesh
-            if mesh is None or len(mesh.vertices) == 0:
-                continue
-            hit = ray_mesh_hit(mesh, origin, direction)
-            if hit is not None and (best is None or hit[0] < best[0]):
-                best = (hit[0], mesh, hit[1])
+        origin = None
+        for cx, cy in cands:
+            o = (A @ np.array([cx, cy, reach, 1.0]))[:3]
+            for body in doc.bodies.values():
+                mesh = body.render_mesh
+                if mesh is None or len(mesh.vertices) == 0:
+                    continue
+                hit = ray_mesh_hit(mesh, o, direction)
+                if hit is not None and (best is None or hit[0] < best[0]):
+                    best = (hit[0], mesh, hit[1])
+                    origin = o
+            if best is not None:
+                break
         if best is None:
             return None
         t, mesh, tri = best

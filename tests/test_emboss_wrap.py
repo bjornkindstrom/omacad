@@ -35,3 +35,20 @@ def test_deboss_wraps_too():
     mesh = doc.bodies[body].manifold
     assert mesh.volume() < np.pi * R * R * H - 1.0
     assert mesh.bounding_box()[3] == pytest.approx(R, abs=0.05)
+
+
+def test_long_text_with_centroid_beside_the_cylinder_still_wraps():
+    """Request #60: after editing the text to a longer string its centroid left the cylinder and the emboss
+    turned into a flat extrude floating at the sketch plane."""
+    doc = Document()
+    doc.add_cylinder(R, H)
+    body = next(iter(doc.bodies))
+    n = np.array([1.0, 0.0, 0.0])
+    sk = doc.start_sketch_on_plane(SketchPlane.from_face(n, n * (R + GAP)))
+    sk.add_text("Testar att andra", (-15.0, 20.0), height=10.0)
+    doc.finish_sketch()
+    idx = sk.text_profile_indices()
+    doc.add_emboss(sk.sketch_id, idx[0], 1.0, extra_profiles=idx[1:])
+    mesh = doc.bodies[body].manifold
+    assert len(doc.bodies) == 1
+    assert mesh.bounding_box()[3] == pytest.approx(R + 1.0, abs=0.05)

@@ -963,7 +963,9 @@ class RenderGLMixin:
             if projected_lines:   # edges included from the body: a distinct colour, like Fusion's projected curves
                 self.draw_thick_lines(mvp, projected_lines, (0.80, 0.45, 1.0, 1.0), 2.2)
             if hover_lines:
-                self.draw_thick_lines(mvp, hover_lines, (1.0, 1.0, 1.0, 1.0), 3.0)
+                from omacad.ui.settings import hover_line_style
+                hv_col, hv_w = hover_line_style()
+                self.draw_thick_lines(mvp, hover_lines, hv_col, max(1.0, hv_w - 0.5))
             if selected_lines:
                 from omacad.ui.settings import get_settings
                 hl_col = get_settings().highlight_color_rgb01() or theme.palette().highlight01()

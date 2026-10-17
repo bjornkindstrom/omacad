@@ -29,6 +29,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "rect_default_tool": "RECT",        # what the rectangle button draws: RECT, CENTER_RECT, ROUNDED_RECT
     "curve_segments": 96,               # flat pieces around a full circle: lower = lighter and faster, higher = smoother
     "arrow_size": 1.0,                  # scale of the extrude/move arrow in the 3D view
+    "hover_line_width": 3.5,            # px thickness of the edge/line under the cursor (normal edges are thinner)
+    "hover_line_color": None,           # colour of the edge/line under the cursor; None = white
     "arrow_gap": 2.0,                   # mm the arrow is drawn off the surface, in its direction
     "view_projection": "perspective",    # perspective or orthographic
     "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
@@ -69,6 +71,17 @@ def rgb01_to_hex(r: float, g: float, b: float) -> str:
     ig = max(0, min(255, int(round(g * 255))))
     ib = max(0, min(255, int(round(b * 255))))
     return f"#{ir:02X}{ig:02X}{ib:02X}"
+
+
+def hover_line_style() -> Tuple[Tuple[float, float, float, float], float]:
+    """(rgba, width) for the edge or sketch line under the cursor, from the settings."""
+    s = get_settings()
+    rgb = hex_to_rgb01(s.get("hover_line_color")) or (1.0, 1.0, 1.0)
+    try:
+        width = max(1.0, min(12.0, float(s.get("hover_line_width", 3.5))))
+    except (TypeError, ValueError):
+        width = 3.5
+    return (*rgb, 1.0), width
 
 
 class SettingsManager(QObject):
