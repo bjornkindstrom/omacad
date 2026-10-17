@@ -54,7 +54,7 @@ Rankat efter tidsvinst per arbetsinsats.
 - **S9 Symmetriläge**: slå på ett symmetriplan så speglas varje steg automatiskt, parametriskt.
 - **S10 Checkpoints + visuell diff**: namngivna versioner och en vy som visar vad som ändrats mellan två (tillagt grönt, bortaget rött).
 
-### Text (0.10)
+### Text (klart i 0.7.9.50, kvar: wrap på cylinder och text-parametrar som {Namn})
 Fusion: *Sketch > Text* öppnar en dialog (text, font, höjd, teckenavstånd, justering, fet/kursiv); man drar en ruta i skissen; texten förblir redigerbar tills den "exploderas". Textprofiler kan extruderas (join/cut) eller **Emboss/Deboss**. Enlinjefonter fungerar inte för solider. Text på bana kommer senare.
 - Ny `SketchText`-entitet i `omacad/model/sketch.py`; konturer från Qt (`QPainterPath.addText` + `toSubpathPolygons`), hål (O, A, 8) via shapely så `solve_profiles` ger profiler som för cirklar och slots.
 - Skissverktyget **Text** (ribbon och Create-menyn) med dialog och live-förhandsvisning, dubbelklick redigerar, *Explode* ger vanliga linjer. Typsnitt via `QFontDatabase`; saknas fonten på en annan maskin används en reservfont och en varning visas (viktigt för Windows-EXE:n).

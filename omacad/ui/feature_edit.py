@@ -17,7 +17,7 @@ OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as t
 
 
 def can_edit(feature) -> bool:
-    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "sketch", "fillet", "pattern", "move", "thread", "offset_face")
+    return feature.feature_type in ("box", "cylinder", "sphere", "extrude", "emboss", "sketch", "fillet", "pattern", "move", "thread", "offset_face")
 
 
 def edit_feature(win, doc, index: int) -> bool:
@@ -47,6 +47,14 @@ def edit_feature(win, doc, index: int) -> bool:
             op = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, "auto", direction, dist2).resolve_operation(doc)
         return doc.edit_feature(index, sketch_id=s_id, profile_idx=p_idx, distance=dist,
                                 direction=direction, distance2=dist2, operation=op, exprs=dlg.get_expressions())
+    if t == "emboss":
+        from omacad.ui.dialogs import EmbossDialog
+        dlg = EmbossDialog(win, feat.depth, editing=True)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        dlg.set_values(feat)
+        if not dlg.exec():
+            return False
+        return doc.edit_feature(index, exprs=dlg.get_expressions(), **dlg.get_values())
     if t == "box":
         dlg = BoxDialog(win)
         dlg.setWindowTitle(f"Edit {feat.name}")

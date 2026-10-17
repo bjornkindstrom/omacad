@@ -12,7 +12,7 @@ import numpy as np
 import trimesh
 from omacad.model.document import Document, Parameter, default_origin_vis
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, SphereFeature,
-                                    ExtrudeFeature, RevolveFeature, CombineFeature, FilletFeature,
+                                    ExtrudeFeature, EmbossFeature, RevolveFeature, CombineFeature, FilletFeature,
                                     PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature)
 from omacad.model.sketch import Sketch
 from omacad.model.timeline import ProfileRefs
@@ -445,6 +445,14 @@ class Exporter:
                     extra_profiles=f_data.get("extra_profiles", []),
                     extra_refs=f_data.get("extra_refs", []), holes=f_data.get("holes", [])
                 )
+                feat.load_profile_refs(f_data)
+                doc.timeline.add_feature(feat)
+            elif ft == "emboss":
+                feat = EmbossFeature(
+                    fid, fname, f_data["sketch_id"], f_data["profile_idx"], f_data.get("depth", 1.0),
+                    flip=f_data.get("flip", False), dx=f_data.get("dx", 0.0), dy=f_data.get("dy", 0.0),
+                    rotation=f_data.get("rotation", 0.0), extra_profiles=f_data.get("extra_profiles", []),
+                    extra_refs=f_data.get("extra_refs", []))
                 feat.load_profile_refs(f_data)
                 doc.timeline.add_feature(feat)
             elif ft == "revolve":

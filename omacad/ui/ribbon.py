@@ -108,6 +108,7 @@ class Ribbon(QWidget):
     create_sketch_clicked = Signal()
     extrude_clicked = Signal()
     revolve_clicked = Signal()
+    emboss_clicked = Signal()
     fillet_clicked = Signal()
     project_clicked = Signal()
     chamfer_clicked = Signal()
@@ -297,6 +298,12 @@ class Ribbon(QWidget):
         btn_revolve.setToolTip("Revolve a sketch profile around an axis or edge to create a solid body")
         btn_revolve.clicked.connect(self.revolve_clicked)
         h_layout.addWidget(btn_revolve)
+
+        btn_emboss = RibbonButton("Emboss", "🔖")
+        btn_emboss.setToolTip("Emboss or deboss text (any sketch profile) on a face, as in Fusion: a positive depth raises it, "
+                              "a negative depth presses it in")
+        btn_emboss.clicked.connect(self.emboss_clicked)
+        h_layout.addWidget(btn_emboss)
 
         btn_fillet = RibbonButton("Fillet", "🔘")
         btn_fillet.setToolTip("Round edges (outside and inside corners): select edges, type a radius")
@@ -495,6 +502,13 @@ class Ribbon(QWidget):
         self.btn_slot.setToolTip("Create a slot shape defined by center-to-center line and diameter")
         self.btn_slot.clicked.connect(lambda: self.select_sketch_tool("SLOT"))
         h_layout.addWidget(self.btn_slot)
+
+        self.btn_text = RibbonButton("Text", "🔤")
+        self.btn_text.setCheckable(True)
+        self.btn_text.setToolTip("Add text to the sketch (as in Fusion): letters in a frame, or along a circle, arc or line. "
+                                 "The letters can be extruded or embossed")
+        self.btn_text.clicked.connect(lambda: self.select_sketch_tool("TEXT"))
+        h_layout.addWidget(self.btn_text)
 
         self.btn_fillet_sk = RibbonButton("Fillet\n(F)", "╭")
         self.btn_fillet_sk.setCheckable(True)
@@ -698,6 +712,7 @@ class Ribbon(QWidget):
         self.btn_polygon.setChecked(tool_name == "POLYGON")
         self.btn_arc.setChecked(tool_name == "ARC")
         self.btn_slot.setChecked(tool_name == "SLOT")
+        self.btn_text.setChecked(tool_name == "TEXT")
         if hasattr(self, "btn_fillet_sk"):
             self.btn_fillet_sk.setChecked(tool_name == "FILLET")
         if hasattr(self, "btn_offset_sk"):
@@ -725,5 +740,6 @@ class Ribbon(QWidget):
             self.btn_circle.setChecked(False)
             self.btn_arc.setChecked(False)
             self.btn_slot.setChecked(False)
+            self.btn_text.setChecked(False)
             self.btn_dim.setChecked(False)
             self.btn_construct.setChecked(False)

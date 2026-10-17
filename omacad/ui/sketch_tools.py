@@ -18,6 +18,7 @@ SKETCH_TOOLS = [
     ("ARC", "Arc", "Draw", None),
     ("SLOT", "Slot", "Draw", None),
     ("POLYGON", "Polygon", "Draw", None),
+    ("TEXT", "Text", "Draw", None),
     ("TRIM", "Trim", "Modify", None),
     ("OFFSET", "Offset  (O)", "Modify", None),
     ("MIRROR", "Mirror", "Modify", None),

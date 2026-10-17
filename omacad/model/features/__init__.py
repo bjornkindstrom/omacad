@@ -24,6 +24,7 @@ from omacad.model.features.primitives import (
     SketchFeature,
 )
 from omacad.model.features.extrude import ExtrudeFeature
+from omacad.model.features.emboss import EmbossFeature
 from omacad.model.features.revolve import RevolveFeature
 from omacad.model.features.fillet import FilletFeature
 from omacad.model.features.hole import HoleFeature, hole_tool
@@ -60,6 +61,7 @@ __all__ = [
     "SphereFeature",
     "SketchFeature",
     "ExtrudeFeature",
+    "EmbossFeature",
     "RevolveFeature",
     "FilletFeature",
     "HoleFeature",

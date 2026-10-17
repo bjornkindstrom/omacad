@@ -1,4 +1,5 @@
 from omacad.ui.controllers.tool_prompts import ToolPromptsMixin
+from omacad.ui.controllers.text_prompts import EmbossPromptMixin, TextPromptsMixin
 from omacad.ui.controllers.file_session import FileSessionMixin
 """
 Omacad - Main CAD Application Window
@@ -54,7 +55,7 @@ from omacad.ui.dialogs import (
 from omacad.io.exporter import Exporter
 
 
-class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
+class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMixin, FileSessionMixin):
     """Main Fusion 360 style window for Omacad."""
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -158,6 +159,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.ribbon.chamfer_clicked.connect(lambda: self.prompt_round_edges("chamfer"))
         self.ribbon.parameters_clicked.connect(self.on_change_parameters)
         self.ribbon.revolve_clicked.connect(self.prompt_revolve)
+        self.ribbon.emboss_clicked.connect(self.prompt_emboss)
         self.ribbon.box_clicked.connect(self.prompt_box)
         self.ribbon.cylinder_clicked.connect(self.prompt_cylinder)
         self.ribbon.sphere_clicked.connect(self.prompt_sphere)
@@ -165,6 +167,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)
         self.viewport.join_bodies_requested.connect(self.on_join_bodies)
+        self.viewport.text_place_requested.connect(self.on_text_place)
+        self.viewport.text_edit_requested.connect(self.prompt_text_edit)
         self.viewport.split_plane_requested.connect(lambda pid: self.prompt_split_body(plane_id=pid))
         self.ribbon.shell_clicked.connect(self.prompt_shell)
         self.ribbon.offset_face_clicked.connect(lambda: self.prompt_offset_face())
@@ -296,6 +300,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         act_extrude.setShortcuts([QKeySequence("E"), QKeySequence("Ctrl+E")])
         act_extrude.triggered.connect(self.prompt_extrude)
         menu_create.addAction(act_extrude)
+        menu_create.addAction("Emboss…", self.prompt_emboss)
         menu_create.addAction("Offset Plane…", self.prompt_offset_plane)
         act_canvas = QAction("Insert Canvas (Image)…", self)
         act_canvas.triggered.connect(self.prompt_insert_canvas)
@@ -382,7 +387,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         # Icons for the menu entries (drawn from emoji at a size the menu font can't give)
         icons = {
             "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
-            "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️", "Insert Canvas": "🖼️",
+            "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️", "Emboss": "🔖", "Insert Canvas": "🖼️",
             "Box": "📦", "Cylinder": "🥫", "Sphere": "⚽", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚", "Offset Face": "↔️",
             "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
             "Fit View": "🔲", "Section View": "✂️", "Measure": "📏", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
@@ -655,6 +660,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
 
     def on_sketch_tool_selected(self, tool_name: str):
         self.viewport.set_sketch_tool(tool_name)
+        if tool_name == "TEXT":
+            self.prompt_text()
+            return
         self.status_label.setText(f"Sketch Tool: {tool_name}. Click on grid plane to place points.")
 
     def sync_sketch_tool_from_viewport(self, tool_name: str):
@@ -664,6 +672,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.ribbon.btn_polygon.setChecked(tool_name == "POLYGON")
         self.ribbon.btn_arc.setChecked(tool_name == "ARC")
         self.ribbon.btn_slot.setChecked(tool_name == "SLOT")
+        self.ribbon.btn_text.setChecked(tool_name == "TEXT")
         self.ribbon.btn_trim_sk.setChecked(tool_name == "TRIM")
         self.ribbon.btn_mirror_sk.setChecked(tool_name == "MIRROR")
         self.ribbon.btn_offset_sk.setChecked(tool_name == "OFFSET")

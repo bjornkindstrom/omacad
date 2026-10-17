@@ -28,6 +28,8 @@ Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inst
 
 **Solider**
 - **Extrude** med dragbar pil i vyn *och* inskrivet värde, riktning (en sida, symmetriskt, två sidor), *To face…*, Auto / New Body / Join / Cut / Intersect. Förhandsvisning och profilval i vyn: inget väljs åt dig, klicka på en profil och **Shift+klick** lägger till eller tar bort fler (t.ex. ringen och cirkeln i den). Extrudera också en hel yta.
+- **Text i skissen** (som Fusion): ram eller **Text On Path** längs en cirkel, båge eller linje; typsnitt, fet/kursiv, höjd, teckenavstånd, justering, flip. Bokstäverna är riktiga profiler (hål i O/A/B blir hål) som kan extruderas, spegla, flyttas och sparas. Högerklick: Edit Text / Explode Text.
+- **Emboss**: upphöjd (positivt djup) eller ingraverad (negativt, Deboss) text på en yta, med Flip, Horizontal/Vertical distance och Rotation, live-förhandsvisning och redigerbar i tidslinjen. Kopieras runt en cirkel med Pattern/Mirror.
 - **Revolve**: profil, axel (en konstruktionslinje eller någon linje i skissen, eller skissens X/Y-axel), vinkel (360 = helt varv, negativt vänder), One Side / Symmetric / Two Sides, Auto / New / Join / Cut / Intersect, med förhandsvisning.
 - Box, Cylinder, Sphere, Combine (Join/Cut/Intersect).
 - **Split Body**: Dela en solid kropp i två separata kroppar med ett offset-plan eller origin-plan. Klicka på planet i vyn för att välja det, eller högerklicka på ett plan > *Split Body with this Plane*.

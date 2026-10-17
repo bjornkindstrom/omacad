@@ -35,6 +35,8 @@ from omacad.ui.dialogs.fillet_dlg import (
 from omacad.ui.dialogs.pattern_dlg import (
     PatternDialog,
 )
+from omacad.ui.dialogs.text_dlg import TextDialog
+from omacad.ui.dialogs.emboss_dlg import EmbossDialog
 from omacad.ui.dialogs.shell_dlg import (
     ShellDialog,
 )
@@ -73,6 +75,8 @@ __all__ = [
     "SectionDialog",
     "CombineDialog",
     "SplitBodyDialog",
+    "TextDialog",
+    "EmbossDialog",
     "RoundEdgesDialog",
     "PatternDialog",
     "ShellDialog",

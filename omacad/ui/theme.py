@@ -301,6 +301,8 @@ EMOJI_TO_TOOL = {
     "⬡": "polygon",
     "⌒": "arc",
     "💊": "slot",
+    "🔤": "text",
+    "🔖": "emboss",
     "╭": "fillet_sk",
     "🪞": "mirror",
     "⧉": "offset_sk",

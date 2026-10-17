@@ -11,7 +11,7 @@ import numpy as np
 import manifold3d as m3d
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature,
-    SphereFeature, ExtrudeFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
+    SphereFeature, ExtrudeFeature, EmbossFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
     ImportMeshFeature, ThreadFeature, OffsetFaceFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
@@ -416,7 +416,7 @@ class Document:
     def hide_used_sketches(self) -> None:
         """Sketches that already made a solid (extrude/revolve) are hidden so they stop cluttering the
         view; the eye in the browser shows them again."""
-        used = {getattr(f, "sketch_id", None) for f in self.timeline.features if f.feature_type in ("extrude", "revolve")}
+        used = {getattr(f, "sketch_id", None) for f in self.timeline.features if f.feature_type in ("extrude", "revolve", "emboss")}
         for sk in self.sketches.values():
             if sk.sketch_id in used and sk is not self.active_sketch:
                 sk.visible = False
@@ -497,6 +497,21 @@ class Document:
         feat.execute(self)
         self.hide_used_sketches()
         self.notify_changed()
+
+    @undoable("Emboss")
+    def add_emboss(self, sketch_id: str, profile_idx: int, depth: float = 1.0, flip: bool = False, dx: float = 0.0,
+                   dy: float = 0.0, rotation: float = 0.0, extra_profiles=None, extra_refs=None, exprs=None):
+        """Fusion's Emboss: raise (depth > 0) or press in (depth < 0) the chosen sketch profiles from the face they sit on."""
+        feat_id = f"emboss_{len(self.timeline.features) + 1}"
+        feat_name = f"Emboss {len([f for f in self.timeline.features if f.feature_type == 'emboss']) + 1}"
+        feat = EmbossFeature(feat_id, feat_name, sketch_id, profile_idx, depth, flip=flip, dx=dx, dy=dy, rotation=rotation,
+                             extra_profiles=extra_profiles, extra_refs=extra_refs)
+        feat.exprs = dict(exprs or {})
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.hide_used_sketches()
+        self.notify_changed()
+        return feat
 
     @undoable("Revolve")
     def add_revolve(self, sketch_id: str, profile_idx: int, axis=("v",), angle: float = 360.0, operation: str = "new_body",
@@ -660,6 +675,7 @@ class Document:
         "cylinder": ("radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v"),
         "sphere": ("radius",),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "operation"),
+        "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
         "combine": ("operation",),
         "fillet": ("size", "kind"),

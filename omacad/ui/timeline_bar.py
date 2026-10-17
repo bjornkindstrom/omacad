@@ -30,6 +30,7 @@ class FeatureNodeWidget(QFrame):
         "sphere": "⚽",
         "sketch": "✏️",
         "extrude": "⬆️",
+        "emboss": "🔖",
         "revolve": "🔄",
         "hole": "🕳️",
         "delete_body": "🗑️",
@@ -97,6 +98,8 @@ class FeatureNodeWidget(QFrame):
         t = f.feature_type
         if t == "extrude":
             return f"{f.name}\nDistance {f.distance:g} mm, {f.direction.replace('_', ' ')}, {f.operation.replace('_', ' ')}"
+        if t == "emboss":
+            return f"{f.name}\n{f.effect.title()} {abs(f.depth):g} mm" + (", flipped" if f.flip else "")
         if t == "box":
             return f"{f.name}\n{f.length:g} x {f.width:g} x {f.height:g} mm"
         if t == "cylinder":

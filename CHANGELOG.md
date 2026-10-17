@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.50 - 2026-10-17
+
+### Added
+- **Text in sketches** (Sketch > Text, as in Fusion): options in the side panel: Type (*Text* in a frame, or *Text On Path* along a circle, arc or line), the text (several lines), Font, Bold / Italic, Height (of a capital letter), Character spacing, Horizontal and Vertical alignment, Angle, Flip, and for a path: Placement (above / below) and *Fit to path*. A ghost follows the cursor; click to place, or click the circle / arc / line the text follows (it lights up). The letters are real sketch profiles, with the holes of O, A, B ... as holes: they can be extruded, embossed, moved (M), rotated, mirrored (Mirror makes a mirrored copy), saved, and the text moves with its path when the circle changes. Right-click a text: **Edit Text…** or **Explode Text** (turns it into lines). Placing and editing is one undo step; Cancel / Esc removes it.
+- **Emboss** (Solid > Create > Emboss, as in Fusion): pick the profiles (it starts with all the letters of the newest text sketch picked; *Select all text of this sketch*), set the **Depth** (positive = Emboss adds material, negative = Deboss presses it in; the Effect follows the sign), **Flip normal**, **Horizontal / Vertical distance** and **Rotation**. Live green / red preview, one undo step, editable from the timeline, formulas and parameters work. Emboss steps can be copied round a circle with Pattern / Mirror (Circular pattern). Flat faces only: wrapping text round a cylinder is not done yet.
+
 ## 0.7.9.49 - 2026-10-17
 
 ### Changed

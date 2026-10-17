@@ -7,6 +7,7 @@ from omacad.ui.viewport.render_mixin import RenderGLMixin
 from omacad.ui.viewport.gizmo_mixin import GizmoMixin
 from omacad.ui.viewport.picker_mixin import PickerMixin
 from omacad.ui.viewport.overlay_mixin import OverlayMixin
+from omacad.ui.viewport.text_mixin import TextToolMixin
 """
 Omacad - 3D CAD OpenGL Viewport
 Interactive 3D canvas with CAD shading, sharp edge outlines, dynamic ground grid,
@@ -38,7 +39,7 @@ import manifold3d as m3d
 from omacad.model.sketch_solver import solve_sketch
 from omacad.model.sketch import (
     Sketch, SketchPlane, SketchLine, SketchRect, SketchCircle,
-    SketchCenterRect, SketchArc, SketchSlot, move_entity, rotate_entity, rotate_point, entity_key_points,
+    SketchCenterRect, SketchArc, SketchSlot, SketchText, move_entity, rotate_entity, rotate_point, entity_key_points,
     point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex, ref_id, ref_segment, EDGE_PTS
 )
 from omacad.model.sketch_snap import SketchSnapper, SnapResult
@@ -55,7 +56,7 @@ from omacad.ui import theme
 from omacad.ui.theme import qcolor
 
 
-class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayMixin):
+class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayMixin, TextToolMixin):
     """Modern OpenGL 3D CAD canvas with Fusion 360 look and feel."""
 
     selection_changed = Signal()
@@ -87,6 +88,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     move_gizmo_axis_selected = Signal(str)
     body_clicked = Signal(str)  # body_id of clicked 3D body
     plane_clicked = Signal(str)  # an origin plane ("XY") or construction plane id clicked without a tool
+    text_place_requested = Signal(object, object)   # Text tool click: (anchor uv or None, path entity id or None)
+    text_edit_requested = Signal(str)               # a text element chosen for editing (Text tool click, right-click menu)
     join_bodies_requested = Signal(object)    # right-click with two or more bodies selected > Join
     split_plane_requested = Signal(str)   # right-click on a plane > Split Body with this plane
     face_extrude_requested = Signal(object)  # a flat face to extrude (pull in = cut, out = build up)
@@ -146,6 +149,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.hud_busy = HudText(self)
         self.hud_busy.setVisible(False)
         self.flash_sketch_id = None      # a sketch lit up for a moment (hovering its step in the timeline)
+        self.text_draft = None           # the SketchText being placed by the Text tool
+        self.text_wants_path = False     # ... and it is Text On Path: the click picks a curve
 
         # Sketch element selection (click / Ctrl+click, Delete)
         self.selected_entities: set = set()
@@ -748,6 +753,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
     def _update_entity_hover(self, x: float, y: float):
         active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and (self.sketch_tool in ("DIMENSION", "OFFSET") or self.measure is not None))
+        if self.sketch_tool == "TEXT":
+            return                                  # the Text tool lights up its own path curve
         ent = self._pick_entity(x, y) if active else None
         hid = ent.entity_id if ent else None
         if hid != self.hover_entity_id:
@@ -1537,6 +1544,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
 
         # 3. Draw Active or Visible Sketches
         self.render_sketches(mvp)
+        self.render_text_preview(mvp)
         self.render_profile_fills(mvp)
         if self.section is None:
             self.render_preview(mvp)
@@ -1690,6 +1698,9 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
                 if self._start_rubber(event):
                     return
                 return
+
+        if self.doc.active_sketch and self.sketch_tool == "TEXT" and self._text_press(event, x, y):
+            return
 
         # Handle Mirror Tool Click
         if self.doc.active_sketch and self.sketch_tool == "MIRROR":
@@ -2038,7 +2049,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         self.hovered_dim_id = hovered
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self.sketch_tool in ("LINE", "RECT", "ROUNDED_RECT", "CENTER_RECT", "CENTER_ROUNDED_RECT", "CIRCLE", "SMART_CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE"):
+        elif self.sketch_tool in ("LINE", "RECT", "ROUNDED_RECT", "CENTER_RECT", "CENTER_ROUNDED_RECT", "CIRCLE", "SMART_CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE", "TEXT"):
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -2046,6 +2057,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         if hovered != prev_hovered:
             self.update()
 
+        if self.doc.active_sketch and self.sketch_tool == "TEXT":
+            self._text_hover(x, y)
         if self.doc.active_sketch and self.sketch_tool == "TRIM":
             self._trim_hover(x, y)
         if self.doc.active_sketch and self.sketch_tool == "MIRROR":
@@ -2181,6 +2194,10 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             menu.addSeparator()
             heading("Make it")
             add("fix", "🔒 Fixed in place", "Locks the circle so it can't move or change.")
+        elif isinstance(ent, SketchText):
+            heading("Text")
+            add("edit_text", "✏️ Edit Text…", "Change the words, the font, the height, the alignment or the path.")
+            add("explode_text", "💥 Explode Text", "Turns the text into ordinary lines. It can no longer be edited as text.")
         else:
             heading("Arcs and slots can't be dimensioned yet")
         menu.addSeparator()
@@ -2199,6 +2216,16 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         if key is None:
             return
         pt = lambda name: [("pt", ent, name)]
+        if key == "edit_text":
+            self.text_edit_requested.emit(ent.entity_id)
+            return
+        if key == "explode_text":
+            before = sk.to_dict()
+            sk.explode_text(ent.entity_id)
+            self.selected_entities.clear()
+            self.doc.record_sketch_change(sk, before)
+            self.update()
+            return
         if key == "p_side":
             self._dim_length(poly_line)
             return

@@ -520,6 +520,95 @@ def nearest_ends_to_vertex(line_a: "SketchLine", line_b: "SketchLine"):
     return best[1], best[2]
 
 
+class SketchText(SketchEntity):
+    """Text in a sketch, like Fusion's Text: a frame placed at `anchor`, or text running along a circle, arc or line
+    (`path_id`). Its letter outlines are lines like any other, so the letters become profiles that can be extruded or
+    embossed; counters (the hole of an O) are holes in the letter's profile."""
+
+    PARAMS = ("text", "font", "height", "bold", "italic", "spacing", "h_align", "v_align", "flip_h", "flip_v", "angle",
+              "anchor", "path_id", "placement", "fit")
+
+    def __init__(self, entity_id: str, text: str, anchor: Tuple[float, float] = (0.0, 0.0), height: float = 10.0,
+                 font: str = "Sans Serif", bold: bool = False, italic: bool = False, spacing: float = 0.0,
+                 h_align: str = "left", v_align: str = "bottom", flip_h: bool = False, flip_v: bool = False,
+                 angle: float = 0.0, path_id: Optional[str] = None, placement: str = "above", fit: bool = False,
+                 is_construction: bool = False):
+        super().__init__(entity_id=entity_id, entity_type="text", is_construction=is_construction)
+        self.text = str(text)
+        self.anchor = (float(anchor[0]), float(anchor[1]))
+        self.height = float(height)
+        self.font = font
+        self.bold, self.italic = bool(bold), bool(italic)
+        self.spacing = float(spacing)                      # extra space between letters in percent of the font's own
+        self.h_align, self.v_align = h_align, v_align      # left/center/right, top/middle/bottom (frame text)
+        self.flip_h, self.flip_v = bool(flip_h), bool(flip_v)
+        self.angle = float(angle)
+        self.path_id = path_id                             # a circle, arc or line of this sketch: Text On Path
+        self.placement = placement                         # on a path: "above" (left of the travel direction) or "below"
+        self.fit = bool(fit)                               # on a path: spread the text over its whole length
+        self.sketch: Optional["Sketch"] = None             # set by the sketch that owns this text (to find its path)
+        self._geom = None
+        self._key = None
+
+    def path_spec(self) -> Optional[Dict[str, Any]]:
+        """The curve this text follows, or None (no path chosen, or it is gone)."""
+        if not self.path_id or self.sketch is None:
+            return None
+        ent = next((e for e in self.sketch.entities if e.entity_id == self.path_id), None)
+        if isinstance(ent, SketchCircle):
+            return {"kind": "circle", "center": ent.center, "radius": ent.radius}
+        if isinstance(ent, SketchArc):
+            params = ent.get_circle_params()
+            if params:
+                center, r, a0, a1, ccw = params
+                return {"kind": "arc", "center": center, "radius": r, "a0": a0, "a1": a1, "ccw": ccw}
+        if isinstance(ent, SketchLine):
+            return {"kind": "line", "p1": ent.p1, "p2": ent.p2}
+        return None
+
+    def geometry(self):
+        """The letters as shapely polygons in sketch units (cached until a parameter or the path changes)."""
+        path = self.path_spec()
+        key = (tuple(getattr(self, k) for k in self.PARAMS if k != "path_id"), repr(path))
+        if key != self._key:
+            from omacad.model import text_layout
+            self._geom = text_layout.layout(
+                text=self.text, font=self.font, height=self.height, bold=self.bold, italic=self.italic,
+                spacing=self.spacing, h_align=self.h_align, v_align=self.v_align, flip_h=self.flip_h,
+                flip_v=self.flip_v, angle=self.angle, anchor=self.anchor, path=path, placement=self.placement,
+                fit=self.fit)
+            self._key = key
+        return self._geom
+
+    def polygons(self) -> list:
+        g = self.geometry()
+        return [] if g is None or g.is_empty else list(getattr(g, "geoms", [g]))
+
+    def bbox(self) -> Optional[Tuple[float, float, float, float]]:
+        g = self.geometry()
+        return None if g is None or g.is_empty else tuple(g.bounds)
+
+    def to_lines(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        lines = []
+        for poly in self.polygons():
+            for ring in [poly.exterior, *poly.interiors]:
+                pts = list(ring.coords)
+                lines.extend((pts[i], pts[i + 1]) for i in range(len(pts) - 1))
+        return lines
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = {"entity_id": self.entity_id, "entity_type": "text", "is_construction": self.is_construction}
+        for k in self.PARAMS:
+            v = getattr(self, k)
+            d[k] = list(v) if k == "anchor" else v
+        return d
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SketchText":
+        kw = {k: data[k] for k in cls.PARAMS if k in data and k != "text"}
+        return cls(data["entity_id"], data.get("text", ""), is_construction=data.get("is_construction", False), **kw)
+
+
 def _shift(pt, du, dv):
     return (pt[0] + du, pt[1] + dv)
 
@@ -546,6 +635,8 @@ def move_entity(ent: "SketchEntity", du: float, dv: float) -> None:
                                              _shift(ent.p_end, du, dv))
     elif isinstance(ent, SketchSlot):
         ent.center1, ent.center2 = _shift(ent.center1, du, dv), _shift(ent.center2, du, dv)
+    elif isinstance(ent, SketchText):
+        ent.anchor = _shift(ent.anchor, du, dv)
 
 
 def rotate_entity(ent: "SketchEntity", angle_deg: float, origin: Tuple[float, float]) -> None:
@@ -569,6 +660,9 @@ def rotate_entity(ent: "SketchEntity", angle_deg: float, origin: Tuple[float, fl
     elif isinstance(ent, SketchSlot):
         ent.center1 = rotate_point(ent.center1, angle_deg, origin)
         ent.center2 = rotate_point(ent.center2, angle_deg, origin)
+    elif isinstance(ent, SketchText):
+        ent.anchor = rotate_point(ent.anchor, angle_deg, origin)
+        ent.angle += angle_deg
 
 
 def entity_key_points(ent: "SketchEntity") -> List[Tuple[float, float]]:
@@ -586,6 +680,8 @@ def entity_key_points(ent: "SketchEntity") -> List[Tuple[float, float]]:
         return [ent.p_start, ent.p_end]
     if isinstance(ent, SketchSlot):
         return [ent.center1, ent.center2]
+    if isinstance(ent, SketchText):
+        return [ent.anchor]
     return []
 
 
@@ -704,6 +800,9 @@ class Sketch:
         """Nearest entity whose outline passes within `tol` of (u, v)."""
         best, best_d = None, tol
         for ent in self.entities:
+            box = ent.bbox() if isinstance(ent, SketchText) else None
+            if box is not None and (u < box[0] - tol or u > box[2] + tol or v < box[1] - tol or v > box[3] + tol):
+                continue                                   # lots of segments: skip text the point is nowhere near
             for p1, p2 in ent.to_lines():
                 d = _dist_point_segment((u, v), p1, p2)
                 if d <= best_d:
@@ -717,6 +816,7 @@ class Sketch:
         self.entities = snap.entities
         self.dimensions = snap.dimensions
         self.constraints = snap.constraints
+        self._bind_texts()
         self.solve_profiles()  # uses this sketch's own reference edges
 
     def connected_entities(self, entity_id: str, tol: float = 1e-6) -> set:
@@ -929,9 +1029,47 @@ class Sketch:
         self.solve_profiles()
         return new
 
+    def _bind_texts(self) -> None:
+        for e in self.entities:
+            if isinstance(e, SketchText):
+                e.sketch = self
+
+    def text_profile_indices(self) -> List[int]:
+        """Indices of the profiles that are the letters themselves (not the counters inside an O or A): everything
+        Emboss or Extrude should take to make the text."""
+        from shapely.ops import unary_union
+        glyphs = [p for e in self.entities if isinstance(e, SketchText) for p in e.polygons()]
+        if not glyphs:
+            return []
+        area = unary_union(glyphs)
+        return [i for i, prof in enumerate(self.profiles)
+                if area.contains(Polygon(prof.exterior_pts, prof.interior_holes).buffer(0).representative_point())]
+
+    def explode_text(self, entity_id: str) -> list:
+        """Fusion's Explode: the text becomes ordinary lines (its outlines) and stops being editable text."""
+        ent = next((e for e in self.entities if e.entity_id == entity_id and isinstance(e, SketchText)), None)
+        if ent is None:
+            return []
+        lines = []
+        for p1, p2 in ent.to_lines():
+            if abs(p1[0] - p2[0]) > 1e-9 or abs(p1[1] - p2[1]) > 1e-9:
+                lines.append(SketchLine(self._new_entity_id("line"), p1, p2, is_construction=ent.is_construction))
+                self.entities.append(lines[-1])
+        self.entities.remove(ent)
+        self.solve_profiles()
+        return lines
+
+    def add_text(self, text: str, anchor: Tuple[float, float] = (0.0, 0.0), **params) -> "SketchText":
+        """Text at `anchor` (see SketchText for the options); `path_id` makes it run along a circle, arc or line."""
+        ent = SketchText(self._new_entity_id("text"), text, anchor, **params)
+        ent.sketch = self
+        self.entities.append(ent)
+        self.solve_profiles()
+        return ent
+
     def mirror_entities(self, ids, a, b) -> list:
         """Mirror copies of the given elements across the line through points a and b (the originals stay).
-        Lines, circles, arcs and slots; the copies carry no dimensions or constraints."""
+        Lines, circles, arcs, slots and text; the copies carry no dimensions or constraints."""
         ax, ay = a
         dx, dy = b[0] - a[0], b[1] - a[1]
         L = math.hypot(dx, dy)
@@ -959,6 +1097,13 @@ class Sketch:
                 n = SketchArc(self._new_entity_id("arc"), mp(ent.p_start), mp(ent.p_mid), mp(ent.p_end), is_construction=c)
             elif isinstance(ent, SketchSlot):
                 n = SketchSlot(self._new_entity_id("slot"), mp(ent.center1), mp(ent.center2), ent.radius, is_construction=c)
+            elif isinstance(ent, SketchText):
+                # a reflection is a turn by 2*phi - angle of the mirrored letters (flip_v): Rot(2phi) Flip_y Rot(a) F = Rot(2phi-a) F[fy toggled]
+                phi = math.degrees(math.atan2(dy, dx))
+                n = SketchText.from_dict(dict(ent.to_dict(), entity_id=self._new_entity_id("text"),
+                                              anchor=list(mp(ent.anchor)), angle=2.0 * phi - ent.angle,
+                                              flip_v=not ent.flip_v))
+                n.sketch = self
             else:
                 continue
             self.entities.append(n)
@@ -1593,6 +1738,8 @@ class Sketch:
                 sketch.entities.append(SketchArc.from_dict(ent_data))
             elif t == "slot":
                 sketch.entities.append(SketchSlot.from_dict(ent_data))
+            elif t == "text":
+                sketch.entities.append(SketchText.from_dict(ent_data))
 
         for dim_data in data.get("dimensions", []):
             sketch.dimensions.append(SketchDimension.from_dict(dim_data))
@@ -1606,5 +1753,6 @@ class Sketch:
             if e.entity_id in projected:
                 e.projected = True
         sketch._migrate_legacy_rects()
+        sketch._bind_texts()
         sketch.solve_profiles()
         return sketch
