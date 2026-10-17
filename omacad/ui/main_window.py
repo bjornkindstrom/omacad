@@ -105,13 +105,21 @@ class MainWindow(QMainWindow, ToolPromptsMixin, FileSessionMixin):
         self.viewport.hover_info_changed.connect(self.inspector.show_hover)
         self._init_undo_listener = True   # registered once the Edit menu exists (see _build_menus)
 
+        # SOLID / SKETCH: a small bar in the view, directly above the Browser (it belongs to the big box, not the ribbon)
+        self.workspace_bar = self.ribbon.workspace_bar
+        self.workspace_bar.setParent(self.viewport)
+        self.workspace_bar.show()
+
         def _update_overlays(size=None):
             if size is None:
                 size = self.viewport.size()
             top_pad = 10
             bottom_pad = 10
-            h = max(100, size.height() - top_pad - bottom_pad)
-            self.browser.setGeometry(10, top_pad, 260, h)
+            self.workspace_bar.adjustSize()
+            self.workspace_bar.move(10, 4)
+            browser_top = max(top_pad, 4 + self.workspace_bar.sizeHint().height() + 2)
+            h = max(100, size.height() - browser_top - bottom_pad)
+            self.browser.setGeometry(10, browser_top, 260, h)
             self.inspector.move(self.inspector.x(), top_pad)
             self.inspector.set_max_height(h)          # the panel fits its content and anchors to the right edge
 

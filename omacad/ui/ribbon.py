@@ -6,7 +6,7 @@ Fusion 360 style ribbon with SOLID, SKETCH tabs and tool buttons.
 from typing import Optional
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QToolButton, QLabel, QFrame, QSizePolicy, QScrollArea
+    QWidget, QVBoxLayout, QHBoxLayout, QTabBar, QTabWidget, QToolButton, QLabel, QFrame, QSizePolicy, QScrollArea
 )
 from PySide6.QtGui import QFont, QFontMetrics
 from omacad.ui.sketch_tools import RECT_TOOLS
@@ -161,15 +161,53 @@ class Ribbon(QWidget):
         self.setup_sketch_tab()
         self.tabs.addTab(self._scrollable(self.sketch_tab), "SKETCH")
 
+        # The SOLID / SKETCH selector is not part of the ribbon: it is a small bar the main window puts in the 3D view,
+        # above the Browser. The QTabWidget keeps the pages; its own tab bar is hidden and this one drives it.
+        self.tabs.tabBar().hide()
+        self.workspace_bar = QTabBar()
+        self.workspace_bar.setDrawBase(False)
+        self.workspace_bar.setExpanding(False)
+        self.workspace_bar.setUsesScrollButtons(False)       # it is tiny; never scroll its two tabs
+        self.workspace_bar.addTab("SOLID")
+        self.workspace_bar.addTab("SKETCH")
+        self.workspace_bar.currentChanged.connect(self.tabs.setCurrentIndex)
+        self.tabs.currentChanged.connect(self.workspace_bar.setCurrentIndex)
         # Hide sketch tab by default until sketch is started
         self.tabs.setTabVisible(1, False)
+        self.workspace_bar.setTabVisible(1, False)
+        self.equalize_buttons()
         self.fit_height()
+
+    def equalize_buttons(self):
+        """Every ribbon button gets the same size (in both tabs): with names, the widest plain button sets the width
+        and the tallest the height; icon-only, icon plus a small margin. Buttons sized after their own text looked
+        uneven. (Dropdown buttons draw their arrow inside the same size.)"""
+        from PySide6.QtCore import QEvent
+        from PySide6.QtWidgets import QApplication
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)       # buttons of a rebuilt tab are gone first
+        buttons = self.findChildren(RibbonButton)
+        if not buttons:
+            return
+        for b in buttons:
+            b.setMinimumSize(0, 0)
+            b.setMaximumSize(16777215, 16777215)
+        scale = ribbon_button_scale()
+        icon_px = max(18, int(round(30 * scale)))
+        if ribbon_labels():
+            plain = [b for b in buttons if not b.menu()] or buttons
+            w = max(b.sizeHint().width() for b in plain)
+            h = max(b.sizeHint().height() for b in buttons)
+        else:
+            w = icon_px + max(8, int(round(10 * scale)))
+            h = icon_px + max(6, int(round(8 * scale)))
+        for b in buttons:
+            b.setFixedSize(w, h)
 
     def fit_height(self):
         """The ribbon is as high as its tab bar plus the tallest page (the sketch page has two rows of constraint
         buttons). A fixed number clipped the buttons on Windows, where the tab bar and fonts are taller."""
         pages = max(self.solid_tab.sizeHint().height(), self.sketch_tab.sizeHint().height())
-        need = self.tabs.tabBar().sizeHint().height() + pages + 10      # + the sideways scrollbar
+        need = pages + 10      # + the sideways scrollbar (the tab selector is not in the ribbon)
         self.tabs.setFixedHeight(max(ribbon_height(ribbon_button_scale()), need))
 
     def update_button_scale(self):
@@ -178,6 +216,7 @@ class Ribbon(QWidget):
         self.tabs.setFixedHeight(ribbon_height(scale))
         for btn in self.findChildren(RibbonButton):
             btn.apply_scale()
+        self.equalize_buttons()
         self.fit_height()
         if hasattr(self, "btn_finish") and self.btn_finish:
             self.btn_finish.setMinimumSize(max(100, int(round(140 * scale))), max(34, int(round(48 * scale))))
@@ -217,6 +256,7 @@ class Ribbon(QWidget):
         self.tabs.setFixedHeight(ribbon_height(scale))
         self.setup_solid_tab()
         self.setup_sketch_tab()
+        self.equalize_buttons()
         self.fit_height()
         self.sync_active_tab()
 
@@ -674,6 +714,8 @@ class Ribbon(QWidget):
         """Shows/hides SKETCH tab when sketch is active."""
         is_sketching = (self.doc.active_sketch is not None)
         self.tabs.setTabVisible(1, is_sketching)
+        self.workspace_bar.setTabVisible(1, is_sketching)
+        self.workspace_bar.resize(self.workspace_bar.sizeHint())      # grows with the SKETCH tab
         if is_sketching:
             self.tabs.setCurrentIndex(1)
         else:

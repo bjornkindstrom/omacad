@@ -22,3 +22,17 @@ def test_icon_only_and_tooltip_then_labels():
     r.rebuild_ribbon()
     assert r.solid_tab.sizeHint().height() > compact_h
     assert ribbon_mod.RibbonButton("A", "✏️").toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon
+
+
+def test_all_ribbon_buttons_are_the_same_size_with_and_without_names():
+    QApplication.instance() or QApplication([])
+    st = get_settings()
+    r = ribbon_mod.Ribbon(Document())
+    try:
+        for labels in (False, True):
+            st.set("show_button_labels", labels)
+            r.rebuild_ribbon()
+            sizes = {(b.minimumWidth(), b.minimumHeight()) for b in r.findChildren(ribbon_mod.RibbonButton)}
+            assert len(sizes) == 1, (labels, sizes)                    # solid and sketch tab alike
+    finally:
+        st.set("show_button_labels", False)

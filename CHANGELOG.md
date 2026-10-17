@@ -3,6 +3,16 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.7.9.49 - 2026-10-17
+
+### Changed
+- The SOLID / SKETCH selector moved out of the ribbon: it is a small bar in the 3D view directly above the Browser, part of the big box, and the Browser moved down to make room. SKETCH still appears only while a sketch is open. The ribbon is one row lower (just the buttons).
+
+## 0.7.9.48 - 2026-10-17
+
+### Changed
+- All ribbon buttons are the same size, in both tabs, with and without names (the widest plain button sets the width), instead of each button being as wide as its own text. The small margins from 0.7.9.47 are kept.
+
 ## 0.7.9.47 - 2026-10-17
 
 ### Changed
