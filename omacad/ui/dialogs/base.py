@@ -3,7 +3,7 @@
 from typing import Optional
 from PySide6.QtCore import Qt, QEventLoop
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton
+    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QDoubleSpinBox, QSpinBox
 )
 from omacad.ui.theme import style
 
@@ -94,6 +94,25 @@ class BaseFeatureDialog(QDialog):
         """Docks the dialog in the right-hand side panel."""
         if SIDE_HOST is not None:
             SIDE_HOST.dock(self)
+
+    def primary_field(self):
+        """The number field that typing in the 3D view goes to: the distance/size field, else the first
+        visible, editable number field."""
+        named = [getattr(self, n, None) for n in ("spn_dist", "spn_size")]
+        for field in [f for f in named if f is not None] + self.findChildren(QDoubleSpinBox) + self.findChildren(QSpinBox):
+            if field.isVisibleTo(self) and field.isEnabled() and not field.isReadOnly():
+                return field
+        return None
+
+    def focus_primary(self) -> bool:
+        """Put the cursor in the primary field with its text selected, so the first digit replaces it."""
+        field = self.primary_field()
+        if field is None:
+            return False
+        field.setFocus(Qt.FocusReason.OtherFocusReason)
+        field.lineEdit().setFocus(Qt.FocusReason.OtherFocusReason)
+        field.lineEdit().selectAll()
+        return True
 
     def add_buttons(self):
         btn_layout = QHBoxLayout()

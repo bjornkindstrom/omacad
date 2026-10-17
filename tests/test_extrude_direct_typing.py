@@ -40,15 +40,15 @@ def test_extrude_dialog_focus_and_direct_typing():
     dlg = ExtrudeDialog(doc, view, embedded=True)
     dlg.place(view.size())
     dlg.show()
-    dlg.focus_distance()
+    dlg.focus_primary()
 
     line_edit = dlg.spn_dist.lineEdit()
     assert line_edit is not None
     assert line_edit.hasSelectedText()
 
-    # User picks a profile in the 3D viewport -> dlg.select_profile + focus_distance
+    # User picks a profile in the 3D viewport -> dlg.select_profile + focus_primary
     dlg.select_profile((sk.sketch_id, 0))
-    dlg.focus_distance()
+    dlg.focus_primary()
     assert line_edit.hasSelectedText()
 
     # Direct typing via viewport key event forwards to spn_dist

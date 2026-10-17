@@ -592,7 +592,7 @@ class ToolPromptsMixin:
             if self.doc.selected_profile:
                 dlg.select_profile(self.doc.selected_profile)
             refresh_preview()
-            dlg.focus_distance()
+            dlg.focus_primary()
 
         def on_pick_face():
             self.viewport.begin_plane_pick("extrude_target")
@@ -614,7 +614,7 @@ class ToolPromptsMixin:
                     dlg.set_distance(dist)
                     self.status_label.setText(f"Extrude distance to the face: {dist:.3f} mm.")
             dlg.activateWindow()
-            dlg.focus_distance()
+            dlg.focus_primary()
 
         def on_finished(result):
             self.viewport.profile_picked.disconnect(on_pick)
@@ -649,8 +649,8 @@ class ToolPromptsMixin:
         dlg.finished.connect(on_finished)
         dlg.show()
         refresh_preview()
-        dlg.focus_distance()
-        QTimer.singleShot(0, dlg.focus_distance)
+        dlg.focus_primary()
+        QTimer.singleShot(0, dlg.focus_primary)
 
     def prompt_revolve(self):
         """Revolve: profile (click it in the view), axis, angle, direction and operation, with live preview."""

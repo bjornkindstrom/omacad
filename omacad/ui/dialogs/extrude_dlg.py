@@ -92,7 +92,7 @@ class ExtrudeDialog(BaseFeatureDialog):
             self.cmb_profile.setCurrentIndex(self.profile_keys.index(doc.selected_profile))
         elif len(self.profile_keys) > 1:
             self.cmb_profile.setCurrentIndex(-1)   # nothing is picked for you when there is a choice
-        QTimer.singleShot(0, self.focus_distance)
+        QTimer.singleShot(0, self.focus_primary)
         for sig in (self.cmb_profile.currentIndexChanged, self.cmb_dir.currentIndexChanged,
                     self.cmb_op.currentIndexChanged, self.spn_dist.valueChanged, self.spn_dist2.valueChanged,
                     self.spn_offset.valueChanged):
@@ -110,21 +110,11 @@ class ExtrudeDialog(BaseFeatureDialog):
         self.cmb_profile.setEnabled(bool(self.profile_keys))
         self.cmb_profile.blockSignals(False)
 
-    def focus_distance(self):
-        """Distance field active with its text selected: just type, e.g. -10, and press Enter."""
-        self.spn_dist.setFocus(Qt.FocusReason.OtherFocusReason)
-        line_edit = self.spn_dist.lineEdit()
-        if line_edit is not None:
-            line_edit.setFocus(Qt.FocusReason.OtherFocusReason)
-            line_edit.selectAll()
-        else:
-            self.spn_dist.selectAll()
-
     def set_distance(self, value: float):
         """Used by 'To face': one-sided extrusion by the given (signed) distance."""
         self.cmb_dir.setCurrentIndex(0)
         self.spn_dist.setValue(round(value, 4))
-        self.focus_distance()
+        self.focus_primary()
 
     def select_profile(self, key):
         """Selects a (sketch_id, profile_idx) in the combo (e.g. picked in the viewport)."""

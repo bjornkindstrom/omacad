@@ -54,10 +54,6 @@ class OffsetPlaneDialog(BaseFeatureDialog):
         self.main_layout.addLayout(form)
         self.add_buttons()
 
-    def focus_distance(self):
-        self.spn_dist.setFocus()
-        self.spn_dist.selectAll()
-
     def get_distance(self) -> float:
         return self.spn_dist.value()
 
