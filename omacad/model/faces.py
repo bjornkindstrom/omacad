@@ -840,9 +840,10 @@ def _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, plan
         # exactly on the circle)
         # (only the direction matters: step from the middle of the segment into the flat triangle and see
         # whether that moves away from the axis; the triangle's centroid can lie on the wrong side of a big face)
-        mid = (v[e0] + v[e1]) / 2.0
-        radial = (mid - center) - ((mid - center) @ n_plane) * n_plane
-        s1 = 1.0 if float((third_pl - mid) @ radial) > 0 else -1.0
+        # every segment votes: a hair-thin flat triangle along the seam can point either way
+        mids = (v[[sg[0] for sg in segs]] + v[[sg[1] for sg in segs]]) / 2.0
+        radial = (mids - center) - np.outer((mids - center) @ n_plane, n_plane)
+        s1 = 1.0 if float(np.einsum("ij,ij->i", np.array([sg[4] for sg in segs]) - mids, radial).sum()) > 0 else -1.0
         s2 = 1.0 if float((third_cu - center) @ n_plane) > 0 else -1.0
         convex = float(n_plane @ (third_cu - m)) < 0
         if closed:
@@ -871,6 +872,82 @@ def _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, plan
         if sweep < np.radians(8.0) or sweep > 2 * np.pi - 0.2:
             continue
         out.append(CircularEdge(center, n_plane.copy(), R, s1, s2, convex, int(round(len(segs) * 2 * np.pi / sweep)), a0, sweep))
+    return _join_arcs(out, v)
+
+
+def _join_arcs(edges: list, v: np.ndarray) -> list:
+    """Booleans (emboss, patterns, shells) leave zero-area triangles along a seam; they chop the circle where a flat
+    face meets a wall into short arcs with gaps that cannot be picked. Arcs of one circle are joined across a gap when
+    the mesh has points on the circle all through it (no wider apart than a facet), so a real notch stays a gap."""
+    def near(a, b):   # short arcs fit their circle loosely: same plane and side, centre and radius roughly alike
+        r = max(a.radius, b.radius)
+        return (float(a.axis @ b.axis) > 0.999 and abs(float(a.axis @ (a.center - b.center))) < 1e-4 * max(1.0, r)
+                and np.linalg.norm(a.center - b.center) < 0.1 * r and abs(a.radius - b.radius) < 0.1 * r
+                and (a.s1, a.s2, a.convex) == (b.s1, b.s2, b.convex))
+
+    groups: list = []
+    for e in edges:
+        if e.is_arc:
+            g = next((g for g in groups if near(g[0], e)), None)
+            g.append(e) if g is not None else groups.append([e])
+    out = [e for e in edges if not e.is_arc]
+    for g in groups:
+        joined = _join_arc_group(g, v) if len(g) > 1 else None
+        out.extend(g if joined is None else joined)
+    whole = [e for e in out if not e.is_arc and all(e is not o for o in edges)]   # circles made here
+
+    def covered(e):   # a short arc with a poor fit of its own, lying on a circle joined here
+        for c in whole:
+            p = e.polyline() - c.center
+            if float(c.axis @ e.axis) > 0.999 and np.abs(p @ c.axis).max() < 1e-4 * max(1.0, c.radius) and np.abs(
+                    np.linalg.norm(p - np.outer(p @ c.axis, c.axis), axis=1) - c.radius).max() < 2e-3 * max(1.0, c.radius):
+                return True
+        return False
+    return [e for e in out if not (e.is_arc and covered(e))]
+
+
+def _join_arc_group(g: list, v: np.ndarray):
+    """The arcs of one circle joined where the mesh bridges the gaps, or None when it fits no circle."""
+    o = g[0]
+    u, w = o._basis()
+    R = float(np.mean([e.radius for e in g]))
+    c = np.mean([e.center for e in g], axis=0)
+    d = v - c
+    d = d[np.abs(d @ o.axis) < 1e-4 * max(1.0, R)]
+    xy = np.stack([d @ u, d @ w], axis=1)
+    fine = 2e-3 * max(1.0, R)
+    band = max(1.5 * max(abs(e.radius - R) + np.linalg.norm(e.center - c) for e in g), 4 * fine)
+    while True:   # fit the circle to the mesh points on it, narrowing the band down to `fine`
+        pts = xy[np.abs(np.hypot(xy[:, 0], xy[:, 1]) - R) < band]
+        if len(pts) < 3:
+            return None
+        sol, *_ = np.linalg.lstsq(np.c_[2 * pts, np.ones(len(pts))], (pts ** 2).sum(axis=1), rcond=None)
+        xy = xy - sol[:2]
+        c = c + sol[0] * u + sol[1] * w
+        R = float(np.sqrt(max(sol[2] + sol[0] ** 2 + sol[1] ** 2, 0.0)))
+        if band <= fine:
+            break
+        band = max(band / 4, fine)
+    band = fine
+    on = np.abs(np.hypot(xy[:, 0], xy[:, 1]) - R) < band
+    if on.sum() < 3:
+        return None
+    ang = np.unique(np.mod(np.arctan2(xy[on, 1], xy[on, 0]), 2 * np.pi))
+    gaps = np.diff(np.r_[ang, ang[0] + 2 * np.pi])
+    step = float(np.percentile(gaps, 90))   # one facet of the wall (the arcs' own facet counts are rough)
+    wide = np.flatnonzero(gaps > 1.5 * step)
+    nseg = int(round(2 * np.pi / step))
+    if len(wide) == 0:
+        return [CircularEdge(c, o.axis.copy(), R, o.s1, o.s2, o.convex, nseg)]
+    out = []
+    for i, k in enumerate(wide):   # each run of close points between two wide gaps that holds arcs becomes one arc
+        start = float(ang[(k + 1) % len(ang)])
+        sweep = float(np.mod(ang[wide[(i + 1) % len(wide)]] - start, 2 * np.pi))
+        inside = [e for e in g if np.mod(e.a0 + e.sweep / 2 - start, 2 * np.pi) <= sweep + 1e-9]
+        if len(inside) == 1:
+            out.append(inside[0])
+        elif inside:
+            out.append(CircularEdge(c, o.axis.copy(), R, o.s1, o.s2, o.convex, nseg, start, sweep))
     return out
 
 

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.23 - 2026-10-18
+
+### Fixed
+- Fillet/Chamfer: the edge where a flat face meets a wall is a whole circle again on bodies with patterns, embosses and shells. Leftover zero-area triangles from the booleans had chopped it into short arcs with gaps that could not be picked.
+
 ## 0.9.9.22 - 2026-10-18
 
 ### Fixed
