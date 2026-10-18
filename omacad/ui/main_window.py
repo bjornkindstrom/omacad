@@ -795,19 +795,17 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         if body is not None:
             self.status_label.setText(f"Joined {len(body_ids)} bodies into {body.name}.")
 
-    def show_guide(self, guide_id: str) -> None:
-        """Opens a guide (omacad/guides/<id>) in a small window that stays beside the work."""
-        from omacad.guide import find_guide
-        from omacad.ui.guide_dialog import GuideWindow
-        guide = find_guide(guide_id)
-        if guide is None:
-            self.status_label.setText(f"Guide '{guide_id}' was not found.")
-            return
-        old = getattr(self, "_guide_window", None)
-        if old is not None:
-            old.close()
-        self._guide_window = GuideWindow(guide, self)
-        self._guide_window.show()
+    def show_help(self):
+        """Help & Commands (F1): every function with help text and a keyword search (see ui/help_dialog.py)."""
+        from omacad.ui.help_dialog import HelpWindow
+        win = getattr(self, "_help_window", None)
+        if win is None:
+            win = self._help_window = HelpWindow(self)
+        win.show()
+        win.raise_()
+        win.activateWindow()
+        win.edt_search.setFocus()
+        win.edt_search.selectAll()
 
     def on_changelog(self):
         from omacad.ui.changelog_dialog import ChangelogDialog

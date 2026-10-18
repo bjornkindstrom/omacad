@@ -77,7 +77,6 @@ class OffsetFaceDialog(FacePickMixin, BaseFeatureDialog):
             btn = QPushButton("Clear selection")
             btn.clicked.connect(self.clear)
             self.main_layout.addWidget(btn)
-        self.guide_box = None
         self.add_buttons()
         self.spn_dist.valueChanged.connect(lambda *_: self.changed.emit())
         QTimer.singleShot(0, lambda: (self.spn_dist.setFocus(), self.spn_dist.selectAll()))

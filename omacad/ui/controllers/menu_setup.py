@@ -98,6 +98,7 @@ class MenuSetupMixin:
                 act.triggered.connect(lambda _=False, cid=cid: self.ribbon._emit_command(cid))
                 menu.addAction(act)
                 self.command_actions[cid] = act
+            menu.setToolTipsVisible(True)       # hovering an entry shows what it does
 
         # View Menu
         menu_view = menubar.addMenu("View")
@@ -133,10 +134,11 @@ class MenuSetupMixin:
         act_request.setToolTip("Ask for a change or a new feature: your text, a screenshot, the model and the log are sent to the owner on GitHub")
         act_request.triggered.connect(self.on_request_change)
         menu_help.addAction(act_request)
-        from omacad.guide import list_guides
-        menu_guides = menu_help.addMenu("Guides")
-        for g in list_guides():
-            menu_guides.addAction(g.title, lambda _=False, gid=g.guide_id: self.show_guide(gid))
+        act_help = QAction(theme.emoji_icon("❓", 24), "Help && Commands…", menu_help)
+        act_help.setShortcut(QKeySequence("F1"))
+        act_help.setToolTip("Every function, grouped as in the ribbon, with help text and a search: Enter runs it")
+        act_help.triggered.connect(self.show_help)
+        menu_help.insertAction(menu_help.actions()[0] if menu_help.actions() else None, act_help)
         menu_help.addAction("Changelog…", self.on_changelog)
         menu_help.addAction("About Omacad", self.on_about)
 

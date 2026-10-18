@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.56 - 2026-10-18
+
+### Changed
+- Help > Help & Commands (F1) replaces the picture guides: every function grouped as in the ribbon (SOLID, SKETCH, file, view, timeline and browser, working tips) with help text, its key and where to find it. Type keywords to search (hole, round, parameter, print …); the best match is selected and Enter runs it. The Create, Modify and Inspect menus show what an entry does when you hover it.
+
 ## 0.9.9.55 - 2026-10-18
 
 ### Changed
