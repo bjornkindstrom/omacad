@@ -25,9 +25,18 @@ class ShellFeature(Feature):
         super().__init__(feature_id, "shell", name)
         self.target_body_id = target_body_id
         self.thickness = float(thickness)
-        self.open_faces = list(open_faces or [])
+        self.open_faces = open_faces
         self.direction = direction if direction in ("inside", "outside", "both") else "inside"
         self.thickness2 = float(thickness2)
+
+    @property
+    def open_faces(self) -> List[Dict[str, Any]]:
+        return self._open_faces
+
+    @open_faces.setter
+    def open_faces(self, faces) -> None:
+        # only the plain data: the dialog's picks carry the live "_face" object, which can't be saved
+        self._open_faces = [{k: v for k, v in f.items() if not k.startswith("_")} for f in faces or []]
 
     def wall_sizes(self):
         """(inward, outward) wall thickness in mm."""

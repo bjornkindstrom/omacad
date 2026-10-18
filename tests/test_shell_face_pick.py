@@ -37,3 +37,17 @@ def test_shell_pick_hits_hidden_target_body_only(monkeypatch):
     monkeypatch.setattr("omacad.ui.viewport.ray_from_screen",
                         lambda *args: (np.array([45.0, 5.0, 50.0]), np.array([0.0, 0.0, -1.0])))
     assert Viewport3D._pick_plane_target(vp, 0, 0) is None
+
+
+def test_shell_with_picked_open_face_can_be_saved():
+    """The dialog's picks carry the live face ("_face"); it leaked into the step, so F8/F9 and Save crashed in json.dumps."""
+    import json
+    from omacad.io.exporter import Exporter
+    doc = _two_boxes()
+    a = next(iter(doc.bodies.values()))
+    top = next(f for f in a.faces if f.normal[2] > 0.9)
+    pick = {"normal": [float(x) for x in top.normal], "origin": [float(x) for x in top.origin], "body_id": a.body_id, "_face": top}
+    doc.add_shell(a.body_id, 1.0, open_faces=[pick])
+    idx = next(i for i, f in enumerate(doc.timeline.features) if f.feature_type == "shell")
+    doc.edit_feature(idx, open_faces=[dict(pick)])      # editing from the timeline sets the attribute directly
+    json.dumps(Exporter.document_to_dict(doc))
