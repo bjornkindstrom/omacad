@@ -102,6 +102,9 @@ class CadKernel:
         t = (edge.p1 - edge.p0) / np.linalg.norm(edge.p1 - edge.p0)
         origin = edge.p0.copy()
         ext_start, ext_end = (extend if isinstance(extend, (tuple, list)) else (extend, extend))   # at p0, at p1
+        cos_faces = float(np.clip(edge.d1 @ edge.d2, -1.0, 1.0))
+        if not 1e-6 < math.acos(cos_faces) < math.pi - 1e-6:
+            return m3d.Manifold()         # flat (no corner) or folded flat on itself: nothing to round, no 1/tan(0)
         e1 = edge.d1
         e2 = edge.d2 - (edge.d2 @ e1) * e1
         e2 = e2 / np.linalg.norm(e2)

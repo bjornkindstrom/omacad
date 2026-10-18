@@ -230,3 +230,14 @@ def test_new_threads_default_to_zero_clearance():
     import inspect
     for fn in (Document.add_thread, ThreadFeature.__init__, CadKernel.create_thread):
         assert inspect.signature(fn).parameters["clearance"].default == 0.0
+
+
+def test_thread_panel_length_is_at_least_one_turn():
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    from omacad.ui.dialogs.thread_dlg import ThreadDialog
+    QApplication.instance() or QApplication([])
+    dlg = ThreadDialog(Document())
+    dlg.spn_pitch.setValue(3.0)
+    dlg.spn_length.setValue(1.0)
+    assert dlg.spn_length.value() == pytest.approx(3.0)       # shown, not stretched silently by the kernel

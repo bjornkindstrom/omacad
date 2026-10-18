@@ -92,6 +92,7 @@ class ThreadDialog(BaseFeatureDialog):
         self.spn_length.setValue(25.0)
         self.spn_length.setSuffix(" mm")
         self.spn_length.valueChanged.connect(lambda _: self.changed.emit())
+        self.spn_length.setToolTip("At least one turn (the pitch) long.")
         form.addRow("Length (Längd):", self.spn_length)
 
         # Target Body / Application Mode
@@ -251,6 +252,7 @@ class ThreadDialog(BaseFeatureDialog):
         # Switch preset combo to Custom if values don't match
         cur_dia = self.spn_dia.value()
         cur_pitch = self.spn_pitch.value()
+        self.spn_length.setMinimum(cur_pitch)      # a thread is at least one turn long (the kernel would stretch it silently)
         matched = False
         for idx in range(1, self.cmb_preset.count()):
             d, p = self.cmb_preset.itemData(idx)

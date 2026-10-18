@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.45 - 2026-10-18
+
+### Fixed
+- Deleting a step now also takes along (and warns about) an Extrude that uses a hole or profile of its sketch, and an Offset Face on its thread. A fillet or chamfer on a flat or folded edge no longer divides by zero. The Thread panel keeps the length at least one turn (the pitch) instead of the model stretching it silently.
+
 ## 0.9.9.44 - 2026-10-18
 
 ### Fixed

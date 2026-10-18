@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Formel kraschade appen** (0.9.9.34): `expr._eval` lät `(-8)^(1/3)` ge ett komplext tal (TypeError) och `(64^64)^64` ett jätteheltal (OverflowError vid `isfinite`); anroparna fångar bara ValueError. Nu ger båda ValueError och varje BinOp-resultat görs till float direkt. Test: `test_expr_errors.py`.
+
 - **Kurvkvalitet byggde inte om** (0.9.9.33): stegcachens fingeravtryck saknade `quality.circle_segments()`, så `rebuild_for_curve_quality` återställde gamla kroppar (en cylinder byggd med 48 segment hade kvar 96 hörn efter byte till 192). Nu ingår värdet i fingeravtrycket (även interaktivt läge, så lågupplösta förhandsbyggen aldrig återanvänds), och `apply_dict` tömmer cachen så att nya stegobjekt efter ångra kör igen (`ThreadFeature._effective`, `PatternFeature.copies` ...). Test: `test_timeline_cache.py`.
 
 - **Nytt steg raderade senare steg** (0.9.9.32): `Timeline.add_feature` klippte bort allt efter markören när man lade till ett steg i en bakåtrullad historik. Nu infogas steget vid markören (som Fusion), markören står efter det, senare steg ligger kvar bakom markören, och cacheposterna från den positionen töms. Test: `test_timeline_cache.py`.

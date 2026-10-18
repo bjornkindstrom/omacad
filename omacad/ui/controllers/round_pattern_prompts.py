@@ -386,20 +386,6 @@ class RoundPatternPromptsMixin:
         self.viewport.pick_step_mode = True
         self.viewport.step_point_clicked.connect(on_step_clicked)
 
-        def on_body_clicked(bid: str):
-            # If user clicked a body in 3D, check all features associated with that body or toggle body's features
-            b = self.doc.bodies.get(bid)
-            if not b:
-                return
-            # Find features in timeline that created or modified this body
-            body_features = [f.feature_id for f in self.doc.timeline.features if getattr(f, "target_body_id", None) == bid or getattr(f, "body_id", None) == bid or f.feature_id == bid or f.name == b.name]
-            for i in range(dlg.lst.count()):
-                it = dlg.lst.item(i)
-                if it.data(Qt.ItemDataRole.UserRole) in body_features or it.text() == b.name:
-                    cur = it.checkState()
-                    it.setCheckState(Qt.CheckState.Unchecked if cur == Qt.CheckState.Checked else Qt.CheckState.Checked)
-
-        self.viewport.body_clicked.connect(on_body_clicked)
         self.status_label.setText("Circular Pattern: choose the rib and its fillet in the timeline or list; set the axis and total quantity."
                                   if kind == "circular" else
                                   "Pattern / Mirror: click features in the timeline or 3D view, or tick steps in the list.")
@@ -411,10 +397,6 @@ class RoundPatternPromptsMixin:
             self.viewport.pick_step_mode = False
             try:
                 self.viewport.step_point_clicked.disconnect(on_step_clicked)
-            except Exception:
-                pass
-            try:
-                self.viewport.body_clicked.disconnect(on_body_clicked)
             except Exception:
                 pass
             self.viewport.set_preview(None)

@@ -807,12 +807,15 @@ class Document:
         body_ids = {f"body_{feat.feature_id}"}
         for j in range(index + 1, len(feats)):
             other = feats[j]
+            sketch_refs = [r[0] for r in list(getattr(other, "extra_refs", None) or []) + list(getattr(other, "holes", None) or [])]
             uses_sketch = (isinstance(feat, SketchFeature)
-                           and getattr(other, "sketch_id", None) == feat.sketch.sketch_id)
+                           and feat.sketch.sketch_id in [getattr(other, "sketch_id", None)] + sketch_refs)
             uses_body = (
                 getattr(other, "target_body_id", None) in body_ids
                 or getattr(other, "tool_body_id", None) in body_ids
                 or (other.feature_type == "pattern" and feat.feature_id in (getattr(other, "source_ids", None) or []))
+                or any(isinstance(f, dict) and f.get("thread_id") == feat.feature_id   # Offset Face on this thread
+                       for f in getattr(other, "faces", None) or [])
             )
             if uses_sketch or uses_body:
                 out.append(j)
