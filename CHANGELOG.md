@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.18 - 2026-10-18
+
+### Changed
+- Offset Plane: a plane offset from an origin plane now starts at the centre of the visible model (projected onto the base plane), so its marker sits around the part instead of at world origin.
+
 ## 0.9.9.17 - 2026-10-18
 
 ### Fixed
