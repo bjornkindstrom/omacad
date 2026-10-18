@@ -264,12 +264,16 @@ class SketchToolsMixin:
 
     def _dyn_suggest(self):
         """List the parameters starting with the name being typed in the focused field (as in the panels' fields)."""
-        from omacad.ui.expr_spin import ParameterList, matching_parameters, name_before
+        from omacad.ui.expr_spin import ParameterList, formula_hint, matching_parameters, name_before
         from PySide6.QtCore import QPoint
         i = self.dyn.focus
         token = name_before(self.dyn.texts[i])[0] if self.dyn.active and i >= 0 else None
         names, values = matching_parameters(token)
-        if not names:
+        if names:
+            hint = formula_hint(names[0])
+        elif token in values:
+            hint = f"{token} = {values[token]:g} · {formula_hint(token)}"
+        else:
             if self._dyn_list is not None:
                 self._dyn_list.hide()
             return
@@ -278,7 +282,7 @@ class SketchToolsMixin:
             self._dyn_list.itemClicked.connect(lambda _item: self._dyn_take_suggestion())
         r = self._dyn_focus_rect
         x, y, w = (int(r.left()), int(r.bottom()) + 4, int(r.width())) if r is not None else (20, 20, 170)
-        self._dyn_list.show_at(QPoint(x, y), w, [(n, values[n]) for n in names])
+        self._dyn_list.show_at(QPoint(x, y), w, [(n, values[n]) for n in names], hint)
 
     def _dyn_take_suggestion(self):
         from omacad.ui.expr_spin import name_before
@@ -305,7 +309,7 @@ class SketchToolsMixin:
         if not self._dyn_can_start():
             return False
         text = event.text()
-        if self._dyn_list is not None and self._dyn_list.isVisible():   # the parameter list under the field
+        if self._dyn_list is not None and self._dyn_list.has_choices():   # the parameter list under the field
             if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
                 self._dyn_list.step(-1 if key == Qt.Key.Key_Up else 1)
                 return True

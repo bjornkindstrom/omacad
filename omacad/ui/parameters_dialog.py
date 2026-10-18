@@ -23,8 +23,9 @@ class ParametersDialog(QDialog):
         self.resize(620, 420)
         lay = QVBoxLayout(self)
 
-        hint = QLabel("Name a value, then type its name (or a formula such as width/2 + 3) in any number field. "
-                      "Change it here and the drawing and all steps follow.")
+        hint = QLabel("Name a value, then type its name in any number field, alone or in a formula: radius+2, "
+                      "width/2 + 3, 2*(depth-1), test1+5*test3. Typing a letter lists the names; Up/Down and Enter pick one. "
+                      "Change a value here and the drawing and all steps follow.")
         hint.setWordWrap(True)
         lay.addWidget(hint)
 

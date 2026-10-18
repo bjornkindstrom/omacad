@@ -26,6 +26,11 @@ def matching_parameters(token):
     return names, values
 
 
+def formula_hint(name: str) -> str:
+    """The help line under the list: a parameter can be part of a formula, shown with the user's own name."""
+    return f"Formulas too: {name}+2 · {name}/2 · 2*{name}"
+
+
 def name_before(text: str):
     """The parameter name being typed at the end of `text` (None if it does not end in one) and where it starts."""
     m = _NAME_BEFORE_CURSOR.search(text)
@@ -50,28 +55,45 @@ class ParameterList(QListWidget):
         """)
         self.hide()
 
-    def show_names(self, field, names_values):
+    def show_names(self, field, names_values, hint: str = ""):
         edit = field.lineEdit()
-        self.show_at(edit.mapTo(self.parentWidget(), QPoint(0, edit.height() + 2)), edit.width(), names_values)
+        self.show_at(edit.mapTo(self.parentWidget(), QPoint(0, edit.height() + 2)), edit.width(), names_values, hint)
 
-    def show_at(self, top_left: QPoint, width: int, names_values):
-        """List `names_values` ((name, value) pairs) with its top-left corner at `top_left` in the parent."""
+    def show_at(self, top_left: QPoint, width: int, names_values, hint: str = ""):
+        """List `names_values` ((name, value) pairs) with its top-left corner at `top_left` in the parent, and a grey
+        help line under them (it cannot be chosen; with no names the list is only that line)."""
+        from PySide6.QtGui import QColor, QFont
+        from PySide6.QtWidgets import QListWidgetItem
         self.clear()
         for name, value in names_values:
             self.addItem(f"{name}   = {value:g}")
             self.item(self.count() - 1).setData(Qt.ItemDataRole.UserRole, name)
-        self.setCurrentRow(0)
-        rows = min(self.count(), self.MAX_ROWS)
-        self.setGeometry(top_left.x(), top_left.y(), max(170, width), rows * (self.sizeHintForRow(0) or 22) + 8)
+        self.choices = len(names_values)
+        if hint:
+            item = QListWidgetItem(hint)
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            item.setForeground(QColor(154, 160, 166))
+            font = QFont(self.font())
+            font.setItalic(True)
+            item.setFont(font)
+            self.addItem(item)
+        self.setCurrentRow(0 if self.choices else -1)
+        rows = min(self.count(), self.MAX_ROWS + (1 if hint else 0))
+        widest = max(self.fontMetrics().horizontalAdvance(self.item(i).text()) for i in range(self.count())) + 24
+        self.setGeometry(top_left.x(), top_left.y(), max(170, width, widest), rows * (self.sizeHintForRow(0) or 22) + 8)
         self.show()
         self.raise_()
 
+    def has_choices(self) -> bool:
+        """Names to pick (not only the help line): then Up/Down/Enter/Tab belong to the list."""
+        return self.isVisible() and getattr(self, "choices", 0) > 0
+
     def step(self, delta: int):
-        self.setCurrentRow(max(0, min(self.count() - 1, self.currentRow() + delta)))
+        self.setCurrentRow(max(0, min(self.choices - 1, self.currentRow() + delta)))
 
     def chosen(self):
         item = self.currentItem()
-        return item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        return item.data(Qt.ItemDataRole.UserRole) if item is not None and self.currentRow() < self.choices else None
 
 
 class ExprDoubleSpinBox(QDoubleSpinBox):
@@ -94,16 +116,21 @@ class ExprDoubleSpinBox(QDoubleSpinBox):
         """Show the parameters starting with the name being typed (case-insensitive), or hide the list."""
         token, _start, _cur = self._name_at_cursor()
         names, values = matching_parameters(token)
-        if not names:
+        if names:
+            hint, pairs = formula_hint(names[0]), [(n, values[n]) for n in names]
+        elif token in values:           # a whole name typed: its value, and that it can be part of a formula
+            hint, pairs = f"{token} = {values[token]:g} · {formula_hint(token)}", []
+        else:
             self.hide_suggestions()
             return
         if self._list is None or self._list.parentWidget() is not self.window():
             self._list = ParameterList(self.window())
             self._list.itemClicked.connect(lambda _item: self._take_suggestion())
-        self._list.show_names(self, [(n, values[n]) for n in names])
+        self._list.show_names(self, pairs, hint)
 
     def suggestions_visible(self) -> bool:
-        return self._list is not None and self._list.isVisible()
+        """Names are listed to pick from (the help line alone does not take Enter or the arrows)."""
+        return self._list is not None and self._list.has_choices()
 
     def hide_suggestions(self):
         if self._list is not None:
@@ -134,6 +161,9 @@ class ExprDoubleSpinBox(QDoubleSpinBox):
             if key == Qt.Key.Key_Escape:
                 self.hide_suggestions()
                 return
+        elif self._list is not None and self._list.isVisible() and event.key() == Qt.Key.Key_Escape:
+            self.hide_suggestions()         # only the help line: Esc closes it first
+            return
         super().keyPressEvent(event)
 
     def focusNextPrevChild(self, nxt):
@@ -155,7 +185,7 @@ class ExprDoubleSpinBox(QDoubleSpinBox):
 
     def focusInEvent(self, event):
         names = sorted(expr.get_variables())
-        base = "Type a value, a formula (10-1, 2x(3+5)) or a parameter name."
+        base = "Type a value, a parameter name, or a formula with them: radius+2, width/2, 2*(depth-1)."
         self.setToolTip(base + (f"\nParameters: {', '.join(names)}" if names else "\nNo parameters defined yet (Modify > Change Parameters)."))
         super().focusInEvent(event)
 

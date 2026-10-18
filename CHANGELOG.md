@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.53 - 2026-10-18
+
+### Added
+- Help for formulas where you type: the parameter list under a field ends with a grey line using your own names, such as "Formulas too: radius+2 · radius/2 · 2*radius", and once a whole name is typed a line shows its value and the same examples (Enter still works as usual). The field tooltip and Change Parameters explain formulas with examples such as radius+2 and test1+5*test3.
+
 ## 0.9.9.52 - 2026-10-18
 
 ### Added

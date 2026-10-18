@@ -45,7 +45,8 @@ def test_field_lists_parameters_and_enter_picks_one(win):
     f.setFocus()
     f.lineEdit().selectAll()
     _type(f, "d")
-    assert f.suggestions_visible() and f._list.count() == 2               # depth, diameter
+    assert f.suggestions_visible() and f._list.choices == 2              # depth, diameter (+ the help line)
+    assert f._list.item(2).text() == "Formulas too: depth+2 · depth/2 · 2*depth"
     QTest.keyClick(f, Qt.Key.Key_Down)
     QTest.keyClick(f, Qt.Key.Key_Return)
     assert not f.suggestions_visible()
@@ -104,10 +105,35 @@ def test_list_completes_a_name_inside_a_formula(win):
     f.setFocus()
     f.lineEdit().selectAll()
     _type(f, "test1+5*te")
-    assert f.suggestions_visible() and f._list.count() == 2               # test1, test3: only the name being typed
+    assert f.suggestions_visible() and f._list.choices == 2              # test1, test3: only the name being typed
     QTest.keyClick(f, Qt.Key.Key_Down)
     QTest.keyClick(f, Qt.Key.Key_Return)
     assert f.lineEdit().text().startswith("test1+5*test3")
     f.interpretText()
     assert f.value() == pytest.approx(22.0) and f.expression() == "test1+5*test3"
     dlg.reject()
+
+
+def test_a_whole_name_shows_how_to_make_a_formula(win):
+    win.prompt_box()
+    dlg = win.inspector.current_tool_dlg
+    f = dlg.spn_length
+    win.activateWindow()
+    f.setFocus()
+    f.lineEdit().selectAll()
+    _type(f, "depth")
+    assert f._list.isVisible() and not f.suggestions_visible()            # only the help line: Enter is free
+    assert f._list.item(0).text() == "depth = 12 · Formulas too: depth+2 · depth/2 · 2*depth"
+    _type(f, "+2")
+    f.interpretText()
+    assert f.value() == pytest.approx(14.0) and f.expression() == "depth+2"
+    dlg.reject()
+
+
+def test_parameters_dialog_explains_formulas():
+    from omacad.model.document import Document
+    from omacad.ui.parameters_dialog import ParametersDialog
+    from PySide6.QtWidgets import QLabel
+    QApplication.instance() or QApplication([])
+    dlg = ParametersDialog(Document())
+    assert any("radius+2" in lbl.text() for lbl in dlg.findChildren(QLabel))
