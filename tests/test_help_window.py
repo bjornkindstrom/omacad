@@ -72,3 +72,11 @@ def test_best_match_is_selected(win):
     hw = win._help_window
     hw.edt_search.setText("round")
     assert hw.selected().title == "Fillet"            # its search words say round; Emboss only mentions it
+
+
+def test_close_button_closes_the_help(win):
+    win.show_help()
+    hw = win._help_window
+    assert hw.isVisible()
+    hw.btn_close.click()
+    assert not hw.isVisible()
