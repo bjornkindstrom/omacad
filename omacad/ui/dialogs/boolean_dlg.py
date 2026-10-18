@@ -32,7 +32,7 @@ class CombineDialog(BaseFeatureDialog):
             self.cmb_target.setCurrentIndex(self.body_ids.index(preselected_target_id))
         elif doc.selected_body_ids and doc.selected_body_ids[0] in self.body_ids:
             self.cmb_target.setCurrentIndex(self.body_ids.index(doc.selected_body_ids[0]))
-        self.cmb_target.currentIndexChanged.connect(lambda _: self.changed.emit())
+        self.cmb_target.currentIndexChanged.connect(self._target_chosen)
         form.addRow("Target Body:", self.cmb_target)
 
         self.cmb_tool = QComboBox()
@@ -58,24 +58,44 @@ class CombineDialog(BaseFeatureDialog):
         self.chk_keep_tool.toggled.connect(lambda _: self.changed.emit())
         form.addRow("", self.chk_keep_tool)
 
+        self.lbl_pick = QLabel()
+        self.lbl_pick.setWordWrap(True)
+        form.addRow(self.lbl_pick)
+
         self.main_layout.addLayout(form)
         self.add_buttons()
 
-        self._active_field = "tool"  # clicking 3D body updates tool unless user focused target
+        # Like Fusion: with no body chosen beforehand, the first body clicked in the view is the target, then the tool.
+        chosen = preselected_target_id in self.body_ids or bool(doc.selected_body_ids and doc.selected_body_ids[0] in self.body_ids)
+        self._active_field = "tool" if chosen else "target"
+        self._update_pick_hint()
+
+    def _target_chosen(self, _index: int):
+        self._active_field = "tool"
+        self._update_pick_hint()
+        self.changed.emit()
+
+    def picking_target(self) -> bool:
+        return self._active_field == "target"
+
+    def _update_pick_hint(self):
+        what = "the target body (the one that changes)" if self._active_field == "target" else "the tool body"
+        self.lbl_pick.setText(f"Click {what} in the view.")
 
     def select_body(self, body_id: str):
+        """A body clicked in the view: the target first (when none was chosen beforehand), then the tool."""
         if body_id not in self.body_ids:
             return
-        # If clicked body is target, set target; otherwise set tool
-        cur_target = self.body_ids[self.cmb_target.currentIndex()] if self.body_ids else None
-        if cur_target == body_id:
-            # User clicked target again or wants to change target
-            pass
-        elif self._active_field == "target":
-            self.cmb_target.setCurrentIndex(self.body_ids.index(body_id))
-            self._active_field = "tool"
-        else:
-            self.cmb_tool.setCurrentIndex(self.body_ids.index(body_id))
+        idx = self.body_ids.index(body_id)
+        if self._active_field == "target":
+            if self.cmb_tool.currentIndex() == idx and len(self.body_ids) > 1:
+                self.cmb_tool.setCurrentIndex(1 if idx == 0 else 0)
+            if self.cmb_target.currentIndex() == idx:
+                self._target_chosen(idx)
+            else:
+                self.cmb_target.setCurrentIndex(idx)       # -> _target_chosen
+        elif idx != self.cmb_target.currentIndex():
+            self.cmb_tool.setCurrentIndex(idx)
 
     def get_values(self):
         t_idx = self.cmb_target.currentIndex()

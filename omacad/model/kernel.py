@@ -443,6 +443,13 @@ class CadKernel:
         return a ^ b
 
     @staticmethod
+    def boolean_op(target: m3d.Manifold, tool: m3d.Manifold, operation: str) -> m3d.Manifold:
+        """Combine: "join", "cut" or "intersect" the tool into the target."""
+        ops = {"join": CadKernel.boolean_union, "cut": CadKernel.boolean_difference,
+               "intersect": CadKernel.boolean_intersection}
+        return ops[operation](target, tool)
+
+    @staticmethod
     def extract_render_mesh(manifold: m3d.Manifold, edge_angle_threshold_deg: float = 20.0) -> RenderMesh:
         """
         Extract triangle buffers and sharp CAD feature edges for OpenGL rendering.

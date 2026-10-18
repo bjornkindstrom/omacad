@@ -972,16 +972,44 @@ class ToolPromptsMixin:
         dlg = CombineDialog(self.doc, self, preselected_target_id=selected_id or None)
         self.dock(dlg)
 
+        vp = self.viewport
+        hidden = {}     # body id -> visibility before the preview hid it
+
+        def restore_visibility():
+            for bid, vis in hidden.items():
+                if bid in self.doc.bodies:
+                    self.doc.bodies[bid].visible = vis
+            hidden.clear()
+
+        def refresh_preview():
+            """Shows the result in place of the target once it is chosen; the tool stays visible so it can be clicked."""
+            from omacad.model.kernel import CadKernel
+            restore_visibility()
+            target_id, tool_id, op, _ = dlg.get_values()
+            if not target_id or not tool_id or dlg.picking_target():
+                vp.set_preview(None)
+                vp.update()
+                return
+            hidden[target_id] = self.doc.bodies[target_id].visible
+            self.doc.bodies[target_id].visible = False
+            vp.set_preview(CadKernel.boolean_op(self.doc.bodies[target_id].manifold,
+                                                self.doc.bodies[tool_id].manifold, op), "new_body")
+            vp.update()
+
         def on_body_clicked(bid: str):
             dlg.select_body(bid)
 
-        self.viewport.body_clicked.connect(on_body_clicked)
+        vp.body_clicked.connect(on_body_clicked)
+        dlg.changed.connect(refresh_preview)
+        refresh_preview()
 
         def on_finished(result):
             try:
-                self.viewport.body_clicked.disconnect(on_body_clicked)
+                vp.body_clicked.disconnect(on_body_clicked)
             except (RuntimeError, TypeError):
                 pass
+            restore_visibility()
+            vp.set_preview(None)
             self.inspector.undock_tool()
             if result:
                 target_id, tool_id, op, keep = dlg.get_values()

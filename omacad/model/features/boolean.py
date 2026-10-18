@@ -42,13 +42,7 @@ class CombineFeature(Feature):
         if not target or not tool:
             return
 
-        if self.operation == "join":
-            target.manifold = CadKernel.boolean_union(target.manifold, tool.manifold)
-        elif self.operation == "cut":
-            target.manifold = CadKernel.boolean_difference(target.manifold, tool.manifold)
-        elif self.operation == "intersect":
-            target.manifold = CadKernel.boolean_intersection(target.manifold, tool.manifold)
-
+        target.manifold = CadKernel.boolean_op(target.manifold, tool.manifold, self.operation)
         target.update_render_mesh()
         # Remove tool body after combine unless keep_tool is True
         if not self.keep_tool:

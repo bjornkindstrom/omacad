@@ -3,6 +3,12 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.14 - 2026-10-18
+
+### Fixed
+- Combine: with no body selected, clicks in the view could only change the tool, so the target stayed the first body and a lid "cut by the can" cut the can instead. Now the first body clicked is the target and the next the tool (like Fusion), with a hint saying which one to click.
+- Combine shows a live preview of the result (new Combine had none, and the preview when editing a Combine silently failed).
+
 ## 0.9.9.13 - 2026-10-18
 
 ### Fixed
