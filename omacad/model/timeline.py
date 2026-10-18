@@ -106,6 +106,10 @@ class Timeline:
             cp = self._state_cache[start_step - 1]
             doc.bodies = {bid: copy.copy(b) for bid, b in cp["bodies"].items()}
             doc.sketches = {sid: copy.deepcopy(s) for sid, s in cp["sketches"].items()}
+            # a timeline sketch must stay the step's own object, as after a full run: edits go into a copy otherwise
+            for f in self.features[:start_step]:
+                if f.feature_type == "sketch" and not f.suppressed and f.sketch.sketch_id in doc.sketches:
+                    doc.sketches[f.sketch.sketch_id] = f.sketch
             doc.step_states = dict(cp["step_states"])
         else:
             doc.bodies.clear()
