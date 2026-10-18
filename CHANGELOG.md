@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.49 - 2026-10-18
+
+### Fixed
+- Typing a parameter name no longer sets off shortcuts: the letters of "depth" used to start Extrude at the e, whether typed in the 3D view with a tool open or in the dimension fields while drawing. Letters typed in the 3D view now go into the open panel's field, like numbers. A list of the parameters starting with what you type opens under the field (also under the dimension fields while drawing): Up/Down step through it, Enter or Tab picks the name without pressing OK, Esc closes it. Values that follow a parameter are marked: blue text in the fields, a blue "ƒx name = value" badge on sketch dimensions, and ƒx on timeline steps with formulas.
+
 ## 0.9.9.48 - 2026-10-18
 
 ### Added

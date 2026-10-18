@@ -69,23 +69,56 @@ class ViewportEventsMixin:
         if self.point_pick:   # other points come within reach (or behind the body) at the new zoom
             self._point_pick_hover(event.position().x(), event.position().y())
         self.update()
+    def _typing_panel(self):
+        """The open tool panel whose main field takes what is typed in the 3D view (outside a sketch), else None."""
+        if self.doc.active_sketch:
+            return None
+        from omacad.ui import dialogs as _dialogs
+        host = _dialogs.SIDE_HOST
+        tool_dlg = getattr(host, "_extrude_dlg", None) or getattr(getattr(host, "inspector", None), "current_tool_dlg", None)
+        if tool_dlg is not None and hasattr(tool_dlg, "primary_field") and tool_dlg.isVisible():
+            return tool_dlg
+        return None
+
+    def _types_into_panel(self, event) -> bool:
+        """A character that belongs in the panel's field: a number, a formula sign, or a letter of a parameter name
+        (X stays see-through while edges are picked)."""
+        txt = event.text()
+        if not txt or len(txt) != 1 or event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier):
+            return False
+        if self.edge_pick_mode and txt in "xX":
+            return False
+        return txt in "0123456789+-/*().,_" or txt.isalpha()
+
+    def _owns_key(self, event) -> bool:
+        """Keys the view handles itself even though a menu shortcut uses the same letter: the sketch tools' keys,
+        every letter while a value is typed into a drawing's dimension fields (a parameter name such as 'depth'
+        must not start Extrude at its 'e'), and letters typed for an open tool panel's field."""
+        no_mods = not event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)
+        txt = event.text()
+        if self.doc.active_sketch:
+            if no_mods and len(txt) == 1 and (txt.isalnum() or txt == "_") and self._dyn_can_start() and self.dyn.active:
+                return True                 # the dimension fields are open: letters may be a parameter name
+            return no_mods and event.key() in SKETCH_KEYS
+        return self._typing_panel() is not None and self._types_into_panel(event)
+
     def keyPressEvent(self, event):
-        # A tool panel is open (Extrude, Fillet, Chamfer, Shell, ...): typing a number in the 3D view goes
-        # straight into its main field, Enter is OK. Backspace stays "undo last edge" while edges are picked.
-        if not self.doc.active_sketch:
-            from omacad.ui import dialogs as _dialogs
-            host = _dialogs.SIDE_HOST
-            tool_dlg = getattr(host, "_extrude_dlg", None) or getattr(getattr(host, "inspector", None), "current_tool_dlg", None)
-            if tool_dlg is not None and hasattr(tool_dlg, "primary_field") and tool_dlg.isVisible():
-                txt = event.text()
-                edit_key = event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete) and not self.edge_pick_mode
-                if ((txt and txt in "0123456789+-/*().,") or edit_key) and tool_dlg.focus_primary():
-                    if txt:
-                        tool_dlg.primary_field().lineEdit().event(event)
-                    return
-                if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                    tool_dlg.accept()
-                    return
+        # A tool panel is open (Extrude, Fillet, Chamfer, Shell, ...): typing a number or a parameter name in the 3D
+        # view goes straight into its main field, Enter is OK. Backspace stays "undo last edge" while edges are picked.
+        tool_dlg = self._typing_panel()
+        if tool_dlg is not None:
+            txt = event.text()
+            edit_key = event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete) and not self.edge_pick_mode
+            if (self._types_into_panel(event) or edit_key) and tool_dlg.focus_primary():
+                if txt:
+                    field = tool_dlg.primary_field()
+                    field.lineEdit().event(event)
+                    if hasattr(field, "suggest"):
+                        field.suggest()         # the parameter list, as when typed in the field itself
+                return
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                tool_dlg.accept()
+                return
 
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()

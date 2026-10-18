@@ -259,6 +259,40 @@ class SketchToolsMixin:
         if self.sketch_tool == "MOVE" and self._move:
             self._apply_move(end[0] - self.sketch_start_uv[0], end[1] - self.sketch_start_uv[1])
         self.update()
+    _dyn_list = None          # ParameterList under the focused dimension field while a name is typed
+    _dyn_focus_rect = None    # where the focused field was drawn last
+
+    def _dyn_suggest(self):
+        """List the parameters starting with the name being typed in the focused field (as in the panels' fields)."""
+        from omacad.ui.expr_spin import ParameterList, matching_parameters, name_before
+        from PySide6.QtCore import QPoint
+        i = self.dyn.focus
+        token = name_before(self.dyn.texts[i])[0] if self.dyn.active and i >= 0 else None
+        names, values = matching_parameters(token)
+        if not names:
+            if self._dyn_list is not None:
+                self._dyn_list.hide()
+            return
+        if self._dyn_list is None:
+            self._dyn_list = ParameterList(self)
+            self._dyn_list.itemClicked.connect(lambda _item: self._dyn_take_suggestion())
+        r = self._dyn_focus_rect
+        x, y, w = (int(r.left()), int(r.bottom()) + 4, int(r.width())) if r is not None else (20, 20, 170)
+        self._dyn_list.show_at(QPoint(x, y), w, [(n, values[n]) for n in names])
+
+    def _dyn_take_suggestion(self):
+        from omacad.ui.expr_spin import name_before
+        name = self._dyn_list.chosen() if self._dyn_list is not None else None
+        if self._dyn_list is not None:
+            self._dyn_list.hide()
+        i = self.dyn.focus
+        if not name or i < 0:
+            return
+        _token, start = name_before(self.dyn.texts[i])
+        self.dyn.texts[i] = self.dyn.texts[i][:start] + name
+        self._refresh_dyn()
+        self.update()
+
     def _handle_dyn_key(self, event) -> bool:
         key = event.key()
         if (key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self.doc.active_sketch
@@ -271,6 +305,16 @@ class SketchToolsMixin:
         if not self._dyn_can_start():
             return False
         text = event.text()
+        if self._dyn_list is not None and self._dyn_list.isVisible():   # the parameter list under the field
+            if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+                self._dyn_list.step(-1 if key == Qt.Key.Key_Up else 1)
+                return True
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
+                self._dyn_take_suggestion()
+                return True
+            if key == Qt.Key.Key_Escape:
+                self._dyn_list.hide()
+                return True
         if key in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
             self.dyn.editing = True  # from now on letters go into the field (parameter names)
             self.dyn.start(self.sketch_tool)
@@ -289,6 +333,7 @@ class SketchToolsMixin:
                 and not (text in "xX" and cur[-1:].isdigit())):
             self.dyn.type_char(text)  # a parameter name such as width or Height
             self._refresh_dyn()
+            self._dyn_suggest()
             return True
         formula_char = text in ("+", "*", "/", "(", ")", "^", "×") or (text in ("x", "X") and cur[-1:].isdigit() or text in ("x", "X") and cur[-1:] == ")")
         if text and len(text) == 1 and (text in "0123456789.,-" or (formula_char and (cur or text == "("))):
@@ -307,6 +352,7 @@ class SketchToolsMixin:
         if key == Qt.Key.Key_Backspace:
             self.dyn.backspace()
             self._refresh_dyn()
+            self._dyn_suggest()
             return True
         if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._refresh_dyn()
@@ -500,9 +546,8 @@ class SketchToolsMixin:
         painter.setPen(qcolor(255, 255, 255))
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, txt)
     def event(self, e):
-        if e.type() == QEvent.Type.ShortcutOverride and self.doc.active_sketch and e.key() in SKETCH_KEYS \
-                and not e.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier):
-            e.accept()              # the sketch tool gets the key, not a menu shortcut with the same letter
+        if e.type() == QEvent.Type.ShortcutOverride and self._owns_key(e):
+            e.accept()              # the view gets the key, not a menu shortcut with the same letter (E, M, F, I)
             return True
         # Tab would otherwise move Qt focus; route it to dimension entry while drawing
         if e.type() == QEvent.Type.KeyPress and e.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
@@ -513,6 +558,8 @@ class SketchToolsMixin:
     def draw_dyn_fields(self, painter: QPainter):
         """Floating value boxes next to the shape being drawn."""
         if not (self.dyn.active and self._dyn_can_start() and self.sketch_current_uv):
+            if self._dyn_list is not None and self._dyn_list.isVisible():
+                self._dyn_list.hide()             # the shape was finished or cancelled
             return
         plane = self.doc.active_sketch.plane
         a = self.sketch_start_uv
@@ -577,6 +624,8 @@ class SketchToolsMixin:
                 txt = f"{name}  {txt}"
             wbox = max(64, fm.horizontalAdvance(txt) + 18)
             rect = QRectF(pt.x() - wbox / 2, pt.y() - 12, wbox, 24)
+            if focused:
+                self._dyn_focus_rect = rect
             painter.setBrush(QBrush(qcolor(37, 40, 44, 235)))
             painter.setPen(QPen(qcolor(226, 109, 40) if focused else qcolor(110, 118, 128), 2 if focused else 1))
             painter.drawRoundedRect(rect, 4, 4)

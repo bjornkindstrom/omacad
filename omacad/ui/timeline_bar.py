@@ -73,7 +73,11 @@ class FeatureNodeWidget(QFrame):
         else:
             style(lbl_name, "font-size: 11px; font-weight: bold;")
         problem = f"Failed: {feature.error}\n\n" if failed else ""
-        self.setToolTip(problem + self._describe(feature) + "\n\nDouble-click to edit, right-click for more.")
+        formulas = getattr(feature, "exprs", None) or {}
+        if formulas:                        # values that follow parameters: ƒx on the chip, the formulas in the tooltip
+            lbl_name.setText(f"{feature.name} ƒx")
+        driven = ("\nƒx " + ", ".join(f"{k} = {v}" for k, v in formulas.items())) if formulas else ""
+        self.setToolTip(problem + self._describe(feature) + driven + "\n\nDouble-click to edit, right-click for more.")
         layout.addWidget(lbl_name)
         self.lbl_name = lbl_name
         lbl_name.setVisible(show_label)

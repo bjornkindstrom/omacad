@@ -248,8 +248,8 @@ class DimensionOverlayMixin:
                                 dim_p1_uv, dim_p2_uv = a_off, b_off
                                 badge_pos_uv = ((a_off[0] + b_off[0]) / 2.0, (a_off[1] + b_off[1]) / 2.0)
 
-            if dim.expr and badge_text:
-                badge_text += f"   ƒ {dim.expr}"
+            if dim.expr and badge_text:     # driven by a parameter or formula: say so first (Fusion: "fx:")
+                badge_text = f"ƒx {dim.expr} = {badge_text}"
 
             # Draw lines
             for idx, (u_a, u_b) in enumerate(lines_to_draw):
@@ -296,6 +296,12 @@ class DimensionOverlayMixin:
                         painter.drawRoundedRect(badge_rect, 4, 4)
                         painter.setPen(QPen(qcolor(255, 255, 255)))
                         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, f"✏️ {badge_text}")
+                    elif dim.expr:                   # parameter-driven: blue frame and text
+                        painter.setPen(QPen(qcolor(56, 189, 248, 240), 1.6))
+                        painter.setBrush(QBrush(qcolor(12, 38, 56, 235)))
+                        painter.drawRoundedRect(badge_rect, 4, 4)
+                        painter.setPen(QPen(qcolor(125, 211, 252)))
+                        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, badge_text)
                     else:
                         painter.setPen(QPen(qcolor(70, 115, 160, 210), 1.0))
                         painter.setBrush(QBrush(qcolor(22, 26, 32, 230)))

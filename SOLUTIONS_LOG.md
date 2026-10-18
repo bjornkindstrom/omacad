@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Esc i ytplockande verktyg** (0.9.9.38): Shell, Offset Face, Honeycomb och Move plockar ytor så länge panelen är öppen; Esc körde bara `end_plane_pick(cancelled=True)`, panelen blev kvar utan plockning och statusraden sa "Create Sketch cancelled.". Nu skickar Esc `tool_cancel` när `plane_pick_purpose` är i `events_mixin.SESSION_PICKS` och en panel är öppen; `on_plane_pick_cancelled` namnger verktyget efter syftet. Test: `test_escape_pick_tools_ui.py`.
+
 - **Förhandsvisning kom tillbaka efter OK** (0.9.9.37): Shell, Offset Face och Thread hade en debounce-`QTimer` som inte stoppades i `on_finished`; OK inom 60–75 ms efter en ändring körde förhandsvisningen efter städningen, dolde den ombyggda kroppen och lämnade en förhandsvisning kvar. Nu stoppas timern först i `on_finished`, och `_connect_debounced_preview` stoppar sin timer på `dlg.finished` för alla som använder den. Test: `test_preview_timer_ui.py`.
 
 - **M och F i skissen gick till fel verktyg** (0.9.9.36): menyns genvägar M (Move Body) och F (Fit View) gäller hela fönstret och tog tangenten före viewportens `keyPressEvent`. Nu accepterar `SketchToolsMixin.event` `ShortcutOverride` för skisstangenterna (`events_mixin.SKETCH_KEYS`) när en skiss är aktiv och varken Ctrl eller Alt hålls nere; utanför skissen gäller menyns genvägar som förut. Test: `test_sketch_keys_ui.py`.
