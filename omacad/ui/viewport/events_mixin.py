@@ -8,6 +8,9 @@ from omacad.model.sketch import SketchText
 # with the same letter (M = Move Body, F = Fit View), see SketchToolsMixin.event.
 SKETCH_KEYS = {Qt.Key.Key_L, Qt.Key.Key_R, Qt.Key.Key_C, Qt.Key.Key_P, Qt.Key.Key_A, Qt.Key.Key_X, Qt.Key.Key_D,
                Qt.Key.Key_M, Qt.Key.Key_O, Qt.Key.Key_F, Qt.Key.Key_T, Qt.Key.Key_I}
+# Face picking that lasts as long as its tool panel (Shell, Offset Face, Honeycomb, Move): Esc ends the tool,
+# not just the picking, which would leave an open panel that can no longer pick.
+SESSION_PICKS = {"shell_face", "offset_face", "move_body"}
 
 
 class ViewportEventsMixin:
@@ -213,7 +216,10 @@ class ViewportEventsMixin:
             self.end_edge_pick(cancelled=True)
             return
         if event.key() == Qt.Key.Key_Escape and self.plane_pick_mode:
-            self.end_plane_pick(cancelled=True)
+            if self.plane_pick_purpose in SESSION_PICKS and self.active_tool_title():
+                self.menu_command.emit("tool_cancel")   # the picking is the tool itself: Esc cancels the tool
+            else:
+                self.end_plane_pick(cancelled=True)
             return
         if event.key() == Qt.Key.Key_Escape and self.primitive_handles:
             handles = self.primitive_handles

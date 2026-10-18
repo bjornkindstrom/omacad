@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.38 - 2026-10-18
+
+### Fixed
+- Esc in Shell, Offset Face, Honeycomb and Move now cancels the tool. It used to stop only the face picking, leaving a panel that could no longer pick and a status saying "Create Sketch cancelled". Esc while picking for Offset Plane or Section View now names that tool.
+
 ## 0.9.9.37 - 2026-10-18
 
 ### Fixed

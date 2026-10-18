@@ -419,7 +419,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             self.on_plane_picked(self.doc.construction_plane(pid))
 
     def on_plane_pick_cancelled(self):
-        self.status_label.setText("Face selection cancelled." if getattr(self, "_extrude_dlg", None) else "Create Sketch cancelled.")
+        what = {"sketch": "Create Sketch", "offset_base": "Offset Plane", "section_base": "Section View"}
+        name = what.get(self.viewport.plane_pick_purpose)
+        self.status_label.setText(f"{name} cancelled." if name else "Face selection cancelled.")
 
     def start_sketch_on_plane(self, plane_name: str):
         sketch = self.doc.start_sketch(plane_name)
