@@ -45,8 +45,11 @@ class TextDialog(BaseFeatureDialog):
         self.cmb_type = QComboBox()
         self.cmb_type.addItem("Text", "text")
         self.cmb_type.addItem("Text On Path", "path")
+        self.cmb_type.addItem("Text In Box", "box")
         self.cmb_type.setToolTip("Text: letters in a frame, placed where you click.\n"
-                                 "Text On Path: letters along a circle, arc or line of the sketch.")
+                                 "Text On Path: letters along a circle, arc or line of the sketch.\n"
+                                 "Text In Box: click two corners; the text fills the box, centred, and fits again "
+                                 "when you change the font or the text.")
         form.addRow("Type:", self.cmb_type)
 
         self.edt_text = QPlainTextEdit("Text")
@@ -138,6 +141,7 @@ class TextDialog(BaseFeatureDialog):
         self.add_buttons()
         self._path_rows = (self.lbl_path, self.cmb_place, self.chk_fit)
         self._frame_rows = (self.cmb_v, self.spn_angle, self.flip_box)
+        self._box_hidden = (self.cmb_v,)        # a box centres the text: its height and vertical place are set by it
         self.cmb_type.currentIndexChanged.connect(self._type_changed)
         self.edt_text.textChanged.connect(self.changed)
         for w in (self.cmb_font, self.cmb_h, self.cmb_v, self.cmb_place):
@@ -152,18 +156,31 @@ class TextDialog(BaseFeatureDialog):
     def is_path(self) -> bool:
         return self.cmb_type.currentData() == "path"
 
+    def is_box(self) -> bool:
+        return self.cmb_type.currentData() == "box"
+
+    def show_fitted_height(self, height: float) -> None:
+        """Text In Box: the height the box gives the text, shown in the (then read-only) height field."""
+        self.spn_height.blockSignals(True)
+        self.spn_height.setValue(max(self.spn_height.minimum(), height))
+        self.spn_height.blockSignals(False)
+
     def _type_changed(self):
         path = self.is_path()
+        box = self.is_box()
         for w in self._path_rows:
             w.setVisible(path)
             lab = self.layout_label(w)
             if lab is not None:
                 lab.setVisible(path)
         for w in self._frame_rows:
-            w.setVisible(not path)
+            show = not path and not (box and w in self._box_hidden)
+            w.setVisible(show)
             lab = self.layout_label(w)
             if lab is not None:
-                lab.setVisible(not path)
+                lab.setVisible(show)
+        self.spn_height.setReadOnly(box)
+        self.spn_height.setToolTip("Set by the box: the text fills it." if box else "The height of a capital letter.")
         self.changed.emit()
 
     def layout_label(self, widget):
@@ -201,7 +218,7 @@ class TextDialog(BaseFeatureDialog):
                   self.spn_angle):
             w.blockSignals(True)
         try:
-            self.cmb_type.setCurrentIndex(1 if ent.path_id else 0)
+            self.cmb_type.setCurrentIndex(1 if ent.path_id else (2 if getattr(ent, "box", None) else 0))
             self.edt_text.setPlainText(ent.text)
             self.cmb_font.setCurrentFont(QFont(ent.font))
             self.cmb_h.setCurrentIndex(max(0, self.cmb_h.findData(ent.h_align)))

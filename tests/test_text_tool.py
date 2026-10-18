@@ -189,3 +189,41 @@ def test_another_tool_keeps_the_placed_text_as_its_own_undo_step(win):
     assert not any(e.entity_id == line.entity_id for e in win.doc.active_sketch.entities)
     win.doc.undo()                                                    # then the text
     assert _texts(win) == []
+
+
+class _LeftClick:
+    def button(self):
+        from PySide6.QtCore import Qt
+        return Qt.MouseButton.LeftButton
+
+
+def test_text_in_box_fills_and_centres_and_refits_on_a_new_font(win):
+    import pytest as _pytest
+    from PySide6.QtGui import QFont
+    win.prompt_text()
+    dlg = win._text_session.dlg
+    dlg.cmb_type.setCurrentIndex(dlg.cmb_type.findData("box"))
+    dlg.edt_text.setPlainText("OMACAD")
+    vp = win.viewport
+    vp.set_sketch_tool("TEXT")
+    for uv in ((10.0, 0.0), (70.0, 20.0)):            # two corners: a 60 x 20 box centred on (40, 10)
+        vp.sketch_current_uv = uv
+        vp._text_press(_LeftClick(), 0, 0)
+    t = _texts(win)[0]
+    x0, y0, x1, y1 = t.bbox()
+    assert t.box == (60.0, 20.0)
+    assert (x0 >= 10 - 1e-6 and x1 <= 70 + 1e-6 and y0 >= -1e-6 and y1 <= 20 + 1e-6)          # inside the box
+    assert max(x1 - x0 - 60, y1 - y0 - 20) == _pytest.approx(0.0, abs=1e-6)                   # touches two sides
+    assert ((x0 + x1) / 2, (y0 + y1) / 2) == _pytest.approx((40.0, 10.0))                     # centred
+    h_before = t.fitted_height()
+    dlg.cmb_font.setCurrentFont(QFont("DejaVu Serif"))
+    x0, y0, x1, y1 = t.bbox()
+    assert ((x0 + x1) / 2, (y0 + y1) / 2) == _pytest.approx((40.0, 10.0))                     # still centred
+    assert max(x1 - x0 - 60, y1 - y0 - 20) == _pytest.approx(0.0, abs=1e-6)
+    assert dlg.spn_height.isReadOnly() and dlg.spn_height.value() == _pytest.approx(t.fitted_height(), abs=0.01)
+    assert t.fitted_height() != _pytest.approx(h_before)
+    dlg.accept()
+    from omacad.io.exporter import Exporter
+    data = Exporter.document_to_dict(win.doc)
+    again = next(e for s in data["sketches"] for e in s["entities"] if e["entity_type"] == "text")
+    assert again["box"] == [60.0, 20.0] or tuple(again["box"]) == (60.0, 20.0)

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.58 - 2026-10-18
+
+### Added
+- Text In Box (Text tool, Type: Text In Box): click two corners and the text fills the box as far as it can, centred, measured on the letters themselves. It fits again at once when you change the font, the text or the style; the height field shows the height the box gives. The box shows as a dashed outline in the sketch (not a profile), and is saved with the file.
+
 ## 0.9.9.57 - 2026-10-18
 
 ### Added

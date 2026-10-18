@@ -15,7 +15,7 @@ class _TextSession:
         self.before = sketch.to_dict()          # the text's own entry in here is what undo / cancel go back to
         self.placed = entity is not None        # editing starts with the text already in place
         # the edited text's settings, so Cancel resets only this text (other sketch work stays)
-        self.orig = {k: getattr(entity, k) for k in PARAM_KEYS + ("anchor", "path_id")} if entity else None
+        self.orig = {k: getattr(entity, k) for k in PARAM_KEYS + ("anchor", "path_id", "box")} if entity else None
 
     def before_text(self) -> dict:
         """The sketch as it is now, with only this text as it was before the session: the undo step covers the
@@ -91,6 +91,11 @@ class TextPromptsMixin:
             setattr(target, key, params[key])
         want_path = s.dlg.is_path()
         self.viewport.text_wants_path = want_path
+        self.viewport.text_wants_box = s.dlg.is_box()
+        if not s.dlg.is_box():
+            target.box = None                               # back to plain text: no box
+        elif target.box is not None:
+            s.dlg.show_fitted_height(target.fitted_height())   # the height the box gives it (font, text, style)
         if not want_path:
             target.path_id = None
         elif s.entity is not None and target.path_id is None:
@@ -131,6 +136,8 @@ class TextPromptsMixin:
                 self.viewport.update()
             return
         args = s.dlg.params()
+        if s.dlg.is_box() and s.draft is not None and s.draft.box:
+            args["box"] = tuple(s.draft.box)
         if s.dlg.is_path():
             if not path_id:
                 return
@@ -160,6 +167,7 @@ class TextPromptsMixin:
             pass
         self.viewport.set_text_draft(None)
         self.viewport.text_wants_path = False
+        self.viewport.text_wants_box = False
         self.inspector.undock_tool()
         s.dlg.deleteLater()
         if result and s.entity is not None:

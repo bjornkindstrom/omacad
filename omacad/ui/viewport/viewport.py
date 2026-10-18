@@ -165,6 +165,8 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self.flash_sketch_id = None      # a sketch lit up for a moment (hovering its step in the timeline)
         self.text_draft = None           # the SketchText being placed by the Text tool
         self.text_wants_path = False     # ... and it is Text On Path: the click picks a curve
+        self.text_wants_box = False      # ... or Text In Box: two clicks draw the box it fills
+        self._text_box_start = None      # Text In Box: the first corner, once clicked
 
         # Sketch element selection (click / Ctrl+click, Delete)
         self.selected_entities: set = set()
