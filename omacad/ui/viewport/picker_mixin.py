@@ -117,6 +117,16 @@ class PickerMixin:
                         best, best_d, best_eye = e, min(d, best_d), dist   # near-ties: prefer composite loop, otherwise closer
         return best
 
+    def _hidden_edge_at(self, x: float, y: float):
+        """The edge under the cursor that only see-through picking reaches (None when see-through is on already)."""
+        if self.edge_xray:
+            return None
+        self.edge_xray = True
+        try:
+            return self._pick_edge(x, y)
+        finally:
+            self.edge_xray = False
+
     def _edge_segments(self, body):
         """A body's edges as one flat set of segments, built once per rebuild of the body (its edge list is
         replaced then): (edges, points, edge index per segment, index of each segment's first point)."""

@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.28 - 2026-10-18
+
+### Added
+- Jar with Lid: Inside chamfer (4 mm by default) at the bottom and under the shoulder inside the jar. At the shoulder's width it turns the shoulder into a 45° cone that prints without support.
+
+### Changed
+- Fillet/Chamfer: a click where only a hidden edge lies (inside a jar, under a shoulder) now says so and how to reach it: X or Alt picks through the model.
+
 ## 0.9.9.27 - 2026-10-18
 
 ### Added

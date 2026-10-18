@@ -17,6 +17,9 @@ class JarDialog(BaseFeatureDialog):
         ("diameter", "Diameter:", 5.0, 1000.0, "Outside diameter of the jar and the lid."),
         ("height", "Height:", 2.0, 1000.0, "The jar up to its shoulder; the neck comes on top."),
         ("wall", "Wall:", 0.4, 50.0, "Wall and bottom of the jar."),
+        ("inside_chamfer", "Inside chamfer:", 0.0, 50.0, "Chamfer inside the jar, at the bottom and under the shoulder "
+                                                       "(at most the shoulder's width, which makes it 45° and printable "
+                                                       "without support). 0 = none."),
         ("neck_diameter", "Neck diameter:", 2.0, 1000.0, "The neck the thread sits on (without the thread)."),
         ("neck_height", "Neck / thread height:", 1.0, 500.0, "Height of the neck, which is also the thread's length."),
         ("pitch", "Pitch:", 0.5, 50.0, "Rise of the thread per turn."),
@@ -45,7 +48,7 @@ class JarDialog(BaseFeatureDialog):
         self.cmb_profile.addItems(PROFILE_NAMES)
         self.cmb_profile.setCurrentIndex(PROFILES.index(spec.profile) if spec.profile in PROFILES else 0)
         self.cmb_profile.currentIndexChanged.connect(lambda *_: self.changed.emit())
-        form.insertRow(6, "Thread profile:", self.cmb_profile)
+        form.insertRow(7, "Thread profile:", self.cmb_profile)
         self.chk_beside = QCheckBox("Lid beside the jar, upside down (ready to print)")
         self.chk_beside.setChecked(spec.lid_beside)
         self.chk_beside.toggled.connect(lambda *_: self.changed.emit())

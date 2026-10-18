@@ -370,6 +370,9 @@ class ViewportEventsMixin:
                                         self.selected_edges.append(fe)
                         self.edges_selection_changed.emit()
                         self.update()
+                if self._hidden_edge_at(event.position().x(), event.position().y()) is not None:   # said last: stays shown
+                    self.status_message.emit("An edge hidden behind the model is here (inside a jar, under a shoulder...): "
+                                             "press X or hold Alt to pick through the model (Ctrl+Backspace clears the selection).")
             return
         if was_click and self.plane_pick_mode:
             self._press_pos = None

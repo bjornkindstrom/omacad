@@ -17,6 +17,7 @@ class JarSpec:
     diameter: float = 40.0        # outside of the jar and the lid
     height: float = 40.0          # the jar up to its shoulder (the neck comes on top)
     wall: float = 2.0             # jar wall and bottom
+    inside_chamfer: float = 4.0   # inside the jar, at the bottom and under the shoulder (at most the shoulder: 45°)
     neck_diameter: float = 32.0   # the neck the thread sits on
     neck_height: float = 10.0     # also the thread's length
     pitch: float = 4.0
@@ -33,6 +34,10 @@ class JarSpec:
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+    def shoulder(self) -> float:
+        """Width of the shoulder inside the jar (from the wall to the neck's bore): the 45° chamfer that fills it."""
+        return (self.diameter - self.neck_diameter) / 2.0
+
     def lid_wall(self, tooth: float = 0.0) -> float:
         """The lid's wall outside the thread (and its tolerance). `tooth` is the thread's radial height."""
         return (self.diameter - self.neck_diameter) / 2.0 - tooth - max(0.0, -self.tolerance)
@@ -46,6 +51,8 @@ class JarSpec:
         if lid_wall < 0.8:
             out.append(f"The lid's wall outside the thread is only {lid_wall:.1f} mm: "
                        "make the jar wider or the neck narrower.")
+        if self.inside_chamfer > 0 and 2 * self.inside_chamfer >= self.height - 2 * self.wall:
+            out.append("The inside chamfer is too big for the jar's height.")
         if self.height <= self.wall:
             out.append("The jar is not taller than its bottom.")
         return out
@@ -71,6 +78,13 @@ def build_jar(doc, spec: JarSpec) -> Dict[str, str]:
     doc.add_thread(spec.neck_diameter, spec.pitch, spec.neck_height, profile=spec.profile, clearance=0.0, target_body_id=jar.body_id,
                    operation="join", name="Jar thread", plane_origin=[0.0, 0.0, h], host_length=spec.neck_height, **UP)
     thread = doc.timeline.features[-1]
+    chamfer = min(spec.inside_chamfer, spec.shoulder())
+    if chamfer > 1e-3:   # the inside corners at the bottom and under the shoulder: hidden from outside, so made here
+        r = spec.diameter / 2.0 - spec.wall
+        inside = [e.ref() for e in doc.bodies[jar.body_id].edges if e.kind == "circle" and abs(e.radius - r) < 0.05
+                  and min(abs(e.center[2] - spec.wall), abs(e.center[2] - (h - spec.wall))) < 0.01]
+        if inside:
+            doc.add_fillet(inside, chamfer, "chamfer")
     lid = doc.add_cylinder(spec.diameter / 2.0, spec.neck_height + spec.lid_top, name="Lid", plane_origin=[0.0, 0.0, h], **UP)
     doc.combine_bodies(lid.body_id, jar.body_id, "cut", keep_tool=True)
     # the neck is hollow, so the cut leaves its bore standing in the lid: cut it away (inside the neck's wall, so

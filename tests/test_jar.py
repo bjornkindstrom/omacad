@@ -21,14 +21,14 @@ def test_one_undo_step_with_editable_steps():
     doc, _, _ = _jar()
     assert len(doc.undo_stack) == 1
     types = [f.feature_type for f in doc.timeline.features]
-    assert types == ["cylinder", "cylinder", "combine", "shell", "thread", "cylinder", "combine", "cylinder", "combine",
+    assert types == ["cylinder", "cylinder", "combine", "shell", "thread", "fillet", "cylinder", "combine", "cylinder", "combine",
                      "offset_face", "move"]
     doc.undo()
     assert not doc.bodies and not doc.timeline.features
 
 
 def test_jar_is_a_hollow_cup_with_the_given_wall():
-    _, jar, _ = _jar(lid_beside=False, tolerance=0.0)
+    _, jar, _ = _jar(lid_beside=False, tolerance=0.0, inside_chamfer=0.0)
     above = m3d.Manifold.cube((100, 100, 100)).translate((-50, -50, 50))
     assert (jar ^ above).volume() < 1e-6                     # nothing above the neck
     body = m3d.Manifold.cube((100, 100, 36)).translate((-50, -50, 2))      # 2 mm bottom .. just below the shoulder
@@ -70,3 +70,15 @@ def test_problems_and_save_load(tmp_path):
     again = Exporter.load_project(str(path))
     vols = sorted(b.manifold.volume() for b in again.bodies.values())
     assert vols == pytest.approx(sorted([jar.volume(), lid.volume()]), rel=1e-6)
+
+
+def test_inside_chamfer_at_the_bottom_and_under_the_shoulder():
+    _, plain, _ = _jar(lid_beside=False, tolerance=0.0, inside_chamfer=0.0)
+    _, jar, lid = _jar(lid_beside=False, tolerance=0.0)              # 4 mm = the whole shoulder: 45° up to the bore
+    ring = 0.5 * 4.0 ** 2 * 2 * math.pi * (18.0 - 4.0 / 3.0)         # Pappus: the corner triangle swept round
+    assert jar.volume() - plain.volume() == pytest.approx(2 * ring, rel=0.005)
+    assert (jar ^ lid).volume() < 1e-6
+    big = JarSpec(inside_chamfer=9.0)                                  # held to the shoulder (4 mm)
+    _, capped, _ = _jar(lid_beside=False, tolerance=0.0, inside_chamfer=9.0)
+    assert capped.volume() == pytest.approx(jar.volume(), rel=1e-9)
+    assert not big.problems() and JarSpec(inside_chamfer=19.0).problems()

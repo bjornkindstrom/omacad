@@ -42,3 +42,18 @@ def test_impossible_jar_cannot_be_made(win):
     QTest.qWait(400)
     assert not dlg.btn_ok.isEnabled() and "lid's wall" in dlg.lbl_info.text()
     dlg.reject()
+
+
+def test_hidden_inside_edge_is_found_by_see_through(win):
+    import numpy as np
+    from omacad.model.jar import JarSpec
+    ids = win.doc.add_jar(JarSpec(inside_chamfer=0.0))
+    vp = win.viewport
+    vp.resize(800, 600)
+    vp.target, vp.distance, vp.azimuth, vp.elevation = np.array([0.0, 0.0, 25.0]), 120.0, 45.0, 60.0
+    shoulder = next(e for e in win.doc.bodies[ids["jar"]].edges
+                    if e.kind == "circle" and abs(e.radius - 18) < 0.05 and abs(e.center[2] - 38) < 0.01)
+    p = np.asarray(shoulder.polyline()).reshape(-1, 3)[0]
+    (x, y), = vp.project_points(p[None])[0]
+    assert vp._pick_edge(x, y) is not shoulder                 # under the shoulder: hidden from outside
+    assert vp._hidden_edge_at(x, y) is shoulder and not vp.edge_xray
