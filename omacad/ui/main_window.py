@@ -194,6 +194,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             lambda val: getattr(self.ribbon, "btn_construct", None) and self.ribbon.btn_construct.setChecked(val)
         )
         self.ribbon.finish_sketch_clicked.connect(self.on_finish_sketch)
+        self.ribbon.fix_sketch_clicked.connect(self.on_fix_sketch)
         self.viewport.finish_sketch_requested.connect(self.on_finish_sketch)
         self.viewport.menu_command.connect(self.on_menu_command)
         self.viewport.active_tool_title = self._active_tool_title
@@ -402,6 +403,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
                 dlg.accept() if cmd == "tool_ok" else dlg.reject()
         elif cmd == "extrude":
             self.prompt_extrude()
+        elif cmd == "fix_sketch":
+            self.on_fix_sketch()
         elif cmd == "emboss":
             self.prompt_emboss()
         elif cmd.startswith("delete_sketch:"):
@@ -480,6 +483,26 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             self.status_label.setText("That item has no step in the timeline.")
             return
         self.timeline_bar.find_step(idx)
+
+    def on_fix_sketch(self):
+        """Fix Sketch: close the open sketch's drawing into faces (see model/sketch_fix.py), as one undo step."""
+        from omacad.model.sketch_fix import fix_sketch
+        sk = self.doc.active_sketch
+        if sk is None:
+            self.status_label.setText("Fix Sketch works on the open sketch: edit a sketch first.")
+            return
+        before = sk.to_dict()
+        done = fix_sketch(sk)
+        self.doc.record_sketch_change(sk, before)
+        n = len(sk.profiles)
+        if done:
+            self.status_label.setText(f"Fix Sketch: {', '.join(done)}. {n} closed face(s) now. Ctrl+Z undoes it.")
+        elif n:
+            self.status_label.setText(f"Fix Sketch: the sketch is already closed ({n} face(s)); nothing changed.")
+        else:
+            self.status_label.setText("Fix Sketch: nothing to close here (a face needs at least two connected curves).")
+        self.doc.notify_changed()
+        self.viewport.update()
 
     def on_browser_offset_plane(self, kind: str, item_id: str):
         """Browser > Offset Plane: start from the plane or sketch that was right-clicked (it used to ask for a pick)."""

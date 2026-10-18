@@ -114,6 +114,9 @@ _ALL = [
     _c("construction", "Construction", "┄", "Dashed helper lines (axes for Revolve and Mirror; Extrude ignores them); "
        "with curves selected, turns them into construction lines", "X", "toggle_construction_clicked",
        modes=("sketch",)),
+    _c("fix_sketch", "Fix Sketch", "🩹", "Close what you drew into a face with the fewest changes: joins ends that nearly "
+       "meet, extends lines that stop short, closes an open outline with one line", signal="fix_sketch_clicked",
+       modes=("sketch",)),
     _c("finish_sketch", "Finish Sketch", "✅", "Back to 3D modelling", signal="finish_sketch_clicked",
        modes=("sketch",)),
 ]
@@ -139,7 +142,7 @@ SOLID_GROUPS: List[Tuple[str, list]] = [
 SKETCH_GROUPS: List[Tuple[str, list]] = [
     ("CREATE", ["line", "rect", "circle", "arc", "polygon", "slot", "text", "offset_sketch", "mirror_sketch", "project",
                 "dimension"]),
-    ("MODIFY", ["fillet_sketch", "trim", "move_sketch", "rotate_sketch", "construction"]),
+    ("MODIFY", ["fillet_sketch", "trim", "move_sketch", "rotate_sketch", "construction", "fix_sketch"]),
     ("CONSTRAINTS", ["constraints"]),
     ("INSPECT", ["measure"]),
 ]

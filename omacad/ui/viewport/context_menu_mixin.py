@@ -191,6 +191,7 @@ class ContextMenuMixin:
         self._add_tool_entries(menu, acts)
         if sketch:
             acts[theme.action_with_icon(menu, "✔️ Finish Sketch")] = ("finish", None)
+            acts[theme.action_with_icon(menu, "🩹 " + commands.label("fix_sketch"))] = ("cmd", "fix_sketch")
             menu.addSeparator()
             groups: dict = {}
             for tool, label, group, sub in SKETCH_TOOLS:

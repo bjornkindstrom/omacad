@@ -144,6 +144,7 @@ class Ribbon(QWidget):
     constraint_clicked = Signal(str)  # HORIZONTAL, VERTICAL, PARALLEL, ...
     sketch_tool_selected = Signal(str)  # "LINE", "RECT", "CENTER_RECT", "CIRCLE", "ARC", "SLOT", "FILLET", "DIMENSION"
     finish_sketch_clicked = Signal()
+    fix_sketch_clicked = Signal()
     toggle_construction_clicked = Signal()
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
