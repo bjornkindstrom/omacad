@@ -94,7 +94,10 @@ def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, to
 
     for body in targets:
         if operation == "cut":
-            result = body.manifold - tool
+            # A profile extruded along a faceted wall can coincide with that wall to
+            # within the kernel tolerance. Expand the cutter by a micron so the
+            # boolean resolves the boundary instead of leaving narrow mesh strips.
+            result = body.manifold - CadKernel.grown(tool, 1e-6)
         elif operation == "intersect":
             result = body.manifold ^ tool
         else:
