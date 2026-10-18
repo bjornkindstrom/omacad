@@ -97,10 +97,14 @@ def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, to
 
     for body in targets:
         if operation == "cut":
-            # A profile extruded along a faceted wall can coincide with that wall to
-            # within the kernel tolerance. Expand the cutter by a nanometre so the
-            # boolean resolves the boundary instead of leaving narrow mesh strips.
-            result = body.manifold - CadKernel.grown(tool, 1e-6)
+            # A cutter coinciding with a faceted wall to within the kernel tolerance leaves
+            # narrow strips; a nanometre larger cutter resolves them (fewer triangles). On
+            # other cuts the grown cutter only adds nanometre steps (extra edges that break
+            # later edge picks), so the exact cut is kept.
+            result = body.manifold - tool
+            nudged = body.manifold - CadKernel.grown(tool, 1e-6)
+            if len(nudged.to_mesh().tri_verts) < len(result.to_mesh().tri_verts) or CadKernel.has_sheets(result):
+                result = nudged
             if CadKernel.has_sheets(result):
                 # A profile drawn on the wall is cut into its own flat pieces, so its sides wander up
                 # to a facet's sagitta (0.5 um at 360 segments) around the wall and paper-thin
