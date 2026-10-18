@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Kurvkvalitet byggde inte om** (0.9.9.33): stegcachens fingeravtryck saknade `quality.circle_segments()`, så `rebuild_for_curve_quality` återställde gamla kroppar (en cylinder byggd med 48 segment hade kvar 96 hörn efter byte till 192). Nu ingår värdet i fingeravtrycket (även interaktivt läge, så lågupplösta förhandsbyggen aldrig återanvänds), och `apply_dict` tömmer cachen så att nya stegobjekt efter ångra kör igen (`ThreadFeature._effective`, `PatternFeature.copies` ...). Test: `test_timeline_cache.py`.
+
 - **Nytt steg raderade senare steg** (0.9.9.32): `Timeline.add_feature` klippte bort allt efter markören när man lade till ett steg i en bakåtrullad historik. Nu infogas steget vid markören (som Fusion), markören står efter det, senare steg ligger kvar bakom markören, och cacheposterna från den positionen töms. Test: `test_timeline_cache.py`.
 
 - **ID återanvändes efter radering** (0.9.9.31): `add_*` byggde id som `f"box_{len(features)+1}"` och skisser som `sketch_{len(sketches)+1}`, så efter en radering fick nästa steg samma id som ett befintligt och skrev över dess kropp (`body_<id>`); en ny skiss ersatte en befintlig och nådde aldrig tidslinjen. Nu ger `Document._feature_id`/`_sketch_id` nästa lediga nummer (skisser räknar även bakåtrullade/undertryckta skissteg). Test: `test_unique_ids.py`.

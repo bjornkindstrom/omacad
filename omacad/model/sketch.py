@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Any
 import math
 import numpy as np
+from omacad import applog
 from omacad.model import quality
 import shapely
 from shapely.geometry import LineString, Polygon, Point, MultiPoint
@@ -384,7 +385,8 @@ class Sketch(SketchEditingMixin):
 
             self.profiles = profiles
             self._profiles_cache_key = cache_key
-        except Exception:
+        except Exception as e:      # no closed shapes rather than a crash, but the reason goes in the log
+            applog.log("ERROR", f"{self.name}: profiles could not be found: {e!r}")
             self.profiles = []
             self._profiles_cache_key = None
 

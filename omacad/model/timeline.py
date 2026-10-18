@@ -130,10 +130,12 @@ class Timeline:
         for i in range(start_step, limit):
             doc.step_states[i] = {bid: b.manifold for bid, b in doc.bodies.items()}
             feat = self.features[i]
+            feat.error = ""
             if not feat.suppressed:
                 try:
                     feat.execute(doc)
-                except Exception as e:
+                except Exception as e:      # the rest of the history still builds; the chip turns red and says why
+                    feat.error = str(e) or type(e).__name__
                     print(f"Error executing feature {feat.name}: {e}")
 
             # Save checkpoint after executing feature i

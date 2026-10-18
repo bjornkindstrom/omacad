@@ -10,6 +10,7 @@ import numpy as np
 import manifold3d as m3d
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
+from omacad import applog
 from omacad.model.kernel import CadKernel, RenderMesh
 from omacad.model.faces import (
     PlanarFace, compute_planar_faces, PlanarEdge, compute_planar_edges, compute_planar_faces_and_edges
@@ -33,14 +34,17 @@ class Body:
         self.render_mesh = CadKernel.extract_render_mesh(self.manifold)
         try:
             self.faces, self.edges = compute_planar_faces_and_edges(self.manifold, self.body_id)
-        except Exception:
+        except Exception as e:      # fall back piece by piece; a body without picks still shows, the log says why
+            applog.log("ERROR", f"{self.name}: face/edge analysis failed, trying separately: {e!r}")
             try:
                 self.faces = compute_planar_faces(self.manifold, self.body_id)
-            except Exception:
+            except Exception as e2:
+                applog.log("ERROR", f"{self.name}: faces unavailable: {e2!r}")
                 self.faces = []
             try:
                 self.edges = compute_planar_edges(self.manifold)
-            except Exception:
+            except Exception as e2:
+                applog.log("ERROR", f"{self.name}: edges unavailable: {e2!r}")
                 self.edges = []
 
 
@@ -130,6 +134,7 @@ class Feature:
         self.suppressed: bool = False
         # field name -> formula, e.g. {"distance": "depth-2"}; evaluated when parameters change
         self.exprs: Dict[str, str] = {}
+        self.error: str = ""        # why the step failed the last time it ran (shown on its timeline chip); not saved
 
     def execute(self, doc: Any) -> None:
         raise NotImplementedError

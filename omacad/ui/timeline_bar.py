@@ -65,17 +65,29 @@ class FeatureNodeWidget(QFrame):
         layout.addWidget(lbl_icon)
 
         lbl_name = QLabel(feature.name)
+        failed = bool(getattr(feature, "error", "")) and not feature.suppressed
         if feature.suppressed:
             style(lbl_name, "font-size: 11px; font-weight: bold; color: #6B7280; text-decoration: line-through;")
+        elif failed:
+            style(lbl_name, "font-size: 11px; font-weight: bold; color: #F87171;")
         else:
             style(lbl_name, "font-size: 11px; font-weight: bold;")
-        self.setToolTip(self._describe(feature) + "\n\nDouble-click to edit, right-click for more.")
+        problem = f"Failed: {feature.error}\n\n" if failed else ""
+        self.setToolTip(problem + self._describe(feature) + "\n\nDouble-click to edit, right-click for more.")
         layout.addWidget(lbl_name)
         self.lbl_name = lbl_name
         lbl_name.setVisible(show_label)
 
         self.setObjectName("TimelineChip")
-        if is_active:
+        if failed:
+            style(self, """
+                QFrame#TimelineChip {
+                    background-color: #3A2326;
+                    border: 1px solid #F87171;
+                    border-radius: 4px;
+                }
+            """)
+        elif is_active:
             style(self, """
                 QFrame#TimelineChip {
                     background-color: #2D333B;

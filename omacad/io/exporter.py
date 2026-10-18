@@ -14,6 +14,7 @@ from omacad.model.document import Document, Parameter, default_origin_vis
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, PrismFeature, SphereFeature,
                                     ExtrudeFeature, EmbossFeature, RevolveFeature, CombineFeature, FilletFeature,
                                     PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature, HoneycombFeature)
+from omacad import applog
 from omacad.model.sketch import Sketch
 from omacad.model.timeline import ProfileRefs
 from omacad.model import quality
@@ -301,9 +302,9 @@ class Exporter:
                                         [t_vals[6], t_vals[7], t_vals[8]],
                                     ])
                                     trans = np.array([t_vals[9] * scale, t_vals[10] * scale, t_vals[11] * scale])
-                                    verts = verts @ rot.T + trans
-                            except Exception:
-                                pass
+                                    verts = verts @ rot + trans     # 3MF uses row vectors: p' = p * M
+                            except ValueError as e:
+                                applog.log("ERROR", f"3MF {oname}: unreadable transform {t_str!r} ({e}); imported untransformed")
 
                         feat = doc.import_mesh(oname, verts.tolist(), tris.tolist(), source_file=filepath)
                         body = doc.bodies.get(feat.created_body_id)
