@@ -281,8 +281,12 @@ class RoundPatternPromptsMixin:
                 solid, op = (rem, "cut") if rem is not None else (add, "join")
                 extra = add if rem is not None else None
                 break
-            dlg.lbl_info.setText(f"{copies} copies will be made." if solid is not None
-                                 else "Nothing to copy with these settings (the chosen steps changed nothing, or it is already symmetric).")
+            info = f"{copies} copies will be made." if solid is not None \
+                else "Nothing to copy with these settings (the chosen steps changed nothing, or it is already symmetric)."
+            used = getattr(feat, "margin_used", None)
+            if dlg.kind() == "fill" and used is not None and used < dlg.spn_margin.value() - 1e-2:
+                info += f" Margin held to {used:.1f} mm, the original's own distance to the edge."
+            dlg.lbl_info.setText(info)
             self.viewport.set_preview(solid, op, extra=extra, extra_op="join")
 
         def on_step_clicked(point):

@@ -362,6 +362,10 @@ class PatternFeature(Feature):
             return []
         outline = unary_union([Polygon(p.exterior) for p in parts])
         inner = unary_union([Polygon(i) for p in parts for i in p.interiors] + ([all_obs] if all_obs and not all_obs.is_empty else []))
+        # The original sets the precedent: a margin wider than its own distance to the edge would
+        # leave no room for its row (a 10 mm margin on a 22 mm wall gave two clipped slivers).
+        margin = min(margin, max(float(outline.boundary.distance(foot)) - 1e-3, 0.0))
+        self.margin_used = margin
         room = outline.buffer(-margin) if margin > 0 else outline
         if not inner.is_empty:
             room = room.difference(inner.buffer(gap) if gap > 0 else inner)
