@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.46 - 2026-10-18
+
+### Changed
+- Buttons and menus are reorganised the Fusion 360 way, with few groups. SOLID: CREATE (Create Sketch, Extrude, Revolve, Emboss, Primitives, Pattern, Honeycomb, Offset Plane, Insert: Canvas and Import 3MF) / MODIFY (Fillet, Chamfer, Shell, Offset Face, Combine, Split Body, Move, Change Parameters, Delete) / INSPECT (Measure, Section View, Document Statistics), each group named under its buttons, Settings at the far right. SKETCH: CREATE / MODIFY / CONSTRAINTS / INSPECT. The menu bar has Create, Modify and Inspect in the same order. Every command has one name and one shortcut everywhere (Guide Line is now Construction, Perpendic. is Perpendicular). Revolve and Honeycomb are in the menus now, and Document Statistics can be reached again.
+
 ## 0.9.9.45 - 2026-10-18
 
 ### Fixed

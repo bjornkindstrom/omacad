@@ -15,6 +15,7 @@ def test_right_click_on_profile_selects_it_and_offers_extrude(monkeypatch):
     from PySide6.QtWidgets import QApplication, QMenu
     QApplication.instance() or QApplication([])
     import omacad.ui.viewport as vp
+    import omacad.ui.viewport.context_menu_mixin as menus
 
     seen = []
 
@@ -22,7 +23,7 @@ def test_right_click_on_profile_selects_it_and_offers_extrude(monkeypatch):
         def exec(self, *a, **k):
             seen.append([x.text() for x in self.actions() if x.text()])
             return None
-    monkeypatch.setattr(vp, "QMenu", SpyMenu)
+    monkeypatch.setattr(menus, "QMenu", SpyMenu)        # the menus are built in context_menu_mixin
 
     doc = Document()
     doc.add_box(40, 40, 10)

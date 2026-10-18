@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Ett andra verktyg strandade det första** (0.9.9.35): `SidePanel.dock_tool` dolde bara den öppna panelen, så dess `on_finished` körde aldrig: förhandsvisning, dold kropp (Shell), plockläge och `_extrude_dlg`/`_round_dlg` låg kvar, `_busy_reason` blockerade ångra och verktyget kunde inte öppnas igen. Nu gör `dock_tool` `reject()` på det öppna verktyget (som Cancel). Korta värderutor (`prompt_dimension_value`, `dlg._nested`) avslutar inte verktyget utan dockar tillbaka det efteråt. `QTimer.singleShot(0, dlg, dlg.focus_primary)` har dialogen som kontext så en borttagen panel inte får anropet. Test: `test_tool_switch_ui.py`.
+
 - **Formel kraschade appen** (0.9.9.34): `expr._eval` lät `(-8)^(1/3)` ge ett komplext tal (TypeError) och `(64^64)^64` ett jätteheltal (OverflowError vid `isfinite`); anroparna fångar bara ValueError. Nu ger båda ValueError och varje BinOp-resultat görs till float direkt. Test: `test_expr_errors.py`.
 
 - **Kurvkvalitet byggde inte om** (0.9.9.33): stegcachens fingeravtryck saknade `quality.circle_segments()`, så `rebuild_for_curve_quality` återställde gamla kroppar (en cylinder byggd med 48 segment hade kvar 96 hörn efter byte till 192). Nu ingår värdet i fingeravtrycket (även interaktivt läge, så lågupplösta förhandsbyggen aldrig återanvänds), och `apply_dict` tömmer cachen så att nya stegobjekt efter ångra kör igen (`ThreadFeature._effective`, `PatternFeature.copies` ...). Test: `test_timeline_cache.py`.

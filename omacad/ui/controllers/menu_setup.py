@@ -79,62 +79,30 @@ class MenuSetupMixin:
         act_settings.triggered.connect(self.on_open_settings)
         menu_edit.addAction(act_settings)
 
-        # Create Menu
-        menu_create = menubar.addMenu("Create")
-        menu_create.addAction("Create Sketch", self.prompt_create_sketch)
-        act_extrude = QAction("Extrude  (E)", self)
-        act_extrude.setShortcuts([QKeySequence("E"), QKeySequence("Ctrl+E")])
-        act_extrude.triggered.connect(self.prompt_extrude)
-        menu_create.addAction(act_extrude)
-        menu_create.addAction("Emboss…", self.prompt_emboss)
-        menu_create.addAction("Offset Plane…", self.prompt_offset_plane)
-        act_canvas = QAction("Insert Canvas (Image)…", self)
-        act_canvas.triggered.connect(self.prompt_insert_canvas)
-        menu_create.addAction(act_canvas)
-        menu_create.addSeparator()
-        menu_create.addAction("Circular Feature Pattern…", lambda: self.prompt_pattern("circular"))
-        menu_create.addAction("Box", self.prompt_box)
-        menu_create.addAction("Cylinder", self.prompt_cylinder)
-        menu_create.addAction("Jar with Lid", self.prompt_jar)
-        menu_create.addAction("Hexagon", self.prompt_prism)
-        menu_create.addAction("Thread / Coil…", self.prompt_thread)
-
-        # Modify Menu
-        menu_modify = menubar.addMenu("Modify")
-        act_fillet = QAction("Fillet…", self)
-        act_fillet.triggered.connect(lambda: self.prompt_round_edges("fillet"))
-        menu_modify.addAction(act_fillet)
-        act_chamfer = QAction("Chamfer…", self)
-        act_chamfer.triggered.connect(lambda: self.prompt_round_edges("chamfer"))
-        menu_modify.addAction(act_chamfer)
-        act_shell = QAction("Shell…", self)
-        act_shell.triggered.connect(self.prompt_shell)
-        menu_modify.addAction(act_shell)
-        act_offset_face = QAction("Offset Face…", self)
-        act_offset_face.triggered.connect(lambda: self.prompt_offset_face())
-        menu_modify.addAction(act_offset_face)
-        act_pattern = QAction("Pattern / Mirror…", self)
-        act_pattern.triggered.connect(self.prompt_pattern)
-        menu_modify.addAction(act_pattern)
-        act_params = QAction("Change Parameters…", self)
-        act_params.setShortcut(QKeySequence("Ctrl+P"))
-        act_params.triggered.connect(self.on_change_parameters)
-        menu_modify.addAction(act_params)
-        menu_modify.addAction("Combine", self.prompt_combine)
-        act_split = QAction("Split Body…", self)
-        act_split.triggered.connect(self.prompt_split_body)
-        menu_modify.addAction(act_split)
-        act_move = QAction("Move Body… (M)", self)
-        act_move.setShortcut(QKeySequence("M"))
-        act_move.triggered.connect(self.prompt_move_body)
-        menu_modify.addAction(act_move)
-        menu_modify.addAction("Delete Selected", self.on_delete_selected, QKeySequence.StandardKey.Delete)
+        # Create / Modify / Inspect: the same commands, names and keys as the ribbon (omacad.ui.commands)
+        from omacad.ui import commands
+        self.command_actions = {}
+        for title, cids in commands.MENUS:
+            menu = menubar.addMenu(title)
+            for cid in cids:
+                if cid is None:
+                    menu.addSeparator()
+                    continue
+                c = commands.get(cid)
+                act = QAction(theme.emoji_icon(c.icon, 24) if c.icon != "dimension" else theme.tool_icon(c.icon, 24),
+                              c.label, menu)
+                keys = [k for k in (c.shortcut, *c.extra_shortcuts) if k]
+                if keys:
+                    act.setShortcuts([QKeySequence(k) for k in keys])
+                act.setToolTip(c.tip)
+                act.triggered.connect(lambda _=False, cid=cid: self.ribbon._emit_command(cid))
+                menu.addAction(act)
+                self.command_actions[cid] = act
 
         # View Menu
         menu_view = menubar.addMenu("View")
-        menu_view.addAction("Fit View (Home)", self.viewport.zoom_fit, QKeySequence("F"))
-        menu_view.addAction("Measure", self.viewport.begin_measure, QKeySequence("I"))
-        menu_view.addAction("Section View…", self.prompt_section)
+        act_fit = menu_view.addAction("Fit View", self.viewport.zoom_fit)
+        act_fit.setShortcuts([QKeySequence("F"), QKeySequence("Home")])
         menu_view.addAction("Toggle Ground Grid", self.toggle_grid)
         menu_view.addAction("Toggle Feature Edges", self.toggle_edges)
         self._origin_actions = {}
@@ -172,17 +140,16 @@ class MenuSetupMixin:
         menu_help.addAction("Changelog…", self.on_changelog)
         menu_help.addAction("About Omacad", self.on_about)
 
-        # Icons for the menu entries (drawn from emoji at a size the menu font can't give)
+        # Icons for the other menu entries (the commands have theirs); drawn from emoji at a size the menu font can't give
         icons = {
             "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
-            "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️", "Emboss": "🔖", "Insert Canvas": "🖼️",
-            "Box": "📦", "Cylinder": "🥫", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚", "Offset Face": "↔️",
-            "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
-            "Fit View": "🔲", "Section View": "✂️", "Measure": "📏", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
-            "Settings": "⚙️",
+            "Import 3MF": "📥", "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Fit View": "🔲", "Toggle Ground Grid": "📐",
+            "Toggle Feature Edges": "🔳", "About": "ℹ️", "Settings": "⚙️",
         }
         for menu in menubar.findChildren(QMenu):
             for act in menu.actions():
+                if not act.icon().isNull():
+                    continue
                 for label, emoji in icons.items():
                     if act.text().startswith(label):
                         act.setIcon(theme.emoji_icon(emoji, 24))

@@ -28,7 +28,7 @@ def test_ribbon_offset_face_and_guide_line(qapp):
     solid_btn_texts = [b.text() for b in ribbon.solid_tab.findChildren(RibbonButton)]
     assert any("Offset" in t and "Face" in t for t in solid_btn_texts)
 
-    assert "Guide" in ribbon.btn_construct.text()
+    assert "Construction" in ribbon.btn_construct.text()      # one name everywhere (was "Guide Line")
     assert "construction" in ribbon.btn_construct.toolTip().lower()
 
 

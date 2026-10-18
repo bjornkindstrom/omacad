@@ -180,6 +180,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.project_clicked.connect(lambda: self.viewport.project_edges())
         self.ribbon.move_clicked.connect(self.prompt_move_body)
         self.ribbon.canvas_clicked.connect(self.prompt_insert_canvas)
+        self.ribbon.import_3mf_clicked.connect(self.on_import_3mf)
         self.ribbon.delete_clicked.connect(self.on_delete_selected)
         self.ribbon.inspect_clicked.connect(self.on_inspect)
         self.ribbon.settings_clicked.connect(self.on_open_settings)

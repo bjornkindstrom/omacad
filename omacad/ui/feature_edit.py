@@ -76,10 +76,11 @@ def _exec_with_preview(win, doc, dlg, preview_fn, hide_body_ids=(), wiring=(), s
             except (RuntimeError, TypeError):
                 pass
         if vp is not None:
-            if vp.plane_pick_mode:
+            if getattr(vp, "plane_pick_mode", False):
                 vp.end_plane_pick()
-            vp.shell_target_body_id = ""
-            vp.highlighted_faces = []
+            if wiring or start is not None:
+                vp.shell_target_body_id = ""
+                vp.highlighted_faces = []
             quality.set_interactive_mode(prev_interactive)
             if timer is not None:
                 timer.stop()
