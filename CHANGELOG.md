@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.27 - 2026-10-18
+
+### Added
+- Jar with Lid (Primitives menu and Create menu): a threaded jar and its screw lid in one go. Diameter, height, wall, neck diameter and height, pitch, thread profile, lid top and thread tolerance (-0.2 mm by default; minus = looser), all with sliders and a live preview. The lid is laid upside down beside the jar, ready to print (or screwed on). Everything is made of ordinary, editable timeline steps and is one undo step; the panel remembers the last sizes and refuses a lid wall that is too thin.
+
+### Fixed
+- Shell right after other steps could make a different body than after reopening the file (a cup on a stacked cylinder got a 0.5 mm thinner shoulder until the history was rebuilt). Shell now works from the current history.
+
 ## 0.9.9.26 - 2026-10-18
 
 ### Added

@@ -166,6 +166,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.box_clicked.connect(self.prompt_box)
         self.ribbon.cylinder_clicked.connect(self.prompt_cylinder)
         self.ribbon.hexagon_clicked.connect(self.prompt_prism)
+        self.ribbon.jar_clicked.connect(self.prompt_jar)
         self.ribbon.thread_clicked.connect(self.prompt_thread)
         self.ribbon.combine_clicked.connect(self.prompt_combine)
         self.ribbon.split_body_clicked.connect(self.prompt_split_body)

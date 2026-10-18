@@ -20,6 +20,50 @@ from omacad.ui.canvas_dialog import CanvasEditorDialog
 class PrimitivePromptsMixin:
     """Primitive prompt workflows for MainWindow."""
 
+    def prompt_jar(self):
+        """Jar with Lid: sizes with sliders and a live preview; OK adds the steps (one undo step)."""
+        from omacad.model.document import Document
+        from omacad.model.jar import JarSpec, thread_tooth
+        from omacad.ui.dialogs import JarDialog
+        from omacad.ui.settings import get_settings
+        if self.inspector.current_tool_dlg is not None:
+            return
+        dlg = JarDialog(self, JarSpec.from_dict(get_settings().get("jar_spec", {})), embedded=True)
+        self.dock(dlg)
+        vp = self.viewport
+
+        def refresh_preview():
+            spec = dlg.spec()
+            problems = spec.problems(thread_tooth(spec))
+            dlg.set_problems(spec.lid_wall(thread_tooth(spec)), problems)
+            if problems:
+                vp.set_preview(None)
+                return
+            spec.tolerance = 0.0     # 0.2 mm cannot be seen; leaving it out keeps the preview quick
+            scratch = Document()
+            ids = scratch.add_jar(spec)
+            vp.set_preview(scratch.bodies[ids["jar"]].manifold + scratch.bodies[ids["lid"]].manifold, "new_body")
+
+        def on_finished(result):
+            timer.stop()
+            spec = dlg.spec()
+            vp.set_preview(None)
+            self.inspector.undock_tool()
+            dlg.deleteLater()
+            if result:
+                get_settings().set("jar_spec", spec.to_dict())
+                self.doc.add_jar(spec)
+                self.status_label.setText(f"Jar with Lid: Ø{spec.diameter:g} × {spec.height:g} mm, thread tolerance {spec.tolerance:g} mm.")
+            else:
+                self.status_label.setText("Jar with Lid cancelled.")
+            vp.update()
+
+        timer = self._connect_debounced_preview(dlg, refresh_preview, interval_ms=120)
+        dlg.finished.connect(on_finished)
+        self.status_label.setText("Jar with Lid: set the sizes (fields or sliders), OK. Esc cancels.")
+        dlg.show()
+        timer.start()
+
     def prompt_box(self):
         from omacad.model.features.primitives import BoxFeature
         dlg = BoxDialog(self)

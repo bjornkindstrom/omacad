@@ -916,6 +916,7 @@ class Document:
         """Hollows out the body with a given wall thickness, optionally leaving selected faces open."""
         if body_id not in self.bodies:
             return None
+        self.timeline.recompute(self)  # Shell reads the body's history (step_states): it must be current, as on reload
         n = len([f for f in self.timeline.features if f.feature_type == "shell"]) + 1
         feat_id = f"shell_{len(self.timeline.features) + 1}"
         feat = ShellFeature(feat_id, f"Shell {n}", body_id, thickness, open_faces=open_faces, direction=direction, thickness2=thickness2)
@@ -971,6 +972,12 @@ class Document:
         feat.execute(self)
         self.notify_changed()
         return feat
+
+    @undoable("Jar with Lid")
+    def add_jar(self, spec) -> Dict[str, str]:
+        """A threaded jar and its screw lid (see model/jar.py) as one undo step: {"jar": body id, "lid": body id}."""
+        from omacad.model.jar import build_jar
+        return build_jar(self, spec)
 
     @undoable("Honeycomb")
     def add_honeycomb(self, body_id: str, faces, exprs=None, **params) -> Optional[HoneycombFeature]:

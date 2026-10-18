@@ -95,6 +95,7 @@ class MenuSetupMixin:
         menu_create.addAction("Circular Feature Pattern…", lambda: self.prompt_pattern("circular"))
         menu_create.addAction("Box", self.prompt_box)
         menu_create.addAction("Cylinder", self.prompt_cylinder)
+        menu_create.addAction("Jar with Lid", self.prompt_jar)
         menu_create.addAction("Hexagon", self.prompt_prism)
         menu_create.addAction("Thread / Coil…", self.prompt_thread)
 

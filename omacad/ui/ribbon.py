@@ -121,6 +121,7 @@ class Ribbon(QWidget):
     box_clicked = Signal()
     cylinder_clicked = Signal()
     hexagon_clicked = Signal()
+    jar_clicked = Signal()
     combine_clicked = Signal()
     delete_clicked = Signal()
     split_body_clicked = Signal()
@@ -284,7 +285,7 @@ class Ribbon(QWidget):
         # CREATE: standalone solids and primitives
         if group_primitives:
             btn_primitives = RibbonButton("Primitives\n▾", "📦")
-            btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Thread & Coil (Shell Wall in each panel hollows them)")
+            btn_primitives.setToolTip("Create Box, Cylinder, Hexagon, Thread & Coil, Jar with Lid (Shell Wall in each panel hollows them)")
             btn_primitives.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             prim_menu = QMenu(btn_primitives)
             theme.style_menu(prim_menu)
@@ -296,6 +297,8 @@ class Ribbon(QWidget):
             act_hex.triggered.connect(self.hexagon_clicked)
             act_thr = prim_menu.addAction(theme.tool_icon("🔩", 18), "Thread / Coil")
             act_thr.triggered.connect(self.thread_clicked)
+            act_jar = prim_menu.addAction(theme.tool_icon("🫙", 18), "Jar with Lid")
+            act_jar.triggered.connect(self.jar_clicked)
             btn_primitives.setMenu(prim_menu)
             h_layout.addWidget(btn_primitives)
         else:
@@ -318,6 +321,11 @@ class Ribbon(QWidget):
             btn_thread.setToolTip("3D-printable threads and helical coils (trapezoidal 45°, clearance, lead-in taper)")
             btn_thread.clicked.connect(self.thread_clicked)
             h_layout.addWidget(btn_thread)
+
+            btn_jar = RibbonButton("Jar\nLid", "🫙")
+            btn_jar.setToolTip("A threaded jar and its screw lid, with thread tolerance, ready to print")
+            btn_jar.clicked.connect(self.jar_clicked)
+            h_layout.addWidget(btn_jar)
 
         # EDGE FINISHING: right after the primitives
         btn_fillet = RibbonButton("Fillet", "🔘")
