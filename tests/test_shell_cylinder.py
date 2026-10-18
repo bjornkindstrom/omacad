@@ -87,3 +87,20 @@ def test_edit_shell_dialog_shows_the_step_values():
         feature_edit._exec_with_preview = orig
     assert seen == {"dir": "both", "t": 3.0, "t2": 1.5, "faces": 1, "preview": True}
     w.close()
+
+
+def test_shell_of_stacked_cylinders_follows_the_step():
+    """Report: a cylinder R20 H40 joined with a R16 H6 one on top, shelled 2 mm inside with the small top open.
+    The convex shortcut shelled only the big cylinder and put the small one back solid (a plug), and the open
+    face swept the whole wide cavity up through the narrow wall. Now both are hollowed, open only over the top."""
+    from omacad.io.exporter import Exporter
+    doc = Exporter.load_project("tests/data/shell_stacked_cylinders.omacad")
+    body = doc.bodies["body_cylinder_1"].manifold
+    n = quality.circle_segments()
+    inner = lambda r: _area(r - 2/math.cos(math.pi/n))
+    assert len(body.decompose()) == 1
+    assert body.slice(1).area() == pytest.approx(_area(20), rel=1e-6)                  # closed bottom
+    assert body.slice(20).area() == pytest.approx(_area(20) - inner(20), rel=1e-6)     # big wall
+    assert body.slice(39).area() == pytest.approx(_area(20) - inner(16), rel=1e-6)     # sharp ledge inside
+    for z in (41, 43, 45.5):                                                           # narrow wall, open top
+        assert body.slice(z).area() == pytest.approx(_area(16) - inner(16), rel=1e-6)

@@ -87,16 +87,81 @@ class ShellFeature(Feature):
         exact and 20-50x faster than a 3D Minkowski difference."""
         planes = cls._facet_planes(m)
         if planes is not None:
-            cav = m
-            for n, d in zip(*planes):
-                cav = cav.trim_by_plane(tuple(-n), -(d - t))
+            cav = cls._trimmed(m, *planes, t)
             if not cav.is_empty() and cav.volume() > 1e-6:
                 return cav
         return m.minkowski_difference(m3d.Manifold.sphere(t, 12))
 
+    @staticmethod
+    def _trimmed(m, normals, offsets, t):
+        """`m` cut by every plane (normal n, offset d) moved inward by t."""
+        for n, d in zip(normals, offsets):
+            m = m.trim_by_plane(tuple(-n), -(d - t))
+        return m
+
     @classmethod
-    def compute_shell(cls, body, thickness: float, direction: str = "inside", thickness2: float = 2.0, open_faces: Optional[list] = None):
-        """Hollows out a manifold body with wall thickness and optional open faces. Returns new Manifold or None."""
+    def _stacked_cavity(cls, base, added, t):
+        """The exact cavity of a convex `base` with convex parts joined onto it (a cylinder stacked on a
+        cylinder), or None if a part is not convex. Each piece is eroded by its own facet planes, and each joint
+        by the planes of both pieces except the glued faces, so the cavity runs through the joint with sharp
+        corners and the walls stay exactly t thick."""
+        bn, bd = cls._facet_planes(base)
+        pieces = [cls._trimmed(base, bn, bd, t)]
+        for part in added.decompose():
+            planes = cls._facet_planes(part)
+            if planes is None:
+                return None
+            pn, pd = planes
+            # glued: a base facet and a part facet on the same plane, facing each other
+            glued = (np.abs(bn @ pn.T + 1.0) < 1e-6) & (np.abs(bd[:, None] + pd[None, :]) < 1e-4)
+            keep_b, keep_p = ~glued.any(axis=1), ~glued.any(axis=0)
+            pieces.append(cls._trimmed(part, pn, pd, t))
+            pieces.append(cls._trimmed(base + part, np.vstack((bn[keep_b], pn[keep_p])),
+                                       np.concatenate((bd[keep_b], pd[keep_p])), t))
+        return m3d.Manifold.batch_boolean([p for p in pieces if not p.is_empty()], m3d.OpType.Add)
+
+    EPS = 1e-3     # mm: how far off a face plane its region is sliced
+
+    @staticmethod
+    def _frame(n):
+        """Rotation (rows u, v, n) that takes the unit normal n to +Z."""
+        a = np.array([1.0, 0.0, 0.0]) if abs(n[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        u = np.cross(a, n)
+        u /= np.linalg.norm(u)
+        return np.array([u, np.cross(n, u), n])
+
+    @classmethod
+    def _face_region(cls, body, face):
+        """(rotation to the face frame, face plane height in it, the face's region there) for an open face, or None.
+        The region is where the body ends at the plane (inside just under it, not just over it), only the
+        connected part under the picked point: a ledge is an annulus, not the whole cross-section."""
+        n = np.array(face.get("normal", [0, 0, 1]), dtype=float)
+        ln = float(np.linalg.norm(n))
+        if ln < 1e-6:
+            return None
+        R = cls._frame(n / ln)
+        o = R @ np.array(face.get("origin", [0, 0, 0]), dtype=float)
+        local = body.transform(np.column_stack((R, np.zeros(3))))
+        region = local.slice(o[2] - cls.EPS) - local.slice(o[2] + cls.EPS)
+        if region.is_empty():
+            return None
+        dot = m3d.CrossSection.square((2 * cls.EPS, 2 * cls.EPS), True).translate((o[0], o[1]))
+        parts = [p for p in region.decompose() if not (p ^ dot).is_empty()]
+        if parts:
+            region = m3d.CrossSection.batch_boolean(parts, m3d.OpType.Add)
+        return R, float(o[2]), region
+
+    @staticmethod
+    def _prism(R, region, z0, z1):
+        """`region` (in the face frame R) extruded from height z0 to z1, back in world space."""
+        prism = m3d.Manifold.extrude(region, z1 - z0).translate((0.0, 0.0, z0))
+        return prism.transform(np.column_stack((R.T, np.zeros(3))))
+
+    @classmethod
+    def compute_shell(cls, body, thickness: float, direction: str = "inside", thickness2: float = 2.0,
+                      open_faces: Optional[list] = None, cavity=None):
+        """Hollows out a manifold body with wall thickness and optional open faces. Returns new Manifold or None.
+        `cavity`: the body already eroded by the inside wall, when the caller knows it exactly."""
         if direction == "outside":
             t_in, t_out = 0.0, float(thickness)
         elif direction == "both":
@@ -108,8 +173,7 @@ class ShellFeature(Feature):
             return body
 
         # 1. The empty space: eroded by inside wall (or body itself for outside-only)
-        cavity = body
-        if t_in > 0.001:
+        if cavity is None and t_in > 0.001:
             try:
                 cavity = cls._shrink(body, t_in)
             except Exception as e:
@@ -117,6 +181,7 @@ class ShellFeature(Feature):
                 return None
             if cavity.is_empty() or cavity.volume() < 1e-6:
                 return None
+        cavity = body if cavity is None else cavity
 
         # 2. Outer skin: grown by outside wall
         outer = body
@@ -127,31 +192,19 @@ class ShellFeature(Feature):
                 print(f"ShellFeature grow error: {e}")
                 return None
 
-        # 3. Open faces: sweep cavity out through open face
-        open_faces = list(open_faces or [])
-        for f in open_faces:
-            nf = np.array(f.get("normal", [0, 0, 1]), dtype=float)
-            ln = float(np.linalg.norm(nf))
-            if ln > 1e-6 and t_out > 0.001:
-                nf = nf / ln
-                df = float(nf @ np.array(f.get("origin", [0, 0, 0]), dtype=float))
-                outer = outer.trim_by_plane(tuple(-nf), -df)
-
-        sweep = cavity
-        total = t_in + t_out + 1.0
-        for f in open_faces:
-            norm = np.array(f.get("normal", [0, 0, 1]), dtype=float)
-            ln = float(np.linalg.norm(norm))
-            if ln < 1e-6:
+        # 3. Open faces: a prism through each picked face, as wide as the cavity just under it
+        openings = []
+        for f in open_faces or []:
+            picked = cls._face_region(body, f)
+            if picked is None:
                 continue
-            norm = norm / ln
-            bb = np.array(cavity.bounding_box())
-            ext = float(np.abs(norm) @ (bb[3:] - bb[:3]))
-            step = max(0.25 * ext, 0.2)
-            k = 1
-            while k * step < total + step:
-                sweep = sweep + cavity.translate(tuple(norm * min(k * step, total)))
-                k += 1
+            R, d, region = picked
+            if t_out > 0.001:
+                outer = outer - cls._prism(R, region.offset(t_out, m3d.JoinType.Miter), d, d + t_out + 1.0)
+            under = cavity.transform(np.column_stack((R, np.zeros(3)))).slice(d - t_in - cls.EPS) ^ region
+            if not under.is_empty():
+                openings.append(cls._prism(R, under, d - t_in - 2 * cls.EPS, d + t_out + 1.0))
+        sweep = m3d.Manifold.batch_boolean([cavity] + openings, m3d.OpType.Add) if openings else cavity
 
         # 4. Wall = outer skin minus empty space
         try:
@@ -182,16 +235,32 @@ class ShellFeature(Feature):
         return None, None
 
     @classmethod
+    def _thicker_than(cls, m, t):
+        """Whether some part of `m` still has material left after eroding it by t (a wall would be hollowed).
+        Convex parts are eroded exactly; for others (ribs, text) volume/area is half their thickness."""
+        for part in m.decompose():
+            if cls._facet_planes(part) is not None:
+                if cls._trimmed(part, *cls._facet_planes(part), t).volume() > 1e-6:
+                    return True
+            elif part.volume() > t * part.surface_area():
+                return True
+        return False
+
+    @classmethod
     def shell_body(cls, doc, body_id: str, upto: int, body, thickness: float, direction: str = "inside",
                    thickness2: float = 2.0, open_faces: Optional[list] = None):
         """`body` shelled where step `upto` stands, its history before that step in `doc.step_states`
         (the preview, the edit preview and the step use this)."""
         if direction == "inside":
             base, added = cls._convex_base(doc, body_id, upto, body)
-            if base is not None:
+            if base is not None and not cls._thicker_than(added, thickness):
                 shelled = cls.compute_shell(base, thickness, direction, thickness2, open_faces)
                 if shelled is not None:
                     return CadKernel.drop_slivers(shelled + added) if not added.is_empty() else shelled
+            elif base is not None:         # a stacked cylinder is hollowed too, not put back solid
+                cavity = cls._stacked_cavity(base, added, thickness)
+                if cavity is not None:
+                    return cls.compute_shell(body, thickness, direction, thickness2, open_faces, cavity=cavity)
         return cls.compute_shell(body, thickness, direction, thickness2, open_faces)
 
     def execute(self, doc: Any) -> None:
