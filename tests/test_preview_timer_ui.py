@@ -38,3 +38,17 @@ def test_offset_face_cancel_right_after_a_change_leaves_no_preview(win):
     QTest.qWait(200)
     assert all(b.visible for b in win.doc.bodies.values())
     assert win.viewport.preview_mesh is None
+
+
+def test_box_preview_error_is_shown_not_a_crash(win, monkeypatch):
+    from omacad.model.features.primitives import BoxFeature
+
+    def boom(self):
+        raise ValueError("wall thicker than the box")
+    monkeypatch.setattr(BoxFeature, "build_solid", boom)
+    win.prompt_box()
+    dlg = win.inspector.current_tool_dlg
+    dlg.spn_length.setValue(dlg.spn_length.value() + 1)
+    QTest.qWait(150)
+    assert "wall thicker" in dlg.lbl_problem.text()
+    dlg.reject()

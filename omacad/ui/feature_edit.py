@@ -26,14 +26,19 @@ def can_edit(feature) -> bool:
     )
 
 
-def _exec_with_preview(win, doc, dlg, preview_fn, hide_body_ids=()):
+def _exec_with_preview(win, doc, dlg, preview_fn, hide_body_ids=(), wiring=(), start=None):
     """Connects `preview_fn` to `dlg.changed` (if present) with a 60ms debounce + interactive quality mode,
     hides `hide_body_ids` during editing so the preview cleanly replaces the current solid, runs `dlg.exec()`,
-    and restores visibility and clears the preview after."""
+    and restores visibility and clears the preview after. `wiring` (signal, slot) pairs are connected while the
+    dialog is open (face picking in the view, as when the step was made); `start` runs once before it opens."""
     vp = getattr(win, "viewport", None)
     saved_vis = {}
     timer = None
     prev_interactive = quality.is_interactive_mode()
+    for sig, slot in wiring:
+        sig.connect(slot)
+    if vp is not None and start is not None:
+        start()
     if vp is not None:
         quality.set_interactive_mode(True)
         for bid in hide_body_ids:
@@ -65,7 +70,16 @@ def _exec_with_preview(win, doc, dlg, preview_fn, hide_body_ids=()):
             _run_preview()
         return res
     finally:
+        for sig, slot in wiring:
+            try:
+                sig.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
         if vp is not None:
+            if vp.plane_pick_mode:
+                vp.end_plane_pick()
+            vp.shell_target_body_id = ""
+            vp.highlighted_faces = []
             quality.set_interactive_mode(prev_interactive)
             if timer is not None:
                 timer.stop()
@@ -96,14 +110,49 @@ class _StateBefore:
         return getattr(self._doc, name)
 
 
+def _primitive_face_wiring(vp, dlg, mode="primitive_face", on_plane=None):
+    """'On face' in a primitive or Thread panel: the button starts face picking in the view, the pick goes to the panel."""
+    wiring = [(dlg.pick_face_requested, lambda: vp.begin_plane_pick(mode)),
+              (vp.primitive_face_picked, on_plane or dlg.set_target_plane)]
+    return wiring
+
+
 def edit_feature(win, doc, index: int) -> bool:
-    """Opens the right editor for step `index` with live 3D preview. Sketches are edited in sketch mode (returns False)."""
+    """Opens the right editor for step `index` with live 3D preview. Sketches are edited in sketch mode (returns False).
+    Like Fusion 360, the history is rolled back to the step while its panel is open, so the view and every face or
+    point picked show the model as it was before the step; OK or Cancel rolls forward again."""
     if index not in doc.step_states or index + 1 not in doc.step_states:
         doc.timeline.recompute(doc)     # steps just added have no recorded states yet: previews start from them
+    states = dict(doc.step_states)
+    marker = doc.timeline.marker_index
+    rolled = marker != index
+    if rolled:
+        doc.timeline.step_to(index, doc)
+        doc.notify_changed()
+    committed = [False]
+
+    def commit(**params) -> bool:
+        committed[0] = True
+        doc.timeline.marker_index = marker          # the undo step keeps the marker where the user had it
+        changed = doc.edit_feature(index, **params)
+        if rolled and not changed:
+            doc.timeline.step_to(marker, doc)
+            doc.notify_changed()
+        return changed
+
+    try:
+        return _edit_feature(win, doc, index, states, commit)
+    finally:
+        if rolled and not committed[0]:
+            doc.timeline.step_to(marker, doc)
+            doc.notify_changed()
+
+
+def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
     feat = doc.timeline.features[index]
     t = feat.feature_type
     vp = getattr(win, "viewport", None)
-    state_before = doc.step_states.get(index, {})
+    state_before = states.get(index, {})
 
     if t == "extrude":
         from omacad.model.timeline import ExtrudeFeature
@@ -147,7 +196,7 @@ def edit_feature(win, doc, index: int) -> bool:
             op = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, "auto", direction, dist2,
                                 extra_profiles=feat.extra_profiles, extra_refs=feat.extra_refs, holes=feat.holes,
                                 start_offset=start_offset).resolve_operation(_StateBefore(doc, state_before))
-        return doc.edit_feature(index, sketch_id=s_id, profile_idx=p_idx, distance=dist,
+        return commit(sketch_id=s_id, profile_idx=p_idx, distance=dist,
                                 direction=direction, distance2=dist2, start_offset=start_offset,
                                 operation=op, exprs=dlg.get_expressions())
 
@@ -167,7 +216,7 @@ def edit_feature(win, doc, index: int) -> bool:
 
         if not _exec_with_preview(win, doc, dlg, _preview_emboss):
             return False
-        return doc.edit_feature(index, exprs=dlg.get_expressions(), **dlg.get_values())
+        return commit(exprs=dlg.get_expressions(), **dlg.get_values())
 
     if t == "revolve":
         from omacad.model.timeline import RevolveFeature
@@ -208,7 +257,7 @@ def edit_feature(win, doc, index: int) -> bool:
                                 angle=dlg.spn_angle.value(), direction=dlg.get_direction(),
                                 angle2=dlg.spn_angle2.value(), extra_profiles=feat.extra_profiles,
                                 ).resolve_operation(_StateBefore(doc, state_before))
-        return doc.edit_feature(index, sketch_id=s_id, profile_idx=p_idx, axis=dlg.get_axis(),
+        return commit(sketch_id=s_id, profile_idx=p_idx, axis=dlg.get_axis(),
                                 angle=dlg.spn_angle.value(), direction=dlg.get_direction(),
                                 angle2=dlg.spn_angle2.value(), operation=op, exprs=dlg.get_expressions())
 
@@ -253,10 +302,11 @@ def edit_feature(win, doc, index: int) -> bool:
                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
             vp.set_preview(tmp.build_solid(), "new_body")
 
-        if not _exec_with_preview(win, doc, dlg, _preview_box, [f"body_{feat.feature_id}"]):
+        if not _exec_with_preview(win, doc, dlg, _preview_box, [f"body_{feat.feature_id}"],
+                                  wiring=_primitive_face_wiring(vp, dlg)):
             return False
         l, w, h, center, po, pn, pu, pv = dlg.get_values()
-        return doc.edit_feature(index, length=l, width=w, height=h, center=center,
+        return commit(length=l, width=w, height=h, center=center,
                                 plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
                                 exprs=dlg.get_expressions(), **dlg.get_smart_params())
 
@@ -300,11 +350,12 @@ def edit_feature(win, doc, index: int) -> bool:
                    else CylinderFeature("tmp", "tmp", r, h, center, **place))
             vp.set_preview(tmp.build_solid(), "new_body")
 
-        if not _exec_with_preview(win, doc, dlg, _preview_cylinder, [f"body_{feat.feature_id}"]):
+        if not _exec_with_preview(win, doc, dlg, _preview_cylinder, [f"body_{feat.feature_id}"],
+                                  wiring=_primitive_face_wiring(vp, dlg)):
             return False
         r, h, center, po, pn, pu, pv = dlg.get_values()
         size = {"across_flats": r, "sides": dlg.sides()} if prism else {"radius": r}
-        return doc.edit_feature(index, **size, height=h, center=center,
+        return commit(**size, height=h, center=center,
                                 plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
                                 exprs=dlg.get_expressions(), **dlg.get_smart_params())
 
@@ -321,7 +372,7 @@ def edit_feature(win, doc, index: int) -> bool:
 
         if not _exec_with_preview(win, doc, dlg, _preview_sphere, [f"body_{feat.feature_id}"]):
             return False
-        return doc.edit_feature(index, radius=dlg.get_values(), exprs=dlg.get_expressions())
+        return commit(radius=dlg.get_values(), exprs=dlg.get_expressions())
 
     if t == "fillet":
         from omacad.model.timeline import FilletFeature
@@ -333,7 +384,7 @@ def edit_feature(win, doc, index: int) -> bool:
             dlg.spn_size.set_expression(feat.exprs["size"])
 
         # Find which body was modified by this fillet step and precompute its edges once
-        after_state = doc.step_states.get(index + 1, {})
+        after_state = states.get(index + 1, {})
         mod_bids = [bid for bid, m in state_before.items() if bid in after_state]
         precomputed_edges = {}
         for bid, m in state_before.items():
@@ -360,7 +411,7 @@ def edit_feature(win, doc, index: int) -> bool:
 
         if not _exec_with_preview(win, doc, dlg, _preview_fillet, mod_bids[:1]):
             return False
-        return doc.edit_feature(index, size=dlg.spn_size.value(), kind=dlg.kind(), exprs=dlg.get_expressions())
+        return commit(size=dlg.spn_size.value(), kind=dlg.kind(), exprs=dlg.get_expressions())
 
     if t == "offset_face":
         from omacad.ui.dialogs import OffsetFaceDialog
@@ -378,7 +429,7 @@ def edit_feature(win, doc, index: int) -> bool:
 
         if not _exec_with_preview(win, doc, dlg, _preview_offset_face, [feat.target_body_id]):
             return False
-        return doc.edit_feature(index, distance=dlg.distance(), exprs=dlg.get_expressions())
+        return commit(distance=dlg.distance(), exprs=dlg.get_expressions())
 
     if t == "honeycomb":
         from omacad.ui.dialogs import HoneycombDialog
@@ -393,7 +444,7 @@ def edit_feature(win, doc, index: int) -> bool:
 
         if not _exec_with_preview(win, doc, dlg, _preview_honeycomb, [feat.target_body_id]):
             return False
-        return doc.edit_feature(index, **dlg.params(), exprs=dlg.get_expressions())
+        return commit(**dlg.params(), exprs=dlg.get_expressions())
 
     if t == "shell":
         from omacad.model.timeline import ShellFeature
@@ -418,10 +469,21 @@ def edit_feature(win, doc, index: int) -> bool:
                                               dlg.direction(), dlg.spn_thickness2.value(), dlg.open_faces)
                 vp.set_preview(res if res is not None else base_m, "new_body")
 
-        if not _exec_with_preview(win, doc, dlg, _preview_shell, [feat.target_body_id]):
+        def _shell_face_picked(plane):
+            if getattr(plane, "face", None):
+                dlg.toggle_face(plane.face)
+                vp.highlighted_faces = [f["_face"] for f in dlg.open_faces if "_face" in f]
+                vp.update()
+
+        def _start_shell_pick():
+            vp.shell_target_body_id = feat.target_body_id
+            vp.begin_plane_pick("shell_face")
+
+        if not _exec_with_preview(win, doc, dlg, _preview_shell, [feat.target_body_id],
+                                  wiring=[(vp.shell_face_picked, _shell_face_picked)], start=_start_shell_pick):
             return False
         _, thickness, open_faces = dlg.get_values()
-        return doc.edit_feature(index, thickness=thickness, direction=dlg.direction(),
+        return commit(thickness=thickness, direction=dlg.direction(),
                                 thickness2=dlg.spn_thickness2.value(), open_faces=list(open_faces),
                                 exprs=dlg.get_expressions())
 
@@ -458,7 +520,7 @@ def edit_feature(win, doc, index: int) -> bool:
         if t_id and tool_id:
             kwargs["target_body_id"] = t_id
             kwargs["tool_body_id"] = tool_id
-        return doc.edit_feature(index, **kwargs)
+        return commit(**kwargs)
 
     if t == "split_body":
         import numpy as np
@@ -504,7 +566,7 @@ def edit_feature(win, doc, index: int) -> bool:
         elif p_id in doc.origin_planes:
             op = doc.origin_planes[p_id]
             po, pn = list(op.origin), list(op.normal)
-        return doc.edit_feature(index, target_body_id=b_id, plane_id=p_id, plane_origin=po, plane_normal=pn)
+        return commit(target_body_id=b_id, plane_id=p_id, plane_origin=po, plane_normal=pn)
 
     if t == "pattern":
         from omacad.model.timeline import PatternFeature
@@ -531,7 +593,7 @@ def edit_feature(win, doc, index: int) -> bool:
 
         if not _exec_with_preview(win, doc, dlg, _preview_pattern):
             return False
-        return doc.edit_feature(index, source_ids=dlg.source_ids(), kind=dlg.kind(), exprs=dlg.get_expressions(), **dlg.get_params())
+        return commit(source_ids=dlg.source_ids(), kind=dlg.kind(), exprs=dlg.get_expressions(), **dlg.get_params())
 
     if t == "move":
         import numpy as np
@@ -546,6 +608,9 @@ def edit_feature(win, doc, index: int) -> bool:
         dlg.set_points(feat.from_point, feat.to_point)
         dlg.cmb_pivot.setCurrentIndex(max(0, dlg.cmb_pivot.findData(feat.pivot)))
         dlg.chk_copy_body.setChecked(feat.copy_body)
+        for btn in (dlg.btn_points, dlg.btn_f2f, dlg.btn_lay):  # these pick on the body as the step is made
+            btn.setEnabled(False)
+            btn.setToolTip("Picking works when you make a Move. Here, change the numbers (they hold what was picked).")
         for key, spin in (("dx", dlg.spn_dx), ("dy", dlg.spn_dy), ("dz", dlg.spn_dz),
                           ("rx", dlg.spn_rx), ("ry", dlg.spn_ry), ("rz", dlg.spn_rz)):
             if feat.exprs.get(key):
@@ -567,7 +632,7 @@ def edit_feature(win, doc, index: int) -> bool:
             return False
         bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
         frm, to = dlg.get_points()
-        return doc.edit_feature(index, target_body_id=bid, dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz, pivot=pivot, exprs=exprs,
+        return commit(target_body_id=bid, dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz, pivot=pivot, exprs=exprs,
                                 from_point=frm, to_point=to, copy_body=dlg.chk_copy_body.isChecked())
 
     if t == "thread":
@@ -607,10 +672,12 @@ def edit_feature(win, doc, index: int) -> bool:
             vp.set_preview(solid, op)
 
         hide_ids = [f"body_{feat.feature_id}"] if feat.operation == "new_body" else []
-        if not _exec_with_preview(win, doc, dlg, _preview_thread, hide_ids):
+        wiring = _primitive_face_wiring(vp, dlg, "thread_surface", dlg.set_plane) + [
+            (vp.cylinder_picked, lambda info: dlg.apply_cylinder_info(info, body_id=info.get("body_id")))]
+        if not _exec_with_preview(win, doc, dlg, _preview_thread, hide_ids, wiring=wiring):
             return False
         vals = dlg.get_values()
-        return doc.edit_feature(index, exprs=dlg.get_expressions(), **vals)
+        return commit(exprs=dlg.get_expressions(), **vals)
 
 
     QMessageBox.information(win, "Edit", f"{feat.name} can't be edited here yet.")

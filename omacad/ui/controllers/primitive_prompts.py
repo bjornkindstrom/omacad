@@ -82,7 +82,7 @@ class PrimitivePromptsMixin:
                 dlg.lbl_problem.clear()
             except Exception as exc:
                 from omacad import applog
-                applog.log(f"Box preview error: {exc}")
+                applog.log("ERROR", f"Box preview: {exc}")
                 solid = None
                 dlg.lbl_problem.setText(str(exc))
             self.viewport.set_preview(solid, "new_body")
@@ -156,7 +156,7 @@ class PrimitivePromptsMixin:
                 dlg.lbl_problem.clear()
             except Exception as exc:
                 from omacad import applog
-                applog.log(f"{label} preview error: {exc}")
+                applog.log("ERROR", f"{label} preview: {exc}")
                 solid = None
                 dlg.lbl_problem.setText(str(exc))
             self.viewport.set_preview(solid, "new_body")

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.43 - 2026-10-18
+
+### Changed
+- Edit on the timeline rolls the history back to the step while its panel is open, as in Fusion 360: you see and pick the model as it was before the step, and OK or Cancel rolls forward again. In the edit panels, Shell's open faces, a Box/Cylinder/Hexagon's "On face" and a Thread's face or cylinder can now be picked again (those buttons did nothing). Move's pick buttons are greyed out in an edit and say why. A Box or Cylinder preview error is shown in the panel instead of failing silently.
+
 ## 0.9.9.42 - 2026-10-18
 
 ### Fixed

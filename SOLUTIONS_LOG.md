@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Nytt steg raderade senare steg** (0.9.9.32): `Timeline.add_feature` klippte bort allt efter markören när man lade till ett steg i en bakåtrullad historik. Nu infogas steget vid markören (som Fusion), markören står efter det, senare steg ligger kvar bakom markören, och cacheposterna från den positionen töms. Test: `test_timeline_cache.py`.
+
 - **ID återanvändes efter radering** (0.9.9.31): `add_*` byggde id som `f"box_{len(features)+1}"` och skisser som `sketch_{len(sketches)+1}`, så efter en radering fick nästa steg samma id som ett befintligt och skrev över dess kropp (`body_<id>`); en ny skiss ersatte en befintlig och nådde aldrig tidslinjen. Nu ger `Document._feature_id`/`_sketch_id` nästa lediga nummer (skisser räknar även bakåtrullade/undertryckta skissteg). Test: `test_unique_ids.py`.
 
 - **Skissändring försvann efter ombyggnad** (0.9.9.30): `Timeline.recompute` återställde sparade steg med djupkopior av skisserna, så `edit_sketch` gav en kopia; finish såg ett oförändrat steg (cacheträff) och lade tillbaka originalet. Nu binds varje tidslinjeskiss tillbaka till stegets eget objekt efter återställningen, som efter en full körning. Test: `test_timeline_cache.py`.
