@@ -1,5 +1,5 @@
 """The bottom bar is gone: the status message, the sketch status and the units are painted into the 3D view like the
-Azimuth line, and there is no Report problem button there (F9 and Help > Report problem remain)."""
+Azimuth line, and there is no Report problem button there (F10 and Help > Report problem remain)."""
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication, QPushButton, QStatusBar
 
@@ -18,7 +18,7 @@ def test_no_status_bar_and_no_report_button():
     assert w.findChildren(QStatusBar) == []
     assert not [b for b in w.findChildren(QPushButton) if "Report problem" in b.text()]
     from PySide6.QtGui import QAction
-    assert any(a.text().startswith("Report problem") for a in w.findChildren(QAction))     # Help > Report problem (F9)
+    assert any(a.text().startswith("Report problem") for a in w.findChildren(QAction))     # Help > Report problem (F10)
 
 
 def test_status_text_is_drawn_into_the_view_and_still_logged():
@@ -45,3 +45,14 @@ def test_status_text_is_drawn_into_the_view_and_still_logged():
     p.end()
     assert any(t.startswith("Working…") for t in drawn)
     assert "Offset Face: click a face" in applog.tail(20)          # still goes into the log sent with problem reports
+
+
+def test_report_problem_is_f10_because_omarchy_owns_f9():
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtGui import QAction
+    from omacad.ui.main_window import MainWindow
+    QApplication.instance() or QApplication([])
+    w = MainWindow()
+    act = next(a for a in w.findChildren(QAction) if a.text().startswith("Report problem"))
+    assert act.shortcut().toString() == "F10"
+    assert not any(a.shortcut().toString() == "F9" for a in w.findChildren(QAction))

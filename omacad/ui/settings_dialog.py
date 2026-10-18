@@ -485,7 +485,7 @@ class SettingsDialog(QDialog):
         # AI Agent for fixing errors / reporting problems
         from omacad import feedback
         agent_row = QHBoxLayout()
-        lbl_agent = QLabel("AI agent for fixing errors (F9):")
+        lbl_agent = QLabel("AI agent for fixing errors (F10):")
         lbl_agent.setMinimumWidth(200)
         self.cmb_ai_agent = QComboBox()
         cur_agent = self.settings.get("ai_agent", "omarchy")
@@ -494,7 +494,7 @@ class SettingsDialog(QDialog):
         idx_agent = self.cmb_ai_agent.findData(cur_agent)
         if idx_agent >= 0:
             self.cmb_ai_agent.setCurrentIndex(idx_agent)
-        self.cmb_ai_agent.setToolTip("Choose which coding agent to open when reporting a problem (F9) to fix it.")
+        self.cmb_ai_agent.setToolTip("Choose which coding agent to open when reporting a problem (F10) to fix it.")
         agent_row.addWidget(lbl_agent)
         agent_row.addWidget(self.cmb_ai_agent)
         agent_row.addStretch()

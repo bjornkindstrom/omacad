@@ -67,7 +67,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inst
 **Parametriskt**
 - **Parametrar** med namn och formler (`bredd/2`, `10-1`, `2x(3+5)`) i alla fält.
 - **Ångra/gör om för allt** (`Ctrl+Z`, `Ctrl+Shift+Z`): varje steg som ändrar dokumentet kan ångras, också Finish Sketch, parametrar, tidslinjeredigering och radering av kroppar. Menyn visar vad som ångras.
-- **Report problem (`F9`)**: skriv vad som är fel; programmet skickar en skärmbild, modellen och loggen till Omarchys standard-AI (`omarchy agent prompt`) som rättar felet i koden. `omacad.md` är agenternas minne.
+- **Report problem (`F10`)**: skriv vad som är fel; programmet skickar en skärmbild, modellen och loggen till Omarchys standard-AI (`omarchy agent prompt`) som rättar felet i koden. `omacad.md` är agenternas minne.
 - **Tidslinje**: klicka på ett steg för att färga det stegets ändring i vyn (grönt = tillagt, rött = borttaget), dubbelklick redigerar, rulla tillbaka/framåt, undertrycka steg.
 - Sketcher döljs automatiskt när de använts; ögon i trädet.
 

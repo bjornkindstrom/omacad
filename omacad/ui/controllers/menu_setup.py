@@ -124,7 +124,7 @@ class MenuSetupMixin:
         # Help Menu
         menu_help = menubar.addMenu("Help")
         act_report = QAction("Report problem…", self)
-        act_report.setShortcut(QKeySequence("F9"))
+        act_report.setShortcut(QKeySequence("F10"))      # F9 belongs to Omarchy
         act_report.setToolTip("Describe what is wrong; the AI gets a screenshot, the model and the log, and fixes it")
         act_report.triggered.connect(self.on_report_problem)
         menu_help.addAction(act_report)
