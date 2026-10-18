@@ -99,7 +99,7 @@ class InspectorPanel(QWidget):
 
     def eventFilter(self, obj, event):
         if obj is self.content_widget and event.type() == QEvent.Type.LayoutRequest:
-            QTimer.singleShot(0, self.fit_to_content)
+            QTimer.singleShot(0, self, self.fit_to_content)
         return super().eventFilter(obj, event)
 
     def set_max_height(self, h: int):

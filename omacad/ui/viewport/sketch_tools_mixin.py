@@ -10,6 +10,7 @@ from omacad.model.sketch_solver import solve_sketch
 from omacad.model.sketch import Sketch, SketchLine, ref_id
 from omacad.model import expr as expr_lib
 from omacad.ui import dyn_input, smart_circle, theme
+from omacad.ui.viewport.events_mixin import SKETCH_KEYS
 from omacad.ui.theme import qcolor
 
 
@@ -499,6 +500,10 @@ class SketchToolsMixin:
         painter.setPen(qcolor(255, 255, 255))
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, txt)
     def event(self, e):
+        if e.type() == QEvent.Type.ShortcutOverride and self.doc.active_sketch and e.key() in SKETCH_KEYS \
+                and not e.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier):
+            e.accept()              # the sketch tool gets the key, not a menu shortcut with the same letter
+            return True
         # Tab would otherwise move Qt focus; route it to dimension entry while drawing
         if e.type() == QEvent.Type.KeyPress and e.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
             if self._dyn_can_start():

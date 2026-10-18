@@ -4,6 +4,11 @@ from PySide6.QtCore import Qt
 from omacad.model.faces import tangent_chain
 from omacad.model.sketch import SketchText
 
+# Single keys the sketch tools use (keyPressEvent below). In a sketch they win over the window's menu shortcuts
+# with the same letter (M = Move Body, F = Fit View), see SketchToolsMixin.event.
+SKETCH_KEYS = {Qt.Key.Key_L, Qt.Key.Key_R, Qt.Key.Key_C, Qt.Key.Key_P, Qt.Key.Key_A, Qt.Key.Key_X, Qt.Key.Key_D,
+               Qt.Key.Key_M, Qt.Key.Key_O, Qt.Key.Key_F, Qt.Key.Key_T, Qt.Key.Key_I}
+
 
 class ViewportEventsMixin:
     """Keyboard and discrete mouse event behavior for :class:`Viewport3D`."""

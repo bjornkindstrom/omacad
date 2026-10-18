@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.36 - 2026-10-18
+
+### Fixed
+- In a sketch, M and F now start the sketch's Move and Fillet as the ribbon says; they used to open Move Body and fit the view.
+
 ## 0.9.9.35 - 2026-10-18
 
 ### Fixed
