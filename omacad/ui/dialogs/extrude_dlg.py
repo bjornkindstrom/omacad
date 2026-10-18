@@ -92,7 +92,7 @@ class ExtrudeDialog(BaseFeatureDialog):
             self.cmb_profile.setCurrentIndex(self.profile_keys.index(doc.selected_profile))
         elif len(self.profile_keys) > 1:
             self.cmb_profile.setCurrentIndex(-1)   # nothing is picked for you when there is a choice
-        QTimer.singleShot(0, self.focus_primary)
+        QTimer.singleShot(0, self, self.focus_primary)   # the context drops it if the panel is gone
         for sig in (self.cmb_profile.currentIndexChanged, self.cmb_dir.currentIndexChanged,
                     self.cmb_op.currentIndexChanged, self.spn_dist.valueChanged, self.spn_dist2.valueChanged,
                     self.spn_offset.valueChanged):

@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.35 - 2026-10-18
+
+### Fixed
+- Opening a tool while another was open left the first one half alive (its preview, a hidden body, pick mode) and could block Undo and reopening the tool. A new tool now cancels the open one first; a short value prompt (fillet radius, offset distance) brings you back to the tool it was asked from.
+
 ## 0.9.9.34 - 2026-10-18
 
 ### Fixed

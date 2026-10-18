@@ -434,6 +434,7 @@ class DimensionOverlayMixin:
         if inline and on_change is None:
             return self.prompt_dimension_inline(label, value, lo, hi, suffix, expr)
         dlg = QDialog(self)
+        dlg._nested = True          # asked from inside a tool: the tool stays open and comes back afterwards
         dlg.setWindowTitle(title)
         lay = QVBoxLayout(dlg)
         lbl = QLabel(label)

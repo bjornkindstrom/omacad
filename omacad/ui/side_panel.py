@@ -132,8 +132,14 @@ class InspectorPanel(QWidget):
         if self.current_tool_dlg is dlg:
             return
 
-        if self.current_tool_dlg is not None:
-            self.undock_tool(self.current_tool_dlg)
+        previous = self.current_tool_dlg
+        nested = getattr(dlg, "_nested", False)     # a short value prompt asked from inside the open tool
+        if previous is not None:
+            self.undock_tool(previous)
+            if not nested:
+                # a new tool ends the open one properly, as Cancel would: its preview, hidden bodies,
+                # pick mode and "busy" flag are cleared by its own finish handler
+                previous.reject()
 
         from omacad.ui.numeric_slider import add_numeric_sliders
         add_numeric_sliders(dlg)
@@ -156,9 +162,15 @@ class InspectorPanel(QWidget):
         self.info_container.hide()
 
         def on_finished(*_):
+            dlg._tool_done = True
             self.undock_tool(dlg)
+            if nested and previous is not None and self.current_tool_dlg is None \
+                    and not getattr(previous, "_tool_done", False):
+                self.dock_tool(previous)            # back to the tool the prompt was asked from
 
-        dlg.finished.connect(on_finished)
+        if not getattr(dlg, "_tool_finish_hooked", False):
+            dlg._tool_finish_hooked = True
+            dlg.finished.connect(on_finished)
 
     def undock_tool(self, dlg=None):
         if dlg is None:

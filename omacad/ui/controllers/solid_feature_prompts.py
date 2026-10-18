@@ -150,7 +150,7 @@ class SolidFeaturePromptsMixin:
         dlg.show()
         refresh_preview()
         dlg.focus_primary()
-        QTimer.singleShot(0, dlg.focus_primary)
+        QTimer.singleShot(0, dlg, dlg.focus_primary)
 
     def prompt_revolve(self):
         """Revolve: profile (click it in the view), axis, angle, direction and operation, with live preview."""
