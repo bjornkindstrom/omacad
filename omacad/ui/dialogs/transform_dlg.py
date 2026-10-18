@@ -61,11 +61,11 @@ class MoveBodyDialog(BaseFeatureDialog):
 
         # Pivot point for rotation
         self.cmb_pivot = QComboBox()
-        self.cmb_pivot.addItem("Body Center (Kroppens mitt)", "center")
-        self.cmb_pivot.addItem("World Origin (Origo 0,0,0)", "origin")
+        self.cmb_pivot.addItem("Body centre", "center")
+        self.cmb_pivot.addItem("Origin (0, 0, 0)", "origin")
         self.cmb_pivot.addItem("Picked point", "point")
         self.cmb_pivot.setToolTip("Picked point: rotate about the first point picked with 'Pick points' below.")
-        form.addRow("Rotations-pivot:", self.cmb_pivot)
+        form.addRow("Pivot:", self.cmb_pivot)
 
         # Point to point: a point on the body (an edge end or a corner a rounding hides), then where it goes
         self.from_point = self.to_point = None
@@ -104,7 +104,7 @@ class MoveBodyDialog(BaseFeatureDialog):
         form.addRow("Rotate Z (rz):", self.spn_rz)
 
         # Lay a face flat: click a face of the body and the rotation and height below are filled in for you
-        self.btn_lay = QPushButton("Lay a face on the ground…")
+        self.btn_lay = QPushButton("Lay face flat…")
         self.btn_lay.setCheckable(True)
         self.btn_lay.setToolTip("Then click the face in the 3D view that should rest on the ground (XY plane). "
                                 "The rotation and height are filled in below; adjust them or press OK.")

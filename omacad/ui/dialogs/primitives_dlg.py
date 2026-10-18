@@ -2,7 +2,7 @@
 
 from typing import Optional, Tuple, Any
 from PySide6.QtWidgets import QFormLayout, QComboBox, QPushButton, QHBoxLayout, QLabel, QSpinBox
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
 
@@ -32,6 +32,13 @@ def _accept_primitive(dialog, kind):
         return
     BaseFeatureDialog.accept(dialog)
 
+
+
+def _add_placements(combo, items):
+    """Short names in the list (the panel is narrow); what each one means is in its tooltip."""
+    for label, key, tip in items:
+        combo.addItem(label, key)
+        combo.setItemData(combo.count() - 1, tip, Qt.ItemDataRole.ToolTipRole)
 
 class BoxDialog(BaseFeatureDialog):
     """Dialog for creating a primitive box/block."""
@@ -73,19 +80,21 @@ class BoxDialog(BaseFeatureDialog):
 
         # Placement mode
         self.cmb_placement = QComboBox()
-        self.cmb_placement.addItem("Undersida i origo (Center XY, Z: 0..H)", "bottom_center")
-        self.cmb_placement.addItem("Hörn i origo (X, Y, Z: 0..+)", "corner")
-        self.cmb_placement.addItem("Helt centrerad i origo (±X, ±Y, ±Z)", "center")
-        self.cmb_placement.addItem("På vald yta / plan (On face…)", "on_face")
+        _add_placements(self.cmb_placement, (
+            ("Bottom on origin", "bottom_center", "Centred in X and Y, from Z 0 up to the height"),
+            ("Corner on origin", "corner", "X, Y and Z from 0 upwards"),
+            ("Centred on origin", "center", "Centred in X, Y and Z"),
+            ("On a face…", "on_face", "On a face or plane you pick in the 3D view")))
         self.cmb_placement.currentIndexChanged.connect(self._on_placement_changed)
         form.addRow("Placement:", self.cmb_placement)
 
         # On face button & label
-        self.btn_face = QPushButton("Välj yta (On face…)")
-        self.btn_face.setToolTip("Klicka på en yta eller plan i 3D-vyn där boxen ska starta.")
+        self.btn_face = QPushButton("Pick face…")
+        self.btn_face.setToolTip("Click the face or plane in the 3D view where the box should start.")
         self.btn_face.setAutoDefault(False)
         self.btn_face.clicked.connect(self.pick_face_requested)
         self.lbl_face = QLabel("Default: XY ground plane")
+        self.lbl_face.setWordWrap(True)
         self.lbl_face.setStyleSheet("color: #9AA0A6; font-size: 11px;")
         
         face_row = QHBoxLayout()
@@ -279,18 +288,20 @@ class CylinderDialog(BaseFeatureDialog):
 
         # Placement mode
         self.cmb_placement = QComboBox()
-        self.cmb_placement.addItem("Undersida i origo (Center XY, Z: 0..H)", "bottom_center")
-        self.cmb_placement.addItem("Helt centrerad i origo (±Z/2)", "center")
-        self.cmb_placement.addItem("På vald yta / plan (On face…)", "on_face")
+        _add_placements(self.cmb_placement, (
+            ("Bottom on origin", "bottom_center", "Centred in X and Y, from Z 0 up to the height"),
+            ("Centred on origin", "center", "Centred in X, Y and Z (half the height below Z 0)"),
+            ("On a face…", "on_face", "On a face or plane you pick in the 3D view")))
         self.cmb_placement.currentIndexChanged.connect(self._on_placement_changed)
         form.addRow("Placement:", self.cmb_placement)
 
         # On face button & label
-        self.btn_face = QPushButton("Välj yta (On face…)")
-        self.btn_face.setToolTip("Klicka på en yta eller plan i 3D-vyn där cylindern ska starta.")
+        self.btn_face = QPushButton("Pick face…")
+        self.btn_face.setToolTip("Click the face or plane in the 3D view where the cylinder should start.")
         self.btn_face.setAutoDefault(False)
         self.btn_face.clicked.connect(self.pick_face_requested)
         self.lbl_face = QLabel("Default: XY ground plane")
+        self.lbl_face.setWordWrap(True)
         self.lbl_face.setStyleSheet("color: #9AA0A6; font-size: 11px;")
         
         face_row = QHBoxLayout()

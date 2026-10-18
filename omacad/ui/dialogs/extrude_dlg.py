@@ -26,7 +26,7 @@ class ExtrudeDialog(BaseFeatureDialog):
         self.profile_keys = []
         for s_id, s in doc.sketches.items():
             for p_idx, p in enumerate(s.profiles):
-                label = f"{s.name} - Profile {p_idx + 1} ({p.area:.1f} mm²)"
+                label = f"{s.name} · {p_idx + 1} · {p.area:.0f} mm²"
                 self.cmb_profile.addItem(label)
                 self.profile_keys.append((s_id, p_idx))
 
@@ -105,7 +105,7 @@ class ExtrudeDialog(BaseFeatureDialog):
         self.profile_keys = []
         for s_id, sk in self.doc.sketches.items():
             for p_idx, p in enumerate(sk.profiles):
-                self.cmb_profile.addItem(f"{sk.name} - Profile {p_idx + 1} ({p.area:.1f} mm²)")
+                self.cmb_profile.addItem(f"{sk.name} · {p_idx + 1} · {p.area:.0f} mm²")
                 self.profile_keys.append((s_id, p_idx))
         self.cmb_profile.setEnabled(bool(self.profile_keys))
         self.cmb_profile.blockSignals(False)

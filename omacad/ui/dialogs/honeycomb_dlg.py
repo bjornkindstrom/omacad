@@ -38,12 +38,13 @@ class HoneycombDialog(FacePickMixin, BaseFeatureDialog):
         self.spn_size = spin(0.1, 10000, 6.0, " mm", "Width of a cell across its flats (a circle's diameter).")
         self.spn_wall = spin(0.0, 10000, 1.5, " mm", "Material left between two cells.")
         self.spn_margin = spin(0.0, 10000, 3.0, " mm", "Distance kept to the face's edges and to holes already in it.")
-        self.chk_through = QCheckBox("Through (to the air behind)")
+        self.chk_through = QCheckBox("Through")
         self.chk_through.setChecked(True)
+        self.chk_through.setToolTip("Each cell goes through to the air behind it (the far wall of a box stays whole).")
         self.spn_depth = spin(0.01, 10000, 1.0, " mm", "How deep the cells go into the face.")
         self.spn_angle = spin(-360, 360, 0.0, " °", "Turns the pattern on the face. Round faces take steps of 90°, "
                               "so the pattern closes all the way round.")
-        self.chk_partial = QCheckBox("Cut cells at the edge too")
+        self.chk_partial = QCheckBox("Cut edge cells")
         self.chk_partial.setToolTip("Cells that cross the margin are cut off by it (pieces under a quarter are left out). "
                                     "Off: whole cells only.")
         form.addRow("Cell size:", self.spn_size)

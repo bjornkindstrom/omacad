@@ -92,3 +92,22 @@ def test_timeline_chip_marks_steps_with_formulas(win):
     feat.exprs = {"length": "depth"}
     chip = FeatureNodeWidget(1, feat, True)
     assert chip.lbl_name.text().endswith("ƒx") and "length = depth" in chip.toolTip()
+
+
+def test_list_completes_a_name_inside_a_formula(win):
+    win.doc.parameters = [Parameter("test1", "2"), Parameter("test3", "4"), Parameter("other", "1")]
+    win.doc.refresh_parameters()
+    win.prompt_box()
+    dlg = win.inspector.current_tool_dlg
+    f = dlg.spn_length
+    win.activateWindow()
+    f.setFocus()
+    f.lineEdit().selectAll()
+    _type(f, "test1+5*te")
+    assert f.suggestions_visible() and f._list.count() == 2               # test1, test3: only the name being typed
+    QTest.keyClick(f, Qt.Key.Key_Down)
+    QTest.keyClick(f, Qt.Key.Key_Return)
+    assert f.lineEdit().text().startswith("test1+5*test3")
+    f.interpretText()
+    assert f.value() == pytest.approx(22.0) and f.expression() == "test1+5*test3"
+    dlg.reject()

@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Dict, Any
 import numpy as np
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFormLayout, QComboBox, QLabel, QPushButton
 )
@@ -34,7 +34,10 @@ class ShellDialog(BaseFeatureDialog):
 
         # Direction of the wall (as in Fusion): inside, outside, or both with a thickness each
         self.cmb_dir = QComboBox()
-        self.cmb_dir.addItems(["Inside (wall grows inward)", "Outside (wall grows outward)", "Both (inside + outside)"])
+        for label, tip in (("Inside", "The wall grows inward"), ("Outside", "The wall grows outward"),
+                           ("Both", "Inside and outside")):
+            self.cmb_dir.addItem(label)
+            self.cmb_dir.setItemData(self.cmb_dir.count() - 1, tip, Qt.ItemDataRole.ToolTipRole)
         form.addRow("Direction:", self.cmb_dir)
 
         # Wall Thickness

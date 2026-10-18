@@ -6,7 +6,7 @@ from omacad.model.jar import PROFILES, JarSpec
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
 
-PROFILE_NAMES = ("Trapezoid 45° (prints without support)", "Round", "ISO 60°")
+PROFILE_NAMES = ("Trapezoid 45°", "Round", "ISO 60°")      # Trapezoid 45° prints without support
 
 
 class JarDialog(BaseFeatureDialog):
@@ -49,10 +49,11 @@ class JarDialog(BaseFeatureDialog):
         self.cmb_profile.setCurrentIndex(PROFILES.index(spec.profile) if spec.profile in PROFILES else 0)
         self.cmb_profile.currentIndexChanged.connect(lambda *_: self.changed.emit())
         form.insertRow(7, "Thread profile:", self.cmb_profile)
-        self.chk_beside = QCheckBox("Lid beside the jar, upside down (ready to print)")
+        self.chk_beside = QCheckBox("Beside the jar")
+        self.chk_beside.setToolTip("The lid lies upside down beside the jar, ready to print. Off: screwed on.")
         self.chk_beside.setChecked(spec.lid_beside)
         self.chk_beside.toggled.connect(lambda *_: self.changed.emit())
-        form.addRow("", self.chk_beside)
+        form.addRow("Lid:", self.chk_beside)
         self.main_layout.addLayout(form)
         self.lbl_info = QLabel("")
         self.lbl_info.setWordWrap(True)

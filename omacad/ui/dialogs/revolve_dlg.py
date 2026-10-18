@@ -77,7 +77,7 @@ class RevolveDialog(BaseFeatureDialog):
         self.profile_keys = []
         for s_id, sk in self.doc.sketches.items():
             for p_idx, p in enumerate(sk.profiles):
-                self.cmb_profile.addItem(f"{sk.name} - Profile {p_idx + 1} ({p.area:.1f} mm²)")
+                self.cmb_profile.addItem(f"{sk.name} · {p_idx + 1} · {p.area:.0f} mm²")
                 self.profile_keys.append((s_id, p_idx))
         if not self.profile_keys:
             self.cmb_profile.addItem("No closed sketch profiles found!")
@@ -99,7 +99,7 @@ class RevolveDialog(BaseFeatureDialog):
                 tag = "construction line" if e.is_construction else "line"
                 self.cmb_axis.addItem(f"{'⎯ ' if e.is_construction else ''}{tag} ({e.p1[0]:.1f}, {e.p1[1]:.1f}) → ({e.p2[0]:.1f}, {e.p2[1]:.1f})")
                 self.axis_keys.append(("line", e.entity_id))
-        for text, key in (("Sketch Y axis (vertical, through the origin)", ("v",)), ("Sketch X axis (horizontal, through the origin)", ("u",))):
+        for text, key in (("Sketch Y axis (vertical)", ("v",)), ("Sketch X axis (horizontal)", ("u",))):
             self.cmb_axis.addItem(text)
             self.axis_keys.append(key)
         # a construction line is the natural axis; otherwise the vertical axis

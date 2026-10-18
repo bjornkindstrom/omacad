@@ -7,7 +7,7 @@ from typing import Optional, Any
 from PySide6.QtWidgets import (
     QFormLayout, QComboBox, QCheckBox, QLabel, QHBoxLayout, QPushButton, QGroupBox, QVBoxLayout
 )
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from omacad.model.document import Document
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
@@ -30,9 +30,9 @@ THREAD_PRESETS = [
 
 DEFAULT_LEAD_IN_TURNS = 0.3   # the short lead-in: works best for coils
 LEAD_INS = (   # (label, taper on, turns the thread fades in and out over)
-    ("Smooth lead-in & runout", True, 0.75),
-    ("Smooth lead-in & runout, short", True, 0.3),
-    ("None (full thread to the ends)", False, 0.75),
+    ("Smooth ends", True, 0.75),
+    ("Smooth ends, short", True, 0.3),
+    ("None (full to the ends)", False, 0.75),
 )
 
 
@@ -57,8 +57,8 @@ class ThreadDialog(BaseFeatureDialog):
 
         # Thread Type (Male bolt or Female nut/hole)
         self.cmb_type = QComboBox()
-        self.cmb_type.addItem("Male (Yttergänga / Bult)", False)
-        self.cmb_type.addItem("Female (Innergänga / Hål/Mutter)", True)
+        self.cmb_type.addItem("Male (bolt)", False)
+        self.cmb_type.addItem("Female (nut, hole)", True)
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
         form.addRow("Thread Type:", self.cmb_type)
 
@@ -84,7 +84,7 @@ class ThreadDialog(BaseFeatureDialog):
         self.spn_pitch.setValue(2.0)
         self.spn_pitch.setSuffix(" mm")
         self.spn_pitch.valueChanged.connect(self._on_dim_changed)
-        form.addRow("Pitch (Stigning):", self.spn_pitch)
+        form.addRow("Pitch:", self.spn_pitch)
 
         # Length
         self.spn_length = ExprDoubleSpinBox()
@@ -93,11 +93,11 @@ class ThreadDialog(BaseFeatureDialog):
         self.spn_length.setSuffix(" mm")
         self.spn_length.valueChanged.connect(lambda _: self.changed.emit())
         self.spn_length.setToolTip("At least one turn (the pitch) long.")
-        form.addRow("Length (Längd):", self.spn_length)
+        form.addRow("Length:", self.spn_length)
 
         # Target Body / Application Mode
         self.cmb_target = QComboBox()
-        self.cmb_target.addItem("New Body (Ny fristående kropp)", None)
+        self.cmb_target.addItem("New body", None)
         for bid, bname in zip(self.body_ids, body_names):
             self.cmb_target.addItem(f"Apply to: {bname}", bid)
         if preselected_body_id and preselected_body_id in self.body_ids:
@@ -113,18 +113,20 @@ class ThreadDialog(BaseFeatureDialog):
 
         # Profile type selector
         prof_row = QHBoxLayout()
-        prof_row.addWidget(QLabel("Profil:"))
+        prof_row.addWidget(QLabel("Profile:"))
         self.cmb_profile = QComboBox()
-        self.cmb_profile.addItem("45° Trapezoidal (3D-Print säker, utan support)", "trapezoidal_45")
-        self.cmb_profile.addItem("Round / Circular Coil (Rundad fjäder / gänga)", "round")
-        self.cmb_profile.addItem("ISO 60° (Standard metrisk)", "iso_60")
+        for label, key, tip in (("Trapezoid 45°", "trapezoidal_45", "Prints without support"),
+                                ("Round", "round", "A round coil or thread"),
+                                ("ISO 60°", "iso_60", "Standard metric thread")):
+            self.cmb_profile.addItem(label, key)
+            self.cmb_profile.setItemData(self.cmb_profile.count() - 1, tip, Qt.ItemDataRole.ToolTipRole)
         self.cmb_profile.currentIndexChanged.connect(lambda _: self.changed.emit())
         prof_row.addWidget(self.cmb_profile, 1)
         grp_lay.addLayout(prof_row)
 
         # Clearance row
         clr_layout = QHBoxLayout()
-        clr_label = QLabel("Clearance (Tolerans):")
+        clr_label = QLabel("Clearance:")
         self.spn_clearance = ExprDoubleSpinBox()
         self.spn_clearance.setRange(0.0, 2.0)
         self.spn_clearance.setSingleStep(0.05)
@@ -151,11 +153,12 @@ class ThreadDialog(BaseFeatureDialog):
         form.addRow(grp_3d)
 
         # Placement Face button & label
-        self.btn_face = QPushButton("Välj yta / cylinder (Attach…)")
-        self.btn_face.setToolTip("Klicka på en yta, plan eller direkt på utsidan/insidan av en cylinder i 3D-vyn.")
+        self.btn_face = QPushButton("Pick face…")
+        self.btn_face.setToolTip("Click a face, a plane, or the outside or inside of a cylinder in the 3D view.")
         self.btn_face.setAutoDefault(False)
         self.btn_face.clicked.connect(self.pick_face_requested)
         self.lbl_face = QLabel("Default: XY ground plane")
+        self.lbl_face.setWordWrap(True)
         self.lbl_face.setStyleSheet("color: #9AA0A6; font-size: 11px;")
         face_row = QHBoxLayout()
         face_row.setContentsMargins(0, 0, 0, 0)
@@ -166,8 +169,8 @@ class ThreadDialog(BaseFeatureDialog):
         # Where along the cylinder the thread sits (only when a cylinder was picked: its length is known)
         self.host_length = None
         self.cmb_anchor = QComboBox()
-        self.cmb_anchor.addItem("Bottom end", "bottom")
-        self.cmb_anchor.addItem("Top end", "top")
+        self.cmb_anchor.addItem("Bottom", "bottom")
+        self.cmb_anchor.addItem("Top", "top")
         self.cmb_anchor.currentIndexChanged.connect(lambda _: self.changed.emit())
         self.spn_gap = ExprDoubleSpinBox()
         self.spn_gap.setRange(0.0, 2000.0)
@@ -181,7 +184,7 @@ class ThreadDialog(BaseFeatureDialog):
         anchor_row.addWidget(self.spn_gap)
         form.addRow("Place at:", anchor_row)
         self.host_diameter = None          # the picked cylinder's diameter (None: no cylinder)
-        self.chk_follow = QCheckBox("Follow the cylinder's diameter")
+        self.chk_follow = QCheckBox("Follow the cylinder")
         self.chk_follow.setToolTip("The thread keeps sitting on the cylinder when an earlier step (Offset Face ...) changes "
                                    "its diameter. The difference between the typed diameter and the cylinder's is kept.")
         self.chk_follow.toggled.connect(self._follow_toggled)

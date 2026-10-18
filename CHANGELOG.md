@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.51 - 2026-10-18
+
+### Fixed
+- Texts that did not fit in the tool panels are shorter now, with the explanation in the tooltip: in Move (Lay face flat…, Pivot: Body centre / Origin), Box/Cylinder/Hexagon placement, Thread/Coil, Jar with Lid, Shell, Honeycomb and the Extrude/Revolve profile lists. The Swedish texts left in these panels are now English like the rest of the app.
+
 ## 0.9.9.50 - 2026-10-18
 
 ### Changed
