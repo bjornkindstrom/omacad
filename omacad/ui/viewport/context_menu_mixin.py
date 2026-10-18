@@ -3,7 +3,7 @@
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMenu
-from omacad.ui import theme
+from omacad.ui import commands, theme
 from omacad.ui.sketch_tools import SKETCH_TOOLS
 from omacad.ui.viewport.shaders import SKETCH_GROUP_ICONS
 from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
@@ -26,7 +26,7 @@ class ContextMenuMixin:
         chosen = [b for b in self.doc.selected_body_ids if b in self.doc.bodies]
         if len(chosen) >= 2 and not sketch and not self.active_tool_title():
             names = ", ".join(self.doc.bodies[b].name for b in chosen)
-            acts[theme.action_with_icon(menu, f"🔗 Join {len(chosen)} Bodies ({names})")] = ("join_bodies", list(chosen))
+            acts[theme.action_with_icon(menu, f"🔗 Combine {len(chosen)} Bodies ({names})")] = ("join_bodies", list(chosen))
             menu.addSeparator()
         u, r = self.doc.undo_label(), self.doc.redo_label()
         a = theme.action_with_icon(menu, f"↩️ Undo {u}" if u else "↩️ Undo")
@@ -92,6 +92,8 @@ class ContextMenuMixin:
             self.set_sketch_tool(arg)
         elif kind == "construction":
             self.toggle_construction_mode()
+        elif kind == "project":
+            self.project_edges()
         elif kind == "finish":
             self.finish_sketch_requested.emit()
         elif kind == "sketch":
@@ -128,6 +130,7 @@ class ContextMenuMixin:
         acts[theme.action_with_icon(menu, "✏️ Edit Sketch")] = ("edit_sketch", sketch_id)
         acts[theme.action_with_icon(menu, "⬆️ Extrude\tE")] = ("extrude_sketch", sketch_id)
         acts[theme.action_with_icon(menu, "👁️ Hide Sketch")] = ("hide_sketch", sketch_id)
+        acts[theme.action_with_icon(menu, "🗑️ Delete Sketch…")] = ("cmd", f"delete_sketch:{sketch_id}")
         menu.addSeparator()
         self._add_tool_entries(menu, acts)
         self._add_history_and_view(menu, acts, False)
@@ -151,6 +154,7 @@ class ContextMenuMixin:
         what = "profile" if n == 1 else f"{n} profiles"
         acts[theme.action_with_icon(menu, f"⬆️ Extrude this {what}…")] = ("cmd", "extrude")
         acts[theme.action_with_icon(menu, f"🔄 Revolve this {what}…")] = ("cmd", "revolve")
+        acts[theme.action_with_icon(menu, f"🔖 Emboss this {what}…")] = ("cmd", "emboss")
         acts[theme.action_with_icon(menu, "✖️ Deselect")] = ("deselect", None)
         menu.addSeparator()
         self._add_history_and_view(menu, acts, False)
@@ -202,7 +206,9 @@ class ContextMenuMixin:
                         subs[sub] = parent.addMenu(sub)
                     parent = subs[sub]
                 acts[parent.addAction(label)] = ("tool", tool)
-            c = menu.addAction("Construction mode  (X)")
+            parent = groups.get("Create", (menu,))[0]
+            acts[parent.addAction(commands.menu_text("project"))] = ("project", None)
+            c = menu.addAction(commands.menu_text("construction"))
             c.setCheckable(True)
             c.setChecked(self.construction_mode)
             acts[c] = ("construction", None)

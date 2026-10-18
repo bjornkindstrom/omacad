@@ -229,7 +229,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.viewport.extrude_sketch_requested.connect(self.on_extrude_sketch)
         self.browser.named_view_requested.connect(self.viewport.set_view)
         self.browser.extrude_sketch_requested.connect(self.on_extrude_sketch)
-        self.browser.offset_plane_requested.connect(self.prompt_offset_plane)
+        self.browser.offset_plane_requested.connect(self.on_browser_offset_plane)
         self.browser.find_in_window_requested.connect(self.find_in_window)
         self.browser.find_in_timeline_requested.connect(self.find_in_timeline)
         self.browser.delete_sketch_requested.connect(self.on_delete_sketch)
@@ -399,6 +399,10 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
                 dlg.accept() if cmd == "tool_ok" else dlg.reject()
         elif cmd == "extrude":
             self.prompt_extrude()
+        elif cmd == "emboss":
+            self.prompt_emboss()
+        elif cmd.startswith("delete_sketch:"):
+            self.on_delete_sketch(cmd.split(":", 1)[1])
         elif cmd == "revolve":
             self.prompt_revolve()
         elif cmd == "undo":
@@ -473,6 +477,22 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             self.status_label.setText("That item has no step in the timeline.")
             return
         self.timeline_bar.find_step(idx)
+
+    def on_browser_offset_plane(self, kind: str, item_id: str):
+        """Browser > Offset Plane: start from the plane or sketch that was right-clicked (it used to ask for a pick)."""
+        if kind == "plane":
+            base = self.doc.origin_planes.get(item_id)
+        elif kind == "cplane":
+            base = self.doc.construction_plane(item_id) if item_id in self.doc.construction_planes else None
+        else:
+            sk = self.doc.sketches.get(item_id)
+            base = sk.plane if sk is not None else None
+        if base is None:
+            self.prompt_offset_plane()
+            return
+        if self.doc.active_sketch:
+            self.on_finish_sketch()
+        self.on_offset_base_picked(base)
 
     def on_delete_sketch(self, sketch_id: str):
         from omacad.ui import feature_edit

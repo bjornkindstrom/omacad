@@ -9,23 +9,29 @@ RECT_TOOLS = {
     "CENTER_ROUNDED_RECT": ("Center\nRounded", "▣"),
 }
 
-# (tool, label, menu group, submenu or None). Order is the menu order.
+def _entry(tool: str, cid: str, group: str):
+    from omacad.ui import commands
+    return (tool, commands.menu_text(cid), group, None)
+
+
+# (tool, label, menu group, submenu or None). Order is the menu order: the ribbon's SKETCH groups, with the names and
+# keys of omacad.ui.commands.
 SKETCH_TOOLS = [
-    ("LINE", "Line  (L)", "Draw", None),
-    *[(t, label.replace("\n", " "), "Draw", "Rectangle") for t, (label, _i) in RECT_TOOLS.items()],
-    ("CIRCLE", "Circle  (C)", "Draw", None),
-    ("SMART_CIRCLE", "Smart Circle  (Shift+C)", "Draw", None),
-    ("ARC", "Arc", "Draw", None),
-    ("SLOT", "Slot", "Draw", None),
-    ("POLYGON", "Polygon", "Draw", None),
-    ("TEXT", "Text", "Draw", None),
-    ("TRIM", "Trim", "Modify", None),
-    ("OFFSET", "Offset  (O)", "Modify", None),
-    ("MIRROR", "Mirror", "Modify", None),
-    ("FILLET", "Fillet  (F)", "Modify", None),
-    ("MOVE", "Move", "Modify", None),
-    ("ROTATE", "Rotate  (Shift+R)", "Modify", None),
-    ("DIMENSION", "Dimension", "Dimension", None),
+    _entry("LINE", "line", "Create"),
+    *[(t, label.replace("\n", " "), "Create", "Rectangle") for t, (label, _i) in RECT_TOOLS.items()],
+    _entry("CIRCLE", "circle", "Create"),
+    _entry("SMART_CIRCLE", "smart_circle", "Create"),
+    _entry("ARC", "arc", "Create"),
+    _entry("POLYGON", "polygon", "Create"),
+    _entry("SLOT", "slot", "Create"),
+    _entry("TEXT", "text", "Create"),
+    _entry("OFFSET", "offset_sketch", "Create"),
+    _entry("MIRROR", "mirror_sketch", "Create"),
+    _entry("DIMENSION", "dimension", "Create"),
+    _entry("FILLET", "fillet_sketch", "Modify"),
+    _entry("TRIM", "trim", "Modify"),
+    _entry("MOVE", "move_sketch", "Modify"),
+    _entry("ROTATE", "rotate_sketch", "Modify"),
 ]
 # tool names the viewport uses that are not menu entries
 NON_MENU_TOOLS = {"NONE"}

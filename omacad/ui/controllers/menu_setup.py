@@ -21,7 +21,7 @@ class MenuSetupMixin:
         act_new.triggered.connect(self.on_file_new)
         menu_file.addAction(act_new)
 
-        act_open = QAction("Open Project (.omacad)...", self)
+        act_open = QAction("Open Project (.omacad)…", self)
         act_open.setShortcut(QKeySequence.StandardKey.Open)
         act_open.triggered.connect(self.on_file_open)
         menu_file.addAction(act_open)
@@ -33,24 +33,24 @@ class MenuSetupMixin:
         act_save.triggered.connect(self.on_file_save)
         menu_file.addAction(act_save)
 
-        act_save_as = QAction("Save Project As...", self)
+        act_save_as = QAction("Save Project As…", self)
         act_save_as.setShortcut(QKeySequence("Ctrl+Shift+S"))
         act_save_as.triggered.connect(self.on_file_save_as)
         menu_file.addAction(act_save_as)
 
         menu_file.addSeparator()
 
-        act_import_3mf = QAction("Import 3MF Model...", self)
+        act_import_3mf = QAction("Import 3MF…", self)
         act_import_3mf.triggered.connect(self.on_import_3mf)
         menu_file.addAction(act_import_3mf)
 
         menu_file.addSeparator()
 
-        act_export_stl = QAction("Export All as STL...", self)
+        act_export_stl = QAction("Export All as STL…", self)
         act_export_stl.triggered.connect(self.on_export_all_stl)
         menu_file.addAction(act_export_stl)
 
-        act_export_step = QAction("Export All as STEP...", self)
+        act_export_step = QAction("Export All as STEP…", self)
         act_export_step.triggered.connect(self.on_export_all_step)
         menu_file.addAction(act_export_step)
 

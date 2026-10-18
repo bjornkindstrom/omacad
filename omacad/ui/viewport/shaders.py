@@ -93,4 +93,4 @@ void main() {
 }
 """
 
-SKETCH_GROUP_ICONS = {"Draw": "✏️", "Modify": "🛠️", "Dimension": "📏"}
+SKETCH_GROUP_ICONS = {"Create": "✏️", "Modify": "🛠️"}

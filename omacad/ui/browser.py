@@ -35,7 +35,7 @@ class BrowserTree(QWidget):
     move_body_requested = Signal(str)
     named_view_requested = Signal(str)
     extrude_sketch_requested = Signal(str)
-    offset_plane_requested = Signal()
+    offset_plane_requested = Signal(str, str)    # what was right-clicked: ("plane" | "cplane" | "sketch", id)
     find_in_window_requested = Signal(str, str)      # kind ("body"/"sketch"), id
     find_in_timeline_requested = Signal(str, str)
     delete_sketch_requested = Signal(str)
@@ -381,7 +381,7 @@ class BrowserTree(QWidget):
 
         if item_type == "plane":
             add(f"✏️ Create Sketch on {item_id} Plane", lambda: self.start_sketch_on_plane.emit(item_id))
-            add("📐 Offset Plane", self.offset_plane_requested.emit)
+            add("📐 Offset Plane…", lambda: self.offset_plane_requested.emit("plane", item_id))
             add(f"🖼️ Insert Canvas on {item_id} Plane…", lambda: self.insert_canvas_requested.emit(item_id))
             add(f"🪚 Split Body with {item_id} Plane…", lambda: self.split_body_requested.emit("", item_id))
             menu.addSeparator()
@@ -389,7 +389,7 @@ class BrowserTree(QWidget):
 
         elif item_type == "cplane":
             add("✏️ Create Sketch on this Plane", lambda: self.start_sketch_on_cplane.emit(item_id))
-            add("📐 Offset Plane", self.offset_plane_requested.emit)
+            add("📐 Offset Plane…", lambda: self.offset_plane_requested.emit("cplane", item_id))
             add("🖼️ Insert Canvas on this Plane…", lambda: self.insert_canvas_requested.emit(item_id))
             add("🪚 Split Body with this Plane…", lambda: self.split_body_requested.emit("", item_id))
             menu.addSeparator()
@@ -400,7 +400,7 @@ class BrowserTree(QWidget):
             add("🗑️ Delete", lambda: self.doc.delete_construction_plane(item_id))
 
         elif item_type == "body":
-            add("↔️ Move Body…", lambda: self.move_body_requested.emit(item_id))
+            add("✥ Move…", lambda: self.move_body_requested.emit(item_id))
             add("🐚 Shell…", lambda: self.shell_body_requested.emit(item_id))
             add("🪚 Split Body…", lambda: self.split_body_requested.emit(item_id, ""))
             menu.addSeparator()
@@ -409,8 +409,8 @@ class BrowserTree(QWidget):
             show_hide()
             find("body")
             menu.addSeparator()
-            add("💾 Export as STL...", lambda: self.export_body_stl.emit(item_id))
-            add("💾 Export as STEP...", lambda: self.export_body_step.emit(item_id))
+            add("💾 Export as STL…", lambda: self.export_body_stl.emit(item_id))
+            add("💾 Export as STEP…", lambda: self.export_body_step.emit(item_id))
             menu.addSeparator()
             add("🗑️ Delete", lambda: self.doc.delete_body(item_id))
 
@@ -434,7 +434,7 @@ class BrowserTree(QWidget):
 
         elif item_type == "sketch":
             add("⬆️ Extrude\tE", lambda: self.extrude_sketch_requested.emit(item_id))
-            add("📐 Offset Plane", self.offset_plane_requested.emit)
+            add("📐 Offset Plane…", lambda: self.offset_plane_requested.emit("sketch", item_id))
             add("✏️ Edit Sketch", lambda: self.edit_sketch_requested.emit(item_id))
             sk = self.doc.sketches.get(item_id)
             if sk is not None:

@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **M och F i skissen gick till fel verktyg** (0.9.9.36): menyns genvägar M (Move Body) och F (Fit View) gäller hela fönstret och tog tangenten före viewportens `keyPressEvent`. Nu accepterar `SketchToolsMixin.event` `ShortcutOverride` för skisstangenterna (`events_mixin.SKETCH_KEYS`) när en skiss är aktiv och varken Ctrl eller Alt hålls nere; utanför skissen gäller menyns genvägar som förut. Test: `test_sketch_keys_ui.py`.
+
 - **Ett andra verktyg strandade det första** (0.9.9.35): `SidePanel.dock_tool` dolde bara den öppna panelen, så dess `on_finished` körde aldrig: förhandsvisning, dold kropp (Shell), plockläge och `_extrude_dlg`/`_round_dlg` låg kvar, `_busy_reason` blockerade ångra och verktyget kunde inte öppnas igen. Nu gör `dock_tool` `reject()` på det öppna verktyget (som Cancel). Korta värderutor (`prompt_dimension_value`, `dlg._nested`) avslutar inte verktyget utan dockar tillbaka det efteråt. `QTimer.singleShot(0, dlg, dlg.focus_primary)` har dialogen som kontext så en borttagen panel inte får anropet. Test: `test_tool_switch_ui.py`.
 
 - **Formel kraschade appen** (0.9.9.34): `expr._eval` lät `(-8)^(1/3)` ge ett komplext tal (TypeError) och `(64^64)^64` ett jätteheltal (OverflowError vid `isfinite`); anroparna fångar bara ValueError. Nu ger båda ValueError och varje BinOp-resultat görs till float direkt. Test: `test_expr_errors.py`.

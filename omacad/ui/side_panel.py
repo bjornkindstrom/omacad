@@ -20,7 +20,6 @@ from omacad.ui.theme import style
 class InspectorPanel(QWidget):
     """Right-hand side panel hosting active tool dialogs and live model/sketch properties."""
 
-    tool_action_requested = Signal(str, object)  # e.g. ("extrude", body_id), ("fillet", None)
     width_fitted = Signal(int)                   # the panel's new width (the ViewCube keeps clear of it)
 
     MIN_WIDTH, MAX_WIDTH, EDGE_GAP = 200, 380, 10
