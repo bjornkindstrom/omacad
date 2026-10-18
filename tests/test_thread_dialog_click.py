@@ -30,7 +30,8 @@ def test_click_cylinder_previews_and_ok_adds_thread():
     vp.set_preview = lambda solid, *a, **k: previews.append(solid)
 
     win.prompt_thread()
-    dlg = next(w for w in app.allWidgets() if isinstance(w, ThreadDialog))
+    # This window's dialog: in the full suite earlier tests leave their own ThreadDialogs alive.
+    dlg = next(w for w in app.allWidgets() if isinstance(w, ThreadDialog) and w.window() is win)
     _click(vp, vp.world_to_screen(np.array([0., -10., 15.])))
     values = dlg.get_values()
     assert values["diameter"] == 20.0 and values["length"] == 30.0

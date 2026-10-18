@@ -3,6 +3,14 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.11 - 2026-10-18
+
+### Fixed
+- CI (and the Windows EXE build) hung since 0.9.9.6: a fill pattern grew to 7+ GB in `drop_slivers`. After a pattern the body carried ~10^5 mesh-relation runs, which `decompose()` multiplies per part; `drop_slivers` now drops the relation first (`as_original`).
+- Mirrored chamfered holes got their zero-thickness fins back (0.9.9.7): `drop_slivers` rebuilds from the solid parts again and cuts closed inner voids back out, instead of subtracting flakes that lie on the surface.
+- Edge and loop picking on patterned bodies (0.9.9.6): `clean_difference` only grows/clips when the plain difference really has zero-thickness sheets (`CadKernel.has_sheets`); otherwise every face moved a hair off its plane and edges split.
+- `test_thread_dialog_click` failed in the full suite (and in CI): it took a ThreadDialog left over by an earlier test.
+
 ## 0.9.9.10 - 2026-10-18
 
 ### Changed

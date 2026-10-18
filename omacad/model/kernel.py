@@ -188,14 +188,35 @@ class CadKernel:
         return solid.warp_batch(push)
 
     @staticmethod
+    def has_sheets(solid: m3d.Manifold) -> bool:
+        """True when two real (non-needle) triangles meet back to back along an edge: a zero-thickness sheet."""
+        mesh = solid.to_mesh64()
+        tris = np.asarray(mesh.tri_verts, dtype=np.int64)
+        if len(tris) == 0:
+            return False
+        p = np.asarray(mesh.vert_properties[:, :3], dtype=float)[tris]
+        n = np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0])
+        area = np.linalg.norm(n, axis=1)
+        n /= np.maximum(area, 1e-30)[:, None]
+        edges = np.sort(np.concatenate([tris[:, [0, 1]], tris[:, [1, 2]], tris[:, [2, 0]]]), axis=1)
+        owner = np.tile(np.arange(len(tris)), 3)
+        order = np.lexsort((edges[:, 1], edges[:, 0]))
+        edges, owner = edges[order], owner[order]
+        same = np.all(edges[1:] == edges[:-1], axis=1)
+        t0, t1 = owner[:-1][same], owner[1:][same]
+        real = (area[t0] > 1e-3) & (area[t1] > 1e-3)
+        return bool(np.any(real & (np.einsum("ij,ij->i", n[t0], n[t1]) < -0.9)))
+
+    @staticmethod
     def clean_difference(a: m3d.Manifold, b: m3d.Manifold, eps: float = 1e-6) -> m3d.Manifold:
         """a - b without zero-thickness sheets. Where a's surface lies on b's but is tessellated differently
         (a body before and after a join), a plain difference keeps both copies of that surface as volume-less
         sheets fused to the real change; copied by a pattern they become hundreds of hair-thin strips. The
         cut is taken against b grown by `eps`, then the result is grown back 2 eps and clipped to a, so it still
         reaches (a hair into) b and nothing thinner than eps survives."""
-        if a.is_empty() or b.is_empty():
-            return a - b
+        plain = a - b
+        if a.is_empty() or b.is_empty() or not CadKernel.has_sheets(plain):
+            return plain     # growing moves every face a hair off its plane, which splits edge picking
         cut = a - CadKernel.grown(b, eps)
         if cut.is_empty():
             return cut
@@ -205,18 +226,28 @@ class CadKernel:
     def drop_slivers(solid: m3d.Manifold) -> m3d.Manifold:
         """Removes loose, practically volume-less shells that a boolean can leave where two almost-equal
         surfaces (a mirrored copy of a tessellated curve) fail to coincide."""
+        # Forget the mesh relation: after a pattern it can hold ~10^5 runs and decompose() then eats GBs (CI killed).
+        solid = solid.as_original()
         try:
             parts = solid.decompose()
         except Exception:
             return solid
         if len(parts) <= 1:
             return solid
-        total = max(abs(p.volume()) for p in parts)
-        loose = [p for p in parts if 0.0 <= p.volume() <= max(1e-5 * total, 1e-3)]
-        if not loose or len(loose) == len(parts):
+        limit = max(1e-5 * max(abs(p.volume()) for p in parts), 1e-3)
+        keep = [p for p in parts if p.volume() > limit]
+        voids = [p for p in parts if p.volume() < -limit]
+        if not keep or len(keep) + len(voids) == len(parts):
             return solid
-        # Subtract the flakes; rebuilding from the kept parts would lose a closed inner void (a negative part).
-        return solid - (m3d.Manifold.compose(loose) if len(loose) > 1 else loose[0])
+        # Rebuild from the solid parts and cut the closed inner voids (negative parts) back out, turned right side
+        # out. Subtracting the flakes instead leaves them where they lie on the surface: test_mirror_no_fins.
+        result = m3d.Manifold.compose(keep) if len(keep) > 1 else keep[0]
+        for void in voids:
+            mesh = void.to_mesh64()
+            tris = np.array(np.asarray(mesh.tri_verts)[:, ::-1], dtype=np.uint64, order="C")   # own copies: a
+            verts = np.array(mesh.vert_properties, dtype=np.float64, order="C")              # view is refused
+            result -= m3d.Manifold(m3d.Mesh64(vert_properties=verts, tri_verts=tris))
+        return result
 
     @staticmethod
     def round_tool(edge, size: float, kind: str, extend=0.0) -> m3d.Manifold:
