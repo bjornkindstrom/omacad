@@ -84,8 +84,7 @@ def test_thread_dialog_offers_short_lead_in(win):
     dlg = ThreadDialog(win.doc, win)
     labels = [dlg.cmb_taper.itemText(i) for i in range(dlg.cmb_taper.count())]
     assert any("short" in t for t in labels)
-    dlg.cmb_taper.setCurrentIndex(1)
-    v = dlg.get_values()
+    v = dlg.get_values()            # the short lead-in is the default (it works best for coils)
     assert v["taper_lead_in"] is True and abs(v["taper_turns"] - 0.3) < 1e-9
     dlg.set_lead_in(True, 0.75)
     assert dlg.get_values()["taper_turns"] == 0.75

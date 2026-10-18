@@ -28,6 +28,7 @@ THREAD_PRESETS = [
 ]
 
 
+DEFAULT_LEAD_IN_TURNS = 0.3   # the short lead-in: works best for coils
 LEAD_INS = (   # (label, taper on, turns the thread fades in and out over)
     ("Smooth lead-in & runout", True, 0.75),
     ("Smooth lead-in & runout, short", True, 0.3),
@@ -141,6 +142,7 @@ class ThreadDialog(BaseFeatureDialog):
             self.cmb_taper.addItem(label, (on, turns))
         self.cmb_taper.setToolTip("Fasar in och ut gängans start och slut så bulten glider i muttern utan att skära snett. "
                                   "Short fasar på en tredjedels varv i stället för tre kvarts.")
+        self.set_lead_in(True, DEFAULT_LEAD_IN_TURNS)
         self.cmb_taper.currentIndexChanged.connect(lambda _: self.changed.emit())
         lead_row.addWidget(self.cmb_taper, 1)
         grp_lay.addLayout(lead_row)
