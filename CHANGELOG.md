@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.50 - 2026-10-18
+
+### Changed
+- Move applies each move at once: when you let go of an arrow or ring, the move becomes a real step (everything after it rebuilds) and the panel stays open with the numbers back at 0, so you can move a body in several goes without pressing OK in between. Starting Point to point, Face to face or Lay on ground first applies what you typed, so the picks are made where the body now is. Each move is its own undo step; Esc or Cancel keeps the applied moves and only drops what was not applied yet.
+
 ## 0.9.9.49 - 2026-10-18
 
 ### Fixed

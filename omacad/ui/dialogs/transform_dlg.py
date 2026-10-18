@@ -163,6 +163,22 @@ class MoveBodyDialog(BaseFeatureDialog):
             idx = self.body_ids.index(body_id)
             self.cmb_target.setCurrentIndex(idx)
 
+    def add_body(self, body_id: str, name: str):
+        """A body made while the panel is open (a moved copy) becomes a choice too."""
+        if body_id not in self.body_ids:
+            self.body_ids.append(body_id)
+            self.cmb_target.addItem(f"Body: {name}")
+
+    def reset_motion(self, keep_from_point=None):
+        """Back to no move (after a move was applied): numbers 0 without formulas, no target point. A from-point
+        that was only the rotation pivot can stay: rotating about it left it where it was."""
+        for spn in (self.spn_dx, self.spn_dy, self.spn_dz, self.spn_rx, self.spn_ry, self.spn_rz):
+            spn.blockSignals(True)
+            spn._expr = None
+            spn.setValue(0.0)
+            spn.blockSignals(False)
+        self.set_points(keep_from_point, None)
+
     def get_values(self):
         b_idx = self.cmb_target.currentIndex()
         if b_idx < 0 or b_idx >= len(self.body_ids):

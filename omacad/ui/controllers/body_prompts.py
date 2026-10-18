@@ -312,8 +312,40 @@ class BodyPromptsMixin:
                 new_val = round(new_val, 2)
             dlg.set_active_axis_value(new_val)
 
+        committed = []      # Move steps applied while the panel is open (each its own undo step)
+
+        def pending() -> bool:
+            _, dx, dy, dz, rx, ry, rz, _, _ = dlg.get_values()
+            frm, to = dlg.get_points()
+            return any(abs(v) > 1e-9 for v in (dx, dy, dz, rx, ry, rz)) or (frm is not None and to is not None)
+
+        def apply_pending():
+            """Make the move so far a real step at once (everything after it rebuilds), and start the next one from
+            where the body now is: moving in several goes needs no OK in between."""
+            bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
+            if not pending() or not bid or bid not in self.doc.bodies:
+                return
+            frm, to = dlg.get_points()
+            copy = dlg.chk_copy_body.isChecked()
+            feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs,
+                                      from_point=frm, to_point=to, copy_body=copy)
+            if feat is None:
+                return
+            committed.append(feat.feature_id)
+            if copy and f"body_{feat.feature_id}" in self.doc.bodies:   # keep moving the copy just made
+                new_id = f"body_{feat.feature_id}"
+                dlg.add_body(new_id, self.doc.bodies[new_id].name)
+                dlg.chk_copy_body.setChecked(False)
+                dlg.select_body(new_id)
+            dlg.reset_motion(keep_from_point=frm if to is None else None)
+            current_hidden_id[0] = None
+            refresh_preview()
+            self.status_label.setText(f"Moved {self.doc.bodies[dlg.get_values()[0]].name}. Keep moving, or OK to finish "
+                                      "(each move is one undo step).")
+
         def on_drag_finished():
             drag_state["dragging"] = False
+            apply_pending()
             update_handle()
 
         def on_axis_changed(axis: str):
@@ -342,6 +374,8 @@ class BodyPromptsMixin:
                 spn.setValue(round(v, 4))
 
         def on_face_to_face_toggled(on):
+            if on:
+                apply_pending()             # picks are made on the body where it is now
             bid = dlg.get_values()[0]
             if bid in self.doc.bodies:
                 # The source face must remain visible and pickable while the moved preview is shown.
@@ -356,6 +390,8 @@ class BodyPromptsMixin:
                 refresh_preview()
 
         def on_lay_toggled(on):
+            if on:
+                apply_pending()
             bid = dlg.get_values()[0]
             if on:
                 if dlg.btn_f2f.isChecked():
@@ -404,6 +440,7 @@ class BodyPromptsMixin:
 
         def on_points_toggled(on):
             if on:
+                apply_pending()
                 dlg.set_points(None, None)
                 self.viewport.clear_move_gizmo()
                 self.viewport.begin_point_pick()
@@ -461,7 +498,17 @@ class BodyPromptsMixin:
         def on_finished(result):
             bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
             frm, to = dlg.get_points()
+            has_pending = pending()
             cleanup()
+            if not result and committed:    # Cancel / Esc drops only what is not applied yet; each applied move
+                self.status_label.setText(  # is its own undo step, so nothing done here is lost by a stray Esc
+                    f"Move closed: {len(committed)} move(s) kept (Ctrl+Z takes them back one by one).")
+                self.viewport.update()
+                return
+            if result and not has_pending:
+                self.status_label.setText(f"Move: {len(committed)} move(s) applied." if committed else "Move: nothing to move.")
+                self.viewport.update()
+                return
             if result and bid and bid in self.doc.bodies:
                 feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs,
                                           from_point=frm, to_point=to, copy_body=dlg.chk_copy_body.isChecked())
