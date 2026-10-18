@@ -5,6 +5,9 @@ The version lives in `omacad/__init__.py`; every build is published as release `
 
 ## 0.9.9.23 - 2026-10-18
 
+### Changed
+- Split the viewport, sketch, face-analysis, tool-prompt and theme code into focused modules while keeping their existing public entry points.
+
 ### Fixed
 - Fillet/Chamfer: the edge where a flat face meets a wall is a whole circle again on bodies with patterns, embosses and shells. Leftover zero-area triangles from the booleans had chopped it into short arcs with gaps that could not be picked.
 
@@ -12,6 +15,11 @@ The version lives in `omacad/__init__.py`; every build is published as release `
 
 ### Fixed
 - A circular pattern on a round body no longer erases a thread elsewhere on it: only the height the patterned features occupy is trimmed to what every rotation keeps.
+
+## 0.9.9.21 - 2026-10-18
+
+### Changed
+- New threads default to zero clearance; users can still enter a clearance when they need one.
 
 ## 0.9.9.20 - 2026-10-18
 
