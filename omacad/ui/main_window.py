@@ -181,6 +181,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.move_clicked.connect(self.prompt_move_body)
         self.ribbon.canvas_clicked.connect(self.prompt_insert_canvas)
         self.ribbon.import_3mf_clicked.connect(self.on_import_3mf)
+        self.ribbon.selected_edge_count = lambda: len(self.viewport.selected_edges) if self.viewport.edge_pick_mode else 0
+        self.viewport.edges_selection_changed.connect(self.ribbon.sync_context)
+        self.viewport.profile_picked.connect(self.ribbon.sync_context)
         self.ribbon.delete_clicked.connect(self.on_delete_selected)
         self.ribbon.inspect_clicked.connect(self.on_inspect)
         self.ribbon.settings_clicked.connect(self.on_open_settings)

@@ -155,6 +155,16 @@ MENUS: List[Tuple[str, list]] = [
 ]
 
 
+# What the current selection suggests (Ribbon.sync_context): those buttons get an accent border. Nothing moves, so
+# the hands keep finding the buttons where they always are; the border just says "this fits what you picked".
+CONTEXT: Dict[str, List[str]] = {
+    "profile": ["extrude", "revolve", "emboss"],
+    "edges": ["fillet", "chamfer"],
+    "body": ["move", "shell", "split_body", "offset_face", "fillet", "chamfer"],
+    "bodies": ["combine", "move"],
+}
+
+
 def get(cid: str) -> Command:
     return COMMANDS[cid]
 

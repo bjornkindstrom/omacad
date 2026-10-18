@@ -90,6 +90,10 @@ class RibbonButton(QToolButton):
                 border: 1px solid #FF7E36;
                 color: #FFFFFF;
             }}
+            QToolButton[suggested="true"] {{
+                border: 1px solid #E26D28;
+                background-color: rgba(226, 109, 40, 0.16);
+            }}
         """)
         self.ensurePolished()
         if not labels:
@@ -146,6 +150,9 @@ class Ribbon(QWidget):
         super().__init__(parent)
         self.doc = document
         self.doc.add_change_listener(self.sync_active_tab)
+        self.doc.add_change_listener(self.sync_context)
+        self.selected_edge_count = lambda: 0     # set by the main window (edges are picked in the view)
+        self.suggested = set()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -265,6 +272,8 @@ class Ribbon(QWidget):
         self.equalize_buttons()
         self.fit_height()
         self.sync_active_tab()
+        self.suggested = set()
+        self.sync_context()
 
     # --- building blocks: every button and menu entry comes from omacad.ui.commands ----------------------------------
     def _emit_command(self, cid: str):
@@ -359,7 +368,9 @@ class Ribbon(QWidget):
                 else:
                     row.addWidget(self._command_button(item))
         h_layout.addStretch()
-        h_layout.addWidget(self._command_button("settings"))     # app preferences, not a modelling command
+        # app preferences, not a modelling command: no group, but level with the group buttons (not centred on them
+        # together with their group names below)
+        h_layout.addWidget(self._command_button("settings"), 0, Qt.AlignmentFlag.AlignTop)
 
     def setup_sketch_tab(self):
         from omacad.ui.settings import get_settings
@@ -540,6 +551,37 @@ class Ribbon(QWidget):
         self.btn_move.setChecked(tool_name == "MOVE")
         self.btn_rotate_sk.setChecked(tool_name == "ROTATE")
         self.sketch_tool_selected.emit(tool_name)
+
+    def selection_context(self) -> str:
+        """What is selected, in the words of commands.CONTEXT ("" for nothing / in a sketch)."""
+        doc = self.doc
+        if doc.active_sketch is not None:
+            return ""
+        if self.selected_edge_count():
+            return "edges"
+        if doc.selected_profile:
+            return "profile"
+        bodies = [b for b in doc.selected_body_ids if b in doc.bodies]
+        return "bodies" if len(bodies) >= 2 else ("body" if bodies else "")
+
+    def sync_context(self):
+        """Give the buttons that fit the current selection an accent border (a dropdown gets it for its members)."""
+        cids = set(commands.CONTEXT.get(self.selection_context(), ()))
+        for spec in (commands.PRIMITIVES, commands.INSERT, commands.MODIFY_BODY, commands.INSPECT):
+            if cids & set(spec[4]):
+                cids.add(spec[0])
+        if cids == self.suggested:
+            return
+        self.suggested = cids
+        for cid, btn in getattr(self, "command_buttons", {}).items():
+            try:
+                on = cid in cids
+                if bool(btn.property("suggested")) != on:
+                    btn.setProperty("suggested", on)
+                    btn.style().unpolish(btn)
+                    btn.style().polish(btn)
+            except RuntimeError:        # a button of a rebuilt tab that is already gone
+                pass
 
     def sync_active_tab(self):
         """Shows/hides SKETCH tab when sketch is active."""

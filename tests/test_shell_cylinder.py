@@ -74,7 +74,7 @@ def test_edit_shell_dialog_shows_the_step_values():
     w.doc.timeline.recompute(w.doc)      # as after a load: the state before each step is known
     seen = {}
 
-    def fake_exec(win, doc, dlg, preview, ids):
+    def fake_exec(win, doc, dlg, preview, ids, **_):
         preview()
         seen.update(dir=dlg.direction(), t=dlg.spn_thickness.value(), t2=dlg.spn_thickness2.value(),
                     faces=len(dlg.open_faces), preview=w.viewport.preview_mesh is not None)

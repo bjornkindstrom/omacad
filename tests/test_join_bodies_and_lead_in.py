@@ -58,11 +58,11 @@ def test_join_entry_in_the_context_menu_only_with_two_selected(win):
         from PySide6.QtWidgets import QMenu
         doc.select_body(a)
         vp._add_history_and_view(QMenu(), {}, False)
-        assert not any("Join" in t for t in labels)
+        assert not any("Combine" in t for t in labels)
         doc.select_body(b, multi=True)
         acts = {}
         vp._add_history_and_view(QMenu(), acts, False)
-        assert any("Join 2 Bodies" in t for t in labels)
+        assert any("Combine 2 Bodies" in t for t in labels)      # one name with the ribbon
         kind, ids = next(v for v in acts.values() if v[0] == "join_bodies")
     finally:
         theme.action_with_icon = real

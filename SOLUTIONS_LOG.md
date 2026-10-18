@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Förhandsvisning kom tillbaka efter OK** (0.9.9.37): Shell, Offset Face och Thread hade en debounce-`QTimer` som inte stoppades i `on_finished`; OK inom 60–75 ms efter en ändring körde förhandsvisningen efter städningen, dolde den ombyggda kroppen och lämnade en förhandsvisning kvar. Nu stoppas timern först i `on_finished`, och `_connect_debounced_preview` stoppar sin timer på `dlg.finished` för alla som använder den. Test: `test_preview_timer_ui.py`.
+
 - **M och F i skissen gick till fel verktyg** (0.9.9.36): menyns genvägar M (Move Body) och F (Fit View) gäller hela fönstret och tog tangenten före viewportens `keyPressEvent`. Nu accepterar `SketchToolsMixin.event` `ShortcutOverride` för skisstangenterna (`events_mixin.SKETCH_KEYS`) när en skiss är aktiv och varken Ctrl eller Alt hålls nere; utanför skissen gäller menyns genvägar som förut. Test: `test_sketch_keys_ui.py`.
 
 - **Ett andra verktyg strandade det första** (0.9.9.35): `SidePanel.dock_tool` dolde bara den öppna panelen, så dess `on_finished` körde aldrig: förhandsvisning, dold kropp (Shell), plockläge och `_extrude_dlg`/`_round_dlg` låg kvar, `_busy_reason` blockerade ångra och verktyget kunde inte öppnas igen. Nu gör `dock_tool` `reject()` på det öppna verktyget (som Cancel). Korta värderutor (`prompt_dimension_value`, `dlg._nested`) avslutar inte verktyget utan dockar tillbaka det efteråt. `QTimer.singleShot(0, dlg, dlg.focus_primary)` har dialogen som kontext så en borttagen panel inte får anropet. Test: `test_tool_switch_ui.py`.
