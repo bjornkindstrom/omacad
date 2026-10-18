@@ -1,6 +1,7 @@
 from omacad.ui.controllers.tool_prompts import ToolPromptsMixin
 from omacad.ui.controllers.text_prompts import EmbossPromptMixin, TextPromptsMixin
 from omacad.ui.controllers.file_session import FileSessionMixin
+from omacad.ui.controllers.menu_setup import MenuSetupMixin
 """
 Omacad - Main CAD Application Window
 Connects Ribbon, Viewport, Browser, Timeline, and Menu Bar.
@@ -55,7 +56,7 @@ from omacad.ui.dialogs import (
 from omacad.io.exporter import Exporter
 
 
-class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMixin, FileSessionMixin):
+class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMixin, FileSessionMixin, MenuSetupMixin):
     """Main Fusion 360 style window for Omacad."""
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -228,189 +229,6 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.browser.find_in_timeline_requested.connect(self.find_in_timeline)
         self.browser.delete_sketch_requested.connect(self.on_delete_sketch)
 
-    def setup_menu_bar(self):
-        menubar = self.menuBar()
-
-        # File Menu
-        menu_file = menubar.addMenu("File")
-
-        act_new = QAction("New Design", self)
-        act_new.setShortcut(QKeySequence.StandardKey.New)
-        act_new.triggered.connect(self.on_file_new)
-        menu_file.addAction(act_new)
-
-        act_open = QAction("Open Project (.omacad)...", self)
-        act_open.setShortcut(QKeySequence.StandardKey.Open)
-        act_open.triggered.connect(self.on_file_open)
-        menu_file.addAction(act_open)
-        self.menu_recent = menu_file.addMenu("Open Recent")
-        self.rebuild_recent_menu()
-
-        act_save = QAction("Save Project (.omacad)", self)
-        act_save.setShortcut(QKeySequence.StandardKey.Save)
-        act_save.triggered.connect(self.on_file_save)
-        menu_file.addAction(act_save)
-
-        act_save_as = QAction("Save Project As...", self)
-        act_save_as.setShortcut(QKeySequence("Ctrl+Shift+S"))
-        act_save_as.triggered.connect(self.on_file_save_as)
-        menu_file.addAction(act_save_as)
-
-        menu_file.addSeparator()
-
-        act_import_3mf = QAction("Import 3MF Model...", self)
-        act_import_3mf.triggered.connect(self.on_import_3mf)
-        menu_file.addAction(act_import_3mf)
-
-        menu_file.addSeparator()
-
-        act_export_stl = QAction("Export All as STL...", self)
-        act_export_stl.triggered.connect(self.on_export_all_stl)
-        menu_file.addAction(act_export_stl)
-
-        act_export_step = QAction("Export All as STEP...", self)
-        act_export_step.triggered.connect(self.on_export_all_step)
-        menu_file.addAction(act_export_step)
-
-        menu_file.addSeparator()
-
-        act_exit = QAction("Exit", self)
-        act_exit.setShortcut(QKeySequence("Ctrl+Q"))
-        act_exit.triggered.connect(self.close)
-        menu_file.addAction(act_exit)
-
-        # Edit Menu
-        menu_edit = menubar.addMenu("Edit")
-        act_undo = self.act_undo = QAction("Undo", self)
-        act_undo.setShortcut(QKeySequence("Ctrl+Z"))
-        act_undo.triggered.connect(self.on_undo)
-        menu_edit.addAction(act_undo)
-        act_redo = self.act_redo = QAction("Redo", self)
-        act_redo.setShortcuts([QKeySequence("Ctrl+Shift+Z"), QKeySequence("Ctrl+Y")])
-        act_redo.triggered.connect(self.on_redo)
-        menu_edit.addAction(act_redo)
-        self.doc.history_listeners.append(self._update_undo_actions)
-        self._update_undo_actions()
-        menu_edit.addSeparator()
-        act_settings = QAction("Settings…", self)
-        act_settings.setShortcut(QKeySequence("Ctrl+,"))
-        act_settings.triggered.connect(self.on_open_settings)
-        menu_edit.addAction(act_settings)
-
-        # Create Menu
-        menu_create = menubar.addMenu("Create")
-        menu_create.addAction("Create Sketch", self.prompt_create_sketch)
-        act_extrude = QAction("Extrude  (E)", self)
-        act_extrude.setShortcuts([QKeySequence("E"), QKeySequence("Ctrl+E")])
-        act_extrude.triggered.connect(self.prompt_extrude)
-        menu_create.addAction(act_extrude)
-        menu_create.addAction("Emboss…", self.prompt_emboss)
-        menu_create.addAction("Offset Plane…", self.prompt_offset_plane)
-        act_canvas = QAction("Insert Canvas (Image)…", self)
-        act_canvas.triggered.connect(self.prompt_insert_canvas)
-        menu_create.addAction(act_canvas)
-        menu_create.addSeparator()
-        menu_create.addAction("Circular Feature Pattern…", lambda: self.prompt_pattern("circular"))
-        menu_create.addAction("Box", self.prompt_box)
-        menu_create.addAction("Cylinder", self.prompt_cylinder)
-        menu_create.addAction("Hexagon", self.prompt_prism)
-        menu_create.addAction("Thread / Coil…", self.prompt_thread)
-
-        # Modify Menu
-        menu_modify = menubar.addMenu("Modify")
-        act_fillet = QAction("Fillet…", self)
-        act_fillet.triggered.connect(lambda: self.prompt_round_edges("fillet"))
-        menu_modify.addAction(act_fillet)
-        act_chamfer = QAction("Chamfer…", self)
-        act_chamfer.triggered.connect(lambda: self.prompt_round_edges("chamfer"))
-        menu_modify.addAction(act_chamfer)
-        act_shell = QAction("Shell…", self)
-        act_shell.triggered.connect(self.prompt_shell)
-        menu_modify.addAction(act_shell)
-        act_offset_face = QAction("Offset Face…", self)
-        act_offset_face.triggered.connect(lambda: self.prompt_offset_face())
-        menu_modify.addAction(act_offset_face)
-        act_pattern = QAction("Pattern / Mirror…", self)
-        act_pattern.triggered.connect(self.prompt_pattern)
-        menu_modify.addAction(act_pattern)
-        act_params = QAction("Change Parameters…", self)
-        act_params.setShortcut(QKeySequence("Ctrl+P"))
-        act_params.triggered.connect(self.on_change_parameters)
-        menu_modify.addAction(act_params)
-        menu_modify.addAction("Combine", self.prompt_combine)
-        act_split = QAction("Split Body…", self)
-        act_split.triggered.connect(self.prompt_split_body)
-        menu_modify.addAction(act_split)
-        act_move = QAction("Move Body… (M)", self)
-        act_move.setShortcut(QKeySequence("M"))
-        act_move.triggered.connect(self.prompt_move_body)
-        menu_modify.addAction(act_move)
-        menu_modify.addAction("Delete Selected", self.on_delete_selected, QKeySequence.StandardKey.Delete)
-
-        # View Menu
-        menu_view = menubar.addMenu("View")
-        menu_view.addAction("Fit View (Home)", self.viewport.zoom_fit, QKeySequence("F"))
-        menu_view.addAction("Measure", self.viewport.begin_measure, QKeySequence("I"))
-        menu_view.addAction("Section View…", self.prompt_section)
-        menu_view.addAction("Toggle Ground Grid", self.toggle_grid)
-        menu_view.addAction("Toggle Feature Edges", self.toggle_edges)
-        self._origin_actions = {}
-        menu_origin = menu_view.addMenu("Origin")
-        for kind, name, label in (("all", "", "Show Origin"), ("axis", "X", "X Axis"), ("axis", "Y", "Y Axis"),
-                                  ("axis", "Z", "Z Axis"), ("plane", "XY", "XY Plane"), ("plane", "XZ", "XZ Plane"),
-                                  ("plane", "YZ", "YZ Plane")):
-            if kind == "axis" and name == "X":
-                menu_origin.addSeparator()
-            if kind == "plane" and name == "XY":
-                menu_origin.addSeparator()
-            act = menu_origin.addAction(label)
-            act.setCheckable(True)
-            act.toggled.connect(lambda on, k=kind, n=name: self.doc.set_origin_visibility(k, n, on))
-            self._origin_actions[(kind, name)] = act
-        self.doc.add_change_listener(self.sync_origin_actions)
-        self.sync_origin_actions()
-
-        # Help Menu
-        menu_help = menubar.addMenu("Help")
-        act_report = QAction("Report problem…", self)
-        act_report.setShortcut(QKeySequence("F9"))
-        act_report.setToolTip("Describe what is wrong; the AI gets a screenshot, the model and the log, and fixes it")
-        act_report.triggered.connect(self.on_report_problem)
-        menu_help.addAction(act_report)
-        act_request = QAction("Request a change…", self)
-        act_request.setShortcut(QKeySequence("F8"))
-        act_request.setToolTip("Ask for a change or a new feature: your text, a screenshot, the model and the log are sent to the owner on GitHub")
-        act_request.triggered.connect(self.on_request_change)
-        menu_help.addAction(act_request)
-        from omacad.guide import list_guides
-        menu_guides = menu_help.addMenu("Guides")
-        for g in list_guides():
-            menu_guides.addAction(g.title, lambda _=False, gid=g.guide_id: self.show_guide(gid))
-        menu_help.addAction("Changelog…", self.on_changelog)
-        menu_help.addAction("About Omacad", self.on_about)
-
-        # Icons for the menu entries (drawn from emoji at a size the menu font can't give)
-        icons = {
-            "New Design": "📄", "Open Project": "📂", "Save Project As": "💾", "Save Project": "💾", "Export All as STL": "📤",
-            "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Create Sketch": "✏️", "Extrude": "⬆️", "Emboss": "🔖", "Insert Canvas": "🖼️",
-            "Box": "📦", "Cylinder": "🥫", "Combine": "🔗", "Split Body": "🪚", "Shell": "🐚", "Offset Face": "↔️",
-            "Change Parameters": "🧮", "Pattern": "🔁", "Fillet": "🔘", "Chamfer": "◢", "Delete Selected": "🗑️",
-            "Fit View": "🔲", "Section View": "✂️", "Measure": "📏", "Toggle Ground Grid": "📐", "Toggle Feature Edges": "🔳", "About": "ℹ️",
-            "Settings": "⚙️",
-        }
-        for menu in menubar.findChildren(QMenu):
-            for act in menu.actions():
-                for label, emoji in icons.items():
-                    if act.text().startswith(label):
-                        act.setIcon(theme.emoji_icon(emoji, 24))
-                        break
-
-        # Document / File Name display at the top (Fusion style)
-        self.lbl_doc_title = QLabel()
-        self.lbl_doc_title.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        style(self.lbl_doc_title, "font-size: 12px; font-weight: bold; color: #9AA0A6; padding: 2px 14px; background: transparent;")
-        menubar.setCornerWidget(self.lbl_doc_title, Qt.Corner.TopRightCorner)
-        self.update_window_title()
 
     def on_open_settings(self):
         from omacad.ui.settings_dialog import SettingsDialog
@@ -785,235 +603,25 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.viewport.show_edges = not self.viewport.show_edges
         self.viewport.update()
 
-    def attach_document(self, doc: Document, path: Optional[str] = None, clean: bool = True) -> None:
-        """Make `doc` the document every panel shows (used by New and Open). `clean`: it equals what is on disk."""
-        self.doc = doc
-        self.current_path = path
-        if clean:
-            self.mark_clean()
-        self.viewport.set_document(doc)
-        self.inspector.doc = doc
-        doc.add_change_listener(self.inspector.refresh_info)
-        doc.add_change_listener(self.sync_sketch_status)
-        doc.history_listeners.append(self._update_undo_actions)
-        self._update_undo_actions()
-        for panel, refresh in ((self.browser, "refresh_tree"), (self.timeline_bar, "refresh_timeline"),
-                               (self.ribbon, "sync_active_tab")):
-            panel.doc = doc
-            doc.add_change_listener(getattr(panel, refresh))
-        self.update_window_title()
-        doc.notify_changed()
 
-    def update_window_title(self):
-        name = Path(self.current_path).name if getattr(self, "current_path", None) else (getattr(self.doc, "name", "Untitled") or "Untitled")
-        from omacad import __version__
-        self.setWindowTitle(f"{name} - Omacad {__version__}")
-        if hasattr(self, "lbl_doc_title") and self.lbl_doc_title:
-            doc_display = f"📄  {name}" if getattr(self, "current_path", None) else f"📄  {name}*"
-            self.lbl_doc_title.setText(doc_display)
 
-    def on_file_new(self):
-        if not self.confirm_discard_changes():
-            return
-        self.attach_document(Document("Omacad - Untitled"))
-        self.status_label.setText("Created new design.")
 
-    def on_file_save(self):
-        """Ctrl+S: save to the current file, or ask for a name the first time."""
-        if getattr(self, "current_path", None):
-            self._save_to(self.current_path)
-        else:
-            self.on_file_save_as()
 
-    def on_file_save_as(self):
-        start = self.current_path if getattr(self, "current_path", None) else f"{self.doc.name.replace('Omacad - ', '')}.omacad"
-        filepath, _ = QFileDialog.getSaveFileName(self, "Save Project As", start, "Omacad (*.omacad)")
-        if filepath:
-            if not filepath.endswith(".omacad"):
-                filepath += ".omacad"
-            self._save_to(filepath)
 
-    def _save_to(self, filepath: str):
-        if self.doc.active_sketch:
-            self.on_finish_sketch()  # an unfinished sketch is not part of the history and would be lost
-        try:
-            self.doc.name = Path(filepath).stem
-            Exporter.save_project(self.doc, filepath)
-        except OSError as e:
-            QMessageBox.critical(self, "Save failed", f"Could not save {filepath}:\n{e}")
-            return
-        self.current_path = filepath
-        self.mark_clean()
-        self.add_recent_file(filepath)
-        self.update_window_title()
-        self.doc.notify_changed()
-        self.status_label.setText(f"Saved {filepath}")
 
-    def on_file_open(self):
-        filepath, _ = QFileDialog.getOpenFileName(self, "Open Project", "", "Omacad (*.omacad *.om360)")
-        if filepath:
-            self.open_path(filepath)
 
-    def open_path(self, filepath: str):
-        """Open a project file, first asking what to do with unsaved changes (also from Open Recent)."""
-        if not self.confirm_discard_changes():
-            return
-        try:
-            doc = Exporter.load_project(filepath)
-        except (OSError, ValueError, KeyError) as e:
-            QMessageBox.critical(self, "Open failed", f"Could not open {filepath}:\n{e}")
-            return
-        self.attach_document(doc, filepath)
-        self.add_recent_file(filepath)
-        self.viewport.zoom_fit()
-        self.status_label.setText(f"Opened {filepath}")
 
-    def on_export_all_stl(self):
-        if not self.doc.bodies:
-            QMessageBox.information(self, "Export STL", "No bodies to export.")
-            return
 
-        filepath, _ = QFileDialog.getSaveFileName(self, "Export All Bodies to STL", "", "STL Files (*.stl)")
-        if filepath:
-            if not filepath.endswith(".stl"):
-                filepath += ".stl"
-            ok = Exporter.export_all_to_stl(self.doc, filepath)
-            if ok:
-                QMessageBox.information(self, "Export STL", f"Successfully exported STL to:\n{filepath}")
-                self.status_label.setText(f"Exported STL to {filepath}")
 
-    def export_single_body_stl(self, body_id: str):
-        body = self.doc.bodies.get(body_id)
-        if not body:
-            return
 
-        filepath, _ = QFileDialog.getSaveFileName(self, f"Export {body.name} to STL", f"{body.name}.stl", "STL Files (*.stl)")
-        if filepath:
-            ok = Exporter.export_body_to_stl(body, filepath)
-            if ok:
-                QMessageBox.information(self, "Export STL", f"Successfully exported {body.name} to:\n{filepath}")
 
-    def on_import_3mf(self):
-        filepath, _ = QFileDialog.getOpenFileName(self, "Import 3MF Model", "", "3MF Files (*.3mf)")
-        if not filepath:
-            return
-        try:
-            bodies = Exporter.import_3mf(filepath, self.doc)
-            if bodies:
-                self.viewport.zoom_fit()
-                names = ", ".join(b.name for b in bodies)
-                self.status_label.setText(f"Imported {len(bodies)} body(s) from {Path(filepath).name}: {names}")
-            else:
-                QMessageBox.warning(self, "Import 3MF", "No 3D meshes found in 3MF archive.")
-        except Exception as e:
-            QMessageBox.critical(self, "Import Failed", f"Could not import {filepath}:\n{e}")
-
-    def on_export_all_step(self):
-        if not self.doc.bodies:
-            QMessageBox.information(self, "Export STEP", "No bodies to export.")
-            return
-
-        filepath, _ = QFileDialog.getSaveFileName(self, "Export All Bodies to STEP", "", "STEP Files (*.step *.stp)")
-        if filepath:
-            if not (filepath.endswith(".step") or filepath.endswith(".stp")):
-                filepath += ".step"
-            ok = Exporter.export_all_to_step(self.doc, filepath)
-            if ok:
-                QMessageBox.information(self, "Export STEP", f"Successfully exported STEP to:\n{filepath}")
-                self.status_label.setText(f"Exported STEP to {filepath}")
-
-    def export_single_body_step(self, body_id: str):
-        body = self.doc.bodies.get(body_id)
-        if not body:
-            return
-
-        filepath, _ = QFileDialog.getSaveFileName(self, f"Export {body.name} to STEP", f"{body.name}.step", "STEP Files (*.step *.stp)")
-        if filepath:
-            if not (filepath.endswith(".step") or filepath.endswith(".stp")):
-                filepath += ".step"
-            ok = Exporter.export_body_to_step(body, filepath)
-            if ok:
-                QMessageBox.information(self, "Export STEP", f"Successfully exported {body.name} to:\n{filepath}")
-                self.status_label.setText(f"Exported {body.name} to {filepath}")
 
     # ------------------ Restart with a new version ------------------
 
-    def start_restart_watch(self, interval_ms: int = 3000) -> None:
-        """When the source tree gets a new commit (the agent finished a fix), save everything and restart on it."""
-        from omacad import feedback, session
-        self._code_root = feedback.repo_root()
-        self._code_version = session.code_version(self._code_root)
-        if self._code_version is None:
-            return                                  # not a source checkout: nothing to watch
-        self._restart_timer = QTimer(self)
-        self._restart_timer.timeout.connect(self._check_code_version)
-        self._restart_timer.start(interval_ms)
 
-    def _check_code_version(self) -> None:
-        from PySide6.QtWidgets import QApplication
-        from omacad import session
-        from omacad.ui.settings import get_settings
-        if not get_settings().get("auto_restart", True) or QApplication.activeModalWidget() is not None:
-            return                                  # never pull the app away under an open dialog
-        version = session.code_version(self._code_root)
-        if version and version != self._code_version:
-            self._restart_timer.stop()
-            self.status_label.setText("New version committed: saving your work and restarting ...")
-            QTimer.singleShot(1500, self.restart_app)
 
-    def restart_app(self) -> None:
-        """Saves the session and starts a fresh process that resumes it, then closes this one."""
-        import sys
-        from PySide6.QtCore import QProcess
-        from PySide6.QtWidgets import QApplication
-        from omacad import applog, session
-        v = self.viewport
-        camera = {"azimuth": v.azimuth, "elevation": v.elevation, "distance": v.distance,
-                  "target": [float(x) for x in v.target]}
-        try:
-            session.save(self.doc, self.current_path, camera)
-        except (OSError, TypeError, ValueError) as e:      # no restart if the work could not be saved
-            applog.log("ERROR", f"restart cancelled, could not save the session: {e}")
-            self.status_label.setText(f"Restart cancelled, could not save the session: {e}")
-            self._restart_timer.start()
-            return
-        script = str(Path(self._code_root) / "app.py")
-        if QProcess.startDetached(sys.executable, [script, session.RESUME_FLAG], str(self._code_root)):
-            QApplication.quit()
-        else:
-            applog.log("ERROR", "restart cancelled, could not start the new process")
-            self.status_label.setText("Restart cancelled, could not start the new process.")
-            self._restart_timer.start()
 
-    def restore_session(self) -> bool:
-        """Puts back what restart_app saved (document, sketch being edited, camera). Returns whether there was one."""
-        from omacad import session
-        data = session.load()
-        if not data:
-            return False
-        doc = Document()
-        Exporter.apply_dict(doc, data["document"])
-        self.attach_document(doc, data.get("path"), clean=False)
-        self.mark_clean(self._session_baseline(data.get("path")))
-        cam = data.get("camera") or {}
-        v = self.viewport
-        v.azimuth = cam.get("azimuth", v.azimuth)
-        v.elevation = cam.get("elevation", v.elevation)
-        v.distance = cam.get("distance", v.distance)
-        if "target" in cam:
-            v.target = np.array(cam["target"], dtype=np.float32)
-        v.update()
-        self.status_label.setText(f"Restarted on Omacad {__import__('omacad').__version__}; your work is back.")
-        return True
 
-    def _session_baseline(self, path: Optional[str]) -> str:
-        """What "unchanged" means for a restored session: the file it was opened from, or an empty design."""
-        try:
-            if path and Path(path).exists():
-                return self._state_of(Exporter.load_project(path))
-        except (OSError, ValueError, KeyError):
-            pass
-        return self._state_of(Document())
 
     def _keep_viewcube_clear(self, inspector_width: int):
         """The ViewCube sits just to the left of the Inspector, whatever width the panel fitted to."""

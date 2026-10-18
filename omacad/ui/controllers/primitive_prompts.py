@@ -1,0 +1,261 @@
+"""Grouped MainWindow tool prompt workflows."""
+
+import os
+from typing import Optional
+import numpy as np
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QMessageBox
+from omacad.model.timeline import (
+    ExtrudeFeature, SplitBodyFeature, ShellFeature, MoveFeature
+)
+from omacad.ui.dialogs import (
+    RoundEdgesDialog, PatternDialog, OffsetPlaneDialog,
+    SketchPlaneDialog, ExtrudeDialog, BoxDialog, CylinderDialog, PrismDialog,
+    SphereDialog, CombineDialog, SplitBodyDialog, ShellDialog, MoveBodyDialog,
+    ThreadDialog
+)
+from omacad.ui.canvas_dialog import CanvasEditorDialog
+
+
+class PrimitivePromptsMixin:
+    """Primitive prompt workflows for MainWindow."""
+
+    def prompt_box(self):
+        from omacad.model.features.primitives import BoxFeature
+        dlg = BoxDialog(self)
+
+        def refresh_preview():
+            l, w, h, center, po, pn, pu, pv = dlg.get_values()
+            smart = dlg.get_smart_params()
+            feat = BoxFeature("preview_box", "Preview", l, w, h, center,
+                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                              translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
+            try:
+                solid = feat.build_solid()
+                dlg.lbl_problem.clear()
+            except Exception as exc:
+                from omacad import applog
+                applog.log(f"Box preview error: {exc}")
+                solid = None
+                dlg.lbl_problem.setText(str(exc))
+            self.viewport.set_preview(solid, "new_body")
+            self.viewport.update()
+
+        def on_pick_face():
+            self.viewport.begin_plane_pick("primitive_face")
+            self.status_label.setText("Box: Click the face or plane where the bottom should start (Esc to cancel).")
+
+        def on_face_picked(plane):
+            dlg.set_target_plane(plane)
+            dlg.activateWindow()
+
+        def on_finished(result):
+            for sig, slot in (
+                (dlg.pick_face_requested, on_pick_face),
+                (self.viewport.primitive_face_picked, on_face_picked),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
+            if self.viewport.plane_pick_mode:
+                self.viewport.end_plane_pick()
+            self.viewport.set_preview(None)
+            self.viewport.update()
+            if result:
+                l, w, h, center, po, pn, pu, pv = dlg.get_values()
+                smart = dlg.get_smart_params()
+                body = self.doc.add_box(l, w, h, center=center,
+                                        plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                                        translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
+                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.viewport.zoom_fit()
+                self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
+
+        timer = self._connect_debounced_preview(dlg, refresh_preview, throttle=True)
+        dlg.finished.connect(lambda _: timer.stop())
+        dlg.pick_face_requested.connect(on_pick_face)
+        self.viewport.primitive_face_picked.connect(on_face_picked)
+        dlg.finished.connect(on_finished)
+        from omacad.ui.primitive_handles import attach_primitive_handles
+        attach_primitive_handles(self.viewport, dlg, "box", refresh_preview)
+        self.dock(dlg)
+        refresh_preview()
+
+    def prompt_prism(self):
+        """Hexagon (any regular prism): the Cylinder flow with flat sides, sized across flats."""
+        self.prompt_cylinder(prism=True)
+
+    def prompt_cylinder(self, prism=False):
+        from omacad.model.features.primitives import CylinderFeature, PrismFeature
+        dlg = PrismDialog(self) if prism else CylinderDialog(self)
+        label = "Hexagon" if prism else "Cylinder"
+
+        def make_feature(fid, name, size, h, center, **params):
+            if prism:
+                return PrismFeature(fid, name, size, h, center, sides=dlg.sides(), **params)
+            return CylinderFeature(fid, name, size, h, center, **params)
+
+
+        def refresh_preview():
+            r, h, center, po, pn, pu, pv = dlg.get_values()
+            smart = dlg.get_smart_params()
+            feat = make_feature("preview_cyl", "Preview", r, h, center,
+                                plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                                translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
+            try:
+                solid = feat.build_solid()
+                dlg.lbl_problem.clear()
+            except Exception as exc:
+                from omacad import applog
+                applog.log(f"{label} preview error: {exc}")
+                solid = None
+                dlg.lbl_problem.setText(str(exc))
+            self.viewport.set_preview(solid, "new_body")
+            self.viewport.update()
+
+        def on_pick_face():
+            self.viewport.begin_plane_pick("primitive_face")
+            self.status_label.setText(f"{label}: Click the face or plane where the bottom should start (Esc to cancel).")
+
+        def on_face_picked(plane):
+            dlg.set_target_plane(plane)
+            dlg.activateWindow()
+
+        def on_finished(result):
+            for sig, slot in (
+                (dlg.pick_face_requested, on_pick_face),
+                (self.viewport.primitive_face_picked, on_face_picked),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
+            if self.viewport.plane_pick_mode:
+                self.viewport.end_plane_pick()
+            self.viewport.set_preview(None)
+            self.viewport.update()
+            if result:
+                r, h, center, po, pn, pu, pv = dlg.get_values()
+                smart = dlg.get_smart_params()
+                place = dict(center=center, plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                             translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
+                if prism:
+                    body = self.doc.add_prism(r, h, sides=dlg.sides(), **place)
+                else:
+                    body = self.doc.add_cylinder(r, h, **place)
+                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.viewport.zoom_fit()
+                size = f"{r:g} across flats" if prism else f"R={r}"
+                self.status_label.setText(f"Created {body.name} ({size}, H={h} mm).")
+
+        timer = self._connect_debounced_preview(dlg, refresh_preview, throttle=True)
+        dlg.finished.connect(lambda _: timer.stop())
+        dlg.pick_face_requested.connect(on_pick_face)
+        self.viewport.primitive_face_picked.connect(on_face_picked)
+        dlg.finished.connect(on_finished)
+        from omacad.ui.primitive_handles import attach_primitive_handles
+        attach_primitive_handles(self.viewport, dlg, "prism" if prism else "cylinder", refresh_preview)
+        self.dock(dlg)
+        refresh_preview()
+
+    def prompt_sphere(self):
+        from omacad.model.kernel import CadKernel
+        from omacad.ui.primitive_handles import attach_primitive_handles
+        dlg = SphereDialog(self)
+
+        def preview():
+            solid = CadKernel.create_sphere(dlg.get_values()).translate(tuple(getattr(dlg, "placement_offset", (0, 0, 0))))
+            self.viewport.set_preview(solid, "new_body")
+
+        def finished(result):
+            self.viewport.set_preview(None)
+            if result:
+                r = dlg.get_values()
+                body = self.doc.add_sphere(r, translation=getattr(dlg, "placement_offset", (0, 0, 0)))
+                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.viewport.zoom_fit()
+                self.status_label.setText(f"Created {body.name} (R={r} mm).")
+
+        timer = self._connect_debounced_preview(dlg, preview, throttle=True)
+        dlg.finished.connect(lambda _: timer.stop())
+        attach_primitive_handles(self.viewport, dlg, "sphere", preview)
+        dlg.finished.connect(finished)
+        self.dock(dlg)
+        preview()
+
+    def prompt_thread(self):
+        from omacad.model.features.thread import ThreadFeature
+        selected_id = self.doc.selected_body_ids[0] if self.doc.selected_body_ids else None
+        dlg = ThreadDialog(self.doc, self, preselected_body_id=selected_id)
+
+        preview_timer = QTimer(self)
+        preview_timer.setSingleShot(True)
+        preview_timer.setInterval(60)
+
+        def do_refresh_preview():
+            from omacad.model import quality
+            prev = quality.is_interactive_mode()
+            quality.set_interactive_mode(True)
+            try:
+                vals = dlg.get_values()
+                feat = ThreadFeature("preview_thread", "Preview", **vals)
+                try:
+                    solid = feat.build_solid()
+                except Exception:
+                    solid = None
+            finally:
+                quality.set_interactive_mode(prev)
+            op = "cut" if vals.get("operation") == "cut" else "new_body"
+            self.viewport.set_preview(solid, op)
+            self.viewport.update()
+
+        def refresh_preview():
+            preview_timer.start()
+
+        preview_timer.timeout.connect(do_refresh_preview)
+
+        def on_pick_face():
+            self.viewport.begin_plane_pick("thread_surface")
+            self.status_label.setText("Thread / Coil: Click a flat face or directly on the outside/inside of a cylinder (Esc to cancel).")
+
+        def on_face_picked(plane):
+            dlg.set_plane(plane)
+            dlg.activateWindow()
+
+        def on_cylinder_picked(cyl_info):
+            dlg.apply_cylinder_info(cyl_info, body_id=cyl_info.get("body_id"))
+            dlg.activateWindow()
+
+        def on_finished(result):
+            for sig, slot in (
+                (dlg.changed, refresh_preview),
+                (dlg.pick_face_requested, on_pick_face),
+                (self.viewport.primitive_face_picked, on_face_picked),
+                (self.viewport.cylinder_picked, on_cylinder_picked),
+                (self.viewport.body_clicked, dlg.select_body),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
+            if self.viewport.plane_pick_mode:
+                self.viewport.end_plane_pick()
+            self.viewport.set_preview(None)
+            self.viewport.update()
+            if result:
+                vals = dlg.get_values()
+                body = self.doc.add_thread(exprs=dlg.get_expressions(), **vals)
+                self.viewport.zoom_fit()
+                if body:
+                    self.status_label.setText(f"Created {body.name} (D={vals['diameter']}, P={vals['pitch']} mm).")
+
+        dlg.changed.connect(refresh_preview)
+        dlg.pick_face_requested.connect(on_pick_face)
+        self.viewport.primitive_face_picked.connect(on_face_picked)
+        self.viewport.cylinder_picked.connect(on_cylinder_picked)
+        self.viewport.body_clicked.connect(dlg.select_body)
+        dlg.finished.connect(on_finished)
+        self.dock(dlg)
+        refresh_preview()
+        on_pick_face()
