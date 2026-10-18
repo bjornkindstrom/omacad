@@ -62,7 +62,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inst
 
 **Se in i modellen**
 - **Measure** (`I`, knappen i både SOLID och SKETCH): klicka på en linje, cirkel eller kant för längd/diameter, klicka på en andra för avstånd (parallella) eller vinkel och kortaste avstånd. Gäller skisselement i skissläge och kroppskanter i 3D.
-- **Section View** (✂️ i bandet, View-menyn): välj XY/XZ/YZ, en yta eller ett eget plan, och skjut snittet genom modellen med reglage, inskrivet värde eller genom att dra i den blå pilen. Snittytan färgas, med "se från andra sidan". Sparas som en **Section View i trädet** (öga för av/på, högerklick: ändra, döp om, ta bort) och följer med i filen.
+- **Section View** (✂️ i bandets INSPECT-grupp, Inspect-menyn): välj XY/XZ/YZ, en yta eller ett eget plan, och skjut snittet genom modellen med reglage, inskrivet värde eller genom att dra i den blå pilen. Snittytan färgas, med "se från andra sidan". Sparas som en **Section View i trädet** (öga för av/på, högerklick: ändra, döp om, ta bort) och följer med i filen.
 
 **Parametriskt**
 - **Parametrar** med namn och formler (`bredd/2`, `10-1`, `2x(3+5)`) i alla fält.
@@ -72,7 +72,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inst
 - Sketcher döljs automatiskt när de använts; ögon i trädet.
 
 **Gränssnitt**
-- Ribbon, bläddrare (döp om med F2), tidslinje, ViewCube.
+- Ribbon i Fusion-ordning med få grupper: SOLID har CREATE / MODIFY / INSPECT och SKETCH har CREATE / MODIFY / CONSTRAINTS / INSPECT, med gruppnamnet under knapparna; menyraden Create / Modify / Inspect följer samma ordning. Varje kommando har ett namn och en genväg överallt (`omacad/ui/commands.py`), och knapparna som passar det du valt får en orange kant (profil: Extrude, Revolve, Emboss; kropp: Move, Shell, Fillet ...; två kroppar: Combine). Bläddrare (döp om med F2), tidslinje (ett steg som inte går att bygga blir rött och säger varför; Edit rullar tillbaka till steget medan du redigerar), ViewCube.
 - **Högerpanel (Inspector)**: Verktygsdialoger (Extrude, Fillet, Shell, Move, Offset Plane, Split Body) dockas prydligt i högerpanelen så de aldrig skymmer 3D-modellen, och visar geometri- och mätdata i realtid.
 
 ![Extrude](screenshots/11_extrude_arrow.png)
