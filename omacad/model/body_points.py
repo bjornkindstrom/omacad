@@ -5,6 +5,8 @@
   rounding that runs on tangentially, that is where the tangents at the two ends of the arc cross, so
   it is found from the arc alone (like the guide lines of a rounded rectangle in a sketch).
 - "top_center" / "bottom_center": area centres of the highest / lowest horizontal faces.
+- "face_center": the area centre of every other flat face.
+- "center": the centre of a full circular edge (a hole, the end of a cylinder ...).
 """
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -17,7 +19,7 @@ SHARP_TURN_DEG = 30.0   # a loop vertex turning more than this is a real corner,
 @dataclass
 class BodyPoint:
     xyz: np.ndarray
-    kind: str                                   # edge end, hidden corner, top centre or bottom centre
+    kind: str                                   # edge end, hidden corner, face/circle centre, top or bottom centre
     guides: Tuple[np.ndarray, ...] = field(default_factory=tuple)   # corner: the arc ends the guide lines start at
 
 
@@ -47,6 +49,8 @@ def body_points(body) -> List[BodyPoint]:
         kind = getattr(e, "kind", "")
         if kind == "line":
             out += [BodyPoint(np.asarray(e.p0, float), "end"), BodyPoint(np.asarray(e.p1, float), "end")]
+        elif kind == "circle" and not e.is_arc:
+            out.append(BodyPoint(np.asarray(e.center, float), "center"))
         elif kind == "circle" and e.is_arc:
             (p0, p1), (t0, t1) = _arc_ends(e)
             out += [BodyPoint(p0, "end"), BodyPoint(p1, "end")]
@@ -67,6 +71,7 @@ def body_points(body) -> List[BodyPoint]:
     horizontal = [(face, float(face.origin[2])) for face in getattr(body, "faces", ())
                   if abs(abs(float(face.normal[2])) - 1.0) < 1e-5]
     from omacad.model.geometry import face_centroid
+    out += [BodyPoint(face_centroid(face), "face_center") for face in getattr(body, "faces", ())]
     vertices = np.asarray(body.manifold.to_mesh().vert_properties[:, :3], dtype=float)
     for kind, sign in (("top_center", 1.0), ("bottom_center", -1.0)):
         candidates = [(face, z) for face, z in horizontal if float(face.normal[2]) * sign > 0.999]
@@ -86,16 +91,19 @@ def body_points(body) -> List[BodyPoint]:
     return _unique(out)
 
 
-def _unique(points: List[BodyPoint], tol: float = 1e-6) -> List[BodyPoint]:
+# where two points coincide, the one with the higher rank is kept (a cylinder's top: top centre, not circle centre)
+_RANK = {"end": 0, "corner": 1, "center": 2, "face_center": 3, "top_center": 4, "bottom_center": 4}
+KINDS = tuple(_RANK)
+
+
+def _unique(points: List[BodyPoint], tol: float = 1e-5) -> List[BodyPoint]:
     kept: List[BodyPoint] = []
     for p in points:
-        same = next((k for k in kept if np.linalg.norm(k.xyz - p.xyz) < tol), None)
+        same = next((i for i, k in enumerate(kept) if np.linalg.norm(k.xyz - p.xyz) < tol), None)
         if same is None:
             kept.append(p)
-        elif p.kind in ("corner", "top_center", "bottom_center") and same.kind == "end":
-            kept[kept.index(same)] = p
-        elif p.kind == "corner" and same.kind not in ("corner", "top_center", "bottom_center"):
-            kept[kept.index(same)] = p
+        elif _RANK[p.kind] > _RANK[kept[same].kind]:
+            kept[same] = p
     return kept
 
 

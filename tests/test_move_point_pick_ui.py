@@ -106,3 +106,22 @@ def test_right_click_selects_body_in_move_tool(scene):
                                      Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier))
     assert dlg.get_values()[0] == box
     assert doc.selected_body_ids == [box]
+
+
+@pytest.mark.parametrize("projection", ["perspective", "orthographic"])
+def test_face_centres_show_and_points_behind_the_body_do_not(scene, projection):
+    from omacad.ui.settings import get_settings
+    app, win, doc, vp, dlg, block, box = scene
+    get_settings().set("view_projection", projection)
+    dlg.btn_points.setChecked(True)
+    _move(vp, _screen(vp, (55, 45, 10)))
+    assert vp.hover_point is not None and vp.hover_point[1] == "top_center"
+    shown = [tuple(np.round(c[2], 3)) for c in vp._near_points]
+    assert (55.0, 45.0, 10.0) in shown
+    assert (55.0, 45.0, 0.0) not in shown            # the bottom centre is behind the box seen from above
+    _move(vp, _screen(vp, (15, 0, 5)))
+    assert vp.hover_point is not None and vp.hover_point[1] == "face_center"
+    assert vp.hover_point[2] == pytest.approx((15, 0, 5), abs=1e-3)
+    _move(vp, _screen(vp, (15, 10, 10)))             # the moved body hides behind its preview, yet still hides its back
+    shown = [tuple(np.round(c[2], 3)) for c in vp._near_points]
+    assert (15.0, 10.0, 10.0) in shown and (15.0, 10.0, 0.0) not in shown

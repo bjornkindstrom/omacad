@@ -2,13 +2,17 @@
 
 While picking, the snap points of the bodies near the cursor show as dots: green for the end of a straight
 edge, orange for the sharp corner a rounding hides, with dashed guide lines from the rounding to that
-corner. The world origin can be picked too. A click emits `point_picked` with {"body", "kind", "xyz"}."""
+corner, blue for the centre of a flat face or a circle. Points hidden behind a body are left out, and the
+dots are projected again on every repaint so they stay on the body while the camera moves. The world
+origin can be picked too. A click emits `point_picked` with {"body", "kind", "xyz"}."""
 
 import numpy as np
 from PySide6.QtCore import Qt, QPointF
 from PySide6.QtGui import QColor, QPen
 
 from omacad.model.body_points import body_points
+from omacad.model.faces import ray_mesh_hit
+from omacad.ui.math3d import ray_from_screen
 
 SNAP_PX = 12.0       # the cursor catches a point this close
 SHOW_PX = 90.0       # points (and hidden corners' guide lines) this close are shown
@@ -36,28 +40,53 @@ class PointPickMixin:
             hit = cache[body.body_id] = (body.edges, body_points(body))
         return hit[1]
 
+    def _point_pick_shows(self, body) -> bool:
+        """Visible, or the body being moved (hidden behind its preview while its points are picked)."""
+        return body.visible or body.body_id == getattr(self, "point_pick_hidden_ok", None)
+
     def _candidate_points(self):
         """(body_id or None, kind, xyz, guides) of everything that can be picked: body points and the origin."""
         out = [(None, "fixed", np.zeros(3), ())]
         for body in self.doc.bodies.values():
-            if body.visible or body.body_id == getattr(self, "point_pick_hidden_ok", None):
+            if self._point_pick_shows(body):
                 out += [(body.body_id, p.kind, p.xyz, p.guides) for p in self._snap_points(body)]
         return out
+
+    def _point_hidden(self, scr, xyz) -> bool:
+        """True when a visible body surface lies between the camera and the point (seen at screen spot `scr`).
+        The ray starts on the near plane at the point's own pixel, so this holds for an orthographic view too."""
+        proj, view, _ = self.get_matrices()
+        origin, _ = ray_from_screen(float(scr[0]), float(scr[1]), self.width(), self.height(), view, proj)
+        direction = np.asarray(xyz, float) - origin
+        dist = float(np.linalg.norm(direction))
+        if dist < 1e-9:
+            return False
+        direction = direction / dist
+        for body in self.doc.bodies.values():
+            mesh = self._pick_mesh(body)
+            if not self._point_pick_shows(body) or mesh is None or len(mesh.vertices) == 0 \
+                    or not self._ray_hits_body_aabb(body, origin, direction, dist):
+                continue
+            hit = ray_mesh_hit(mesh, origin, direction)
+            if hit is not None and hit[0] < dist - max(1e-3, 1e-5 * dist):
+                return True
+        return False
 
     def _point_pick_hover(self, x: float, y: float) -> None:
         cands = self._candidate_points()
         screen, front = self.project_points(np.array([c[2] for c in cands]))
         dist = np.hypot(screen[:, 0] - x, screen[:, 1] - y)
         dist[~front] = np.inf
-        self._near_points = [(cands[i], screen[i]) for i in np.flatnonzero(dist < SHOW_PX)]
-        i = int(np.argmin(dist))
-        hover = cands[i] if dist[i] < SNAP_PX else None
+        near = [i for i in np.flatnonzero(dist < SHOW_PX) if not self._point_hidden(screen[i], cands[i][2])]
+        self._near_points = [cands[i] for i in near]
+        i = min(near, key=lambda k: dist[k], default=None)
+        hover = cands[i] if i is not None and dist[i] < SNAP_PX else None
         if (hover is None) != (self.hover_point is None) or (hover is not None and hover[2] is not self.hover_point[2]):
             self.hover_point = hover
             if hover is not None:
-                what = {"end": "end of an edge", "corner": "hidden corner",
-                        "top_center": "centre of top face", "bottom_center": "centre of bottom face",
-                        "fixed": "origin"}[hover[1]]
+                what = {"end": "end of an edge", "corner": "hidden corner", "center": "centre of a circle",
+                        "face_center": "centre of a face", "top_center": "centre of top face",
+                        "bottom_center": "centre of bottom face", "fixed": "origin"}[hover[1]]
                 self.status_message.emit(f"Point: {what} at ({hover[2][0]:.2f}, {hover[2][1]:.2f}, {hover[2][2]:.2f}). Click to pick it.")
         self.update()
 
@@ -72,17 +101,23 @@ class PointPickMixin:
         if not getattr(self, "point_pick", False):
             return
         painter.save()
-        colours = {"end": QColor(80, 220, 120), "corner": QColor(255, 150, 40),
-                   "top_center": QColor(80, 190, 255), "bottom_center": QColor(80, 190, 255),
+        centre = QColor(80, 190, 255)
+        colours = {"end": QColor(80, 220, 120), "corner": QColor(255, 150, 40), "center": centre,
+                   "face_center": centre, "top_center": centre, "bottom_center": centre,
                    "fixed": QColor(120, 180, 255)}
-        for (body_id, kind, xyz, guides), scr in self._near_points:
+        near = self._near_points
+        # projected now, not at the last mouse move: the camera may have moved since
+        screen, front = self.project_points(np.array([c[2] for c in near])) if near else ((), ())
+        for (body_id, kind, xyz, guides), scr, ok in zip(near, screen, front):
+            if not ok:
+                continue
             colour = colours[kind]
             if kind == "corner":
                 ends = self.project_points(np.array(guides))
                 pen = QPen(colour, 1.5, Qt.PenStyle.DashLine)
                 painter.setPen(pen)
-                for g, ok in zip(*ends):
-                    if ok:
+                for g, g_ok in zip(*ends):
+                    if g_ok:
                         painter.drawLine(QPointF(*g), QPointF(*scr))
             hovered = self.hover_point is not None and self.hover_point[2] is xyz
             painter.setPen(QPen(QColor(255, 255, 255), 2 if hovered else 1))

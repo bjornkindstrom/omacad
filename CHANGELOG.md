@@ -3,6 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.24 - 2026-10-18
+
+### Added
+- Point picking (Move / Rotate, point to point): every flat face has a centre point, and every full circle (holes, cylinder ends) has its centre.
+
+### Fixed
+- Point picking: the dots stayed at their old screen spots when the view was zoomed or turned, so they sat in the wrong places on the body. They are now projected again on every repaint.
+- Point picking: points behind a body (also the body being moved, hidden behind its preview) are no longer shown, in perspective and orthographic views.
+
 ## 0.9.9.23 - 2026-10-18
 
 ### Changed

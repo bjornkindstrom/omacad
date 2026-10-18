@@ -75,3 +75,33 @@ def test_tangent_corner_of_a_quarter_turn():
                           np.array([0.0, 1, 0])) == pytest.approx((2, 0, 0))
     assert tangent_corner(np.array([0.0, 0, 0]), np.array([1.0, 0, 0]), np.array([0.0, 1, 0]),
                           np.array([1.0, 0, 0])) is None   # parallel
+
+
+def test_every_flat_face_has_its_centre():
+    d = Document()
+    d.add_box(30, 20, 10)
+    pts = body_points(next(iter(d.bodies.values())))
+    sides = sorted(_set(pts, "face_center"))
+    assert np.allclose(sides, sorted([(0, 10, 5), (30, 10, 5), (15, 0, 5), (15, 20, 5)]), atol=1e-3)
+    assert len(_set(pts, "top_center")) == len(_set(pts, "bottom_center")) == 1   # not doubled as face centres
+
+
+def test_hole_has_circle_centres_top_and_bottom():
+    d = Document()
+    d.add_box(30, 20, 10)
+    block = next(iter(d.bodies))
+    d.add_cylinder(3, 10)
+    pin = next(b for b in d.bodies if b != block)
+    d.move_body(pin, 8, 10, 0, pivot="origin")
+    d.combine_bodies(block, pin, "cut")
+    body = d.bodies[block]
+    assert _set(body_points(body), "center") == [(8.0, 10.0, 0.0), (8.0, 10.0, 10.0)]
+    assert nearest_point(body, (7, 9, 9), "center").xyz == pytest.approx((8, 10, 10), abs=1e-3)
+
+
+def test_cylinder_cap_centre_is_one_point():
+    d = Document()
+    d.add_cylinder(5, 10)
+    pts = body_points(next(iter(d.bodies.values())))
+    tops = [p for p in pts if np.linalg.norm(p.xyz - (0, 0, 10)) < 1e-3]
+    assert [p.kind for p in tops] == ["top_center"]

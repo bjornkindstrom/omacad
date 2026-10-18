@@ -55,8 +55,8 @@ class MoveFeature(Feature):
             return None
         xyz = np.asarray(ref["xyz"], dtype=float)
         body = doc.bodies.get(ref.get("body")) if ref.get("body") else None
-        if body is not None and ref.get("kind") in ("end", "corner", "top_center", "bottom_center"):
-            from omacad.model.body_points import nearest_point
+        from omacad.model.body_points import KINDS, nearest_point
+        if body is not None and ref.get("kind") in KINDS:
             found = nearest_point(body, xyz, ref["kind"])
             if found is not None:
                 return found.xyz
