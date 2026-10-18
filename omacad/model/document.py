@@ -316,7 +316,7 @@ class Document:
         pitch: float,
         length: float,
         is_female: bool = False,
-        clearance: float = 0.25,
+        clearance: float = 0.0,
         profile: str = "trapezoidal_45",
         taper_lead_in: bool = True,
         taper_turns: float = 0.75,

@@ -223,3 +223,10 @@ def test_thread_does_not_protrude_past_length():
         assert np.max(z) <= length + 1e-5, f"Profile {prof} protrudes above top face: max z={np.max(z)}"
         assert np.min(z) >= -1e-5, f"Profile {prof} protrudes below bottom face: min z={np.min(z)}"
 
+
+
+def test_new_threads_default_to_zero_clearance():
+    """New Thread steps, the kernel and the dialog all start at 0 mm clearance."""
+    import inspect
+    for fn in (Document.add_thread, ThreadFeature.__init__, CadKernel.create_thread):
+        assert inspect.signature(fn).parameters["clearance"].default == 0.0
