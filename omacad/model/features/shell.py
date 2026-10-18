@@ -268,7 +268,7 @@ class ShellFeature(Feature):
         if not target:
             return
         feats = doc.timeline.features
-        upto = feats.index(self) if self in feats else len(feats)
+        upto = feats.index(self) if self in feats else doc.timeline.marker_index
         shelled = self.shell_body(doc, self.target_body_id, upto, target.manifold, self.thickness, self.direction, self.thickness2,
                                   self.open_faces)
         if shelled is not None:

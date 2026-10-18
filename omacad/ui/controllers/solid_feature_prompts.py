@@ -136,8 +136,8 @@ class SolidFeaturePromptsMixin:
                     self.doc.extrude_profile(s_id, p_idx, dist, op, direction=direction, distance2=dist2,
                                              extra_profiles=extra, extra_refs=refs, holes=holes,
                                              start_offset=start_offset)
-                    self.doc.timeline.features[-1].exprs = dlg.get_expressions()
-                    op = self.doc.timeline.features[-1].operation  # what Auto resolved to
+                    self.doc.timeline.last_added.exprs = dlg.get_expressions()
+                    op = self.doc.timeline.last_added.operation  # what Auto resolved to
                     self.doc.selected_profile = None
                     self.doc.selected_extra = []
                     self.viewport.zoom_fit()

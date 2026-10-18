@@ -77,7 +77,7 @@ def build_jar(doc, spec: JarSpec) -> Dict[str, str]:
                                                      "body_id": jar.body_id}])
     doc.add_thread(spec.neck_diameter, spec.pitch, spec.neck_height, profile=spec.profile, clearance=0.0, target_body_id=jar.body_id,
                    operation="join", name="Jar thread", plane_origin=[0.0, 0.0, h], host_length=spec.neck_height, **UP)
-    thread = doc.timeline.features[-1]
+    thread = doc.timeline.last_added
     chamfer = min(spec.inside_chamfer, spec.shoulder())
     if chamfer > 1e-3:   # the inside corners at the bottom and under the shoulder: hidden from outside, so made here
         r = spec.diameter / 2.0 - spec.wall

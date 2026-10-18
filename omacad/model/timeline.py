@@ -66,6 +66,11 @@ class Timeline:
         for k in [k for k in self._state_cache if k >= idx]:
             del self._state_cache[k]
 
+    @property
+    def last_added(self) -> Feature:
+        """The step just added: the one before the marker (new steps go in at the marker, not always at the end)."""
+        return self.features[self.marker_index - 1]
+
     def _feature_fingerprint(self, feat: Feature) -> str:
         """Generates a stable cache key for a feature and its evaluation expressions."""
         try:

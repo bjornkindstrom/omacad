@@ -638,7 +638,7 @@ class PatternFeature(Feature):
 
     def compute(self, doc, body_id: str):
         """(removed copies, added copies) for one body, or None if there is nothing to copy."""
-        idx = doc.timeline.features.index(self) if self in doc.timeline.features else len(doc.timeline.features)
+        idx = doc.timeline.features.index(self) if self in doc.timeline.features else doc.timeline.marker_index
         pos = [i for i, f in enumerate(doc.timeline.features) if f.feature_id in self.source_ids and i < idx]
         if not pos:
             return None

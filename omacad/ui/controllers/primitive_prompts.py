@@ -115,7 +115,7 @@ class PrimitivePromptsMixin:
                 body = self.doc.add_box(l, w, h, center=center,
                                         plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
                                         translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
-                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.doc.timeline.last_added.exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
 
@@ -192,7 +192,7 @@ class PrimitivePromptsMixin:
                     body = self.doc.add_prism(r, h, sides=dlg.sides(), **place)
                 else:
                     body = self.doc.add_cylinder(r, h, **place)
-                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.doc.timeline.last_added.exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
                 size = f"{r:g} across flats" if prism else f"R={r}"
                 self.status_label.setText(f"Created {body.name} ({size}, H={h} mm).")
@@ -222,7 +222,7 @@ class PrimitivePromptsMixin:
             if result:
                 r = dlg.get_values()
                 body = self.doc.add_sphere(r, translation=getattr(dlg, "placement_offset", (0, 0, 0)))
-                self.doc.timeline.features[-1].exprs = dlg.get_expressions()
+                self.doc.timeline.last_added.exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} (R={r} mm).")
 

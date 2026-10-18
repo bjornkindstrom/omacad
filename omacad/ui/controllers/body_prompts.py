@@ -157,7 +157,7 @@ class BodyPromptsMixin:
                 dlg.clear_faces()
                 return
 
-            shelled = ShellFeature.shell_body(self.doc, bid, len(self.doc.timeline.features), body.manifold, thickness,
+            shelled = ShellFeature.shell_body(self.doc, bid, self.doc.timeline.marker_index, body.manifold, thickness,
                                               dlg.direction(), dlg.spn_thickness2.value(), open_faces)
             if shelled is not None:
                 self.viewport.set_preview(shelled, "new_body")
