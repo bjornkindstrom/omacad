@@ -12,8 +12,20 @@ PARAM_KEYS = ("text", "font", "height", "bold", "italic", "spacing", "h_align", 
 class _TextSession:
     def __init__(self, sketch, dlg, entity: Optional[SketchText], draft: Optional[SketchText]):
         self.sketch, self.dlg, self.entity, self.draft = sketch, dlg, entity, draft
-        self.before = sketch.to_dict()          # undo / cancel go back to this
+        self.before = sketch.to_dict()          # the text's own entry in here is what undo / cancel go back to
         self.placed = entity is not None        # editing starts with the text already in place
+        # the edited text's settings, so Cancel resets only this text (other sketch work stays)
+        self.orig = {k: getattr(entity, k) for k in PARAM_KEYS + ("anchor", "path_id")} if entity else None
+
+    def before_text(self) -> dict:
+        """The sketch as it is now, with only this text as it was before the session: the undo step covers the
+        text alone, whatever else was drawn meanwhile (that has its own undo steps)."""
+        now = self.sketch.to_dict()
+        eid = self.entity.entity_id
+        old = next((e for e in self.before["entities"] if e["entity_id"] == eid), None)
+        now["entities"] = [old if e["entity_id"] == eid else e for e in now["entities"]
+                           if old is not None or e["entity_id"] != eid]
+        return now
 
 
 class TextPromptsMixin:
@@ -98,8 +110,12 @@ class TextPromptsMixin:
 
     def _text_tool_changed(self, tool: str):
         s = self._text_session
-        if s is not None and not s.placed and tool != "TEXT":
+        if s is None:
+            return
+        if not s.placed and tool != "TEXT":
             s.dlg.reject()                                  # left the tool before placing anything: cancel
+        elif s.placed and tool not in ("NONE", "TEXT"):
+            s.dlg.accept()                                  # another tool: keep the text as its own undo step first
 
     # --- placing -----------------------------------------------------------------------------------------------------
     def on_text_place(self, uv, path_id):
@@ -147,11 +163,15 @@ class TextPromptsMixin:
         self.inspector.undock_tool()
         s.dlg.deleteLater()
         if result and s.entity is not None:
-            self.doc.record_sketch_change(s.sketch, s.before)        # one undo step for placing and editing it
+            self.doc.record_sketch_change(s.sketch, s.before_text())  # one undo step for placing and editing it
             self.status_label.setText("Text added to the sketch.")
         else:
-            if s.entity is not None:
-                s.sketch.restore_from_dict(s.before)
+            if s.entity is not None and s.orig is None:
+                s.sketch.delete_entities([s.entity.entity_id])        # only the text placed in this session
+            elif s.entity is not None:
+                for key, value in s.orig.items():
+                    setattr(s.entity, key, value)
+                s.sketch.solve_profiles()
             self.status_label.setText("Text cancelled.")
         self.viewport.update()
 

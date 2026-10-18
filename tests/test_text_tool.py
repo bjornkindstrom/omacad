@@ -154,3 +154,38 @@ def test_the_font_list_follows_a_light_theme_and_a_dark_one():
         theme.set_fixed_theme(None)
         theme._palette = theme.load_palette()
     assert light > 0.7 and dark < 0.35                                 # a light theme gives a light list, a dark one a dark list
+
+
+def test_cancel_keeps_other_sketch_work_done_while_the_panel_was_open(win):
+    sk = win.doc.active_sketch
+    win.prompt_text()
+    win.viewport.text_place_requested.emit((0.0, 0.0), None)
+    line = sk.add_line((50.0, 0.0), (60.0, 0.0))                     # drawn while the text panel is open
+    win._text_session.dlg.reject()
+    assert _texts(win) == [] and any(e.entity_id == line.entity_id for e in sk.entities)
+
+
+def test_cancel_of_an_edit_resets_only_the_text(win):
+    sk = win.doc.active_sketch
+    t = sk.add_text("ABC", (0.0, 0.0))
+    win.prompt_text_edit(t.entity_id)
+    win._text_session.dlg.edt_text.setPlainText("XYZ")
+    line = sk.add_line((50.0, 0.0), (60.0, 0.0))
+    win._text_session.dlg.reject()
+    assert t.text == "ABC" and any(e.entity_id == line.entity_id for e in sk.entities)
+
+
+def test_another_tool_keeps_the_placed_text_as_its_own_undo_step(win):
+    win.prompt_text()
+    win._text_session.dlg.edt_text.setPlainText("HI")
+    win.viewport.text_place_requested.emit((0.0, 0.0), None)
+    win.viewport.set_sketch_tool("LINE")
+    assert win._text_session is None and len(_texts(win)) == 1
+    before = win.doc.active_sketch.to_dict()
+    line = win.doc.active_sketch.add_line((50.0, 0.0), (60.0, 0.0))
+    win.doc.record_sketch_change(win.doc.active_sketch, before)
+    win.doc.undo()                                                    # the line goes, the text stays
+    assert len(_texts(win)) == 1
+    assert not any(e.entity_id == line.entity_id for e in win.doc.active_sketch.entities)
+    win.doc.undo()                                                    # then the text
+    assert _texts(win) == []
