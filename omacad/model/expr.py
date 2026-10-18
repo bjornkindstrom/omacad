@@ -110,7 +110,10 @@ def _eval(node, names) -> float:
         if isinstance(node.op, ast.Pow) and abs(b) > 64:
             raise ValueError("exponent too large")
         try:
-            return _BIN[type(node.op)](a, b)
+            value = _BIN[type(node.op)](a, b)
+            if isinstance(value, complex):          # (-8)^(1/3)
+                raise ValueError("not a real number")
+            return float(value)                     # a huge int ((64^64)^64) overflows here, not later
         except (ZeroDivisionError, OverflowError):
             raise ValueError("math error") from None
     if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
