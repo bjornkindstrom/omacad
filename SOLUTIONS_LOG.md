@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **ID återanvändes efter radering** (0.9.9.31): `add_*` byggde id som `f"box_{len(features)+1}"` och skisser som `sketch_{len(sketches)+1}`, så efter en radering fick nästa steg samma id som ett befintligt och skrev över dess kropp (`body_<id>`); en ny skiss ersatte en befintlig och nådde aldrig tidslinjen. Nu ger `Document._feature_id`/`_sketch_id` nästa lediga nummer (skisser räknar även bakåtrullade/undertryckta skissteg). Test: `test_unique_ids.py`.
+
 - **Skissändring försvann efter ombyggnad** (0.9.9.30): `Timeline.recompute` återställde sparade steg med djupkopior av skisserna, så `edit_sketch` gav en kopia; finish såg ett oförändrat steg (cacheträff) och lade tillbaka originalet. Nu binds varje tidslinjeskiss tillbaka till stegets eget objekt efter återställningen, som efter en full körning. Test: `test_timeline_cache.py`.
 
 - **Fas på insidan av burken gick inte** (0.9.9.28): modellen klarar fas på alla burkens inre kanter; det var plockningen. Kanten under axeln (r 18, z 38) syns aldrig utifrån, så `_pick_edge` hoppar över den (0/17 träffar från alla vinklar) och klicket föll på axelns ovansida och valde dess kanter. Genomsikt (X/Alt, `edge_xray`) når den från alla vinklar (17/17) men nämndes bara sist i en lång statusrad. Nu säger klicket det (`_hidden_edge_at`), och Jar with Lid gör fasen själv (`inside_chamfer`, högst axelns bredd = 45°). Test: `test_jar.py`, `test_jar_ui.py`.

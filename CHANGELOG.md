@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.42 - 2026-10-18
+
+### Fixed
+- Editing a step from the timeline: a box, cylinder, hexagon or sphere dragged before placing now previews where it is; a step edited right after making it has a preview (Offset Face, Honeycomb, Thread); Auto in an Extrude/Revolve edit decides against the bodies before the step (an upward join no longer turns into a cut); a preview error is shown instead of hidden; formulas for counts (prism sides) stay whole numbers and at least 3 sides.
+
 ## 0.9.9.41 - 2026-10-18
 
 ### Fixed

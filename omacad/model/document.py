@@ -700,7 +700,11 @@ class Document:
         for f in self.timeline.features:
             for key, e in f.exprs.items():
                 try:
-                    setattr(f, key, float(exprlib.evaluate(e, values)))
+                    v = float(exprlib.evaluate(e, values))
+                    old = getattr(f, key)
+                    if isinstance(old, int) and not isinstance(old, bool):
+                        v = max(3, round(v)) if key == "sides" else round(v)   # counts stay whole numbers
+                    setattr(f, key, v)
                 except (ValueError, AttributeError) as err:
                     messages.append(f"{f.name} {key}: {err}")
         if messages:
@@ -761,6 +765,8 @@ class Document:
                 feat.exprs = new
                 changed = True
         for key, value in params.items():
+            if key == "sides":
+                value = max(3, int(round(value)))       # a prism needs at least three sides, as when it was made
             if key in allowed and getattr(feat, key) != value:
                 setattr(feat, key, float(value) if isinstance(getattr(feat, key), float) else value)
                 changed = True

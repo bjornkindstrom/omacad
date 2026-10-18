@@ -8,6 +8,7 @@ Accepting rebuilds everything after the step.
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox
 
+from omacad import applog
 from omacad.model import quality
 from omacad.ui.dialogs import (
     BoxDialog, CylinderDialog, PrismDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog, MoveBodyDialog,
@@ -43,8 +44,11 @@ def _exec_with_preview(win, doc, dlg, preview_fn, hide_body_ids=()):
             def _run_preview():
                 try:
                     preview_fn()
-                except Exception:
-                    pass
+                except Exception as e:      # a value the step can't build yet: no preview, but say why
+                    vp.set_preview(None)
+                    applog.log("ERROR", f"edit preview of {dlg.windowTitle()}: {e!r}")
+                    if hasattr(win, "status_label"):
+                        win.status_label.setText(f"No preview for these values: {e}")
                 vp.update()
 
             timer = QTimer(dlg)
@@ -78,8 +82,24 @@ def _exec_with_preview(win, doc, dlg, preview_fn, hide_body_ids=()):
 
 
 
+class _StateBefore:
+    """The document as it stood before step `index`: its bodies from `doc.step_states`, everything else from `doc`.
+    'Auto' decides join/cut/new body against this, not against the bodies the step itself already changed."""
+
+    def __init__(self, doc, state: dict):
+        from omacad.model.features.base import Body
+        from omacad.model.faces import compute_planar_faces
+        self._doc = doc
+        self.bodies = {bid: Body(bid, bid, m, faces=compute_planar_faces(m, bid)) for bid, m in state.items()}
+
+    def __getattr__(self, name):
+        return getattr(self._doc, name)
+
+
 def edit_feature(win, doc, index: int) -> bool:
     """Opens the right editor for step `index` with live 3D preview. Sketches are edited in sketch mode (returns False)."""
+    if index not in doc.step_states or index + 1 not in doc.step_states:
+        doc.timeline.recompute(doc)     # steps just added have no recorded states yet: previews start from them
     feat = doc.timeline.features[index]
     t = feat.feature_type
     vp = getattr(win, "viewport", None)
@@ -123,9 +143,10 @@ def edit_feature(win, doc, index: int) -> bool:
         start_offset = dlg.get_start_offset()
         if s_id is None:
             return False
-        if op == "auto":  # decide with the step's own parameters, as when it was made
+        if op == "auto":  # decide with the step's own parameters and the bodies before it, as when it was made
             op = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, "auto", direction, dist2,
-                                start_offset=start_offset).resolve_operation(doc)
+                                extra_profiles=feat.extra_profiles, extra_refs=feat.extra_refs, holes=feat.holes,
+                                start_offset=start_offset).resolve_operation(_StateBefore(doc, state_before))
         return doc.edit_feature(index, sketch_id=s_id, profile_idx=p_idx, distance=dist,
                                 direction=direction, distance2=dist2, start_offset=start_offset,
                                 operation=op, exprs=dlg.get_expressions())
@@ -185,7 +206,8 @@ def edit_feature(win, doc, index: int) -> bool:
         if op == "auto":
             op = RevolveFeature("tmp", "tmp", s_id, p_idx, operation="auto", axis=dlg.get_axis(),
                                 angle=dlg.spn_angle.value(), direction=dlg.get_direction(),
-                                angle2=dlg.spn_angle2.value(), extra_profiles=feat.extra_profiles).resolve_operation(doc)
+                                angle2=dlg.spn_angle2.value(), extra_profiles=feat.extra_profiles,
+                                ).resolve_operation(_StateBefore(doc, state_before))
         return doc.edit_feature(index, sketch_id=s_id, profile_idx=p_idx, axis=dlg.get_axis(),
                                 angle=dlg.spn_angle.value(), direction=dlg.get_direction(),
                                 angle2=dlg.spn_angle2.value(), operation=op, exprs=dlg.get_expressions())
@@ -227,7 +249,7 @@ def edit_feature(win, doc, index: int) -> bool:
         def _preview_box():
             l, w, h, center, po, pn, pu, pv = dlg.get_values()
             smart = dlg.get_smart_params()
-            tmp = BoxFeature("tmp", "tmp", l, w, h, center,
+            tmp = BoxFeature("tmp", "tmp", l, w, h, center, translation=feat.translation,
                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
             vp.set_preview(tmp.build_solid(), "new_body")
 
@@ -273,7 +295,7 @@ def edit_feature(win, doc, index: int) -> bool:
         def _preview_cylinder():
             r, h, center, po, pn, pu, pv = dlg.get_values()
             smart = dlg.get_smart_params()
-            place = dict(plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+            place = dict(plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, translation=feat.translation, **smart)
             tmp = (PrismFeature("tmp", "tmp", r, h, center, sides=dlg.sides(), **place) if prism
                    else CylinderFeature("tmp", "tmp", r, h, center, **place))
             vp.set_preview(tmp.build_solid(), "new_body")
@@ -295,7 +317,7 @@ def edit_feature(win, doc, index: int) -> bool:
             dlg.spn_radius.set_expression(feat.exprs["radius"])
 
         def _preview_sphere():
-            vp.set_preview(CadKernel.create_sphere(dlg.get_values()), "new_body")
+            vp.set_preview(CadKernel.create_sphere(dlg.get_values()).translate(tuple(feat.translation)), "new_body")
 
         if not _exec_with_preview(win, doc, dlg, _preview_sphere, [f"body_{feat.feature_id}"]):
             return False
