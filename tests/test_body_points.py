@@ -105,3 +105,32 @@ def test_cylinder_cap_centre_is_one_point():
     pts = body_points(next(iter(d.bodies.values())))
     tops = [p for p in pts if np.linalg.norm(p.xyz - (0, 0, 10)) < 1e-3]
     assert [p.kind for p in tops] == ["top_center"]
+
+
+def test_cylinder_ends_have_a_cross_of_five_points():
+    from omacad.model.body_points import body_points
+    from omacad.model.document import Document
+    doc = Document()
+    doc.add_cylinder(5, 10)
+    pts = body_points(next(iter(doc.bodies.values())))
+    for z, centre in ((0.0, "bottom_center"), (10.0, "top_center")):
+        at = [p for p in pts if abs(p.xyz[2] - z) < 1e-6]
+        assert sorted(p.kind for p in at) == sorted([centre] + ["quadrant"] * 4)
+        quads = sorted((round(p.xyz[0], 6) + 0.0, round(p.xyz[1], 6) + 0.0) for p in at if p.kind == "quadrant")
+        assert quads == [(-5.0, 0.0), (0.0, -5.0), (0.0, 5.0), (5.0, 0.0)]
+
+
+def test_point_to_point_by_the_side_of_a_cylinder_and_after_a_rebuild():
+    """Cylinder B's -X quarter point onto cylinder A's +X quarter point: the two stand side by side, touching, and the
+    move follows when A grows (the stored point is found again on the rebuilt body)."""
+    from omacad.model.document import Document
+    doc = Document()
+    a = doc.add_cylinder(5, 10).body_id
+    b = doc.add_cylinder(3, 10, plane_origin=[40, 20, 0], plane_normal=[0, 0, 1], plane_u=[1, 0, 0], plane_v=[0, 1, 0]).body_id
+    frm = {"body": b, "kind": "quadrant", "xyz": [37.0, 20.0, 0.0]}
+    to = {"body": a, "kind": "quadrant", "xyz": [5.0, 0.0, 0.0]}
+    doc.move_body(b, from_point=frm, to_point=to)
+    lo = doc.bodies[b].manifold.bounding_box()
+    assert lo[0] == pytest.approx(5.0, abs=1e-6) and lo[1] == pytest.approx(-3.0, abs=1e-6)
+    doc.edit_feature(0, radius=8.0)
+    assert doc.bodies[b].manifold.bounding_box()[0] == pytest.approx(8.0, abs=1e-6)

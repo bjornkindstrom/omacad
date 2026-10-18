@@ -7,6 +7,8 @@
 - "top_center" / "bottom_center": area centres of the highest / lowest horizontal faces.
 - "face_center": the area centre of every other flat face.
 - "center": the centre of a full circular edge (a hole, the end of a cylinder ...).
+- "quadrant": the four points of a full circle in line with the axes (a cross with its centre), so a cylinder
+  can be put point to point by its side, not only by its centre.
 """
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -42,6 +44,22 @@ def tangent_corner(p0, t0, p1, t1) -> Optional[np.ndarray]:
     return (q0 + q1) / 2.0
 
 
+def circle_quadrants(e) -> List[np.ndarray]:
+    """The four points of a full circle where it crosses the two world axes lying closest to its plane (X then Y
+    for a horizontal circle), so they form a cross with the centre; a tilted circle uses the projected axes."""
+    n = np.asarray(e.axis, float)
+    n = n / np.linalg.norm(n)
+    u = None
+    for w in np.eye(3):
+        p = w - float(w @ n) * n
+        if np.linalg.norm(p) > 0.5:
+            u = p / np.linalg.norm(p)
+            break
+    v = np.cross(n, u)
+    c, r = np.asarray(e.center, float), float(e.radius)
+    return [c + r * u, c + r * v, c - r * u, c - r * v]
+
+
 def body_points(body) -> List[BodyPoint]:
     """Snap points on a body, including edge ends, hidden corners and horizontal face centres."""
     out: List[BodyPoint] = []
@@ -51,6 +69,7 @@ def body_points(body) -> List[BodyPoint]:
             out += [BodyPoint(np.asarray(e.p0, float), "end"), BodyPoint(np.asarray(e.p1, float), "end")]
         elif kind == "circle" and not e.is_arc:
             out.append(BodyPoint(np.asarray(e.center, float), "center"))
+            out += [BodyPoint(p, "quadrant") for p in circle_quadrants(e)]
         elif kind == "circle" and e.is_arc:
             (p0, p1), (t0, t1) = _arc_ends(e)
             out += [BodyPoint(p0, "end"), BodyPoint(p1, "end")]
@@ -92,7 +111,7 @@ def body_points(body) -> List[BodyPoint]:
 
 
 # where two points coincide, the one with the higher rank is kept (a cylinder's top: top centre, not circle centre)
-_RANK = {"end": 0, "corner": 1, "center": 2, "face_center": 3, "top_center": 4, "bottom_center": 4}
+_RANK = {"end": 0, "quadrant": 1, "corner": 2, "center": 3, "face_center": 4, "top_center": 5, "bottom_center": 5}
 KINDS = tuple(_RANK)
 
 

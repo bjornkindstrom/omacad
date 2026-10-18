@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.52 - 2026-10-18
+
+### Added
+- Point to point: every full circle (a cylinder's ends, holes, pins) now has five points, its centre and four quarter points in line with the axes, like a cross. A cylinder can be put against another by its side, and the move follows when the cylinder is changed later.
+
 ## 0.9.9.51 - 2026-10-18
 
 ### Fixed

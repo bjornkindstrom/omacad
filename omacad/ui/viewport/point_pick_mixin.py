@@ -85,6 +85,7 @@ class PointPickMixin:
             self.hover_point = hover
             if hover is not None:
                 what = {"end": "end of an edge", "corner": "hidden corner", "center": "centre of a circle",
+                        "quadrant": "quarter point of a circle",
                         "face_center": "centre of a face", "top_center": "centre of top face",
                         "bottom_center": "centre of bottom face", "fixed": "origin"}[hover[1]]
                 self.status_message.emit(f"Point: {what} at ({hover[2][0]:.2f}, {hover[2][1]:.2f}, {hover[2][2]:.2f}). Click to pick it.")
@@ -103,6 +104,7 @@ class PointPickMixin:
         painter.save()
         centre = QColor(80, 190, 255)
         colours = {"end": QColor(80, 220, 120), "corner": QColor(255, 150, 40), "center": centre,
+                   "quadrant": QColor(200, 230, 90),
                    "face_center": centre, "top_center": centre, "bottom_center": centre,
                    "fixed": QColor(120, 180, 255)}
         near = self._near_points

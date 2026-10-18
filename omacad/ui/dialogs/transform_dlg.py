@@ -210,7 +210,9 @@ class MoveBodyDialog(BaseFeatureDialog):
         def text(p):
             if p is None:
                 return "-"
-            what = {"end": "edge end", "corner": "hidden corner", "fixed": "origin"}.get(p.get("kind"), "point")
+            what = {"end": "edge end", "corner": "hidden corner", "center": "circle centre", "quadrant": "circle quarter",
+                    "face_center": "face centre", "top_center": "top centre", "bottom_center": "bottom centre",
+                    "fixed": "origin"}.get(p.get("kind"), "point")
             return f"{what} ({p['xyz'][0]:.2f}, {p['xyz'][1]:.2f}, {p['xyz'][2]:.2f})"
         self.lbl_points.setText(f"From: {text(self.from_point)}\nTo: {text(self.to_point)}")
         self.cmb_pivot.model().item(self.cmb_pivot.findData("point")).setEnabled(self.from_point is not None)
