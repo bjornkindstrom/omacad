@@ -22,3 +22,18 @@ def test_sketch_edit_after_cached_recompute_is_kept():
     assert len(doc.sketches[sid].profiles) == 2
     feat = next(f for f in doc.timeline.features if f.feature_type == "sketch")
     assert doc.sketches[sid] is feat.sketch
+
+
+def test_new_step_at_a_rolled_back_marker_is_inserted_and_later_steps_stay():
+    doc = Document()
+    doc.add_box(10, 10, 10)
+    doc.add_cylinder(5, 10)
+    doc.add_box(20, 20, 20)
+    later = [f.feature_id for f in doc.timeline.features[1:]]
+    doc.timeline.step_to(1, doc)
+    doc.add_cylinder(2, 3)
+    ids = [f.feature_id for f in doc.timeline.features]
+    assert ids[2:] == later and len(ids) == 4
+    assert doc.timeline.marker_index == 2
+    doc.timeline.fast_forward(doc)
+    assert len(doc.bodies) == 4

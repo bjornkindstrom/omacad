@@ -58,11 +58,12 @@ class Timeline:
         self._state_cache.clear()
 
     def add_feature(self, feature: Feature) -> None:
-        # If marker is in the middle of history, truncate forward history (like Fusion 360)
-        if self.marker_index < len(self.features):
-            self.features = self.features[:self.marker_index]
-        self.features.append(feature)
-        self.marker_index = len(self.features)
+        # Insert at the marker (like Fusion 360): rolled-back later steps stay, they come back when rolled forward
+        idx = max(0, min(self.marker_index, len(self.features)))
+        self.features.insert(idx, feature)
+        self.marker_index = idx + 1
+        for k in [k for k in self._state_cache if k >= idx]:
+            del self._state_cache[k]
 
     def _feature_fingerprint(self, feat: Feature) -> str:
         """Generates a stable cache key for a feature and its evaluation expressions."""

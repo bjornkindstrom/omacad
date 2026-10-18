@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Nollspel som standard för gängor** (0.9.9.21): nya Thread/Coil-steg och låg-nivåanrop får 0 mm clearance som standard; önskat spel kan fortfarande anges i dialogen. Äldre sparade värden ändras inte.
+
 - **Primitive flyttas före placering** (0.9.9.20): vänsterdrag på förhandsvisningen flyttar primitive i kamerans plan; måtthandtagen behåller sin dimensionering. Förskjutningen sparas i Box/Cylinder/Hexagon/Sphere-featuret och följer spara/ladda och ångra.
 
 - **Move förbättrat** (0.9.9.20): Move Feature har `copy_body`, som skapar en separat kopia i historiken utan att flytta originalet; den följer spara/ladda och undo. Preview med Activate copy visar originalet bredvid den flyttade kopian. Point to point snappar även till centrum på kroppens över- och undersida (plana ytor eller kurviga extrempunkter) och hittar punkterna igen efter ombyggnad. Face-to-face visar originalet medan sidorna väljs så källsidan går att klicka, döljer gizmon under valet och accepterar båda klickordningarna. Lay on ground döljer gizmon, visar kroppen under face-pick och lägger klickad sida plant mot XY. Högerklick i Move väljer kroppen som target; högerklick på plan yta kan även starta Move för hela kroppen. Dialogen saknar redundant Active handle-rad och döljer gizmon under punktplockning.
