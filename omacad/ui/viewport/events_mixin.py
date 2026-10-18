@@ -1,6 +1,7 @@
 """Qt input event handlers for the viewport."""
 
 from PySide6.QtCore import Qt
+from omacad.model import quality
 from omacad.model.faces import tangent_chain
 from omacad.model.sketch import SketchText
 

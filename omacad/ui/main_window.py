@@ -290,9 +290,14 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         if app is not None:
             f = QFont(theme.font_family())
             f.setPixelSize(13)
-            app.setFont(f)
+            # only when they change: setting the app's font or stylesheet restyles every widget of every window,
+            # and a second window (or a test making many) would pay for all of them each time
+            if app.font() != f:
+                app.setFont(f)
             theme.apply_qt_palette()
-            app.setStyleSheet(theme.indicator_stylesheet())   # visible tick boxes everywhere (lists, trees, dialogs)
+            css = theme.indicator_stylesheet()                # visible tick boxes everywhere (lists, trees, dialogs)
+            if app.styleSheet() != css:
+                app.setStyleSheet(css)
 
     def on_theme_changed(self):
         """The Omarchy theme was switched: stylesheets were already re-applied by theme.refresh()."""
