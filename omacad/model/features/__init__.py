@@ -42,9 +42,11 @@ from omacad.model.features.transform import (
 )
 from omacad.model.features.thread import ThreadFeature
 from omacad.model.features.offset_face import OffsetFaceFeature
+from omacad.model.features.honeycomb import HoneycombFeature
 
 __all__ = [
     "OffsetFaceFeature",
+    "HoneycombFeature",
     "Body",
     "Feature",
     "ProfileRefs",

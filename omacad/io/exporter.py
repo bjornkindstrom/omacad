@@ -13,7 +13,7 @@ import trimesh
 from omacad.model.document import Document, Parameter, default_origin_vis
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, PrismFeature, SphereFeature,
                                     ExtrudeFeature, EmbossFeature, RevolveFeature, CombineFeature, FilletFeature,
-                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature)
+                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature, HoneycombFeature)
 from omacad.model.sketch import Sketch
 from omacad.model.timeline import ProfileRefs
 from omacad.model import quality
@@ -534,6 +534,10 @@ class Exporter:
                 doc.timeline.add_feature(feat)
             elif ft == "offset_face":
                 feat = OffsetFaceFeature(fid, fname, f_data["target_body_id"], f_data.get("faces", []), f_data.get("distance", 0.2))
+                doc.timeline.add_feature(feat)
+            elif ft == "honeycomb":
+                feat = HoneycombFeature(fid, fname, f_data["target_body_id"], f_data.get("faces", []),
+                                        **{k: f_data[k] for k in HoneycombFeature.PARAMS if k in f_data})
                 doc.timeline.add_feature(feat)
             elif ft == "move":
                 feat = MoveFeature(

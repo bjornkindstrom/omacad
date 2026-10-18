@@ -126,6 +126,7 @@ class Ribbon(QWidget):
     split_body_clicked = Signal()
     shell_clicked = Signal()
     offset_face_clicked = Signal()
+    honeycomb_clicked = Signal()
     move_clicked = Signal()
     thread_clicked = Signal()
     canvas_clicked = Signal()
@@ -376,6 +377,11 @@ class Ribbon(QWidget):
             action.triggered.connect(lambda checked=False, kind=kind: self.pattern_kind_clicked.emit(kind))
         btn_pattern.setMenu(patterns)
         h_layout.addWidget(btn_pattern)
+
+        btn_honeycomb = RibbonButton("Honey-\ncomb", "🐝")
+        btn_honeycomb.setToolTip("Cut a honeycomb (hexagons, circles, squares, diamonds or triangles) into flat and round faces")
+        btn_honeycomb.clicked.connect(self.honeycomb_clicked)
+        h_layout.addWidget(btn_honeycomb)
 
         # MODIFY Group
         if group_modify:

@@ -40,6 +40,7 @@ class FeatureNodeWidget(QFrame):
         "pattern": "🔁",
         "thread": "🔩",
         "offset_face": "↔️",
+        "honeycomb": "🐝",
         "shell": "🐚",
         "split_body": "🪚",
         "move": "🧭",
@@ -124,6 +125,9 @@ class FeatureNodeWidget(QFrame):
             return f"{f.name}\nThickness {f.thickness:g} mm ({len(getattr(f, 'open_faces', ()) or ())} open face(s))"
         if t == "offset_face":
             return f"{f.name}\nOffset {f.distance:g} mm on {len(getattr(f, 'faces', ()) or ())} face(s)"
+        if t == "honeycomb":
+            depth = "through" if f.through else f"{f.depth:g} mm deep"
+            return f"{f.name}\n{f.cells} {f.shape} cells, {f.size:g} mm, wall {f.wall:g} mm, {depth}"
         if t == "thread":
             return f"{f.name}\nØ{f.diameter:g} × {f.pitch:g} mm, L={f.length:g} mm"
         if t == "split_body":

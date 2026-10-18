@@ -175,6 +175,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.viewport.split_plane_requested.connect(lambda pid: self.prompt_split_body(plane_id=pid))
         self.ribbon.shell_clicked.connect(self.prompt_shell)
         self.ribbon.offset_face_clicked.connect(lambda: self.prompt_offset_face())
+        self.ribbon.honeycomb_clicked.connect(self.prompt_honeycomb)
         self.ribbon.project_clicked.connect(lambda: self.viewport.project_edges())
         self.ribbon.move_clicked.connect(self.prompt_move_body)
         self.ribbon.canvas_clicked.connect(self.prompt_insert_canvas)

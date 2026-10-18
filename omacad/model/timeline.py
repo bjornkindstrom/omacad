@@ -41,6 +41,7 @@ from omacad.model.features import (
     ImportMeshFeature,
     ThreadFeature,
     OffsetFaceFeature,
+    HoneycombFeature,
 )
 
 

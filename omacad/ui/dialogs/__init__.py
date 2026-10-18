@@ -42,6 +42,7 @@ from omacad.ui.dialogs.shell_dlg import (
     ShellDialog,
 )
 from omacad.ui.dialogs.offset_face_dlg import OffsetFaceDialog
+from omacad.ui.dialogs.honeycomb_dlg import HoneycombDialog
 from omacad.ui.dialogs.transform_dlg import (
     MoveBodyDialog,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "PatternDialog",
     "ShellDialog",
     "OffsetFaceDialog",
+    "HoneycombDialog",
     "MoveBodyDialog",
     "ThreadDialog",
 ]

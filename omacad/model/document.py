@@ -12,7 +12,7 @@ import manifold3d as m3d
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature, PrismFeature,
     SphereFeature, ExtrudeFeature, EmbossFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
-    ImportMeshFeature, ThreadFeature, OffsetFaceFeature
+    ImportMeshFeature, ThreadFeature, OffsetFaceFeature, HoneycombFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
 from omacad.model.sketch_solver import solve_sketch, SolveResult
@@ -727,6 +727,7 @@ class Document:
         "split_body": ("target_body_id", "plane_id", "plane_origin", "plane_normal"),
         "shell": ("thickness", "direction", "thickness2", "open_faces"),
         "offset_face": ("distance",),
+        "honeycomb": HoneycombFeature.PARAMS,
         "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle"),
         "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot", "from_point", "to_point", "copy_body"),
     }
@@ -965,6 +966,19 @@ class Document:
         faces = self.thread_faces(faces) or faces    # a thread: only this body changes, the other part keeps its size
         n = len([f for f in self.timeline.features if f.feature_type == "offset_face"]) + 1
         feat = OffsetFaceFeature(f"offset_face_{len(self.timeline.features) + 1}", f"Offset Face {n}", body_id, faces, distance)
+        feat.exprs = dict(exprs or {})
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.notify_changed()
+        return feat
+
+    @undoable("Honeycomb")
+    def add_honeycomb(self, body_id: str, faces, exprs=None, **params) -> Optional[HoneycombFeature]:
+        """Cuts a lattice of cells (shape, size, wall, margin, depth or through, angle) into faces of a body."""
+        if body_id not in self.bodies or not faces:
+            return None
+        n = len([f for f in self.timeline.features if f.feature_type == "honeycomb"]) + 1
+        feat = HoneycombFeature(f"honeycomb_{len(self.timeline.features) + 1}", f"Honeycomb {n}", body_id, faces, **params)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)

@@ -11,7 +11,42 @@ HINT = ("Click flat faces, holes, pins or curved surfaces such as threads in the
         "(looser fit), plus adds material (tighter fit). The Thread step is adjusted, so the thread stays clean.")
 
 
-class OffsetFaceDialog(BaseFeatureDialog):
+class FacePickMixin:
+    """Faces of one body picked in the viewport: `self.faces` (refs) and `self.body_id`; needs `changed` and
+    `_update_count`."""
+
+    @staticmethod
+    def _same(a, b) -> bool:
+        import numpy as np
+        if a["kind"] != b["kind"]:
+            return False
+        if a["kind"] == "surface":    # the same patch: clicks close to each other
+            return bool(np.linalg.norm(np.asarray(a["point"]) - np.asarray(b["point"])) < 0.5)
+        keys = ("normal", "origin") if a["kind"] == "plane" else ("origin", "axis")
+        return all(np.allclose(a[k], b[k], atol=1e-3) for k in keys)
+
+    def toggle(self, ref: dict, body_id: str) -> bool:
+        """Adds the face (or removes it when already picked). False when it belongs to another body."""
+        if self.faces and body_id != self.body_id:
+            return False
+        for i, f in enumerate(self.faces):
+            if self._same(f, ref):
+                self.faces.pop(i)
+                break
+        else:
+            self.faces.append(ref)
+        self.body_id = body_id if self.faces else ""
+        self._update_count()
+        self.changed.emit()
+        return True
+
+    def clear(self):
+        self.faces, self.body_id = [], ""
+        self._update_count()
+        self.changed.emit()
+
+
+class OffsetFaceDialog(FacePickMixin, BaseFeatureDialog):
     """Offset Face: the faces are picked in the viewport, the distance is typed here."""
 
     changed = Signal()
@@ -46,36 +81,6 @@ class OffsetFaceDialog(BaseFeatureDialog):
         self.add_buttons()
         self.spn_dist.valueChanged.connect(lambda *_: self.changed.emit())
         QTimer.singleShot(0, lambda: (self.spn_dist.setFocus(), self.spn_dist.selectAll()))
-
-    @staticmethod
-    def _same(a, b) -> bool:
-        import numpy as np
-        if a["kind"] != b["kind"]:
-            return False
-        if a["kind"] == "surface":    # the same patch: clicks close to each other
-            return bool(np.linalg.norm(np.asarray(a["point"]) - np.asarray(b["point"])) < 0.5)
-        keys = ("normal", "origin") if a["kind"] == "plane" else ("origin", "axis")
-        return all(np.allclose(a[k], b[k], atol=1e-3) for k in keys)
-
-    def toggle(self, ref: dict, body_id: str) -> bool:
-        """Adds the face (or removes it when already picked). False when it belongs to another body."""
-        if self.faces and body_id != self.body_id:
-            return False
-        for i, f in enumerate(self.faces):
-            if self._same(f, ref):
-                self.faces.pop(i)
-                break
-        else:
-            self.faces.append(ref)
-        self.body_id = body_id if self.faces else ""
-        self._update_count()
-        self.changed.emit()
-        return True
-
-    def clear(self):
-        self.faces, self.body_id = [], ""
-        self._update_count()
-        self.changed.emit()
 
     def _update_count(self):
         n = len(self.faces)

@@ -237,6 +237,71 @@ class RoundPatternPromptsMixin:
             dlg.toggle(plane_face_ref(face), face.body_id)
         dlg.show()
 
+    def prompt_honeycomb(self):
+        """Honeycomb: click flat and round faces of one body, choose the cells; live preview of the result."""
+        from omacad.model.features.honeycomb import HoneycombFeature
+        from omacad.ui.dialogs import HoneycombDialog
+        if not self.doc.bodies:
+            QMessageBox.information(self, "Honeycomb", "Create a 3D body first.")
+            return
+        if self.inspector.current_tool_dlg is not None:
+            return
+        dlg = HoneycombDialog(self, embedded=True)
+        self.dock(dlg)
+        vp = self.viewport
+        hidden = [None]    # the body whose preview replaces it
+
+        def show_body():
+            if hidden[0] in self.doc.bodies:
+                self.doc.bodies[hidden[0]].visible = True
+            hidden[0] = None
+
+        def refresh_preview():
+            body = self.doc.bodies.get(dlg.body_id)
+            if body is None or not dlg.faces:
+                show_body()
+                vp.shell_target_body_id = ""
+                vp.set_preview(None)
+                dlg.lbl_info.setText("")
+                return
+            result, cells, skipped = HoneycombFeature.compute(body.manifold, dlg.faces, dlg.params())
+            body.visible = False
+            hidden[0] = body.body_id
+            vp.shell_target_body_id = body.body_id
+            vp.set_preview(result, "new_body")
+            note = f" {skipped} face(s) have no room for a cell." if skipped else ""
+            dlg.lbl_info.setText(f"{cells} cells will be cut.{note}")
+
+        def on_picked(ref, body_id):
+            if ref.get("kind") not in ("plane", "cylinder"):
+                self.status_label.setText("Honeycomb: only flat and cylindrical faces can take a honeycomb.")
+            elif not dlg.toggle(ref, body_id):
+                self.status_label.setText("Honeycomb: all faces must belong to the same body.")
+
+        def on_finished(result):
+            timer.stop()
+            vp.offset_face_picked.disconnect(on_picked)
+            faces, body_id, params, exprs = list(dlg.faces), dlg.body_id, dlg.params(), dlg.get_expressions()
+            show_body()
+            vp.shell_target_body_id = ""
+            vp.end_plane_pick()
+            vp.set_preview(None)
+            self.inspector.undock_tool()
+            dlg.deleteLater()
+            if result and faces:
+                feat = self.doc.add_honeycomb(body_id, faces, exprs=exprs, **params)
+                self.status_label.setText(f"Honeycomb: {feat.cells} cells cut in {len(faces)} face(s).")
+            else:
+                self.status_label.setText("Honeycomb cancelled." if not result else "No faces were selected.")
+            vp.update()
+
+        timer = self._connect_debounced_preview(dlg, refresh_preview, interval_ms=80)
+        dlg.finished.connect(on_finished)
+        vp.offset_face_picked.connect(on_picked)
+        vp.begin_plane_pick("offset_face")   # the same face picking as Offset Face: flat faces and cylinders light up
+        self.status_label.setText("Honeycomb: click flat or round faces, choose shape and sizes, OK. Esc cancels.")
+        dlg.show()
+
     def prompt_pattern(self, kind=None):
         """Copy what some steps did: evenly spaced, mirrored around the body, or around an axis."""
         from omacad.model.timeline import PatternFeature

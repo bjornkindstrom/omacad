@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.26 - 2026-10-18
+
+### Added
+- Honeycomb (ribbon button): cut a lattice of hexagons, circles, squares, diamonds or triangles into picked flat and cylindrical faces of a body. Cell size, wall, margin to the edge, depth or Through (each cell goes to the air behind it, so the opposite wall of a box stays whole), rotation, and optional cut cells at the edge. The pattern is placed where the most whole cells fit and closes exactly round a cylinder (walls only get wider, never thinner). Live preview, undo, save/load, editable in the timeline.
+
 ## 0.9.9.25 - 2026-10-18
 
 ### Fixed
