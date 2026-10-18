@@ -118,13 +118,12 @@ def test_a_whole_name_shows_how_to_make_a_formula(win):
     win.prompt_box()
     dlg = win.inspector.current_tool_dlg
     f = dlg.spn_length
-    win.activateWindow()
-    f.setFocus()
-    f.lineEdit().selectAll()
-    _type(f, "depth")
+    f.lineEdit().setText("depth")             # the list logic itself (key routing is tested above; this must not
+    f.lineEdit().setCursorPosition(5)         # depend on window focus)
+    f.suggest()
     assert f._list.isVisible() and not f.suggestions_visible()            # only the help line: Enter is free
     assert f._list.item(0).text() == "depth = 12 · Formulas too: depth+2 · depth/2 · 2*depth"
-    _type(f, "+2")
+    f.lineEdit().setText("depth+2")
     f.interpretText()
     assert f.value() == pytest.approx(14.0) and f.expression() == "depth+2"
     dlg.reject()
