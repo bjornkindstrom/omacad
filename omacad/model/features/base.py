@@ -62,6 +62,9 @@ def _bbox_overlap(a: m3d.Manifold, b: m3d.Manifold, tol: float = 1e-6) -> bool:
     return bool(np.all(a0 <= b1 + tol) and np.all(b0 <= a1 + tol))
 
 
+CUT_CLEARANCE = 1e-3   # mm a cutter is grown when a cut leaves strips: invisible, wider than facet mismatch
+
+
 def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, tool: m3d.Manifold) -> None:
     """Shared by Extrude and Revolve: add `tool` as a new body, or join/cut/intersect it with every body it touches."""
     def new_body():
@@ -95,9 +98,14 @@ def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, to
     for body in targets:
         if operation == "cut":
             # A profile extruded along a faceted wall can coincide with that wall to
-            # within the kernel tolerance. Expand the cutter by a micron so the
+            # within the kernel tolerance. Expand the cutter by a nanometre so the
             # boolean resolves the boundary instead of leaving narrow mesh strips.
             result = body.manifold - CadKernel.grown(tool, 1e-6)
+            if CadKernel.has_sheets(result):
+                # A profile drawn on the wall is cut into its own flat pieces, so its sides wander up
+                # to a facet's sagitta (0.5 um at 360 segments) around the wall and paper-thin
+                # strips survive. Only then: an invisible micron of clearance (exact volumes otherwise).
+                result = body.manifold - CadKernel.grown(tool, CUT_CLEARANCE)
         elif operation == "intersect":
             result = body.manifold ^ tool
         else:

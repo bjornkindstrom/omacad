@@ -3,10 +3,15 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.17 - 2026-10-18
+
+### Fixed
+- Extruded cuts along a cylinder wall still left vertical strips at fine curve smoothness (360 segments): the sketch profile and the wall are faceted differently and differ by up to 0.5 μm. When a cut leaves zero-thickness sheets, the cutter is now grown by an invisible 1 μm (other cuts keep exact volumes).
+
 ## 0.9.9.16 - 2026-10-18
 
 ### Fixed
-- Extruded cuts through a shelled, threaded cylinder could leave narrow mesh strips where the circular cutter nearly coincided with the faceted inner wall. The cutter now grows by 1 μm before cutting to resolve the boundary cleanly.
+- Extruded cuts through a shelled, threaded cylinder could leave narrow mesh strips where the circular cutter nearly coincided with the faceted inner wall. The cutter now grows by 1 nm before cutting to resolve the boundary cleanly.
 
 ## 0.9.9.15 - 2026-10-18
 
