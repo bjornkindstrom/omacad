@@ -15,11 +15,13 @@ from omacad.ui.dialogs import (
     ThreadDialog
 )
 from omacad.ui.canvas_dialog import CanvasEditorDialog
+from omacad.ui.controllers.prompt_guards import leaves_sketch
 
 
 class SolidFeaturePromptsMixin:
     """SolidFeature prompt workflows for MainWindow."""
 
+    @leaves_sketch
     def prompt_extrude(self, default_distance=None):
         if not self.doc.sketches:
             QMessageBox.information(
@@ -152,6 +154,7 @@ class SolidFeaturePromptsMixin:
         dlg.focus_primary()
         QTimer.singleShot(0, dlg, dlg.focus_primary)
 
+    @leaves_sketch
     def prompt_revolve(self):
         """Revolve: profile (click it in the view), axis, angle, direction and operation, with live preview."""
         if not self.doc.sketches or not any(sk.profiles for sk in self.doc.sketches.values()):

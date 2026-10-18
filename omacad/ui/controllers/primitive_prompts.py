@@ -15,11 +15,13 @@ from omacad.ui.dialogs import (
     ThreadDialog
 )
 from omacad.ui.canvas_dialog import CanvasEditorDialog
+from omacad.ui.controllers.prompt_guards import leaves_sketch
 
 
 class PrimitivePromptsMixin:
     """Primitive prompt workflows for MainWindow."""
 
+    @leaves_sketch
     def prompt_jar(self):
         """Jar with Lid: sizes with sliders and a live preview; OK adds the steps (one undo step)."""
         from omacad.model.document import Document
@@ -64,6 +66,7 @@ class PrimitivePromptsMixin:
         dlg.show()
         timer.start()
 
+    @leaves_sketch
     def prompt_box(self):
         from omacad.model.features.primitives import BoxFeature
         dlg = BoxDialog(self)
@@ -130,6 +133,7 @@ class PrimitivePromptsMixin:
         """Hexagon (any regular prism): the Cylinder flow with flat sides, sized across flats."""
         self.prompt_cylinder(prism=True)
 
+    @leaves_sketch
     def prompt_cylinder(self, prism=False):
         from omacad.model.features.primitives import CylinderFeature, PrismFeature
         dlg = PrismDialog(self) if prism else CylinderDialog(self)
@@ -203,6 +207,7 @@ class PrimitivePromptsMixin:
         self.dock(dlg)
         refresh_preview()
 
+    @leaves_sketch
     def prompt_sphere(self):
         from omacad.model.kernel import CadKernel
         from omacad.ui.primitive_handles import attach_primitive_handles
@@ -228,6 +233,7 @@ class PrimitivePromptsMixin:
         self.dock(dlg)
         preview()
 
+    @leaves_sketch
     def prompt_thread(self):
         from omacad.model.features.thread import ThreadFeature
         selected_id = self.doc.selected_body_ids[0] if self.doc.selected_body_ids else None

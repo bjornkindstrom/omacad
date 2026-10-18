@@ -3,6 +3,7 @@ from typing import Optional
 
 from omacad.model.sketch import SketchText
 from omacad.ui.dialogs import EmbossDialog, TextDialog
+from omacad.ui.controllers.prompt_guards import leaves_sketch
 
 PARAM_KEYS = ("text", "font", "height", "bold", "italic", "spacing", "h_align", "v_align", "flip_h", "flip_v", "angle",
               "placement", "fit")
@@ -158,6 +159,7 @@ class TextPromptsMixin:
 class EmbossPromptMixin:
     """Mixin for MainWindow: Emboss. The profiles (letters) are picked in the view, the options are in the panel."""
 
+    @leaves_sketch
     def prompt_emboss(self):
         from omacad.model.timeline import EmbossFeature, ExtrudeFeature
         from PySide6.QtWidgets import QMessageBox

@@ -15,11 +15,13 @@ from omacad.ui.dialogs import (
     ThreadDialog
 )
 from omacad.ui.canvas_dialog import CanvasEditorDialog
+from omacad.ui.controllers.prompt_guards import leaves_sketch
 
 
 class BodyPromptsMixin:
     """Body prompt workflows for MainWindow."""
 
+    @leaves_sketch
     def prompt_combine(self):
         if len(self.doc.bodies) < 2:
             QMessageBox.information(
@@ -79,6 +81,7 @@ class BodyPromptsMixin:
         dlg.finished.connect(on_finished)
         dlg.show()
 
+    @leaves_sketch
     def prompt_split_body(self, target_body_id: str = "", plane_id: str = ""):
         if not self.doc.bodies:
             QMessageBox.information(
@@ -119,6 +122,7 @@ class BodyPromptsMixin:
         dlg.finished.connect(on_finished)
         dlg.show()
 
+    @leaves_sketch
     def prompt_shell(self, target_body_id: str = ""):
         """Shell: hollow out a 3D solid body with specified wall thickness and optional open faces."""
         if not self.doc.bodies:
@@ -214,6 +218,7 @@ class BodyPromptsMixin:
         refresh_preview()
         dlg.show()
 
+    @leaves_sketch
     def prompt_move_body(self, target_body_id: str = ""):
         """Move / Rotate: Translates and rotates a 3D solid body parametrically with interactive 3D gizmo."""
         if not self.doc.bodies:

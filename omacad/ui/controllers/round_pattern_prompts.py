@@ -15,6 +15,7 @@ from omacad.ui.dialogs import (
     ThreadDialog
 )
 from omacad.ui.canvas_dialog import CanvasEditorDialog
+from omacad.ui.controllers.prompt_guards import leaves_sketch
 
 
 class RoundPatternPromptsMixin:
@@ -44,6 +45,7 @@ class RoundPatternPromptsMixin:
         dlg.finished.connect(lambda *_: timer.stop())     # no preview after OK/Cancel
         return timer
 
+    @leaves_sketch
     def prompt_round_edges(self, kind: str = "fillet", edges=None):
         """Fillet / Chamfer: click edges (outside or inside corners), type the size, OK."""
         if getattr(self, "_round_dlg", None) is not None:
@@ -160,6 +162,7 @@ class RoundPatternPromptsMixin:
             self.viewport.selected_edges = list(edges)
             self.viewport.edges_selection_changed.emit()
 
+    @leaves_sketch
     def prompt_offset_face(self, face=None):
         """Offset Face: move flat faces, or change the radius of holes and pins (tolerances for threads and fits)."""
         from omacad.model.features.offset_face import OffsetFaceFeature, plane_face_ref
@@ -239,6 +242,7 @@ class RoundPatternPromptsMixin:
             dlg.toggle(plane_face_ref(face), face.body_id)
         dlg.show()
 
+    @leaves_sketch
     def prompt_honeycomb(self):
         """Honeycomb: click flat and round faces of one body, choose the cells; live preview of the result."""
         from omacad.model.features.honeycomb import HoneycombFeature
@@ -304,6 +308,7 @@ class RoundPatternPromptsMixin:
         self.status_label.setText("Honeycomb: click flat or round faces, choose shape and sizes, OK. Esc cancels.")
         dlg.show()
 
+    @leaves_sketch
     def prompt_pattern(self, kind=None):
         """Copy what some steps did: evenly spaced, mirrored around the body, or around an axis."""
         from omacad.model.timeline import PatternFeature

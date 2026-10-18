@@ -165,10 +165,12 @@ class TimelineBar(QWidget):
     edit_sketch_requested = Signal(str)
     highlight_changed = Signal(object, object)  # (material the step added, material it removed), or (None, None)
     flash_sketch_requested = Signal(object)     # sketch id to show highlighted for a moment, or None
+    status_message = Signal(str)
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.feature_pick_handler = None
+        self.busy_reason = lambda: None     # set by the main window: why the history must not change now (open tool)
         self.doc = document
         self._highlighted: Optional[int] = None   # step number whose changes are coloured in the view
         self._hovering: Optional[int] = None      # step number under the mouse (its changes are shown while it is there)
@@ -297,10 +299,19 @@ class TimelineBar(QWidget):
         if self._highlighted != index + 1:
             self.on_node_clicked(index + 1)
 
+    def _blocked(self) -> bool:
+        """True (and says why) while a tool is open: rebuilding would swap the bodies it works on."""
+        reason = self.busy_reason()
+        if reason:
+            self.status_message.emit(reason)
+        return bool(reason)
+
     def _changes(self, step_index: int):
         """(added, removed) material of a step, remembered until the timeline is rebuilt."""
         if step_index not in self._changes_cache:
             if (step_index - 1) not in self.doc.step_states or step_index not in self.doc.step_states:
+                if self.busy_reason():
+                    return None, None                       # no rebuild under an open tool
                 self.doc.timeline.recompute(self.doc)       # steps just added have no recorded states yet
             self._changes_cache[step_index] = self.doc.step_changes(step_index - 1)
         return self._changes_cache[step_index]
@@ -356,6 +367,8 @@ class TimelineBar(QWidget):
         if self.feature_pick_handler is not None:
             self.feature_pick_handler(feat.feature_id)
             return
+        if self._blocked():
+            return
         if feat.feature_type == "sketch":
             self.edit_sketch_requested.emit(feat.sketch.sketch_id)
         elif feature_edit.can_edit(feat):
@@ -375,7 +388,7 @@ class TimelineBar(QWidget):
         menu.addSeparator()
         a_del = theme.action_with_icon(menu, "🗑️ Delete…")
         chosen = menu.exec(pos)
-        if chosen is None:
+        if chosen is None or (chosen is not a_rename and self._blocked()):
             return
         if chosen is a_edit:
             self.on_node_edit(step_index)
@@ -394,17 +407,25 @@ class TimelineBar(QWidget):
             self.doc.delete_feature(idx)
 
     def on_rewind(self):
+        if self._blocked():
+            return
         self.doc.timeline.rewind(self.doc)
         self.doc.notify_changed()
 
     def on_step_back(self):
+        if self._blocked():
+            return
         self.doc.timeline.step_backward(self.doc)
         self.doc.notify_changed()
 
     def on_step_forward(self):
+        if self._blocked():
+            return
         self.doc.timeline.step_forward(self.doc)
         self.doc.notify_changed()
 
     def on_fast_forward(self):
+        if self._blocked():
+            return
         self.doc.timeline.fast_forward(self.doc)
         self.doc.notify_changed()

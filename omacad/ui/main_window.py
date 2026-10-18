@@ -212,6 +212,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.viewport.section_base_picked.connect(self.on_section_base_picked)
         self.browser.edit_section_requested.connect(self.edit_section)
         self.timeline_bar.edit_sketch_requested.connect(self.on_edit_sketch)
+        self.timeline_bar.busy_reason = self._busy_reason
+        self.timeline_bar.status_message.connect(self.status_label.setText)
         self.timeline_bar.highlight_changed.connect(
             lambda added, removed: self.viewport.set_preview(added, "join", extra=removed, extra_op="cut"))
         self.timeline_bar.flash_sketch_requested.connect(self.viewport.set_flash_sketch)
@@ -564,9 +566,20 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             n = self.viewport.delete_selected_entities()
             self.status_label.setText(f"Deleted {n} sketch element{'s' if n != 1 else ''}.")
             return
-        for b_id in list(self.doc.selected_body_ids):
+        if self.doc.active_sketch:
+            self.status_label.setText("Select sketch elements to delete them.")
+            return
+        busy = self._busy_reason()      # the open tool works on the selected bodies
+        if busy:
+            self.status_label.setText(busy)
+            return
+        chosen = [b for b in self.doc.selected_body_ids if b in self.doc.bodies]
+        if not chosen:
+            self.status_label.setText("Nothing selected to delete.")
+            return
+        for b_id in chosen:
             self.doc.delete_body(b_id)
-        self.status_label.setText("Deleted selected body.")
+        self.status_label.setText(f"Deleted {len(chosen)} bod{'ies' if len(chosen) != 1 else 'y'}.")
 
     def on_inspect(self):
         num_bodies = len(self.doc.bodies)

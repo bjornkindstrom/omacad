@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.39 - 2026-10-18
+
+### Fixed
+- While a tool panel is open, Delete and the timeline buttons (rewind, step, roll back, edit, suppress, delete) wait and say why, instead of rebuilding the bodies under the tool. Delete in a sketch no longer deletes selected bodies, and says when nothing is selected. Solid tools started inside a sketch (Extrude, Revolve, primitives, Fillet, Pattern, Shell, Move ...) finish the sketch first, as in Fusion 360.
+
 ## 0.9.9.38 - 2026-10-18
 
 ### Fixed
