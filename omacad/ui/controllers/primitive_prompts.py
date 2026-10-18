@@ -272,6 +272,7 @@ class PrimitivePromptsMixin:
             dlg.activateWindow()
 
         def on_finished(result):
+            preview_timer.stop()            # a pending preview must not come back after the panel closed
             for sig, slot in (
                 (dlg.changed, refresh_preview),
                 (dlg.pick_face_requested, on_pick_face),

@@ -187,6 +187,7 @@ class BodyPromptsMixin:
             self.inspector.undock_tool()
 
         def on_finished(result):
+            timer.stop()                    # a pending preview would hide the rebuilt body again
             b_id, thickness, open_faces = dlg.get_values()
             cleanup()
             if result and b_id and thickness > 0:

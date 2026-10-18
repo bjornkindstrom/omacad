@@ -41,6 +41,7 @@ class RoundPatternPromptsMixin:
             dlg.changed.connect(lambda: timer.start() if not timer.isActive() else None)
         else:
             dlg.changed.connect(timer.start)
+        dlg.finished.connect(lambda *_: timer.stop())     # no preview after OK/Cancel
         return timer
 
     def prompt_round_edges(self, kind: str = "fillet", edges=None):
@@ -207,6 +208,7 @@ class RoundPatternPromptsMixin:
                 self.status_label.setText("Offset Face: all faces must belong to the same body.")
 
         def on_finished(result):
+            timer.stop()                    # a pending preview would hide the rebuilt body again
             vp.offset_face_picked.disconnect(on_picked)
             faces, body_id, dist = list(dlg.faces), dlg.body_id, dlg.distance()
             exprs = dlg.get_expressions()

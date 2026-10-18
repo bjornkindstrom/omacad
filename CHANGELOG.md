@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.37 - 2026-10-18
+
+### Fixed
+- Pressing OK or Cancel right after changing a value in Shell, Offset Face, Thread or Fillet/Pattern no longer leaves the body hidden or a preview behind.
+
 ## 0.9.9.36 - 2026-10-18
 
 ### Fixed
