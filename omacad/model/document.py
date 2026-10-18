@@ -1076,16 +1076,19 @@ class Document:
             self.notify_changed()
 
     @undoable("Offset Plane")
-    def add_construction_plane(self, base_plane, distance: float, name: str = None) -> str:
-        """A plane parallel to `base_plane`, `distance` mm along its normal."""
+    def add_construction_plane(self, base_plane, distance: float, name: str = None, origin=None) -> str:
+        """A plane parallel to `base_plane`, `distance` mm along its normal.
+
+        `origin` optionally supplies an in-plane-shifted base point.
+        """
         n = np.asarray(base_plane.normal, dtype=float)
         n = n / np.linalg.norm(n)
         pid = f"plane_{len(self.construction_planes) + 1}"
         while pid in self.construction_planes:
             pid += "_"
-        origin = np.asarray(base_plane.origin, dtype=float) + n * float(distance)
+        plane_origin = np.asarray(base_plane.origin if origin is None else origin, dtype=float) + n * float(distance)
         self.construction_planes[pid] = {"name": name or f"Plane {len(self.construction_planes) + 1}",
-                                         "origin": [float(x) for x in origin], "normal": [float(x) for x in n], "visible": True}
+                                         "origin": [float(x) for x in plane_origin], "normal": [float(x) for x in n], "visible": True}
         self.notify_changed()
         return pid
 
@@ -1126,7 +1129,12 @@ class Document:
     def construction_plane(self, pid: str):
         from omacad.model.sketch import SketchPlane
         c = self.construction_planes[pid]
-        return SketchPlane.from_face(np.array(c["normal"]), np.array(c["origin"]), name="PLANE")
+        plane = SketchPlane.from_face(np.array(c["normal"]), np.array(c["origin"]), name="PLANE")
+        # from_face chooses a canonical origin on the normal through world
+        # origin. Construction planes also store an in-plane centre for their
+        # viewport marker, so retain that exact point.
+        plane.origin = np.asarray(c["origin"], dtype=np.float32)
+        return plane
 
     @undoable("Delete Plane")
     def delete_construction_plane(self, pid: str) -> None:

@@ -382,13 +382,28 @@ class ToolPromptsMixin:
         n = n / np.linalg.norm(n)
         o = np.asarray(base.origin, dtype=float)
 
+        # Start an offset from the centre of the visible model, projected onto
+        # the selected base plane. This keeps planes selected from the origin
+        # planes near the part instead of anchored at world origin.
+        meshes = [b.render_mesh for b in self.doc.bodies.values()
+                  if b.visible and b.render_mesh is not None and len(b.render_mesh.vertices)]
+        if meshes:
+            lo = np.min([m.bounds_min for m in meshes], axis=0)
+            hi = np.max([m.bounds_max for m in meshes], axis=0)
+            centre = (lo + hi) * 0.5
+            o = centre - n * float((centre - o) @ n)
+
         dlg = OffsetPlaneDialog(base.name, self)
         self.dock(dlg)
         self.status_label.setText("Offset Plane: type the distance in mm (or drag the 3D arrow). Click 'To surface…' to touch a surface.")
 
         def update_preview():
             dist = dlg.spn_dist.value()
-            self.viewport.set_preview_plane(SketchPlane.from_face(n, o + n * dist, name="PLANE"))
+            plane = SketchPlane.from_face(n, o + n * dist, name="PLANE")
+            # Keep sketch coordinates anchored as usual, but draw the marker
+            # around the part instead of around world origin.
+            plane.display_origin = np.asarray(o + n * dist, dtype=np.float32)
+            self.viewport.set_preview_plane(plane)
             self.viewport.set_extrude_handle(o, n, dist if abs(dist) > 0.1 else 5.0, color=(0.75, 0.55, 0.95))
 
         def on_handle_drag(dist: float):
@@ -440,7 +455,7 @@ class ToolPromptsMixin:
 
         if dlg.exec():
             dist = dlg.spn_dist.value()
-            pid = self.doc.add_construction_plane(base, dist)
+            pid = self.doc.add_construction_plane(base, dist, origin=o)
             self.status_label.setText(f"{self.doc.construction_planes[pid]['name']} created {dist:.3f} mm from {base.name}.")
         cleanup()
 

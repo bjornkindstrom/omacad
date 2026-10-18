@@ -573,8 +573,11 @@ class PickerMixin:
         half = self._origin_quadrant_size() / 2
         if self.preview_plane is not None:
             pl = self.preview_plane
-            quads = quads + [(None, "", [pl.uv_to_world(-half, -half), pl.uv_to_world(half, -half),
-                                         pl.uv_to_world(half, half), pl.uv_to_world(-half, half)], (1.0, 0.65, 0.2))]
+            centre = np.asarray(getattr(pl, "display_origin", pl.origin), dtype=float)
+            quads = quads + [(None, "", [centre - half * pl.u_axis - half * pl.v_axis,
+                                         centre + half * pl.u_axis - half * pl.v_axis,
+                                         centre + half * pl.u_axis + half * pl.v_axis,
+                                         centre - half * pl.u_axis + half * pl.v_axis], (1.0, 0.65, 0.2))]
         for key, _name, corners, (r, g, b) in quads:
             hovered = key is not None and self.hover_plane == key        # also without a tool: the plane lights up
             fill = 0.25 if key is None else (0.42 if hovered else (0.14 if key[0] == "origin" else 0.10))
