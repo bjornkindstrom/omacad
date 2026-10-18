@@ -223,3 +223,19 @@ def test_clean_difference_drops_coincident_surface_sheets():
     assert added.volume() == pytest.approx((after - base).volume(), abs=1e-3)
     # It still touches the body, so joining it back leaves one shell.
     assert len((base + added).decompose()) == 1
+
+
+def test_circular_pattern_on_threaded_jar_keeps_the_thread():
+    """Report: a circular pattern of wrapped slots on a jar erased its thread. The jar passed as round, so
+    it was cut down to what every rotation keeps, and a helix is not round. Only the slots' height is
+    trimmed now: the thread stays exactly, the wall gets twelve clean slots and no skin strips."""
+    doc = Exporter.load_project("tests/data/circular_pattern_threaded_jar.omacad")
+    before, after = doc.step_states[12]["body_cylinder_1"], doc.step_states[15]["body_cylinder_1"]
+    body = doc.bodies["body_cylinder_1"].manifold
+    neck = m3d.Manifold.cube((100, 100, 10)).translate((-50, -50, 40))
+
+    assert (body ^ neck).volume() == pytest.approx((after ^ neck).volume(), abs=1e-6)
+    assert body.volume() == pytest.approx(before.volume() - 12*(before.volume() - after.volume()), abs=0.5)
+    assert body.genus() == 0
+    for z in np.linspace(2.5, 39.5, 30):
+        assert len(body.slice(z).to_polygons()) == 2, z

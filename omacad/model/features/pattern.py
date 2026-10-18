@@ -230,6 +230,22 @@ class PatternFeature(Feature):
                 return False
         return True
 
+    @staticmethod
+    def _outside_band(body, regions, c, axis, margin=0.05):
+        """Everything around `body` except the slab across the axis that `regions` span (plus `margin`)."""
+        def along(m):
+            return (m.to_mesh().vert_properties[:, :3] - c) @ axis
+        t = np.concatenate([along(r) for r in regions])
+        tb = along(body)
+        size = float(np.ptp(body.to_mesh().vert_properties[:, :3], axis=0).max()) + float(np.abs(tb).max()) + 1.0
+        lo, hi = float(t.min()) - margin, float(t.max()) + margin
+        u = np.cross(axis, [1.0, 0.0, 0.0] if abs(axis[0]) < 0.9 else [0.0, 1.0, 0.0])
+        u /= np.linalg.norm(u)
+        frame = np.column_stack((u, np.cross(axis, u), axis, c))   # local z = the axis, origin = c
+        def slab(a, b):
+            return m3d.Manifold.cube((2*size, 2*size, b - a)).translate((-size, -size, a)).transform(frame)
+        return slab(-2*size, lo) + slab(hi, 2*size)
+
     def _source_plane(self, doc, before=None, removed=None, added=None):
         for f in doc.timeline.features:
             if f.feature_id in self.source_ids:
@@ -677,6 +693,9 @@ class PatternFeature(Feature):
                     r = np.linalg.norm((added.to_mesh().vert_properties[:, :3] - c) @ (np.eye(3) - np.outer(axis, axis)), axis=1)
                     added = added + (self._radial_scale(added, c, axis, 1.0 - 0.03 / max(float(r.max()), 1e-6)) ^ before)
                     self._keep = self._keep + added   # the original boss stays
+                # Only the height the copies occupy is trimmed: a thread or flat elsewhere is not round
+                # about the axis and the intersection would erase it.
+                self._keep = self._keep + self._outside_band(before, regions, c, axis)
         rem = add = None
         if not removed.is_empty():
             parts = [f(removed) for f in funcs]
