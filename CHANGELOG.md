@@ -3,6 +3,21 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.20 - 2026-10-18
+
+### Changed
+- While creating a primitive, drag the preview with the left mouse button to set its position; the offset is stored in the primitive feature and follows save/load and undo.
+- Move / Rotate adds **Activate copy**: the original stays put and a parametrically transformed copy is created, saved, restored and undone with the Move step.
+- Move preview in copy mode now shows both the unchanged original and the moved copy.
+- Point to point can snap to the centre of a body's top and bottom, including curved extremes.
+- Right-clicking a planar face now offers **Move this Body…**, which opens Move / Rotate for the whole owning body.
+- Move / Rotate no longer has a separate Active handle row; click a gizmo axis directly. The gizmo hides while picking point-to-point references.
+- Face-to-face Move accepts the target face first or the moving face first.
+- The moving body remains visible and pickable while choosing faces for Face-to-face Move.
+- Lay on ground hides the Move gizmo, shows the body while picking, and lays the clicked face flat on XY.
+- Right-clicking a body while Move / Rotate is active selects it as the target body.
+- Move gizmo stays hidden while Face-to-face is waiting for its two face picks.
+
 ## 0.9.9.19 - 2026-10-18
 
 ### Fixed

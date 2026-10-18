@@ -91,6 +91,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
     move_gizmo_finished = Signal()
     move_gizmo_axis_selected = Signal(str)
     body_clicked = Signal(str)  # body_id of clicked 3D body
+    move_body_requested = Signal(str)  # right-click on a face moves its owning whole body
     plane_clicked = Signal(str)  # an origin plane ("XY") or construction plane id clicked without a tool
     text_place_requested = Signal(object, object)   # Text tool click: (anchor uv or None, path entity id or None)
     text_edit_requested = Signal(str)               # a text element chosen for editing (Text tool click, right-click menu)
@@ -2426,6 +2427,8 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             self.offset_face_requested.emit(arg)
         elif kind == "offset_plane":
             self.offset_base_picked.emit(arg)
+        elif kind == "move_body":
+            self.move_body_requested.emit(arg)
         elif kind == "join_bodies":
             self.join_bodies_requested.emit(arg)
         elif kind == "split_plane":
@@ -2606,6 +2609,7 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
         acts: dict = {}
         if face.body_id in self.doc.bodies:
             menu.addSeparator()
+            acts[theme.action_with_icon(menu, "↔️ Move this Body…")] = ("move_body", face.body_id)
             acts[theme.action_with_icon(menu, "⬇️ Lay this face on the ground (XY)")] = ("lay", "ground")
             acts[theme.action_with_icon(menu, "⬇️ Lay this face on a face or plane…")] = ("lay", "pick")
         menu.addSeparator()
@@ -2687,6 +2691,13 @@ class Viewport3D(QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayM
             moved = (event.position() - self._rpress).manhattanLength()
             self._rpress = None
             self.is_panning = False
+            if moved < 4 and self.plane_pick_mode and self.plane_pick_purpose == "move_body":
+                body_id = self.pick_body(event.position().x(), event.position().y())
+                if body_id is not None:
+                    self.doc.select_body(body_id)
+                    self.body_clicked.emit(body_id)
+                    self.update()
+                return
             if moved < 4 and not self.plane_pick_mode and not self.edge_pick_mode:
                 if not self.doc.active_sketch and self.move_gizmo:
                     self._show_axis_menu(event)

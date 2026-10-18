@@ -254,13 +254,15 @@ class Document:
     def add_box(self, length: float, width: float, height: float, center: Any = False, name: Optional[str] = None,
                 plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                 wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0) -> Body:
+                inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0,
+                translation: Any = None) -> Body:
         feat_id = f"box_{len(self.timeline.features) + 1}"
         feat_name = name or f"Box {len([f for f in self.timeline.features if f.feature_type == 'box']) + 1}"
         feat = BoxFeature(feat_id, feat_name, length, width, height, center,
                           plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
                           wall_thickness=wall_thickness, outer_round=outer_round, outer_round_kind=outer_round_kind,
-                          inner_round=inner_round, inner_round_kind=inner_round_kind, taper_angle=taper_angle)
+                          inner_round=inner_round, inner_round_kind=inner_round_kind, taper_angle=taper_angle,
+                          translation=translation)
         feat.execute(self)
         self.timeline.add_feature(feat)
         self.notify_changed()
@@ -270,13 +272,15 @@ class Document:
     def add_cylinder(self, radius: float, height: float, center: Any = False, name: Optional[str] = None,
                      plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                      wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                     inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0) -> Body:
+                     inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0,
+                     translation: Any = None) -> Body:
         feat_id = f"cylinder_{len(self.timeline.features) + 1}"
         feat_name = name or f"Cylinder {len([f for f in self.timeline.features if f.feature_type == 'cylinder']) + 1}"
         feat = CylinderFeature(feat_id, feat_name, radius, height, center,
                                plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
                                wall_thickness=wall_thickness, outer_round=outer_round, outer_round_kind=outer_round_kind,
-                               inner_round=inner_round, inner_round_kind=inner_round_kind, taper_angle=taper_angle)
+                               inner_round=inner_round, inner_round_kind=inner_round_kind, taper_angle=taper_angle,
+                               translation=translation)
         feat.execute(self)
         self.timeline.add_feature(feat)
         self.notify_changed()
@@ -296,10 +300,10 @@ class Document:
         return self.bodies[f"body_{feat_id}"]
 
     @undoable("Sphere")
-    def add_sphere(self, radius: float, name: Optional[str] = None) -> Body:
+    def add_sphere(self, radius: float, name: Optional[str] = None, translation: Any = None) -> Body:
         feat_id = f"sphere_{len(self.timeline.features) + 1}"
         feat_name = name or f"Sphere {len([f for f in self.timeline.features if f.feature_type == 'sphere']) + 1}"
-        feat = SphereFeature(feat_id, feat_name, radius)
+        feat = SphereFeature(feat_id, feat_name, radius, translation=translation)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.notify_changed()
@@ -724,7 +728,7 @@ class Document:
         "shell": ("thickness", "direction", "thickness2", "open_faces"),
         "offset_face": ("distance",),
         "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle"),
-        "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot", "from_point", "to_point"),
+        "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot", "from_point", "to_point", "copy_body"),
     }
 
     @undoable("Edit Feature")
@@ -981,6 +985,7 @@ class Document:
         exprs: Optional[dict] = None,
         from_point: Optional[dict] = None,
         to_point: Optional[dict] = None,
+        copy_body: bool = False,
     ) -> Optional[MoveFeature]:
         """Translates and rotates a 3D solid body parametrically (optionally point to point, see MoveFeature)."""
         if body_id not in self.bodies:
@@ -989,7 +994,7 @@ class Document:
         feat_id = f"move_{len(self.timeline.features) + 1}"
         target_name = self.bodies[body_id].name
         feat = MoveFeature(feat_id, f"Move {target_name} ({n})", body_id, dx, dy, dz, rx, ry, rz, pivot=pivot,
-                           from_point=from_point, to_point=to_point)
+                           from_point=from_point, to_point=to_point, copy_body=copy_body)
         if exprs:
             feat.exprs = exprs
         self.timeline.add_feature(feat)

@@ -33,6 +33,7 @@ class MoveFeature(Feature):
         pivot: str = "center",
         from_point: Optional[dict] = None,
         to_point: Optional[dict] = None,
+        copy_body: bool = False,
     ):
         super().__init__(feature_id, "move", name)
         self.target_body_id = target_body_id
@@ -45,6 +46,7 @@ class MoveFeature(Feature):
         self.pivot = pivot if pivot in self.PIVOTS else "center"
         self.from_point = from_point
         self.to_point = to_point
+        self.copy_body = bool(copy_body)
 
     @staticmethod
     def resolve_point(doc: Any, ref: Optional[dict]) -> Optional[np.ndarray]:
@@ -53,7 +55,7 @@ class MoveFeature(Feature):
             return None
         xyz = np.asarray(ref["xyz"], dtype=float)
         body = doc.bodies.get(ref.get("body")) if ref.get("body") else None
-        if body is not None and ref.get("kind") in ("end", "corner"):
+        if body is not None and ref.get("kind") in ("end", "corner", "top_center", "bottom_center"):
             from omacad.model.body_points import nearest_point
             found = nearest_point(body, xyz, ref["kind"])
             if found is not None:
@@ -110,9 +112,15 @@ class MoveFeature(Feature):
             return
         from_xyz = self.resolve_point(doc, self.from_point)
         to_xyz = self.resolve_point(doc, self.to_point)
-        target.manifold = self.transform(target.manifold, (self.dx, self.dy, self.dz), (self.rx, self.ry, self.rz),
-                                         self.pivot_xyz(doc, target, from_xyz), from_xyz, to_xyz)
-        target.update_render_mesh()
+        moved = self.transform(target.manifold, (self.dx, self.dy, self.dz), (self.rx, self.ry, self.rz),
+                               self.pivot_xyz(doc, target, from_xyz), from_xyz, to_xyz)
+        if self.copy_body:
+            body = Body(f"body_{self.feature_id}", f"{target.name} Copy", moved)
+            body.update_render_mesh()
+            doc.bodies[body.body_id] = body
+        else:
+            target.manifold = moved
+            target.update_render_mesh()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -121,6 +129,7 @@ class MoveFeature(Feature):
             "name": self.name,
             "suppressed": self.suppressed,
             "target_body_id": self.target_body_id,
+            "copy_body": self.copy_body,
             "dx": self.dx,
             "dy": self.dy,
             "dz": self.dz,

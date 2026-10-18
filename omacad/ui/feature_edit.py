@@ -508,6 +508,7 @@ def edit_feature(win, doc, index: int) -> bool:
         dlg.spn_rz.setValue(feat.rz)
         dlg.set_points(feat.from_point, feat.to_point)
         dlg.cmb_pivot.setCurrentIndex(max(0, dlg.cmb_pivot.findData(feat.pivot)))
+        dlg.chk_copy_body.setChecked(feat.copy_body)
         for key, spin in (("dx", dlg.spn_dx), ("dy", dlg.spn_dy), ("dz", dlg.spn_dz),
                           ("rx", dlg.spn_rx), ("ry", dlg.spn_ry), ("rz", dlg.spn_rz)):
             if feat.exprs.get(key):
@@ -530,7 +531,7 @@ def edit_feature(win, doc, index: int) -> bool:
         bid, dx, dy, dz, rx, ry, rz, pivot, exprs = dlg.get_values()
         frm, to = dlg.get_points()
         return doc.edit_feature(index, target_body_id=bid, dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz, pivot=pivot, exprs=exprs,
-                                from_point=frm, to_point=to)
+                                from_point=frm, to_point=to, copy_body=dlg.chk_copy_body.isChecked())
 
     if t == "thread":
         from omacad.model.features.thread import ThreadFeature

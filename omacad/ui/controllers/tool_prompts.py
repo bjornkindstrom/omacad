@@ -749,7 +749,8 @@ class ToolPromptsMixin:
             l, w, h, center, po, pn, pu, pv = dlg.get_values()
             smart = dlg.get_smart_params()
             feat = BoxFeature("preview_box", "Preview", l, w, h, center,
-                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+                              plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                              translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
             try:
                 solid = feat.build_solid()
                 dlg.lbl_problem.clear()
@@ -786,7 +787,8 @@ class ToolPromptsMixin:
                 l, w, h, center, po, pn, pu, pv = dlg.get_values()
                 smart = dlg.get_smart_params()
                 body = self.doc.add_box(l, w, h, center=center,
-                                        plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+                                        plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                                        translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
                 self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} ({l}x{w}x{h} mm).")
@@ -797,7 +799,7 @@ class ToolPromptsMixin:
         self.viewport.primitive_face_picked.connect(on_face_picked)
         dlg.finished.connect(on_finished)
         from omacad.ui.primitive_handles import attach_primitive_handles
-        attach_primitive_handles(self.viewport, dlg, "box")
+        attach_primitive_handles(self.viewport, dlg, "box", refresh_preview)
         self.dock(dlg)
         refresh_preview()
 
@@ -820,7 +822,8 @@ class ToolPromptsMixin:
             r, h, center, po, pn, pu, pv = dlg.get_values()
             smart = dlg.get_smart_params()
             feat = make_feature("preview_cyl", "Preview", r, h, center,
-                                plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+                                plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                                translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
             try:
                 solid = feat.build_solid()
                 dlg.lbl_problem.clear()
@@ -856,7 +859,8 @@ class ToolPromptsMixin:
             if result:
                 r, h, center, po, pn, pu, pv = dlg.get_values()
                 smart = dlg.get_smart_params()
-                place = dict(center=center, plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv, **smart)
+                place = dict(center=center, plane_origin=po, plane_normal=pn, plane_u=pu, plane_v=pv,
+                             translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
                 if prism:
                     body = self.doc.add_prism(r, h, sides=dlg.sides(), **place)
                 else:
@@ -872,7 +876,7 @@ class ToolPromptsMixin:
         self.viewport.primitive_face_picked.connect(on_face_picked)
         dlg.finished.connect(on_finished)
         from omacad.ui.primitive_handles import attach_primitive_handles
-        attach_primitive_handles(self.viewport, dlg, "prism" if prism else "cylinder")
+        attach_primitive_handles(self.viewport, dlg, "prism" if prism else "cylinder", refresh_preview)
         self.dock(dlg)
         refresh_preview()
 
@@ -882,20 +886,21 @@ class ToolPromptsMixin:
         dlg = SphereDialog(self)
 
         def preview():
-            self.viewport.set_preview(CadKernel.create_sphere(dlg.get_values()), "new_body")
+            solid = CadKernel.create_sphere(dlg.get_values()).translate(tuple(getattr(dlg, "placement_offset", (0, 0, 0))))
+            self.viewport.set_preview(solid, "new_body")
 
         def finished(result):
             self.viewport.set_preview(None)
             if result:
                 r = dlg.get_values()
-                body = self.doc.add_sphere(r)
+                body = self.doc.add_sphere(r, translation=getattr(dlg, "placement_offset", (0, 0, 0)))
                 self.doc.timeline.features[-1].exprs = dlg.get_expressions()
                 self.viewport.zoom_fit()
                 self.status_label.setText(f"Created {body.name} (R={r} mm).")
 
         timer = self._connect_debounced_preview(dlg, preview, throttle=True)
         dlg.finished.connect(lambda _: timer.stop())
-        attach_primitive_handles(self.viewport, dlg, "sphere")
+        attach_primitive_handles(self.viewport, dlg, "sphere", preview)
         dlg.finished.connect(finished)
         self.dock(dlg)
         preview()
@@ -1207,6 +1212,9 @@ class ToolPromptsMixin:
 
         def update_handle():
             from omacad.model.features.transform import MoveFeature
+            if dlg.btn_points.isChecked() or dlg.btn_lay.isChecked() or dlg.btn_f2f.isChecked():
+                self.viewport.clear_move_gizmo()
+                return
             vals = dlg.get_values()
             bid = vals[0]
             if not bid or bid not in self.doc.bodies:
@@ -1232,7 +1240,8 @@ class ToolPromptsMixin:
 
             from omacad.model.features.transform import MoveFeature
             body = self.doc.bodies[bid]
-            body.visible = False
+            # Copy mode previews the moved duplicate alongside the unchanged source body.
+            body.visible = dlg.chk_copy_body.isChecked() or dlg.btn_f2f.isChecked() or dlg.btn_lay.isChecked()
             current_hidden_id[0] = bid
             self.viewport.point_pick_hidden_ok = bid      # its points can still be picked while the preview shows
             m = MoveFeature.transform(body.manifold, *move_args(body, dlg.get_values()))
@@ -1271,7 +1280,7 @@ class ToolPromptsMixin:
         def on_gizmo_axis_selected(axis: str):
             dlg.set_active_axis(axis)
 
-        f2f = {"src": None, "dst": None}      # the two clicks of "Move a face to another face"
+        f2f = {"src": None, "dst": None, "moving_id": None}  # picked in either order; body id stays locked
 
         def apply_face_to_face():
             from omacad.model.geometry import face_centroid, face_to_face_values
@@ -1288,25 +1297,54 @@ class ToolPromptsMixin:
                 spn.setValue(round(v, 4))
 
         def on_face_to_face_toggled(on):
+            bid = dlg.get_values()[0]
+            if bid in self.doc.bodies:
+                # The source face must remain visible and pickable while the moved preview is shown.
+                self.doc.bodies[bid].visible = bool(on or dlg.chk_copy_body.isChecked())
+                self.viewport.update()
             if on:
                 f2f["src"] = f2f["dst"] = None
-                self.status_label.setText("Face to face: click the face on the body that should move.")
+                f2f["moving_id"] = dlg.get_values()[0]
+                self.viewport.clear_move_gizmo()
+                self.status_label.setText("Face to face: click the moving face or the target face first.")
+            else:
+                refresh_preview()
+
+        def on_lay_toggled(on):
+            bid = dlg.get_values()[0]
+            if on:
+                if dlg.btn_f2f.isChecked():
+                    dlg.btn_f2f.setChecked(False)
+                if dlg.btn_points.isChecked():
+                    dlg.btn_points.setChecked(False)
+                if bid in self.doc.bodies:
+                    self.doc.bodies[bid].visible = True
+                self.viewport.clear_move_gizmo()
+                self.viewport.update()
+                self.status_label.setText("Lay on ground: click a face on the body to place flat on XY.")
+            else:
+                refresh_preview()
 
         def on_face_picked(plane):
             face = getattr(plane, "face", None)
             if dlg.btn_f2f.isChecked():
-                if f2f["src"] is None:
-                    if face is None or not hasattr(face, "body_id"):
-                        self.status_label.setText("Face to face: first click a face on the body (not a plane).")
-                        return
+                moving_id = f2f["moving_id"]
+                picked_body = getattr(face, "body_id", None)
+                if picked_body == moving_id:
                     f2f["src"] = face
-                    dlg.select_body(face.body_id)
-                    self.status_label.setText("Face to face: now click the face or plane it should move to.")
+                    dlg.select_body(picked_body)
+                elif f2f["src"] is None:
+                    f2f["dst"] = plane
                 else:
                     f2f["dst"] = plane
+                if f2f["src"] is not None and f2f["dst"] is not None:
                     dlg.btn_f2f.setChecked(False)
                     apply_face_to_face()
                     self.status_label.setText("Face to face: done. Change the direction or the numbers, then OK.")
+                elif f2f["src"] is None:
+                    self.status_label.setText("Face to face: target saved. Now click a face on the body that should move.")
+                else:
+                    self.status_label.setText("Face to face: moving face saved. Now click its target face or plane.")
                 return
             if face is not None and hasattr(face, "body_id"):
                 dlg.select_body(face.body_id)
@@ -1317,16 +1355,18 @@ class ToolPromptsMixin:
                     for spn, v in zip((dlg.spn_dx, dlg.spn_dy, dlg.spn_dz, dlg.spn_rx, dlg.spn_ry, dlg.spn_rz), vals):
                         spn.setValue(round(v, 4))
                     dlg.btn_lay.setChecked(False)
-                    self.status_label.setText("Face laid on the ground. Adjust the numbers or press OK.")
+                    self.status_label.setText(f"{self.doc.bodies[face.body_id].name}: face laid flat on XY. Adjust the numbers or press OK.")
 
         def on_points_toggled(on):
             if on:
                 dlg.set_points(None, None)
+                self.viewport.clear_move_gizmo()
                 self.viewport.begin_point_pick()
                 self.status_label.setText("Point to point: click a point on the body (an edge end, or move near a rounding "
                                           "for its hidden corner). It becomes the rotation pivot.")
             else:
                 self.viewport.end_point_pick()
+                update_handle()
 
         def on_point_picked(p):
             frm, _ = dlg.get_points()
@@ -1378,10 +1418,12 @@ class ToolPromptsMixin:
             frm, to = dlg.get_points()
             cleanup()
             if result and bid and bid in self.doc.bodies:
-                feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs, from_point=frm, to_point=to)
+                feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs,
+                                          from_point=frm, to_point=to, copy_body=dlg.chk_copy_body.isChecked())
                 if feat:
                     b_name = self.doc.bodies[bid].name if bid in self.doc.bodies else bid
-                    self.status_label.setText(f"Moved {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
+                    action = "Copied and moved" if feat.copy_body else "Moved"
+                    self.status_label.setText(f"{action} {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
                     self.viewport.update()
             else:
                 self.status_label.setText("Move cancelled.")
@@ -1389,6 +1431,7 @@ class ToolPromptsMixin:
 
         self._connect_debounced_preview(dlg, refresh_preview, interval_ms=30)
         dlg.btn_f2f.toggled.connect(on_face_to_face_toggled)
+        dlg.btn_lay.toggled.connect(on_lay_toggled)
         dlg.btn_points.toggled.connect(on_points_toggled)
         self.viewport.point_picked.connect(on_point_picked)
         dlg.f2f_changed.connect(apply_face_to_face)

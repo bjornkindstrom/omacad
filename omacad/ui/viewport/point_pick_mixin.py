@@ -55,7 +55,9 @@ class PointPickMixin:
         if (hover is None) != (self.hover_point is None) or (hover is not None and hover[2] is not self.hover_point[2]):
             self.hover_point = hover
             if hover is not None:
-                what = {"end": "end of an edge", "corner": "hidden corner", "fixed": "origin"}[hover[1]]
+                what = {"end": "end of an edge", "corner": "hidden corner",
+                        "top_center": "centre of top face", "bottom_center": "centre of bottom face",
+                        "fixed": "origin"}[hover[1]]
                 self.status_message.emit(f"Point: {what} at ({hover[2][0]:.2f}, {hover[2][1]:.2f}, {hover[2][2]:.2f}). Click to pick it.")
         self.update()
 
@@ -70,7 +72,9 @@ class PointPickMixin:
         if not getattr(self, "point_pick", False):
             return
         painter.save()
-        colours = {"end": QColor(80, 220, 120), "corner": QColor(255, 150, 40), "fixed": QColor(120, 180, 255)}
+        colours = {"end": QColor(80, 220, 120), "corner": QColor(255, 150, 40),
+                   "top_center": QColor(80, 190, 255), "bottom_center": QColor(80, 190, 255),
+                   "fixed": QColor(120, 180, 255)}
         for (body_id, kind, xyz, guides), scr in self._near_points:
             colour = colours[kind]
             if kind == "corner":

@@ -108,10 +108,15 @@ def test_dialog_flow_two_clicks_fills_the_numbers_and_the_option_recomputes():
     src = max(doc.bodies[b].faces, key=lambda f: -f.normal[2])        # B's underside
     dst = max(doc.bodies[a].faces, key=lambda f: f.normal[2])         # A's top
     dlg.btn_f2f.setChecked(True)
+    assert vp.move_gizmo is None
+    assert doc.bodies[b].visible                                  # source face stays visible for picking
     vp.move_body_picked.emit(vp.plane_from_target(("face", src)))
     assert dlg.btn_f2f.isChecked()                                    # waiting for the target
+    assert doc.bodies[b].visible
     vp.move_body_picked.emit(vp.plane_from_target(("face", dst)))
     assert not dlg.btn_f2f.isChecked()
+    assert vp.move_gizmo is not None
+    assert not doc.bodies[b].visible                                 # normal Move preview replaces source
     # B's underside already looks down: no turning, just from its centre to A's top centre
     want = face_centroid(dst) - face_centroid(src)
     assert np.allclose([dlg.spn_dx.value(), dlg.spn_dy.value(), dlg.spn_dz.value()], want, atol=1e-3)
@@ -119,4 +124,56 @@ def test_dialog_flow_two_clicks_fills_the_numbers_and_the_option_recomputes():
     assert np.allclose([dlg.spn_rx.value(), dlg.spn_ry.value(), dlg.spn_rz.value()], 0, atol=1e-3)
     dlg.chk_f2f_centre.setChecked(False)                              # recomputed from the same two clicks
     assert np.allclose([dlg.spn_dx.value(), dlg.spn_dy.value(), dlg.spn_dz.value()], [0, 0, 10], atol=1e-3)   # normal only
+    dlg.reject()
+
+
+def test_dialog_flow_accepts_target_face_before_moving_face():
+    QApplication.instance() or QApplication([])
+    from omacad.ui.main_window import MainWindow
+    w = MainWindow()
+    doc = w.doc
+    doc.add_box(20, 20, 10)
+    a = next(iter(doc.bodies))
+    doc.add_box(6, 6, 4)
+    b = [k for k in doc.bodies if k != a][0]
+    doc.move_body(b, dx=40)
+    w.prompt_move_body(b)
+    dlg, vp = w.inspector.current_tool_dlg, w.viewport
+    src = max(doc.bodies[b].faces, key=lambda f: -f.normal[2])
+    dst = max(doc.bodies[a].faces, key=lambda f: f.normal[2])
+    dlg.btn_f2f.setChecked(True)
+    assert vp.move_gizmo is None
+    assert doc.bodies[b].visible
+    vp.move_body_picked.emit(vp.plane_from_target(("face", dst)))
+    assert dlg.btn_f2f.isChecked()
+    assert doc.bodies[b].visible
+    vp.move_body_picked.emit(vp.plane_from_target(("face", src)))
+    assert not dlg.btn_f2f.isChecked()
+    assert vp.move_gizmo is not None
+    assert not doc.bodies[b].visible
+    want = face_centroid(dst) - face_centroid(src)
+    assert np.allclose([dlg.spn_dx.value(), dlg.spn_dy.value(), dlg.spn_dz.value()], want, atol=1e-3)
+    dlg.reject()
+
+
+def test_lay_on_ground_hides_gizmo_and_accepts_a_body_face():
+    QApplication.instance() or QApplication([])
+    from omacad.ui.main_window import MainWindow
+    w = MainWindow()
+    doc = w.doc
+    doc.add_box(6, 6, 4)
+    bid = next(iter(doc.bodies))
+    doc.move_body(bid, dx=40, dz=12)
+    w.prompt_move_body(bid)
+    dlg, vp = w.inspector.current_tool_dlg, w.viewport
+
+    assert vp.move_gizmo is not None
+    dlg.btn_lay.setChecked(True)
+    assert vp.move_gizmo is None
+    assert doc.bodies[bid].visible
+    face = max(doc.bodies[bid].faces, key=lambda f: f.normal[0])
+    vp.move_body_picked.emit(vp.plane_from_target(("face", face)))
+    assert not dlg.btn_lay.isChecked()
+    assert vp.move_gizmo is not None
+    assert dlg.spn_rx.value() != 0 or dlg.spn_ry.value() != 0
     dlg.reject()

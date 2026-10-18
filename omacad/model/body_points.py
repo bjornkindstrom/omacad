@@ -4,6 +4,7 @@
 - "corner": the sharp corner a rounding hides, where the straight edges on both sides would meet. For a
   rounding that runs on tangentially, that is where the tangents at the two ends of the arc cross, so
   it is found from the arc alone (like the guide lines of a rounded rectangle in a sketch).
+- "top_center" / "bottom_center": area centres of the highest / lowest horizontal faces.
 """
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -16,7 +17,7 @@ SHARP_TURN_DEG = 30.0   # a loop vertex turning more than this is a real corner,
 @dataclass
 class BodyPoint:
     xyz: np.ndarray
-    kind: str                                   # "end" or "corner"
+    kind: str                                   # edge end, hidden corner, top centre or bottom centre
     guides: Tuple[np.ndarray, ...] = field(default_factory=tuple)   # corner: the arc ends the guide lines start at
 
 
@@ -40,7 +41,7 @@ def tangent_corner(p0, t0, p1, t1) -> Optional[np.ndarray]:
 
 
 def body_points(body) -> List[BodyPoint]:
-    """Every snap point of a body (ends of straight edges, arc ends, and the corners roundings hide)."""
+    """Snap points on a body, including edge ends, hidden corners and horizontal face centres."""
     out: List[BodyPoint] = []
     for e in body.edges:
         kind = getattr(e, "kind", "")
@@ -61,6 +62,27 @@ def body_points(body) -> List[BodyPoint]:
                 np.linalg.norm(d_in, axis=1) * np.linalg.norm(d_out, axis=1), 1e-18)
             for i in np.flatnonzero(cos < np.cos(np.radians(SHARP_TURN_DEG))):
                 out.append(BodyPoint(pts[i], "end"))
+    # Use actual extreme horizontal faces rather than the bounding-box centre, so cuts and
+    # asymmetric shapes keep their centre points on the top and bottom surfaces.
+    horizontal = [(face, float(face.origin[2])) for face in getattr(body, "faces", ())
+                  if abs(abs(float(face.normal[2])) - 1.0) < 1e-5]
+    from omacad.model.geometry import face_centroid
+    vertices = np.asarray(body.manifold.to_mesh().vert_properties[:, :3], dtype=float)
+    for kind, sign in (("top_center", 1.0), ("bottom_center", -1.0)):
+        candidates = [(face, z) for face, z in horizontal if float(face.normal[2]) * sign > 0.999]
+        if candidates:
+            extreme = (max if sign > 0 else min)(z for _, z in candidates)
+            faces = [face for face, z in candidates if abs(z - extreme) < 1e-5]
+            centres = np.asarray([face_centroid(face) for face in faces])
+            areas = np.asarray([face.area for face in faces], dtype=float)
+            out.append(BodyPoint(np.average(centres, axis=0, weights=areas), kind))
+        elif len(vertices):
+            # Curved caps have no planar face; the extreme mesh vertices still give a stable
+            # centre point (a sphere, for example, has one vertex at each pole).
+            z = float(vertices[:, 2].max() if sign > 0 else vertices[:, 2].min())
+            extreme_vertices = vertices[np.abs(vertices[:, 2] - z) < 1e-5]
+            centre = extreme_vertices.mean(axis=0)
+            out.append(BodyPoint(centre, kind))
     return _unique(out)
 
 
@@ -70,7 +92,9 @@ def _unique(points: List[BodyPoint], tol: float = 1e-6) -> List[BodyPoint]:
         same = next((k for k in kept if np.linalg.norm(k.xyz - p.xyz) < tol), None)
         if same is None:
             kept.append(p)
-        elif p.kind == "corner" and same.kind != "corner":   # a corner wins: it carries its guide lines
+        elif p.kind in ("corner", "top_center", "bottom_center") and same.kind == "end":
+            kept[kept.index(same)] = p
+        elif p.kind == "corner" and same.kind not in ("corner", "top_center", "bottom_center"):
             kept[kept.index(same)] = p
     return kept
 

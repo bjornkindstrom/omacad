@@ -3,7 +3,7 @@
 from typing import Dict
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QFormLayout, QComboBox, QHBoxLayout, QPushButton, QCheckBox, QLabel
+    QFormLayout, QComboBox, QPushButton, QCheckBox, QLabel
 )
 from omacad.model.document import Document
 from omacad.ui.expr_spin import ExprDoubleSpinBox
@@ -33,33 +33,9 @@ class MoveBodyDialog(BaseFeatureDialog):
         if self.body_ids:
             self.cmb_target.setCurrentIndex(target_idx)
         form.addRow("Target Body:", self.cmb_target)
-
-        # Active Drag Axis / Ring buttons (X, Y, Z, Rx, Ry, Rz)
-        axis_layout = QHBoxLayout()
-        self.btn_axis_x = QPushButton("X")
-        self.btn_axis_y = QPushButton("Y")
-        self.btn_axis_z = QPushButton("Z")
-        self.btn_axis_rx = QPushButton("Rx")
-        self.btn_axis_ry = QPushButton("Ry")
-        self.btn_axis_rz = QPushButton("Rz")
-        # the axis colours: red, green, blue. Checked = filled with colour, white text.
-        btns = [
-            (self.btn_axis_x, "#D8453B", "X linear arrow"),
-            (self.btn_axis_y, "#2E9E4F", "Y linear arrow"),
-            (self.btn_axis_z, "#2F7FE0", "Z linear arrow"),
-            (self.btn_axis_rx, "#D8453B", "X rotation ring"),
-            (self.btn_axis_ry, "#2E9E4F", "Y rotation ring"),
-            (self.btn_axis_rz, "#2F7FE0", "Z rotation ring"),
-        ]
-        for b, colour, name in btns:
-            b.setCheckable(True)
-            b.setToolTip(f"Drag along {name}")
-            b.setStyleSheet(
-                f"QPushButton {{ padding: 5px 0px; font-weight: bold; font-size: 11px; border: 2px solid {colour}; border-radius: 4px; }}"
-                f"QPushButton:checked {{ background-color: {colour}; color: #FFFFFF; }}")
-            axis_layout.addWidget(b)
-        self.btn_axis_x.setChecked(True)
-        form.addRow("Active handle:", axis_layout)
+        self.chk_copy_body = QCheckBox("Activate copy")
+        self.chk_copy_body.setToolTip("Keep the original body and create a moved copy.")
+        form.addRow("Mode:", self.chk_copy_body)
 
         # Translation
         self.spn_dx = ExprDoubleSpinBox()
@@ -158,46 +134,14 @@ class MoveBodyDialog(BaseFeatureDialog):
         self.main_layout.addLayout(form)
         self.add_buttons()
 
-        def set_x():
-            self.set_active_axis("X")
-        def set_y():
-            self.set_active_axis("Y")
-        def set_z():
-            self.set_active_axis("Z")
-        def set_rx():
-            self.set_active_axis("RX")
-        def set_ry():
-            self.set_active_axis("RY")
-        def set_rz():
-            self.set_active_axis("RZ")
-
-        self.btn_axis_x.clicked.connect(set_x)
-        self.btn_axis_y.clicked.connect(set_y)
-        self.btn_axis_z.clicked.connect(set_z)
-        self.btn_axis_rx.clicked.connect(set_rx)
-        self.btn_axis_ry.clicked.connect(set_ry)
-        self.btn_axis_rz.clicked.connect(set_rz)
-
-        self.spn_dx.editingFinished.connect(set_x)
-        self.spn_dy.editingFinished.connect(set_y)
-        self.spn_dz.editingFinished.connect(set_z)
-        self.spn_rx.editingFinished.connect(set_rx)
-        self.spn_ry.editingFinished.connect(set_ry)
-        self.spn_rz.editingFinished.connect(set_rz)
-
         for spn in (self.spn_dx, self.spn_dy, self.spn_dz, self.spn_rx, self.spn_ry, self.spn_rz):
             spn.valueChanged.connect(lambda *_: self.changed.emit())
         self.cmb_pivot.currentIndexChanged.connect(lambda *_: self.changed.emit())
         self.cmb_target.currentIndexChanged.connect(lambda *_: self.changed.emit())
+        self.chk_copy_body.toggled.connect(lambda *_: self.changed.emit())
 
     def set_active_axis(self, axis: str):
         self.active_axis = axis
-        self.btn_axis_x.setChecked(axis == "X")
-        self.btn_axis_y.setChecked(axis == "Y")
-        self.btn_axis_z.setChecked(axis == "Z")
-        self.btn_axis_rx.setChecked(axis == "RX")
-        self.btn_axis_ry.setChecked(axis == "RY")
-        self.btn_axis_rz.setChecked(axis == "RZ")
         self.axis_changed.emit(axis)
 
     def set_active_axis_value(self, val: float):

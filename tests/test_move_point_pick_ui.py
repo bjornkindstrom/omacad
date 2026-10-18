@@ -59,6 +59,7 @@ def test_pick_hidden_corner_then_box_corner_and_ok(scene):
     app, win, doc, vp, dlg, block, box = scene
     dlg.btn_points.setChecked(True)
     assert vp.point_pick
+    assert vp.move_gizmo is None
     _move(vp, _screen(vp, (30, 20, 10)))
     assert vp.hover_point is not None and vp.hover_point[1] == "corner"     # shown though no edge is there
     _click(vp, _screen(vp, (30, 20, 10)))
@@ -93,3 +94,15 @@ def test_escape_after_first_point_keeps_it_as_pivot(scene):
     bb = doc.bodies[block].manifold.bounding_box()
     # a quarter turn counter-clockwise about the corner (30, 20), which stays put: x 30..50, y -10..20
     assert bb[:2] == pytest.approx((30, -10), abs=1e-3) and bb[3:5] == pytest.approx((50, 20), abs=1e-3)
+
+
+def test_right_click_selects_body_in_move_tool(scene):
+    app, win, doc, vp, dlg, block, box = scene
+    vp.pick_body = lambda *_: box
+    p = QPointF(500, 400)
+    vp.mousePressEvent(QMouseEvent(QEvent.Type.MouseButtonPress, p, p, Qt.MouseButton.RightButton,
+                                   Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier))
+    vp.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, p, p, Qt.MouseButton.RightButton,
+                                     Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier))
+    assert dlg.get_values()[0] == box
+    assert doc.selected_body_ids == [box]

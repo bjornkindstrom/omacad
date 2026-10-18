@@ -144,7 +144,8 @@ class BoxFeature(Feature):
     def __init__(self, feature_id: str, name: str, length: float, width: float, height: float, center: Any = False,
                  plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                  wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                 inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0):
+                 inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0,
+                 translation: Any = None):
         super().__init__(feature_id, "box", name)
         self.length = float(length)
         self.width = float(width)
@@ -160,6 +161,7 @@ class BoxFeature(Feature):
         self.inner_round = float(inner_round)
         self.inner_round_kind = str(inner_round_kind or "fillet")
         self.taper_angle = float(taper_angle)
+        self.translation = [float(x) for x in ((0.0, 0.0, 0.0) if translation is None else translation)]
 
     def build_solid(self) -> m3d.Manifold:
         is_centered = (self.center is True or self.center == "center")
@@ -210,6 +212,8 @@ class BoxFeature(Feature):
                     v = np.cross(n, u)
                 mat = np.column_stack([u, v, n, np.array(self.plane_origin, dtype=float)]).astype(float)
                 solid = solid.transform(mat)
+        if any(abs(x) > 1e-12 for x in self.translation):
+            solid = solid.translate(tuple(self.translation))
         return solid
 
     def execute(self, doc: Any) -> None:
@@ -232,6 +236,7 @@ class BoxFeature(Feature):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "translation": self.translation,
             "taper_angle": self.taper_angle,
             "wall_thickness": self.wall_thickness,
             "outer_round": self.outer_round,
@@ -290,7 +295,8 @@ class CylinderFeature(Feature):
     def __init__(self, feature_id: str, name: str, radius: float, height: float, center: Any = False,
                  plane_origin: Any = None, plane_normal: Any = None, plane_u: Any = None, plane_v: Any = None,
                  wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
-                 inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0):
+                 inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0,
+                 translation: Any = None):
         super().__init__(feature_id, "cylinder", name)
         self.radius = float(radius)
         self.height = float(height)
@@ -305,6 +311,7 @@ class CylinderFeature(Feature):
         self.inner_round = float(inner_round)
         self.inner_round_kind = str(inner_round_kind or "fillet")
         self.taper_angle = float(taper_angle)
+        self.translation = [float(x) for x in ((0.0, 0.0, 0.0) if translation is None else translation)]
         self.sides = 0  # round; PrismFeature sets 3+
 
     def build_solid(self) -> m3d.Manifold:
@@ -348,6 +355,8 @@ class CylinderFeature(Feature):
                     v = np.cross(n, u)
                 mat = np.column_stack([u, v, n, np.array(self.plane_origin, dtype=float)]).astype(float)
                 solid = solid.transform(mat)
+        if any(abs(x) > 1e-12 for x in self.translation):
+            solid = solid.translate(tuple(self.translation))
         return solid
 
     def execute(self, doc: Any) -> None:
@@ -369,6 +378,7 @@ class CylinderFeature(Feature):
             "plane_normal": self.plane_normal,
             "plane_u": self.plane_u,
             "plane_v": self.plane_v,
+            "translation": self.translation,
             "taper_angle": self.taper_angle,
             "wall_thickness": self.wall_thickness,
             "outer_round": self.outer_round,
@@ -407,12 +417,13 @@ class PrismFeature(CylinderFeature):
         return d
 
 class SphereFeature(Feature):
-    def __init__(self, feature_id: str, name: str, radius: float):
+    def __init__(self, feature_id: str, name: str, radius: float, translation: Any = None):
         super().__init__(feature_id, "sphere", name)
         self.radius = float(radius)
+        self.translation = [float(x) for x in ((0.0, 0.0, 0.0) if translation is None else translation)]
 
     def execute(self, doc: Any) -> None:
-        solid = CadKernel.create_sphere(self.radius)
+        solid = CadKernel.create_sphere(self.radius).translate(tuple(self.translation))
         body = Body(body_id=f"body_{self.feature_id}", name=self.name, manifold=solid)
         body.update_render_mesh()
         doc.bodies[body.body_id] = body
@@ -424,6 +435,7 @@ class SphereFeature(Feature):
             "name": self.name,
             "suppressed": self.suppressed,
             "radius": self.radius,
+            "translation": self.translation,
         }
 
 

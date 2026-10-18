@@ -430,6 +430,7 @@ class Exporter:
                     outer_round_kind=f_data.get("outer_round_kind", "fillet"),
                     inner_round=f_data.get("inner_round", 0.0),
                     inner_round_kind=f_data.get("inner_round_kind", "fillet"),
+                    translation=f_data.get("translation"),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "cylinder":
@@ -443,6 +444,7 @@ class Exporter:
                     outer_round_kind=f_data.get("outer_round_kind", "fillet"),
                     inner_round=f_data.get("inner_round", 0.0),
                     inner_round_kind=f_data.get("inner_round_kind", "fillet"),
+                    translation=f_data.get("translation"),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "prism":
@@ -456,10 +458,11 @@ class Exporter:
                     outer_round_kind=f_data.get("outer_round_kind", "fillet"),
                     inner_round=f_data.get("inner_round", 0.0),
                     inner_round_kind=f_data.get("inner_round_kind", "fillet"),
+                    translation=f_data.get("translation"),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "sphere":
-                feat = SphereFeature(fid, fname, f_data["radius"])
+                feat = SphereFeature(fid, fname, f_data["radius"], translation=f_data.get("translation"))
                 doc.timeline.add_feature(feat)
             elif ft == "sketch":
                 sk = Sketch.from_dict(f_data["sketch"])
@@ -539,6 +542,7 @@ class Exporter:
                     rx=f_data.get("rx", 0.0), ry=f_data.get("ry", 0.0), rz=f_data.get("rz", 0.0),
                     pivot=f_data.get("pivot", "center"),
                     from_point=f_data.get("from_point"), to_point=f_data.get("to_point"),
+                    copy_body=f_data.get("copy_body", False),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "import_mesh":

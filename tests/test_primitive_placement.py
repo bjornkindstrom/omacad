@@ -74,3 +74,35 @@ def test_cylinder_on_vertical_face():
     # Normal is +X, so bottom of cylinder starts at X=50, top reaches X=75
     assert abs(mesh.bounds_min[0] - 50.0) < 1e-4
     assert abs(mesh.bounds_max[0] - 75.0) < 1e-4
+
+
+def test_primitive_translation_is_saved_with_the_primitive_step():
+    from omacad.io.exporter import Exporter
+
+    doc = Document()
+    box = doc.add_box(10, 8, 6, translation=[12, -4, 3])
+    assert box.manifold.bounding_box() == pytest.approx((12, -4, 3, 22, 4, 9), abs=1e-5)
+    cylinder = doc.add_cylinder(3, 8, translation=[-10, 5, 2])
+    assert cylinder.manifold.bounding_box() == pytest.approx((-13, 2, 2, -7, 8, 10), abs=1e-5)
+    prism = doc.add_prism(8, 5, translation=[0, 14, -2])
+    assert prism.manifold.bounding_box()[1:6:4] == pytest.approx((9.3811978465, 3), abs=1e-4)
+    sphere = doc.add_sphere(4, translation=[20, 0, 5])
+    assert sphere.manifold.bounding_box() == pytest.approx((16, -4, 1, 24, 4, 9), abs=1e-5)
+
+    loaded = Document()
+    Exporter.apply_dict(loaded, Exporter.document_to_dict(doc))
+    for bid, body in doc.bodies.items():
+        assert loaded.bodies[bid].manifold.volume() == pytest.approx(body.manifold.volume())
+        assert loaded.bodies[bid].manifold.bounding_box() == pytest.approx(body.manifold.bounding_box(), abs=1e-5)
+
+
+def test_primitive_translation_accepts_numpy_offset_used_by_drag_handles():
+    offset = np.array([12.0, -4.0, 3.0])
+    doc = Document()
+
+    box = doc.add_box(10, 8, 6, translation=offset)
+    assert box.manifold.bounding_box() == pytest.approx((12, -4, 3, 22, 4, 9), abs=1e-5)
+    cylinder = doc.add_cylinder(3, 8, translation=offset)
+    assert cylinder.manifold.bounding_box() == pytest.approx((9, -7, 3, 15, -1, 11), abs=1e-5)
+    sphere = doc.add_sphere(4, translation=offset)
+    assert sphere.manifold.bounding_box() == pytest.approx((8, -8, -1, 16, 0, 7), abs=1e-5)

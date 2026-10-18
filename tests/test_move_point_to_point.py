@@ -83,3 +83,24 @@ def test_points_survive_save_and_load():
     assert hi == pytest.approx((50, 40, 0), abs=1e-3)
     move = [f for f in loaded.timeline.features if f.feature_type == "move"][-1]
     assert move.from_point == frm and move.to_point == to
+
+
+def test_move_activate_copy_preserves_source_and_replays_copy():
+    d = Document()
+    d.add_box(10, 8, 6)
+    source_id = next(iter(d.bodies))
+    source_volume = d.bodies[source_id].manifold.volume()
+    feat = d.move_body(source_id, dx=25, rz=90, copy_body=True)
+    copy_id = f"body_{feat.feature_id}"
+    assert feat.copy_body
+    assert set(d.bodies) == {source_id, copy_id}
+    assert d.bodies[source_id].manifold.volume() == pytest.approx(source_volume)
+    assert d.bodies[copy_id].manifold.volume() == pytest.approx(source_volume)
+    assert d.bodies[copy_id].manifold.bounding_box()[0] > 20
+    restored = Document()
+    Exporter.apply_dict(restored, Exporter.document_to_dict(d))
+    assert set(restored.bodies) == {source_id, copy_id}
+    assert restored.bodies[source_id].manifold.volume() == pytest.approx(source_volume)
+    assert restored.bodies[copy_id].manifold.volume() == pytest.approx(source_volume)
+    d.undo()
+    assert set(d.bodies) == {source_id}

@@ -21,7 +21,7 @@ def app():
 @pytest.mark.parametrize("kind,cls", [("box", BoxDialog), ("cylinder", CylinderDialog), ("sphere", SphereDialog)])
 def test_drag_fields_and_clamp(app, kind, cls):
     d = cls()
-    vp = SimpleNamespace(plane_pick_mode=None, update=lambda: None,
+    vp = SimpleNamespace(plane_pick_mode=None, preview_mesh=None, setCursor=lambda *_: None, update=lambda: None,
                          world_to_screen=lambda p: (200 + 3*p[0] - 2*p[1], 200 + p[0] + p[1] - 3*p[2]))
     handles = PrimitiveHandles(vp, d, kind)
     for index in range(len(handles.geometry())):
@@ -54,6 +54,32 @@ def test_box_handles_follow_placement_and_picked_plane(app):
     height = h.specs()[2]
     assert np.allclose(height[1], [10, -5, 30])
     assert np.allclose(height[2], [0, -1, 0])
+    d.close()
+
+
+def test_primitive_placement_drag_stays_in_world_xy_plane(app):
+    d = BoxDialog()
+    origin = np.array([0., 0., 100.])
+    direction = np.array([0., 0., -1.])
+    vp = SimpleNamespace(
+        plane_pick_mode=False,
+        preview_mesh=SimpleNamespace(vertices=[1]),
+        get_matrices=lambda: (np.eye(4), np.eye(4), None),
+        width=lambda: 100,
+        height=lambda: 100,
+        setCursor=lambda *_: None,
+        world_to_screen=lambda p: (0., 0.),
+        update=lambda: None,
+    )
+    h = PrimitiveHandles(vp, d, "box")
+    h._ray = lambda *_: (origin, direction)
+    h._preview_hit = lambda *_: (np.array([1., 2., 3.]), direction)
+    h.hit = lambda *_: None
+    assert h.press(10, 10)
+    h._ray = lambda *_: (np.array([5., 8., 100.]), direction)
+    h.move(20, 20)
+    assert d.placement_offset == pytest.approx([4., 6., 0.])
+    h.release()
     d.close()
 
 
@@ -104,7 +130,7 @@ def test_create_preview_drag_accept_undo_and_cancel(app, kind):
 def test_cancel_drag_restores_formula(app):
     d = BoxDialog()
     d.spn_length.set_expression("2*(20+5)")
-    vp = SimpleNamespace(plane_pick_mode=None, update=lambda: None,
+    vp = SimpleNamespace(plane_pick_mode=None, preview_mesh=None, setCursor=lambda *_: None, update=lambda: None,
                          world_to_screen=lambda p: (200 + 3*p[0] - 2*p[1], 200 + p[0] + p[1] - 3*p[2]))
     handles = PrimitiveHandles(vp, d, "box")
     field, tip, tangent, _ = handles.geometry()[0]
@@ -132,7 +158,7 @@ def test_drag_precision_setting(app, decimals, expected):
     from omacad.ui.settings import get_settings
     get_settings().set("primitive_drag_decimals", decimals)
     d = BoxDialog()
-    vp = SimpleNamespace(plane_pick_mode=None, update=lambda: None,
+    vp = SimpleNamespace(plane_pick_mode=None, preview_mesh=None, setCursor=lambda *_: None, update=lambda: None,
                          world_to_screen=lambda p: (200 + 3*p[0] - 2*p[1], 200 + p[0] + p[1] - 3*p[2]))
     handles = PrimitiveHandles(vp, d, "box")
     field, tip, tangent, _ = handles.geometry()[0]
