@@ -82,7 +82,17 @@ class Timeline:
             return repr(feat)
 
     def recompute(self, doc: Any) -> None:
-        """Executes all unsuppressed features up to marker incrementally, reusing cached states."""
+        """Executes all unsuppressed features up to marker incrementally, reusing cached states. The model is always
+        built at full curve quality: the coarse 'interactive' quality is for previews while dragging, and a flag left
+        on (a lost mouse release, a preview cut short) must never end up in the real bodies."""
+        was_interactive = quality.is_interactive_mode()
+        quality.set_interactive_mode(False)
+        try:
+            self._recompute(doc)
+        finally:
+            quality.set_interactive_mode(was_interactive)
+
+    def _recompute(self, doc: Any) -> None:
         if hasattr(doc, "refresh_parameters"):
             doc.refresh_parameters()  # formulas pick up the current parameter values first
         active = getattr(doc, "active_sketch", None)

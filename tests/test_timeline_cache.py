@@ -69,3 +69,30 @@ def test_undo_runs_the_steps_again_so_their_results_are_there():
     doc.add_box(5, 5, 5)
     doc.undo()
     assert doc.timeline.features[-1]._effective == before
+
+
+def test_the_model_is_built_at_full_quality_even_if_interactive_mode_was_left_on():
+    from omacad.model import quality
+    doc = Document()
+    doc.add_cylinder(5, 10)
+    quality.set_interactive_mode(True)          # e.g. a drag whose release was lost
+    try:
+        doc.timeline.clear_cache()
+        doc.timeline.recompute(doc)
+        verts = len(next(iter(doc.bodies.values())).manifold.to_mesh().vert_properties)
+        assert verts == 2 * quality.DEFAULT_SEGMENTS      # full quality (interactive would give 2 * 32)
+        assert quality.is_interactive_mode()    # the flag itself is left as it was
+    finally:
+        quality.set_interactive_mode(False)
+
+
+def test_a_new_step_is_built_at_full_quality_even_if_interactive_mode_was_left_on():
+    from omacad.model import quality
+    doc = Document()
+    quality.set_interactive_mode(True)
+    try:
+        doc.add_cylinder(5, 10)
+        verts = len(next(iter(doc.bodies.values())).manifold.to_mesh().vert_properties)
+        assert verts == 2 * quality.DEFAULT_SEGMENTS and quality.is_interactive_mode()
+    finally:
+        quality.set_interactive_mode(False)

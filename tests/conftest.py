@@ -19,6 +19,7 @@ def isolated_settings(tmp_path, monkeypatch):
     yield
     from omacad.model import quality
     quality.set_circle_segments(quality.DEFAULT_SEGMENTS)
+    quality.set_interactive_mode(False)     # a test that ends mid-drag must not leave coarse curves for the next
 
 
 def pytest_sessionfinish(session, exitstatus):

@@ -5,6 +5,7 @@ Holds active bodies, sketches, origin reference geometry, and timeline.
 
 from dataclasses import dataclass
 from typing import Dict, Optional, List, Callable, Tuple, Any
+from omacad.model import quality
 import copy
 import functools
 import numpy as np
@@ -30,9 +31,12 @@ def undoable(label: str):
                 return fn(self, *args, **kwargs)
             self._undo_depth += 1
             before = self.snapshot()
+            was_interactive = quality.is_interactive_mode()
+            quality.set_interactive_mode(False)     # a real change is built at full quality (coarse is for previews)
             try:
                 return fn(self, *args, **kwargs)
             finally:
+                quality.set_interactive_mode(was_interactive)
                 self._undo_depth -= 1
                 try:
                     self._push_doc_undo(label, before)
