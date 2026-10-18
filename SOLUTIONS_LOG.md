@@ -1,5 +1,7 @@
 # Omacad: Historisk Lösningslogg (Arkiv)
 
+- **Circular pattern raderade gängan** (0.9.9.22, via F9): burk med gänga, 12 inpressade slitsar (Emboss + Chamfer) i Circular pattern. Kroppen räknades som rund (`_round_about` mäter medeltjockleken på det en rotation lämnar, och hundratals facettflisor drog ned gängans 0,22 mm till 0,03), så hela kroppen skars ned till snittet av alla rotationer, och en helix är inte rund. Att bara skärpa gränsen hjälpte inte: vanlig cut-väg ger hårstrimmor, och att lägga tillbaka det icke-runda fastnade på hinnor med noll volym. Nu gäller avskärningen bara höjdbandet som kopiorna upptar (`PatternFeature._outside_band`). Test: `test_circular_pattern_on_threaded_jar_keeps_the_thread`.
+
 - **Nollspel som standard för gängor** (0.9.9.21): nya Thread/Coil-steg och låg-nivåanrop får 0 mm clearance som standard; önskat spel kan fortfarande anges i dialogen. Äldre sparade värden ändras inte.
 
 - **Primitive flyttas före placering** (0.9.9.20): vänsterdrag på förhandsvisningen flyttar primitive i kamerans plan; måtthandtagen behåller sin dimensionering. Förskjutningen sparas i Box/Cylinder/Hexagon/Sphere-featuret och följer spara/ladda och ångra.

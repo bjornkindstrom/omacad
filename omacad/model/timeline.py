@@ -7,6 +7,7 @@ All feature classes are modularized in `omacad.model.features.*` and re-exported
 import copy
 import json
 from typing import List, Any
+from omacad.model import quality
 from omacad.model.features import (
     Body,
     Feature,
@@ -68,7 +69,9 @@ class Timeline:
     def _feature_fingerprint(self, feat: Feature) -> str:
         """Generates a stable cache key for a feature and its evaluation expressions."""
         try:
-            d = dict(feat.to_dict(), exprs=dict(getattr(feat, "exprs", {})), suppressed=feat.suppressed)
+            # the curve smoothness is part of every round shape: a new setting must rebuild, not reuse
+            d = dict(feat.to_dict(), exprs=dict(getattr(feat, "exprs", {})), suppressed=feat.suppressed,
+                     segments=quality.circle_segments())
             return json.dumps(d, sort_keys=True, default=str)
         except Exception:
             return repr(feat)

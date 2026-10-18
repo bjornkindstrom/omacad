@@ -389,6 +389,7 @@ class Exporter:
         """Replaces the content of `doc` with `data` (a project file or a snapshot), keeping the Document object and its
         listeners, then rebuilds every body."""
         doc.timeline.features.clear()
+        doc.timeline.clear_cache()      # new step objects: results a step stores while it runs must be computed again
         doc.timeline.marker_index = 0
         doc.sketches.clear()
         doc.bodies.clear()
