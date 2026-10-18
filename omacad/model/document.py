@@ -256,7 +256,7 @@ class Document:
                 wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
                 inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0,
                 translation: Any = None) -> Body:
-        feat_id = f"box_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("box")
         feat_name = name or f"Box {len([f for f in self.timeline.features if f.feature_type == 'box']) + 1}"
         feat = BoxFeature(feat_id, feat_name, length, width, height, center,
                           plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
@@ -274,7 +274,7 @@ class Document:
                      wall_thickness: float = 0.0, outer_round: float = 0.0, outer_round_kind: str = "fillet",
                      inner_round: float = 0.0, inner_round_kind: str = "fillet", taper_angle: float = 0.0,
                      translation: Any = None) -> Body:
-        feat_id = f"cylinder_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("cylinder")
         feat_name = name or f"Cylinder {len([f for f in self.timeline.features if f.feature_type == 'cylinder']) + 1}"
         feat = CylinderFeature(feat_id, feat_name, radius, height, center,
                                plane_origin=plane_origin, plane_normal=plane_normal, plane_u=plane_u, plane_v=plane_v,
@@ -290,7 +290,7 @@ class Document:
     def add_prism(self, across_flats: float, height: float, sides: int = 6, center: Any = False,
                   name: Optional[str] = None, **params) -> Body:
         """A regular prism (hexagon by default), with the same options as `add_cylinder`."""
-        feat_id = f"prism_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("prism")
         label = "Hexagon" if int(sides) == 6 else "Prism"
         feat_name = name or f"{label} {len([f for f in self.timeline.features if f.feature_type == 'prism']) + 1}"
         feat = PrismFeature(feat_id, feat_name, across_flats, height, center, sides=sides, **params)
@@ -301,7 +301,7 @@ class Document:
 
     @undoable("Sphere")
     def add_sphere(self, radius: float, name: Optional[str] = None, translation: Any = None) -> Body:
-        feat_id = f"sphere_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("sphere")
         feat_name = name or f"Sphere {len([f for f in self.timeline.features if f.feature_type == 'sphere']) + 1}"
         feat = SphereFeature(feat_id, feat_name, radius, translation=translation)
         self.timeline.add_feature(feat)
@@ -334,7 +334,7 @@ class Document:
         host_offset: float = 0.0,
         exprs: Optional[Dict[str, str]] = None,
     ) -> Optional[Body]:
-        feat_id = f"thread_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("thread")
         feat_name = name or f"Thread {len([f for f in self.timeline.features if f.feature_type == 'thread']) + 1}"
         feat = ThreadFeature(
             feat_id,
@@ -375,12 +375,27 @@ class Document:
         sketch.reference_segments = in_plane_edges(self.bodies.values(), sketch.plane)
         sketch.solve_profiles()
 
+    def _feature_id(self, prefix: str) -> str:
+        """A new step id: "<prefix>_<n>", never one already in the history (ids counted from the length repeat after a delete)."""
+        taken = {f.feature_id for f in self.timeline.features}
+        n = len(self.timeline.features) + 1
+        while f"{prefix}_{n}" in taken:
+            n += 1
+        return f"{prefix}_{n}"
+
+    def _sketch_id(self):
+        """A new sketch id and its number, unused by open sketches and by sketch steps rolled back or suppressed."""
+        taken = set(self.sketches) | {f.sketch.sketch_id for f in self.timeline.features if f.feature_type == "sketch"}
+        n = len(self.sketches) + 1
+        while f"sketch_{n}" in taken:
+            n += 1
+        return f"sketch_{n}", n
+
     @undoable("Start Sketch")
     def start_sketch(self, plane_name: str = "XY") -> Sketch:
         plane = self.origin_planes.get(plane_name.upper(), self.origin_planes["XY"])
-        sketch_id = f"sketch_{len(self.sketches) + 1}"
-        sketch_name = f"Sketch {len(self.sketches) + 1}"
-        sketch = Sketch(sketch_id, sketch_name, plane)
+        sketch_id, n = self._sketch_id()
+        sketch = Sketch(sketch_id, f"Sketch {n}", plane)
         self.refresh_sketch_references(sketch)
         self.active_sketch = sketch
         self.sketches[sketch_id] = sketch
@@ -390,8 +405,8 @@ class Document:
     @undoable("Start Sketch")
     def start_sketch_on_plane(self, plane: SketchPlane) -> Sketch:
         """Starts a sketch on an arbitrary plane (origin plane or body face)."""
-        sketch_id = f"sketch_{len(self.sketches) + 1}"
-        sketch = Sketch(sketch_id, f"Sketch {len(self.sketches) + 1}", plane)
+        sketch_id, n = self._sketch_id()
+        sketch = Sketch(sketch_id, f"Sketch {n}", plane)
         face = getattr(plane, "face", None)
         if face is not None:
             from omacad.model.sketch_rotate import face_centroid
@@ -432,7 +447,7 @@ class Document:
             if sk.face_key == key and sk.profiles:
                 return sk, best_profile(sk)
         n = len([k for k in self.sketches.values() if k.face_key]) + 1
-        sketch_id = f"sketch_{len(self.sketches) + 1}"
+        sketch_id, _ = self._sketch_id()
         sk = Sketch(sketch_id, f"Face {n}", plane)
         sk.face_key = key
         from omacad.model.sketch_rotate import face_centroid
@@ -488,7 +503,7 @@ class Document:
     def add_fillet(self, edges, size: float, kind: str = "fillet", exprs=None) -> FilletFeature:
         """Fillet or chamfer the given edges ((p0, p1) world coordinates each)."""
         n = len([f for f in self.timeline.features if f.feature_type == "fillet"]) + 1
-        feat_id = f"fillet_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("fillet")
         feat = FilletFeature(feat_id, f"{'Chamfer' if kind == 'chamfer' else 'Fillet'} {n}", edges, size, kind)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
@@ -503,7 +518,7 @@ class Document:
         self.timeline.recompute(self)  # makes sure the before/after states of the steps are current
         n = len([f for f in self.timeline.features if f.feature_type == "pattern"]) + 1
         names = {"linear": "Pattern", "mirror": "Mirror", "circular": "Circular pattern", "fill": "Fill pattern"}
-        feat = PatternFeature(f"pattern_{len(self.timeline.features) + 1}", f"{names.get(kind, 'Pattern')} {n}",
+        feat = PatternFeature(self._feature_id("pattern"), f"{names.get(kind, 'Pattern')} {n}",
                               source_ids, kind, **params)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
@@ -526,7 +541,7 @@ class Document:
         holes=None,
         start_offset: float = 0.0,
     ) -> None:
-        feat_id = f"extrude_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("extrude")
         feat_name = name or f"Extrude {len([f for f in self.timeline.features if f.feature_type == 'extrude']) + 1}"
         feat = ExtrudeFeature(feat_id, feat_name, sketch_id, profile_idx, distance, operation, direction, distance2,
                               extra_profiles=extra_profiles, extra_refs=extra_refs, holes=holes,
@@ -540,7 +555,7 @@ class Document:
     def add_emboss(self, sketch_id: str, profile_idx: int, depth: float = 1.0, flip: bool = False, dx: float = 0.0,
                    dy: float = 0.0, rotation: float = 0.0, wrap: bool = True, extra_profiles=None, extra_refs=None, exprs=None):
         """Fusion's Emboss: raise (depth > 0) or press in (depth < 0) the chosen sketch profiles from the face they sit on."""
-        feat_id = f"emboss_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("emboss")
         feat_name = f"Emboss {len([f for f in self.timeline.features if f.feature_type == 'emboss']) + 1}"
         feat = EmbossFeature(feat_id, feat_name, sketch_id, profile_idx, depth, flip=flip, dx=dx, dy=dy, rotation=rotation,
                              wrap=wrap, extra_profiles=extra_profiles, extra_refs=extra_refs)
@@ -554,7 +569,7 @@ class Document:
     @undoable("Revolve")
     def add_revolve(self, sketch_id: str, profile_idx: int, axis=("v",), angle: float = 360.0, operation: str = "new_body",
                     direction: str = "one_side", angle2: float = 0.0, extra_profiles=None, exprs=None):
-        feat_id = f"revolve_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("revolve")
         feat_name = f"Revolve {len([f for f in self.timeline.features if f.feature_type == 'revolve']) + 1}"
         feat = RevolveFeature(feat_id, feat_name, sketch_id, profile_idx, operation=operation, axis=axis, angle=angle,
                               direction=direction, angle2=angle2, extra_profiles=extra_profiles)
@@ -567,7 +582,7 @@ class Document:
 
     @undoable("Hole")
     def add_hole(self, points, exprs=None, **params) -> HoleFeature:
-        feat_id = f"hole_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("hole")
         feat = HoleFeature(feat_id, f"Hole {len([f for f in self.timeline.features if f.feature_type == 'hole']) + 1}", points, **params)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
@@ -866,7 +881,7 @@ class Document:
         from omacad.model.features.boolean import CombineFeature
         if target_id == tool_id or target_id not in self.bodies or tool_id not in self.bodies:
             return None
-        feat = CombineFeature(f"combine_{len(self.timeline.features) + 1}", f"Combine ({operation})", target_id, tool_id,
+        feat = CombineFeature(self._feature_id("combine"), f"Combine ({operation})", target_id, tool_id,
                               operation, keep_tool=keep_tool)
         self.timeline.add_feature(feat)
         feat.execute(self)
@@ -891,7 +906,7 @@ class Document:
         if body_id not in self.bodies:
             return None
         n = len([f for f in self.timeline.features if f.feature_type == "split_body"]) + 1
-        feat_id = f"split_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("split")
         plane_origin, plane_normal = None, None
         if plane_id in self.construction_planes:
             cp = self.construction_planes[plane_id]
@@ -918,7 +933,7 @@ class Document:
             return None
         self.timeline.recompute(self)  # Shell reads the body's history (step_states): it must be current, as on reload
         n = len([f for f in self.timeline.features if f.feature_type == "shell"]) + 1
-        feat_id = f"shell_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("shell")
         feat = ShellFeature(feat_id, f"Shell {n}", body_id, thickness, open_faces=open_faces, direction=direction, thickness2=thickness2)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
@@ -966,7 +981,7 @@ class Document:
             return None
         faces = self.thread_faces(faces) or faces    # a thread: only this body changes, the other part keeps its size
         n = len([f for f in self.timeline.features if f.feature_type == "offset_face"]) + 1
-        feat = OffsetFaceFeature(f"offset_face_{len(self.timeline.features) + 1}", f"Offset Face {n}", body_id, faces, distance)
+        feat = OffsetFaceFeature(self._feature_id("offset_face"), f"Offset Face {n}", body_id, faces, distance)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)
@@ -985,7 +1000,7 @@ class Document:
         if body_id not in self.bodies or not faces:
             return None
         n = len([f for f in self.timeline.features if f.feature_type == "honeycomb"]) + 1
-        feat = HoneycombFeature(f"honeycomb_{len(self.timeline.features) + 1}", f"Honeycomb {n}", body_id, faces, **params)
+        feat = HoneycombFeature(self._feature_id("honeycomb"), f"Honeycomb {n}", body_id, faces, **params)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)
@@ -1012,7 +1027,7 @@ class Document:
         if body_id not in self.bodies:
             return None
         n = len([f for f in self.timeline.features if f.feature_type == "move"]) + 1
-        feat_id = f"move_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("move")
         target_name = self.bodies[body_id].name
         feat = MoveFeature(feat_id, f"Move {target_name} ({n})", body_id, dx, dy, dz, rx, ry, rz, pivot=pivot,
                            from_point=from_point, to_point=to_point, copy_body=copy_body)
@@ -1051,7 +1066,7 @@ class Document:
         source_file: str = "",
     ) -> ImportMeshFeature:
         """Adds an imported 3D mesh (e.g. from 3MF) as a parametric solid body."""
-        feat_id = f"import_{len(self.timeline.features) + 1}"
+        feat_id = self._feature_id("import")
         feat = ImportMeshFeature(feat_id, name, vertices, triangles, source_file=source_file)
         self.timeline.add_feature(feat)
         feat.execute(self)
@@ -1230,7 +1245,7 @@ class Document:
         body = self.bodies.get(body_id)
         if body is None:
             return
-        feat = DeleteBodyFeature(f"delete_{len(self.timeline.features) + 1}", f"Delete {body.name}", body_id)
+        feat = DeleteBodyFeature(self._feature_id("delete"), f"Delete {body.name}", body_id)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.selected_body_ids = [b for b in self.selected_body_ids if b in self.bodies]
