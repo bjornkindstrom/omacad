@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.65 - 2026-10-19
+
+### Fixed
+- Sketch Move with Copy: the originals disappeared until OK; they are now drawn where they stay the whole time (Björn).
+
 ## 0.9.9.64 - 2026-10-19
 
 ### Fixed

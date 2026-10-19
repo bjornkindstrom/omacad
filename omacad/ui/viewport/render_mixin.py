@@ -573,6 +573,15 @@ class RenderGLMixin:
             projected_lines = []
             selected_lines = []
             hover_lines = []
+            copy_box = getattr(getattr(self, "tool_panel", None), "chk_copy", None)
+            if is_active and self._move and copy_box is not None and copy_box.isChecked():
+                # Move with Copy: the originals stay where they are, so keep drawing them there (Björn)
+                for ent in self._move["orig"].values():
+                    dest = construction_lines if ent.is_construction else normal_lines
+                    for p1, p2 in ent.to_lines():
+                        w1 = plane.uv_to_world(p1[0], p1[1])
+                        w2 = plane.uv_to_world(p2[0], p2[1])
+                        dest.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
             for ent in sketch.entities:
                 if flash:
                     dest = selected_lines          # lit up in the highlight colour

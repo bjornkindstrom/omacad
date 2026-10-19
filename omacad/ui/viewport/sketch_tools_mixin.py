@@ -214,6 +214,8 @@ class SketchToolsMixin:
 
     def _show_tool_panel(self, tool: str):
         self.tool_panel.show_tool(tool)
+        if self.tool_panel.chk_copy is not None:
+            self.tool_panel.chk_copy.toggled.connect(lambda _on: self.update())   # originals shown / hidden
         self.tool_panel.set_values({"Sides": float(self.sketch_palette.spn_sides.value()),
                                     "Radius": self.sketch_palette.spn_corner_radius.value()})
         self.sketch_palette.adjustSize()
