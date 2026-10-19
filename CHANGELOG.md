@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.64 - 2026-10-19
+
+### Fixed
+- Fillet round an outline with inward arcs (a dog bone) left a row of teeth along the arcs (Björn #78). Where an arc meets a circle the rounding folds a little, so the tool is built piece by piece; those straight pieces now overlap a hair and the gap at every inward turn is filled with the section turned about the corner, so the rounding is smooth and has no thin flaps.
+
 ## 0.9.9.63 - 2026-10-19
 
 ### Added

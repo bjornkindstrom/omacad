@@ -375,13 +375,52 @@ class CadKernel:
                     break
             if length < 1e-9:
                 continue
-            solid = m3d.Manifold.extrude(cs, height=length)
+            # a hair past both ends, so neighbouring pieces overlap instead of touching face to face (that left
+            # zero-thickness flaps in the result)
+            eps = 1e-3 + 1e-4 * length
+            solid = m3d.Manifold.extrude(cs, height=length + 2.0 * eps).translate((0.0, 0.0, -eps))
             mat = np.column_stack([inw[i0], n, t[i0], P[i0]]).astype(float)
             pieces.append(solid.transform(mat))
+        pieces += CadKernel._loop_joints(P, n, t, inw, starts, cs)
         result = m3d.Manifold.batch_boolean(pieces, m3d.OpType.Add)
         if result.is_empty():
             raise ValueError("Could not build the rounding for this outline.")
         return result
+
+    @staticmethod
+    def _loop_joints(P, n, t, inw, starts, cs) -> list:
+        """Where the outline turns away from the face (a right turn: the inside of a concave arc), two straight
+        pieces leave a wedge between them on the face side that nothing cuts: a row of teeth along the arc
+        (Björn #78). Fill each with the face-side half of the section turned about the corner, which is exactly
+        what a smooth sweep would have covered there."""
+        size = 4.0 * max(abs(x) for poly in cs.to_polygons() for p in poly for x in p) + 1.0
+        half = cs ^ m3d.CrossSection.square((size, 2.0 * size)).translate((0.0, -size))   # a >= 0: the face side
+        if half.is_empty():
+            return []
+        joints = []
+        for i in starts:
+            turn = float(np.cross(t[i - 1], t[i]) @ n)
+            cos = float(np.clip(t[i - 1] @ t[i], -1.0, 1.0))
+            if turn >= -1e-9:
+                continue                     # a left turn: the pieces overlap on the face side already
+            angle = math.degrees(math.acos(cos))
+            if angle < 1e-6:
+                continue
+            e1 = inw[i - 1]
+            e2 = inw[i] - (inw[i] @ e1) * e1
+            if float(np.linalg.norm(e2)) < 1e-12:
+                continue
+            e2 = e2 / np.linalg.norm(e2)
+            up = np.cross(e1, e2)            # right-handed frame; the section's height runs along n
+            sec = half if float(up @ n) > 0 else half.mirror((0.0, 1.0))
+            # a little past both pieces' end faces: faces that coincide exactly leave paper-thin flaps
+            over = min(0.5, 0.25 * angle + 0.05)
+            sweep = angle + 2.0 * over
+            # circular_segments counts a whole turn: enough that this small angle still gets a step per 5°
+            wedge = m3d.Manifold.revolve(sec, int(math.ceil(360.0 / min(sweep, 5.0))) + 1, sweep)
+            wedge = wedge.rotate((0.0, 0.0, -over))
+            joints.append(wedge.transform(np.column_stack([e1, e2, up, P[i]]).astype(float)))
+        return joints
 
     @staticmethod
     def circle_round_tool(edge, size: float, kind: str, arc_segments: int = 24, reach=(0.0, 0.0)) -> m3d.Manifold:
