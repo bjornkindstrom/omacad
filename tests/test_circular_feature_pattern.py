@@ -239,3 +239,24 @@ def test_circular_pattern_on_threaded_jar_keeps_the_thread():
     assert body.genus() == 0
     for z in np.linspace(2.5, 39.5, 30):
         assert len(body.slice(z).to_polygons()) == 2, z
+
+
+def test_circular_pattern_on_threaded_lid_leaves_no_fins():
+    """Lennart #69: 30 wrapped slots (deboss + fillet) around a jar lid got fins on every copy. The lid's inner thread
+    is not round about the axis, so the lid failed the round test and the copies were plain rotated cuts, whose walls
+    miss the lid's facets. Only the ring the slots sweep is tested and trimmed now; the thread stays exactly."""
+    doc = Exporter.load_project("tests/data/circular_pattern_threaded_lid.omacad")
+    ids = [f.feature_id for f in doc.timeline.features]
+    pattern = doc.timeline.features[ids.index("pattern_20")]
+    assert pattern._keep is not None
+    before = doc.step_states[ids.index("feat_sketch_1")]["body_cylinder_7"]
+    after = doc.step_states[ids.index("pattern_20")]["body_cylinder_7"]
+    body = doc.bodies["body_cylinder_7"].manifold
+    inner = m3d.Manifold.cylinder(30, 19, 19, 256).translate((50, 0, -5))
+    assert ((body ^ inner) - (after ^ inner)).volume() + ((after ^ inner) - (body ^ inner)).volume() < 1e-6
+
+    def area(m, z):
+        return sum(Polygon(p).area * (1 if Polygon(p).exterior.is_ccw else -1) for p in m.slice(z).to_polygons())
+    for z in (4.0, 6.2, 8.5):
+        expected = area(before, z) - 30*(area(before, z) - area(after, z))
+        assert area(body, z) == pytest.approx(expected, abs=0.3), z

@@ -3,6 +3,17 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.61 - 2026-10-19
+
+### Fixed
+- Jar with Lid: the lid could not be screwed on (Lennart #70). The lid is cut from the jar, so its groove copied the coil's tapered ends and was missing where the coil starts at the lid's mouth; the full tooth jammed there. Offset Face on a thread now cuts a full, untapered channel that runs one turn out through the mouth, so the lid screws all the way off.
+- Circular pattern on a round body with an inner thread (a lid with slots) left fins on every copy (Lennart #69). The round test and trim now only look at the ring the copies sweep, so the clean round-body path is used and the thread stays untouched.
+- Closing Omacad (window X, Ctrl+Q, logging out) never asked to save unsaved changes (Björn #55, Lennart #68): Qt's own closeEvent hid ours. A restart for a new version still closes without asking (the session is saved).
+
+### Changed
+- Primitives: "Hexagon" is now called "Prism" (Björn #66).
+- Sketching on a face centres the face and zooms so it fills the view (Björn #48).
+
 ## 0.9.9.60 - 2026-10-18
 
 ### Fixed

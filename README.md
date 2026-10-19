@@ -6,9 +6,9 @@
 
 Verktygspanelens måttfält har sliders; du kan fortfarande skriva exakta värden och formler.
 
-Box, cylinder och hexagon har **Taper angle**: positiv vinkel smalnar av uppåt, negativ vinkel vidgar, 0° ger raka väggar. Fungerar även med shell.
+Box, cylinder och prisma (hexagon) har **Taper angle**: positiv vinkel smalnar av uppåt, negativ vinkel vidgar, 0° ger raka väggar. Fungerar även med shell.
 
-Primitiver: dra kroppen i förhandsvisningen med vänster musknapp för att placera den i X/Y; dra de blå måtthandtagen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie (hexagon: mått över planen och höjd). Placeringen och måtten följer med; OK skapar och Esc avbryter. **Hexagon** har samma val som Cylinder (Shell Wall, Outer/Inner Edge, Taper, placering på yta) och väggen, rundningen och lutningen mäts vinkelrätt mot planen. Ihåliga former gör du med **Shell Wall** direkt i Box-, Cylinder- och Hexagon-panelen (0 = massiv, öppen topp när väggen är större än 0).
+Primitiver: dra kroppen i förhandsvisningen med vänster musknapp för att placera den i X/Y; dra de blå måtthandtagen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie (prisma: mått över planen och höjd). Placeringen och måtten följer med; OK skapar och Esc avbryter. **Prism** (tidigare Hexagon) har samma val som Cylinder (Shell Wall, Outer/Inner Edge, Taper, placering på yta) och väggen, rundningen och lutningen mäts vinkelrätt mot planen. Ihåliga former gör du med **Shell Wall** direkt i Box-, Cylinder- och Prism-panelen (0 = massiv, öppen topp när väggen är större än 0).
 
 **Version 0.7.6** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 

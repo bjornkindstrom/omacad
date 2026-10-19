@@ -10,6 +10,7 @@ import numpy as np
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 import manifold3d as m3d
+from omacad.model import quality
 from omacad.model.kernel import CadKernel
 from omacad.model.features.base import Feature
 
@@ -232,7 +233,9 @@ class PatternFeature(Feature):
 
     @staticmethod
     def _outside_band(body, regions, c, axis, margin=0.05):
-        """Everything around `body` except the slab across the axis that `regions` span (plus `margin`)."""
+        """Everything around `body` except the ring the copies sweep: the slab across the axis that `regions` span
+        (plus `margin`), from just inside their nearest point to the axis outwards. A thread or bore further in is
+        not round about the axis, so it must stay out of the round test and the intersection."""
         def along(m):
             return (m.to_mesh().vert_properties[:, :3] - c) @ axis
         t = np.concatenate([along(r) for r in regions])
@@ -244,7 +247,14 @@ class PatternFeature(Feature):
         frame = np.column_stack((u, np.cross(axis, u), axis, c))   # local z = the axis, origin = c
         def slab(a, b):
             return m3d.Manifold.cube((2*size, 2*size, b - a)).translate((-size, -size, a)).transform(frame)
-        return slab(-2*size, lo) + slab(hi, 2*size)
+        out = slab(-2*size, lo) + slab(hi, 2*size)
+        radial = np.eye(3) - np.outer(axis, axis)
+        r_in = min(float(np.linalg.norm((r.to_mesh().vert_properties[:, :3] - c) @ radial, axis=1).min())
+                   for r in regions) - 4 * margin
+        if r_in > 4 * margin:
+            core = m3d.Manifold.cylinder(hi - lo, r_in, r_in, quality.circle_segments()).translate((0.0, 0.0, lo))
+            out = out + core.transform(frame)
+        return out
 
     def _source_plane(self, doc, before=None, removed=None, added=None):
         for f in doc.timeline.features:
@@ -688,7 +698,8 @@ class PatternFeature(Feature):
         self._keep = None
         if self.kind == "circular" and not whole_body and pos == list(range(min(pos), idx)):
             c, axis = self._circular_axis(centre)
-            if self._round_about(before, funcs, c, axis):
+            outside = self._outside_band(before, regions, c, axis)
+            if self._round_about(before - outside, funcs, c, axis):
                 # Rotated cuts never land exactly on the round body's facets and leave paper-thin skin strips.
                 # On a round body the result is instead what every rotated copy keeps; bosses sink a hair into it.
                 kept = before ^ after
@@ -699,7 +710,7 @@ class PatternFeature(Feature):
                     self._keep = self._keep + added   # the original boss stays
                 # Only the height the copies occupy is trimmed: a thread or flat elsewhere is not round
                 # about the axis and the intersection would erase it.
-                self._keep = self._keep + self._outside_band(before, regions, c, axis)
+                self._keep = self._keep + outside
         rem = add = None
         if not removed.is_empty():
             parts = [f(removed) for f in funcs]

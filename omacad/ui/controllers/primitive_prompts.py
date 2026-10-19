@@ -137,7 +137,7 @@ class PrimitivePromptsMixin:
     def prompt_cylinder(self, prism=False):
         from omacad.model.features.primitives import CylinderFeature, PrismFeature
         dlg = PrismDialog(self) if prism else CylinderDialog(self)
-        label = "Hexagon" if prism else "Cylinder"
+        label = "Prism" if prism else "Cylinder"
 
         def make_feature(fid, name, size, h, center, **params):
             if prism:

@@ -463,7 +463,7 @@ class PrismDialog(CylinderDialog):
 
     def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent, embedded)
-        self.setWindowTitle("Create Hexagon")
+        self.setWindowTitle("Create Prism")
         self.form.labelForField(self.spn_radius).setText("Across flats:")
         self.spn_radius.setValue(20.0)
         self.spn_radius.setToolTip("Distance between two opposite flat sides (the wrench size for a hexagon).")

@@ -44,6 +44,18 @@ def test_lid_screws_on_with_room_in_the_thread(tol, at_least):
     assert jar.min_gap(lid ^ THREAD_BAND, 2.0) >= at_least
 
 
+@pytest.mark.parametrize("kw", [{}, dict(pitch=3.0, tolerance=-0.25, height=30.0, neck_height=10.0)])
+def test_lid_can_be_screwed_all_the_way_off(kw):
+    """Lennart #70: the lid was cut from the jar, so its groove was as shallow as the coil's tapered ends and missing
+    where the coil starts at the lid's mouth; the coil's full tooth jammed there while screwing (18 mm³ overlap)."""
+    spec = JarSpec(lid_beside=False, **kw)
+    _, jar, lid = _jar(lid_beside=False, **kw)
+    for deg in (30, 90, 180, 270, 360, 540, 720, 1080):     # unscrew: turn and rise one pitch per turn
+        off = lid.rotate((0, 0, deg)).translate((0, 0, spec.pitch * deg / 360.0))
+        assert (jar ^ off).volume() < 1e-3, deg
+    assert len(lid.decompose()) == 1
+
+
 def test_without_tolerance_the_threads_touch_and_no_plug_is_left():
     _, jar, lid = _jar(lid_beside=False, tolerance=0.0)
     assert (jar ^ lid).volume() < 1e-6

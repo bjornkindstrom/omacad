@@ -31,6 +31,9 @@ class SketchScenePromptsMixin:
         self.doc.auto_include_edges = self.viewport.sketch_palette.chk_project.isChecked()
         sketch = self.doc.start_sketch_on_plane(plane)
         self.viewport.align_to_plane(plane)
+        face = getattr(plane, "face", None)
+        if face is not None:
+            self.viewport.frame_face(plane, face.tris)
         where = f"{plane.name} plane" if plane.name != "FACE" else "face"
         self.status_label.setText(f"Active Sketch: {sketch.name} on {where}. Select a tool (Line, Rect, Circle) to draw.")
 

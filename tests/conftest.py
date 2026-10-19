@@ -16,10 +16,17 @@ def isolated_settings(tmp_path, monkeypatch):
         yield
         return
     monkeypatch.setattr(settings_mod, "_instance", settings_mod.SettingsManager(tmp_path / "settings.json"))
+    _never_ask_to_save(monkeypatch.setattr)
     yield
     from omacad.model import quality
     quality.set_circle_segments(quality.DEFAULT_SEGMENTS)
     quality.set_interactive_mode(False)     # a test that ends mid-drag must not leave coarse curves for the next
+
+
+def _never_ask_to_save(setattr_):
+    """Closing a test window with changes would open the modal "save changes?" box and hang the run: discard."""
+    from omacad.ui.controllers.file_session import FileSessionMixin
+    setattr_(FileSessionMixin, "_ask_save_changes", lambda self, name: "discard")
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -33,6 +40,7 @@ def pytest_sessionfinish(session, exitstatus):
     app = QApplication.instance()
     if app is None:
         return
+    _never_ask_to_save(setattr)
     for w in app.topLevelWidgets():
         w.close()
         w.deleteLater()

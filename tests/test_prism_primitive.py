@@ -91,13 +91,13 @@ def test_hexagon_command_previews_creates_and_undoes(grouped):
     get_settings().set("group_primitives", grouped)
     w = MainWindow()
     if grouped:
-        menu = next(m for m in w.ribbon.findChildren(QMenu) if any(a.text() == "Hexagon" for a in m.actions()))
-        next(a for a in menu.actions() if a.text() == "Hexagon").trigger()
+        menu = next(m for m in w.ribbon.findChildren(QMenu) if any(a.text() == "Prism" for a in m.actions()))
+        next(a for a in menu.actions() if a.text() == "Prism").trigger()
     else:
-        next(b for b in w.ribbon.findChildren(QToolButton) if b.text() == "Hexagon").click()
+        next(b for b in w.ribbon.findChildren(QToolButton) if b.text() == "Prism").click()
     handles = w.viewport.primitive_handles
     dlg = handles.dialog
-    assert handles.kind == "prism" and dlg.windowTitle() == "Create Hexagon"
+    assert handles.kind == "prism" and dlg.windowTitle() == "Create Prism"
     assert w.viewport.preview_mesh is not None and not w.doc.bodies
     assert [label for *_, label in handles.specs()] == ["Across flats", "Height"]
     dlg.spn_wall.setValue(2.0)

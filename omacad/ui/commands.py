@@ -39,7 +39,7 @@ _ALL = [
        "negative presses it in", signal="emboss_clicked"),
     _c("box", "Box", "📦", "A rectangular box; the panel can also hollow, round and taper it", signal="box_clicked"),
     _c("cylinder", "Cylinder", "🥫", "A cylinder; the panel can also hollow, round and taper it", signal="cylinder_clicked"),
-    _c("hexagon", "Hexagon", "⬢", "A hexagonal (or other regular) prism, sized across flats", signal="hexagon_clicked"),
+    _c("hexagon", "Prism", "⬢", "A regular prism (6 sides = hexagon), sized across flats", signal="hexagon_clicked"),
     _c("thread", "Thread / Coil", "🔩", "3D-printable threads and coils, on a cylinder or on their own",
        signal="thread_clicked"),
     _c("jar", "Jar with Lid", "🫙", "A threaded jar and its screw lid, with thread tolerance, ready to print",
@@ -125,7 +125,7 @@ COMMANDS: Dict[str, Command] = {c.cid: c for c in _ALL}
 
 # A dropdown in the ribbon: (dropdown id, label, icon, tip, [command ids]). With the matching setting off its
 # commands stand as separate buttons instead (Settings > ribbon layout).
-PRIMITIVES = ("primitives", "Primitives", "📦", "Box, Cylinder, Hexagon, Thread / Coil, Jar with Lid (each panel can "
+PRIMITIVES = ("primitives", "Primitives", "📦", "Box, Cylinder, Prism, Thread / Coil, Jar with Lid (each panel can "
               "hollow, round and taper)", ["box", "cylinder", "hexagon", "thread", "jar"])
 INSERT = ("insert", "Insert", "🖼️", "Canvas (Image) and Import 3MF", ["canvas", "import_3mf"])
 MODIFY_BODY = ("modify_body", "Body", "🔗", "Combine, Split Body, Shell, Offset Face, Move",

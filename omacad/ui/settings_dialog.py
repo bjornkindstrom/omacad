@@ -284,7 +284,7 @@ class SettingsDialog(QDialog):
         grp_lbl.setStyleSheet("color: #9AA0A6; font-size: 11px; margin-top: 6px;")
         lay_ui.addWidget(grp_lbl)
 
-        self.chk_group_primitives = QCheckBox("Group Primitives into dropdown (Box, Cylinder, Hexagon, Thread)")
+        self.chk_group_primitives = QCheckBox("Group Primitives into dropdown (Box, Cylinder, Prism, Thread)")
         self.chk_group_primitives.setChecked(bool(self.settings.get("group_primitives", True)))
         self.chk_group_primitives.setToolTip("Puts 3D primitive tools into a compact Primitives ▾ dropdown menu.")
         lay_ui.addWidget(self.chk_group_primitives)

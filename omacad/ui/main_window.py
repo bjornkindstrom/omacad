@@ -59,6 +59,9 @@ from omacad.io.exporter import Exporter
 class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMixin, FileSessionMixin, MenuSetupMixin):
     """Main Fusion 360 style window for Omacad."""
 
+    # QMainWindow comes first in the bases, so Qt's own closeEvent would hide the mixin's (no "save changes?" on close)
+    closeEvent = FileSessionMixin.closeEvent
+
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle(f"Omacad {__import__('omacad').__version__} - Native CAD for Omarchy")

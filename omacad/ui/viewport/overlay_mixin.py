@@ -443,6 +443,21 @@ class OverlayMixin:
         self.distance = max(40.0, float(np.linalg.norm(b_max - b_min)) * 1.8)
         self.update()
 
+    def frame_face(self, plane, tris, fill: float = 0.8) -> None:
+        """Centres a face seen straight on (after align_to_plane) and zooms so it fills `fill` of the view's
+        shorter side: sketching on a face starts with the face filling the screen."""
+        pts = np.asarray(tris, dtype=float).reshape(-1, 3)
+        if len(pts) == 0:
+            return
+        u = pts @ np.asarray(plane.u_axis, dtype=float)
+        v = pts @ np.asarray(plane.v_axis, dtype=float)
+        size = max(float(np.ptp(u)), float(np.ptp(v)), 1e-3)
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        self.target = ((lo + hi) * 0.5).astype(np.float32)
+        aspect = min(1.0, self.width() / max(1, self.height()))
+        self.distance = max(5.0, min(2000.0, size / (fill * aspect * 2.0 * math.tan(math.radians(self.fovy) / 2.0))))
+        self.update()
+
     def zoom_to_body(self, body_id: str) -> None:
         b = self.doc.bodies.get(body_id)
         if b is not None and b.render_mesh is not None and len(b.render_mesh.vertices):

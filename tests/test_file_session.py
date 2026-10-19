@@ -91,3 +91,25 @@ def test_recent_list_order_limit_and_missing_file(win, tmp_path, monkeypatch):
     monkeypatch.setattr("omacad.ui.main_window.QMessageBox.warning", lambda *a, **k: None)
     win.open_recent(files[5])
     assert not any(p.endswith("f5.omacad") for p in win.recent_files())
+
+
+def test_closing_the_window_asks_and_cancel_keeps_it_open(win):
+    """Björn #55, Lennart #68: closing Omacad never asked to save, because QMainWindow (first in the bases) hid
+    FileSessionMixin.closeEvent."""
+    from PySide6.QtGui import QCloseEvent
+    draw_something(win)
+    win.answers = ["cancel"]
+    event = QCloseEvent()
+    win.closeEvent(event)
+    assert not event.isAccepted() and not win.answers
+    win.answers = ["discard"]
+    event = QCloseEvent()
+    win.closeEvent(event)
+    assert event.isAccepted()
+
+
+def test_no_mixin_method_is_hidden_by_qt():
+    from PySide6.QtWidgets import QMainWindow
+    hidden = [f"{k.__name__}.{n}" for k in MainWindow.__mro__ if k.__module__.startswith("omacad") and k is not MainWindow
+              for n in k.__dict__ if not n.startswith("__") and hasattr(QMainWindow, n) and n not in MainWindow.__dict__]
+    assert not hidden

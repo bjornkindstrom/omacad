@@ -181,33 +181,41 @@ class ThreadFeature(Feature):
         origin = np.array(self.plane_origin, dtype=float) + n * self.start_offset()
         return np.column_stack([u, v, n, origin]).astype(float)
 
-    def build_solid(self, grow: Optional[float] = None, diameter: Optional[float] = None) -> m3d.Manifold:
+    def build_solid(self, grow: Optional[float] = None, diameter: Optional[float] = None,
+                    lead: float = 0.0) -> m3d.Manifold:
+        """The thread solid; `lead` > 0 starts it that much earlier (whole turns keep the coil where it was), untapered,
+        so a mating part cut with it gets a channel the coil can screw out through."""
         include_core = (self.operation == "new_body" or not self.target_body_id) and not self.is_female
         attached = bool(self.target_body_id and self.operation == "join" and not self.is_female)
         solid = CadKernel.create_thread(
             diameter=self.used_diameter if diameter is None else diameter,
             pitch=self.pitch,
-            length=self.length,
+            length=self.length + lead,
             is_female=self.is_female,
             clearance=self.clearance,
             profile=self.profile,
-            taper_lead_in=self.taper_lead_in,
+            taper_lead_in=self.taper_lead_in and lead <= 0.0,
             taper_turns=self.taper_turns,
             include_core=include_core,
             attached_to_cylinder=attached,
             grow=self.grow if grow is None else grow,
         )
+        if lead > 0.0:
+            solid = solid.translate([0.0, 0.0, -lead])
         mat = self.placement()
         return solid if mat is None else solid.transform(mat)
 
-    def zone(self, extra: float) -> m3d.Manifold:
+    def zone(self, extra: float, channel: bool = False) -> m3d.Manifold:
         """The threaded region (coil + the cylinder it sits on or in) grown by `extra` on every side, radially; used
-        by Offset Face to give one body clearance against the other without touching the Thread step."""
+        by Offset Face to give one body clearance against the other without touching the Thread step. `channel`: the
+        coil runs one turn further back and is not tapered, so a part cut with it (a lid cut from a jar) has a full
+        groove out through its mouth; a groove copied from the tapered or ending coil is too shallow there and the
+        coil's full tooth jams in it while screwing."""
         r = 0.5 * self.used_diameter + extra
         core = m3d.Manifold.cylinder(self.length, r, r, circular_segments=quality.circle_segments())
         mat = self.placement()
         core = core if mat is None else core.transform(mat)
-        return self.build_solid(grow=self.grow + extra) + core
+        return self.build_solid(grow=self.grow + extra, lead=self.pitch if channel else 0.0) + core
 
     def execute(self, doc: Any) -> None:
         self._effective = None

@@ -46,6 +46,6 @@ def test_no_separate_shelled_commands_in_either_ribbon_layout(app, grouped):
     w = MainWindow()
     texts = [a.text() for m in w.ribbon.findChildren(QMenu) for a in m.actions()]
     texts += [b.text() for b in w.ribbon.findChildren(QToolButton)]
-    assert "Hexagon" in texts
+    assert "Prism" in texts
     assert not [t for t in texts if t.startswith("Shelled")]
     w.close()

@@ -65,7 +65,8 @@ class FileSessionMixin:
         return True
 
     def closeEvent(self, event):
-        if self.confirm_discard_changes():
+        # a restart has saved the session already and the new process resumes it: no question
+        if getattr(self, "_restarting", False) or self.confirm_discard_changes():
             event.accept()
         else:
             event.ignore()
@@ -310,6 +311,7 @@ class FileSessionMixin:
             return
         script = str(Path(self._code_root) / "app.py")
         if QProcess.startDetached(sys.executable, [script, session.RESUME_FLAG], str(self._code_root)):
+            self._restarting = True
             QApplication.quit()
         else:
             applog.log("ERROR", "restart cancelled, could not start the new process")

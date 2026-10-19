@@ -270,10 +270,10 @@ def offset_thread(manifold, ref, d: float, doc) -> Optional[m3d.Manifold]:
     if feat is None:
         return None
     shift = ref.get("shift") or [0.0, 0.0, 0.0]
-    zone = lambda extra: feat.zone(extra).translate(shift)
+    zone = lambda extra, channel=False: feat.zone(extra, channel).translate(shift)
     e = ref["sign"] * d          # how much the zone grows
-    if ref["sign"] < 0:
-        return manifold - zone(e) if e > 0 else manifold + (zone(OVERSHOOT) - zone(e))
+    if ref["sign"] < 0:          # looser: a full channel, so the coil can screw out through this body's mouth
+        return manifold - zone(e, channel=True) if e > 0 else manifold + (zone(OVERSHOOT) - zone(e))
     return manifold + (zone(e) - zone(-OVERSHOOT)) if e > 0 else manifold - (zone(OVERSHOOT) - zone(e))
 
 
