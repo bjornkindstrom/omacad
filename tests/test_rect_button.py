@@ -48,7 +48,9 @@ def test_palette_shows_sides_and_corner_radius_only_for_their_tools():
     for tool, sides, radius in (("NONE", False, False), ("POLYGON", True, False), ("ROUNDED_RECT", False, True),
                                 ("CENTER_ROUNDED_RECT", False, True), ("LINE", False, False), ("RECT", False, False)):
         vp.set_sketch_tool(tool)
-        assert (pal.sides_row.isHidden(), pal.radius_row.isHidden()) == (not sides, not radius), tool
+        # the tool panel shows them now (with sliders); the palette rows only keep the defaults (#76)
+        assert pal.sides_row.isHidden() and pal.radius_row.isHidden(), tool
+        assert ("Sides" in vp.tool_panel.spins, "Radius" in vp.tool_panel.spins) == (sides, radius), tool
     vp.close()
     vp.deleteLater()
     app.processEvents()

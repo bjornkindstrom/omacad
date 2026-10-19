@@ -298,15 +298,7 @@ class OverlayMixin:
                     "OFFSET": f"OFFSET: click curves ({len(self.selected_entities)} picked), then Enter",
                     "MIRROR": ("MIRROR 1/2: click shapes, then Enter" if self._mirror_phase == "pick"
                                else "MIRROR 2/2: click the mirror line / an axis")}[self.sketch_tool]
-            hf = QFont(); hf.setBold(True); hf.setPointSize(11)
-            painter.setFont(hf)
-            hw = QFontMetrics(hf).horizontalAdvance(hint) + 30
-            hr = QRectF(w / 2.0 - hw / 2.0, 58, hw, 30)
-            painter.setPen(QPen(qcolor(226, 109, 40), 1))
-            painter.setBrush(QBrush(qcolor(30, 34, 40, 230)))
-            painter.drawRoundedRect(hr, 6, 6)
-            painter.setPen(QPen(qcolor(255, 255, 255)))
-            painter.drawText(hr, Qt.AlignmentFlag.AlignCenter, hint)
+            self.tool_panel.set_hint(hint.split(": ", 1)[-1])   # in the tool panel, not over the drawing (#76)
 
         # 6. Bottom HUD Navigation Bar
         hud_w = 260

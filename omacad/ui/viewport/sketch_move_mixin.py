@@ -104,6 +104,9 @@ class SketchMoveMixin:
                 self.doc.notify_changed()
                 self.update()
                 return
+        copy_box = getattr(getattr(self, "tool_panel", None), "chk_copy", None)
+        if commit and has_change and copy_box is not None and copy_box.isChecked() and abs(ang) < 1e-4:
+            self._keep_originals(sk, m)     # Move with Copy (Björn #75): the moved ones become new elements
         if commit and has_change:
             self.doc.record_sketch_change(sk, m["before"])
             self.doc.timeline.recompute(self.doc)
@@ -111,6 +114,25 @@ class SketchMoveMixin:
         else:
             sk.restore_from_dict(m["before"])
         self.update()
+    def _keep_originals(self, sk, m):
+        """Puts the originals back where they were and adds the moved elements as copies with new ids (free:
+        no constraints or dimensions come along)."""
+        moved = [copy.deepcopy(e) for e in sk.entities if e.entity_id in m["ids"]]
+        sk.restore_from_dict(m["before"])
+        new_ids = set()
+        for ent in moved:
+            ent.entity_id = sk._new_entity_id(ent.entity_id.rsplit("_", 1)[0])
+            if hasattr(ent, "group"):
+                ent.group = None            # a copy is not part of the original's polygon / fillet bookkeeping
+            if getattr(ent, "fillet_info", None):
+                ent.fillet_info = {}
+            sk.entities.append(ent)
+            new_ids.add(ent.entity_id)
+        sk._bind_texts()
+        sk.solve_profiles()
+        self.selected_entities = new_ids
+        self.selection_changed.emit()
+
     def _snap_move_delta(self, du: float, dv: float):
         """Snaps the dragged elements' key points to geometry/edges, else the grid."""
         m = self._move

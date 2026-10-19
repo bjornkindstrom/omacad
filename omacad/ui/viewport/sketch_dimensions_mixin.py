@@ -8,6 +8,7 @@ from PySide6.QtGui import QPainter, QPen, QBrush, QFont
 from PySide6.QtWidgets import QMenu
 from omacad.model.sketch import SketchArc, SketchCircle, SketchLine, SketchSlot, SketchText, point_of
 from omacad.model.dim_layout import offset_for_point
+from omacad.model.sketch_solver import midpoint_spec
 from omacad.ui import theme
 from omacad.ui.theme import qcolor
 
@@ -78,6 +79,8 @@ class SketchDimensionsMixin:
                        key=lambda t: math.hypot(getattr(a, t[0])[0] - getattr(b, t[1])[0],
                                                 getattr(a, t[0])[1] - getattr(b, t[1])[1]))
             specs = [(ctype, [a.entity_id, b.entity_id], list(best))]
+        elif ctype == "MIDPOINT" and len(lines) + len(circles) == 2 and lines:
+            specs = [midpoint_spec(lines, circles)]
         elif ctype == "FIX":
             specs = [(ctype, [e.entity_id], []) for e in lines + circles]
 
@@ -146,7 +149,7 @@ class SketchDimensionsMixin:
                 continue   # the built-in relations of a polygon stay out of sight
             if not show_all and not (set(c.refs) & focus):
                 continue
-            if c.ctype == "COINCIDENT" and c.pts:
+            if c.ctype in ("COINCIDENT", "MIDPOINT") and c.pts:
                 uv = getattr(ent, c.pts[0], None) or (0.0, 0.0)
             elif isinstance(ent, SketchLine):
                 uv = ((ent.p1[0] + ent.p2[0]) / 2.0, (ent.p1[1] + ent.p2[1]) / 2.0)

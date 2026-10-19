@@ -3,6 +3,21 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.63 - 2026-10-19
+
+### Added
+- Sketch tool panel (Björn #76): every sketch tool shows what to do next in the sketch palette, and its numbers (Length/Angle, Width/Height, Diameter, Side/Sides, Radius, Move X/Y) as fields with sliders. A value set there locks it for the following shapes until "Follow the mouse"; Sides and corner radius set the defaults. The Offset/Trim/Mirror/Fillet hints moved from the banner over the drawing into the panel.
+- Sketch Move (Björn #75): X / Y fields with sliders move the picked elements at once from their centre (a click still picks another base point), and "Copy" keeps the originals.
+- Sketch Pattern (Björn #75): new Pattern button in the sketch's Modify group. Rows and columns (count and spacing in X and Y) or around a centre (count, angle, selection/origin/face centre), live, with sliders; OK is one undo step, Cancel or Esc puts the sketch back.
+- Midpoint constraint (Björn #73): an end point or a circle's centre on the middle of a line (select it and the line).
+- Settings > Appearance: thickness of sketch lines and selected lines, and the colour of selected lines (Björn #74). Default lines are thinner (1.6 px, was 2.4) with a thinner dark rim.
+- Hovering a dimension tells what it measures, its value and formula (Björn #72).
+
+### Fixed
+- Rectangle width and height dimensions were placed inside the rectangle; they are outside now, also on rounded rectangles (Björn #71).
+- Extension lines of a line dimension on the "negative" side stopped 2 mm short of the dimension line (Björn #72).
+- Tests: closing a module-scoped test window could open the "save changes?" box and hang the run (since 0.9.9.61).
+
 ## 0.9.9.62 - 2026-10-19
 
 ### Added

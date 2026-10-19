@@ -133,3 +133,22 @@ def offset_for_point(sketch, dim, uv: Tuple[float, float]) -> Optional[float]:
             return None
         return ((u - A[0]) * -(B[1] - A[1]) + (v - A[1]) * (B[0] - A[0])) / L
     return None
+
+
+DIM_KINDS = {
+    "LENGTH": "Length of a line", "DIAMETER": "Diameter", "RADIUS": "Radius", "ANGLE": "Angle between two lines",
+    "DISTANCE": "Distance between two points", "HORIZ_DIST": "Horizontal distance", "VERT_DIST": "Vertical distance",
+    "PT_LINE_DIST": "Distance from a point to a line", "RECT_WIDTH": "Rectangle width", "RECT_HEIGHT": "Rectangle height",
+}
+
+
+def describe_dimension(dim) -> str:
+    """Hover text for a dimension badge: what it measures, its value (and formula) and what you can do with it."""
+    unit = "°" if dim.dim_type == "ANGLE" else " mm"
+    kind = DIM_KINDS.get(dim.dim_type, dim.dim_type.replace("_", " ").capitalize())
+    title = f"{dim.dim_id}: {dim.name}" if dim.name and dim.name != dim.dim_id else dim.dim_id
+    lines = [title, f"{kind}: {dim.value:g}{unit}"]
+    if dim.expr:
+        lines.append(f"Formula: {dim.expr}")
+    lines.append("Double-click to change it, drag to move it.")
+    return "\n".join(lines)

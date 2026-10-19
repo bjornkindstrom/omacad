@@ -200,6 +200,62 @@ class SketchToolsMixin:
         if self._dyn_can_start():
             self.dyn.start(self.sketch_tool)
             self.dyn.focus = 0
+            self._apply_panel_locks()
+
+    # ---- tool panel (Björn #76): the tool's numbers as fields with sliders in the sketch palette ----------------
+    def _init_tool_panel(self):
+        from omacad.ui.sketch_tool_panel import SketchToolPanel
+        self.tool_panel = SketchToolPanel(self.sketch_palette.content_widget)
+        self.sketch_palette.content_widget.layout().insertWidget(0, self.tool_panel)
+        self.tool_panel.hide()
+        self.tool_panel.locked.connect(self._panel_locked)
+        self.tool_panel.unlocked.connect(self._panel_unlocked)
+        self.tool_panel.default_changed.connect(self._panel_default)
+
+    def _show_tool_panel(self, tool: str):
+        self.tool_panel.show_tool(tool)
+        self.tool_panel.set_values({"Sides": float(self.sketch_palette.spn_sides.value()),
+                                    "Radius": self.sketch_palette.spn_corner_radius.value()})
+        self.sketch_palette.adjustSize()
+
+    def _apply_panel_locks(self):
+        """Values set in the panel go into the matching Tab fields that were not typed in."""
+        if not self.dyn.active:
+            return
+        for name, v in self.tool_panel.locks.items():
+            if name in self.dyn.names:
+                i = self.dyn.names.index(name)
+                if not self.dyn.texts[i]:
+                    self.dyn.texts[i] = repr(float(v))
+
+    def _panel_locked(self, name: str, value: float):
+        if self.sketch_tool == "MOVE" and self.sketch_start_uv is None and self.selected_entities:
+            self._move_auto_base()          # move straight away from the selection's centre, like Move for bodies
+        if self.dyn.active and name in self.dyn.names:
+            self.dyn.texts[self.dyn.names.index(name)] = repr(float(value))
+            self._refresh_dyn()
+        self.update()
+
+    def _panel_unlocked(self):
+        if self.dyn.active:
+            self.dyn.texts = [""] * len(self.dyn.names)
+            self._refresh_dyn()
+        self.update()
+
+    def _panel_default(self, name: str, value: float):
+        spin = {"Sides": self.sketch_palette.spn_sides, "Radius": self.sketch_palette.spn_corner_radius}[name]
+        spin.setValue(int(round(value)) if name == "Sides" else value)
+        self._refresh_dyn()
+        self.update()
+
+    def _move_auto_base(self):
+        """Move: the base point is the centre of the picked elements (a click in the view picks another)."""
+        if self._move_phase == "pick":
+            self._move_phase = "base"
+        self._begin_move(self.selected_entities)
+        self.sketch_start_uv = tuple(self._move["pivot"])
+        self._raw_mouse_uv = self.sketch_start_uv
+        self._arm_dyn()
     def _auto_constrain_line(self, sketch, line):
         """Fusion-style inference: horizontal/vertical lines and end points that meet other lines."""
         eid = line.entity_id
@@ -256,6 +312,7 @@ class SketchToolsMixin:
         end, live = self.dyn.resolve(self.sketch_start_uv, mouse)
         self.sketch_current_uv = end
         self.dyn_live = live
+        self.tool_panel.set_values(live)
         if self.sketch_tool == "MOVE" and self._move:
             self._apply_move(end[0] - self.sketch_start_uv[0], end[1] - self.sketch_start_uv[1])
         self.update()

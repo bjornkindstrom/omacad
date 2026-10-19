@@ -23,6 +23,8 @@ class SketchOperationMixin:
         if self._move:
             self._end_move(False)
         self.rotation_panel.hide()
+        if getattr(self, "_pattern", None):
+            self._pattern_finish(False)     # leaving Pattern without OK puts the sketch back
         self._rotate_drag = None
         self._move_phase = "base" if (tool_name == "MOVE" and self.selected_entities) else "pick"
         if tool_name == "ROTATE" and not self.selected_entities:
@@ -41,7 +43,10 @@ class SketchOperationMixin:
         self.sketch_current_uv = None
         if tool_name == "ROTATE" and not self._rotate_begin():
             self.sketch_tool = tool_name = "NONE"
+        if tool_name == "PATTERN" and not self._pattern_begin():
+            self.sketch_tool = tool_name = "NONE"
         self.sketch_palette.set_tool(tool_name)
+        self._show_tool_panel(tool_name)
         self.sketch_tool_changed.emit(tool_name)
         if tool_name == "ROTATE":
             self.status_message.emit("Rotate: " + ROTATE_INFO)

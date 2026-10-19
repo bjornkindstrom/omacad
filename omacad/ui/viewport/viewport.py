@@ -9,6 +9,7 @@ from omacad.ui.viewport.picker_mixin import PickerMixin
 from omacad.ui.viewport.overlay_mixin import OverlayMixin
 from omacad.ui.viewport.text_mixin import TextToolMixin
 from omacad.ui.viewport.sketch_rotate_mixin import SketchRotateMixin
+from omacad.ui.viewport.sketch_pattern_mixin import SketchPatternMixin
 from omacad.ui.viewport.point_pick_mixin import PointPickMixin
 from omacad.ui.viewport.events_mixin import ViewportEventsMixin
 from omacad.ui.viewport.measure_mixin import MeasureMixin
@@ -68,7 +69,7 @@ from omacad.ui import theme
 from omacad.ui.theme import qcolor
 
 class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, ContextMenuMixin, SketchToolsMixin, PointerMixin, ProfileMixin, SketchMoveMixin, SketchDimensionsMixin, SketchOperationMixin, QOpenGLWidget, RenderGLMixin, GizmoMixin, PickerMixin, OverlayMixin, TextToolMixin, SketchRotateMixin,
-                 PointPickMixin):
+                 PointPickMixin, SketchPatternMixin):
     """Modern OpenGL 3D CAD canvas with Fusion 360 look and feel."""
 
     selection_changed = Signal()
@@ -235,6 +236,8 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         # Floating Sketch Palette
         self.sketch_palette = SketchPalette(self)
         self._init_sketch_rotation()
+        self._init_tool_panel()
+        self._init_sketch_pattern()
         self.sketch_palette.finish_clicked.connect(self.finish_sketch_requested)
         self.sketch_palette.look_at_clicked.connect(self.look_at_active_plane)
         self.sketch_palette.settings_changed.connect(self.update)
@@ -345,6 +348,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
     CONSTRAINT_GLYPHS = {
         "HORIZONTAL": "H", "VERTICAL": "V", "PARALLEL": "∥", "PERPENDICULAR": "⟂",
         "EQUAL": "=", "TANGENT": "T", "CONCENTRIC": "◎", "COINCIDENT": "•", "FIX": "F", "POINT_ON_CIRCLE": "○",
+        "MIDPOINT": "M",
     }
     CONSTRAINT_HINTS = {
         "HORIZONTAL": "Horizontal: select one or more lines.",
@@ -355,6 +359,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         "TANGENT": "Tangent: select a line and a circle, or two circles.",
         "CONCENTRIC": "Concentric: select two circles.",
         "COINCIDENT": "Coincident: select two lines (their nearest end points are joined).",
+        "MIDPOINT": "Midpoint: select a circle or line (its nearest end point) and the line whose middle it goes to.",
         "FIX": "Fix: select lines or circles to lock in place.",
     }
 

@@ -489,7 +489,8 @@ class RenderGLMixin:
             gap_px = float(get_settings().get("guide_line_gap", 6.0))
         return dash_lines(flat_segments, self.world_to_screen, dash_px, gap_px)
 
-    def draw_thick_lines(self, mvp: np.ndarray, flat_segments, rgba, width_px: float, halo: bool = True):
+    def draw_thick_lines(self, mvp: np.ndarray, flat_segments, rgba, width_px: float, halo: bool = True,
+                         halo_px: float = 3.5):
         """Draws line segments (flat [x1,y1,z1,x2,y2,z2,...]) as screen-space quads.
         A dark halo under the coloured core keeps them readable on light faces and dark grid alike."""
         if self.prog_thick is None or self.vbo_thick is None:
@@ -525,7 +526,7 @@ class RenderGLMixin:
 
         passes = []
         if halo:
-            passes.append(((0.03, 0.04, 0.06, 0.85), width_px + 3.5))
+            passes.append(((0.03, 0.04, 0.06, 0.85), width_px + halo_px))
         passes.append((rgba, width_px))
         for col, w in passes:
             GL.glUniform4f(loc_col, *col)
@@ -586,11 +587,13 @@ class RenderGLMixin:
                     w2 = plane.uv_to_world(p2[0], p2[1])
                     dest.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
 
+            from omacad.ui.settings import get_settings, hex_to_rgb01, sketch_line_widths
+            line_w, sel_w = sketch_line_widths()     # Björn #74: set in Settings, thinner than before
+            halo_px = 0.4 + 0.8 * line_w             # a thin dark rim, not a second line
             if normal_lines:
                 if is_active:
-                    from omacad.ui.settings import get_settings
                     scol = get_settings().sketch_line_color_rgb01()
-                    self.draw_thick_lines(mvp, normal_lines, (*scol, 1.0), 2.4)
+                    self.draw_thick_lines(mvp, normal_lines, (*scol, 1.0), line_w, halo_px=halo_px)
                 else:
                     self.draw_thick_lines(mvp, normal_lines, (1.0, 0.65, 0.20, 1.0), 2.0)  # Orange sketch
 
@@ -601,14 +604,14 @@ class RenderGLMixin:
                 hv_col, hv_w = hover_line_style()
                 self.draw_thick_lines(mvp, hover_lines, hv_col, max(1.0, hv_w - 0.5))
             if selected_lines:
-                from omacad.ui.settings import get_settings
-                hl_col = get_settings().highlight_color_rgb01() or theme.palette().highlight01()
-                self.draw_thick_lines(mvp, selected_lines, (*hl_col, 1.0), 3.4)
+                hl_col = (hex_to_rgb01(get_settings().get("selected_line_color"))
+                          or get_settings().highlight_color_rgb01() or theme.palette().highlight01())
+                self.draw_thick_lines(mvp, selected_lines, (*hl_col, 1.0), sel_w, halo_px=halo_px)
 
             if construction_lines:
-                from omacad.ui.settings import get_settings
                 ccol = get_settings().sketch_construction_color_rgb01()
-                self.draw_thick_lines(mvp, self.dash_segments(construction_lines), (*ccol, 1.0), 1.6)
+                self.draw_thick_lines(mvp, self.dash_segments(construction_lines), (*ccol, 1.0), line_w,
+                                      halo_px=halo_px)
 
         GL.glEnable(GL.GL_DEPTH_TEST)
 

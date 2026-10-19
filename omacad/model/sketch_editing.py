@@ -319,8 +319,12 @@ class SketchEditingMixin:
         for i in range(4):  # start of the next line meets the end of this one
             self.constraints.append(SketchConstraint(
                 self.new_constraint_id(), "COINCIDENT", [ids[(i + 1) % 4], ids[i]], ["p1", "p2"]))
-        self.add_dimension("LENGTH", ids[0], width, offset_distance=offset, name="Width")
-        self.add_dimension("LENGTH", ids[1], height, offset_distance=offset, name="Height")
+        # a LENGTH dimension sits on the left of its line (p1 -> p2); the corners run counter-clockwise when the
+        # signed area is positive, so left is inside: put the width and height outside, as Fusion does
+        area = sum(corners[i][0] * corners[(i + 1) % 4][1] - corners[(i + 1) % 4][0] * corners[i][1] for i in range(4))
+        outside = -abs(offset) if area > 0 else abs(offset)
+        self.add_dimension("LENGTH", ids[0], width, offset_distance=outside, name="Width")
+        self.add_dimension("LENGTH", ids[1], height, offset_distance=outside, name="Height")
         self.solve_profiles()
         return lines
 
@@ -371,13 +375,25 @@ class SketchEditingMixin:
         so the size can be changed with the corner radii and anything measured from the walls following along."""
         bottom, right, top, left = lines
         old = [d for d in self.dimensions if d.target_entity_id in (bottom.entity_id, right.entity_id) and d.dim_type == "LENGTH"]
-        offsets = {d.target_entity_id: d.offset_distance for d in old}
         self.dimensions = [d for d in self.dimensions if not any(d is o for o in old)]
         # wall to opposite wall, square to them: right also when the rectangle is turned
-        self.add_dimension("PT_LINE_DIST", right.entity_id, abs(right.p1[0] - left.p1[0]), offset_distance=offsets.get(bottom.entity_id, 10.0),
-                           name="Width", refs=[left.entity_id], pts=["p1"])
-        self.add_dimension("PT_LINE_DIST", top.entity_id, abs(top.p1[1] - bottom.p1[1]), offset_distance=offsets.get(right.entity_id, 10.0),
-                           name="Height", refs=[bottom.entity_id], pts=["p1"])
+        self.add_dimension("PT_LINE_DIST", right.entity_id, abs(right.p1[0] - left.p1[0]),
+                           offset_distance=self._outside_offset(right.p1, left, lines), name="Width",
+                           refs=[left.entity_id], pts=["p1"])
+        self.add_dimension("PT_LINE_DIST", top.entity_id, abs(top.p1[1] - bottom.p1[1]),
+                           offset_distance=self._outside_offset(top.p1, bottom, lines), name="Height",
+                           refs=[bottom.entity_id], pts=["p1"])
+
+    @staticmethod
+    def _outside_offset(point, ref: "SketchLine", lines, gap: float = 10.0) -> float:
+        """Offset for a point-to-line dimension that draws it `gap` beyond the figure: it is drawn shifted along the
+        reference line from the point by pt_line_base_shift + offset - PT_LINE_DEFAULT_OFFSET."""
+        from omacad.model.dim_layout import PT_LINE_DEFAULT_OFFSET, pt_line_base_shift
+        d = np.subtract(ref.p2, ref.p1)
+        d = d / max(float(np.linalg.norm(d)), 1e-12)
+        far = max(float(np.dot(p, d)) for ln in lines for p in (ln.p1, ln.p2))
+        shift = far + gap - float(np.dot(point, d))
+        return shift - pt_line_base_shift(ref) + PT_LINE_DEFAULT_OFFSET
 
     def add_center_rect(self, center: Tuple[float, float], corner: Tuple[float, float], is_construction: bool = False) -> List[SketchLine]:
         cx, cy = center

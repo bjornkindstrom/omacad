@@ -189,6 +189,8 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
             sys_.coincident(pts[(b, c.pts[0])], geo[a], wp)
         elif t == "TANGENT" and b:
             _tangent(sys_, wp, ents, pts, geo, a, b)
+        elif t == "MIDPOINT" and b and line(b) and c.pts and (a, c.pts[0]) in pts:
+            sys_.midpoint(pts[(a, c.pts[0])], geo[b], wp)
 
     ref_lines: Dict[str, object] = {}  # fixed face edges used by dimensions, created on demand
 
@@ -342,3 +344,20 @@ def _tangent(sys_, wp, ents, pts, geo, a, b):
         inner = d < max(ea.radius, eb.radius) - 1e-6
         value = abs(ea.radius - eb.radius) if inner else ea.radius + eb.radius
         sys_.distance(pts[(a, "center")], pts[(b, "center")], float(value), wp)
+
+
+def midpoint_spec(lines, circles):
+    """(ctype, refs, pts) for a Midpoint constraint from two selected elements: a circle's centre, or the end of one
+    line nearest the other line's middle, goes to the middle of the other line (Fusion: point + line)."""
+    if circles:
+        return ("MIDPOINT", [circles[0].entity_id, lines[0].entity_id], ["center"])
+    best = None
+    for a, b in ((lines[0], lines[1]), (lines[1], lines[0])):
+        mid = ((b.p1[0] + b.p2[0]) / 2.0, (b.p1[1] + b.p2[1]) / 2.0)
+        for name in ("p1", "p2"):
+            p = getattr(a, name)
+            d = math.hypot(p[0] - mid[0], p[1] - mid[1])
+            if best is None or d < best[0]:
+                best = (d, a, b, name)
+    _, a, b, name = best
+    return ("MIDPOINT", [a.entity_id, b.entity_id], [name])

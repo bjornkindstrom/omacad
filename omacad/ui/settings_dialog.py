@@ -191,20 +191,14 @@ class SettingsDialog(QDialog):
         self.row_hover = ColorRow("Line under the cursor:", self.settings.get("hover_line_color"), default_hex="#FFFFFF")
         lay_appearance.addWidget(self.row_hover)
 
-        hw_row = QHBoxLayout()
-        lbl_hw = QLabel("Line under cursor, thickness:")
-        lbl_hw.setMinimumWidth(200)
-        self.spn_hover_w = QDoubleSpinBox()
-        self.spn_hover_w.setRange(1.0, 12.0)
-        self.spn_hover_w.setSingleStep(0.5)
-        self.spn_hover_w.setDecimals(1)
-        self.spn_hover_w.setSuffix(" px")
-        self.spn_hover_w.setValue(float(self.settings.get("hover_line_width", 3.5)))
-        self.spn_hover_w.setToolTip("How thick the edge or sketch line gets when you hover over it. Normal lines are about 1-1.6 px, so a bigger number makes the difference bigger.")
-        hw_row.addWidget(lbl_hw)
-        hw_row.addWidget(self.spn_hover_w)
-        hw_row.addStretch()
-        lay_appearance.addLayout(hw_row)
+        self.spn_hover_w = self._width_row(lay_appearance, "Line under cursor, thickness:", "hover_line_width", 3.5,
+                                           "How thick the edge or sketch line gets when you hover over it. Normal lines are about 1-1.6 px, so a bigger number makes the difference bigger.")
+        self.spn_sketch_w = self._width_row(lay_appearance, "Sketch lines, thickness:", "sketch_line_width", 1.6,
+                                            "How thick the lines of the sketch you are editing are drawn.")
+        self.spn_selected_w = self._width_row(lay_appearance, "Selected lines, thickness:", "selected_line_width", 2.4,
+                                              "How thick selected sketch lines are drawn.")
+        self.row_selected = ColorRow("Selected lines:", self.settings.get("selected_line_color"), default_hex=None)
+        lay_appearance.addWidget(self.row_selected)
 
         self.row_highlight = ColorRow("Highlight:", self.settings.get("highlight_color"), default_hex=None)
         lay_appearance.addWidget(self.row_highlight)
@@ -577,6 +571,9 @@ class SettingsDialog(QDialog):
         self.row_highlight.reset_color()
         self.row_hover.reset_color()
         self.spn_hover_w.setValue(3.5)
+        self.spn_sketch_w.setValue(1.6)
+        self.spn_selected_w.setValue(2.4)
+        self.row_selected.reset_color()
         idx_p = self.cmb_pos.findData("bottom_right")
         if idx_p >= 0:
             self.cmb_pos.setCurrentIndex(idx_p)
@@ -602,6 +599,24 @@ class SettingsDialog(QDialog):
         if idx_ai >= 0:
             self.cmb_ai_agent.setCurrentIndex(idx_ai)
 
+    def _width_row(self, layout, label: str, key: str, default: float, tip: str) -> QDoubleSpinBox:
+        """A labelled px-thickness field for `key`, added to `layout`."""
+        row = QHBoxLayout()
+        lbl = QLabel(label)
+        lbl.setMinimumWidth(200)
+        spn = QDoubleSpinBox()
+        spn.setRange(0.5, 12.0)
+        spn.setSingleStep(0.2)
+        spn.setDecimals(1)
+        spn.setSuffix(" px")
+        spn.setValue(float(self.settings.get(key, default)))
+        spn.setToolTip(tip)
+        row.addWidget(lbl)
+        row.addWidget(spn)
+        row.addStretch()
+        layout.addLayout(row)
+        return spn
+
     def accept(self):
         self.save_and_close()
 
@@ -614,6 +629,9 @@ class SettingsDialog(QDialog):
             "highlight_color": self.row_highlight.current_hex,
             "hover_line_color": self.row_hover.current_hex,
             "hover_line_width": self.spn_hover_w.value(),
+            "sketch_line_width": self.spn_sketch_w.value(),
+            "selected_line_width": self.spn_selected_w.value(),
+            "selected_line_color": self.row_selected.current_hex,
             "palette_position": self.cmb_pos.currentData(),
             "autohide_palette_on_measure": self.chk_autohide.isChecked(),
             "invert_zoom": self.chk_invert_zoom.isChecked(),

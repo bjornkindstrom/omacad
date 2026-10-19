@@ -3,6 +3,8 @@
 import math
 import numpy as np
 from PySide6.QtCore import Qt, QRectF
+from PySide6.QtWidgets import QToolTip
+from omacad.model.dim_layout import describe_dimension
 from omacad.model import quality
 from omacad.model.sketch import SketchLine
 from omacad.model.sketch_snap import SketchSnapper, SnapResult
@@ -409,6 +411,12 @@ class PointerMixin:
                     break
 
         self.hovered_dim_id = hovered
+        if hovered != prev_hovered:      # say what the dimension measures (Björn #72)
+            dim = next((d for d in self.doc.active_sketch.dimensions if d.dim_id == hovered), None) if hovered else None
+            if dim is not None:
+                QToolTip.showText(event.globalPosition().toPoint(), describe_dimension(dim), self)
+            else:
+                QToolTip.hideText()
         if hovered:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
         elif self.sketch_tool in ("LINE", "RECT", "ROUNDED_RECT", "CENTER_RECT", "CENTER_ROUNDED_RECT", "CIRCLE", "SMART_CIRCLE", "POLYGON", "ARC", "SLOT", "FILLET", "TRIM", "MIRROR", "OFFSET", "DIMENSION", "MOVE", "TEXT"):

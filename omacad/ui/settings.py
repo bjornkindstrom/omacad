@@ -33,6 +33,9 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "guide_line_gap": 6.0,             # screen pixels between construction-line dashes
     "hover_line_width": 3.5,            # px thickness of the edge/line under the cursor (normal edges are thinner)
     "hover_line_color": None,           # colour of the edge/line under the cursor; None = white
+    "sketch_line_width": 1.6,           # px thickness of lines in the active sketch (was 2.4: looked clumsy)
+    "selected_line_width": 2.4,         # px thickness of selected sketch lines
+    "selected_line_color": None,        # colour of selected sketch lines; None = the highlight colour
     "arrow_gap": 2.0,                   # mm the arrow is drawn off the surface, in its direction
     "view_projection": "perspective",    # perspective or orthographic
     "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
@@ -84,6 +87,19 @@ def hover_line_style() -> Tuple[Tuple[float, float, float, float], float]:
     except (TypeError, ValueError):
         width = 3.5
     return (*rgb, 1.0), width
+
+
+def _width(s, key: str, default: float) -> float:
+    try:
+        return max(0.5, min(12.0, float(s.get(key, default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def sketch_line_widths() -> Tuple[float, float]:
+    """(normal, selected) px thickness of the active sketch's lines, from the settings."""
+    s = get_settings()
+    return _width(s, "sketch_line_width", 1.6), _width(s, "selected_line_width", 2.4)
 
 
 class SettingsManager(QObject):

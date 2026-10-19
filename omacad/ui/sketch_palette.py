@@ -216,8 +216,9 @@ class SketchPalette(QFrame):
 
     def set_tool(self, tool_name: str) -> None:
         """Show Polygon sides / Corner radius only for the tools that use them."""
-        self.sides_row.setVisible(tool_name == "POLYGON")
-        self.radius_row.setVisible(tool_name in ("ROUNDED_RECT", "CENTER_ROUNDED_RECT"))
+        # the tool panel above shows Sides / Radius now (with sliders); the spinners here keep the defaults
+        self.sides_row.setVisible(False)
+        self.radius_row.setVisible(False)
         self.adjustSize()
 
     def set_has_text(self, has_text: bool) -> None:

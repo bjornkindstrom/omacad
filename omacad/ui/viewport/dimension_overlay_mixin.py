@@ -99,8 +99,9 @@ class DimensionOverlayMixin:
                         off = dim.offset_distance
                         p1_off = (p1[0] + nx * off, p1[1] + ny * off)
                         p2_off = (p2[0] + nx * off, p2[1] + ny * off)
-                        ext1 = (p1, (p1_off[0] + nx * 2.0, p1_off[1] + ny * 2.0))
-                        ext2 = (p2, (p2_off[0] + nx * 2.0, p2_off[1] + ny * 2.0))
+                        over = 2.0 if off >= 0 else -2.0   # extension lines run a little past the dimension line
+                        ext1 = (p1, (p1_off[0] + nx * over, p1_off[1] + ny * over))
+                        ext2 = (p2, (p2_off[0] + nx * over, p2_off[1] + ny * over))
                         dim_line = (p1_off, p2_off)
                         lines_to_draw = [ext1, ext2, dim_line]
                         dim_p1_uv = p1_off
