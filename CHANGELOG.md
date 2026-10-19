@@ -3,6 +3,11 @@
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 
+## 0.9.9.62 - 2026-10-19
+
+### Added
+- 3-point Arc: tangent magnet (Björn #53). When the arc leaves or meets a line, arc or face edge that ends at its start or end point within 8° of smooth, the third point sticks so the arc is exactly tangent there; a green ring marks it. A real snap point (end point, mid point, edge) still wins.
+
 ## 0.9.9.61 - 2026-10-19
 
 ### Fixed

@@ -183,6 +183,11 @@ class OverlayMixin:
                     painter.setBrush(QBrush(qcolor(74, 222, 128, 60)))
                     tri = QPolygonF([QPointF(sx, sy - 6), QPointF(sx - 6, sy + 5), QPointF(sx + 6, sy + 5)])
                     painter.drawPolygon(tri)
+                elif snap.snap_type == "TANGENT":     # the arc sticks smoothly to the line or arc it meets
+                    painter.setPen(QPen(qcolor(74, 222, 128), 2))
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawEllipse(QPointF(sx, sy), 6, 6)
+                    painter.drawLine(QPointF(sx - 10, sy - 6), QPointF(sx + 10, sy - 6))
                 elif snap.snap_type in ("ORTHO_H", "ORTHO_V"):
                     painter.setPen(QPen(qcolor(56, 189, 248), 1.5))
                     painter.setBrush(QBrush(qcolor(24, 28, 34, 220)))

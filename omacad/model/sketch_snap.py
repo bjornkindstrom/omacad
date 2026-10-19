@@ -27,7 +27,7 @@ def _closest_on_segment(pt, p1, p2):
 class SnapResult:
     """Holds information about the snapped 2D coordinate and its type."""
     uv: Tuple[float, float]
-    snap_type: str  # "NONE", "ORIGIN", "ENDPOINT", "MIDPOINT", "EDGE", "ORTHO_H", "ORTHO_V", "GRID"
+    snap_type: str  # "NONE", "ORIGIN", "ENDPOINT", "MIDPOINT", "EDGE", "ORTHO_H", "ORTHO_V", "GRID", "TANGENT"
     target_uv: Optional[Tuple[float, float]] = None
     guide_line: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
 

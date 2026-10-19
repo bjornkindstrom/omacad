@@ -22,7 +22,7 @@ Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inst
 
 **Skissa**
 - Skissa på origin-plan, på valfri plan yta (högerklick → *Create Sketch on this Face*) och på egna plan (Offset Plane).
-- Linje, rektangel, centrumrektangel, cirkel, 3-punktsbåge, slot och **regelbunden polygon** (`P`: trianglar, hexagoner ... klicka mitten, Tab ger sidlängd och antal sidor). Snäpper mot hörn, kanter, mittpunkter, rutnät och kroppens kanter.
+- Linje, rektangel, centrumrektangel, cirkel, 3-punktsbåge, slot och **regelbunden polygon** (`P`: trianglar, hexagoner ... klicka mitten, Tab ger sidlängd och antal sidor). Snäpper mot hörn, kanter, mittpunkter, rutnät och kroppens kanter. 3-punktsbågen **fastnar i tangent läge** (grön ring) när den nästan går slätt över i en linje, båge eller kroppskant som slutar i dess start- eller slutpunkt.
 - **Tab-inmatning** medan du ritar (längd, vinkel, bredd/höjd, diameter) – Enter går vidare, Esc ångrar.
 - **Mått och villkor** (SolveSpace): horisontell, vertikal, parallell, vinkelrät, lika, tangent, koncentrisk, fixerad, avstånd, längd, vinkel, diameter, punkt–linje. Guidad högerklicksmeny på varje element.
 - Markera (klick, **Shift/Ctrl+klick** lägger till och tar bort), flytta (dra eller `M` med dx/dy), ta bort, ångra/gör om.

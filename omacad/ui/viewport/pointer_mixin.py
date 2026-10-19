@@ -5,7 +5,8 @@ import numpy as np
 from PySide6.QtCore import Qt, QRectF
 from omacad.model import quality
 from omacad.model.sketch import SketchLine
-from omacad.model.sketch_snap import SketchSnapper
+from omacad.model.sketch_snap import SketchSnapper, SnapResult
+from omacad.model.sketch_tangent import snap_tangent_arc
 
 
 class PointerMixin:
@@ -459,6 +460,12 @@ class PointerMixin:
                     enable_grid_snap=enable_grid,
                     enable_geom_snap=enable_pts
                 )
+                if (self.sketch_tool == "ARC" and self.sketch_start_uv is not None and self.sketch_second_uv is not None
+                        and snap_res.snap_type in ("NONE", "GRID")):   # a real snap point wins over the magnet
+                    mid = snap_tangent_arc(self.sketch_start_uv, self.sketch_second_uv, snap_res.uv,
+                                           self.doc.active_sketch.entities, self._reference_segments())
+                    if mid is not None:
+                        snap_res = SnapResult(uv=mid, snap_type="TANGENT")
                 self.active_snap = snap_res
                 if self.sketch_tool == "SMART_CIRCLE":
                     if not self.hasFocus():
