@@ -23,6 +23,7 @@ class JarSpec:
     pitch: float = 4.0
     profile: str = "trapezoidal_45"
     tolerance: float = -0.2       # Offset Face on the lid's thread: minus = more room (looser)
+    thread_chamfer: float = 1.0   # 45° lead-in on the jar's top thread and in the lid's mouth (0 = none)
     lid_top: float = 2.0          # thickness of the lid's top
     lid_beside: bool = True       # the lid upside down beside the jar, ready to print; off: screwed on
 
@@ -56,6 +57,15 @@ class JarSpec:
         if self.height <= self.wall:
             out.append("The jar is not taller than its bottom.")
         return out
+
+
+def chamfer_size(spec: JarSpec, tooth: float) -> float:
+    """The thread chamfer as made: held so it leaves the neck's rim, the lid's wall and the lid's top alone."""
+    room = min(spec.wall / 2.0,                                               # half the jar's rim stays
+               spec.neck_height - tooth - 1.5,                                # the jar's cutter stays on the neck
+               spec.neck_height - tooth - spec.wall / 2.0 - 1.0,              # the lid's cone stays under its top
+               spec.diameter / 2.0 - spec.neck_diameter / 2.0 - tooth - 0.4)  # the lid's mouth keeps a wall
+    return max(0.0, min(spec.thread_chamfer, room))
 
 
 def thread_tooth(spec: JarSpec) -> float:
@@ -95,6 +105,23 @@ def build_jar(doc, spec: JarSpec) -> Dict[str, str]:
     if abs(spec.tolerance) > 1e-9:
         doc.add_offset_face(lid.body_id, [{"kind": "thread", "thread_id": thread.feature_id, "sign": -1,
                                            "shift": [0.0, 0.0, 0.0]}], spec.tolerance)
+    tooth = thread_tooth(spec)
+    c = chamfer_size(spec, tooth)
+    if c > 1e-3:   # Lennart #70: 45° lead-ins so the lid finds the thread
+        crest = spec.neck_diameter / 2.0 + tooth
+        # the jar: a chamfer c on the neck's outer rim, its cone carried on out through the thread's start (a ring
+        # minus the cone; the thread's own taper already lies inside a cone through the crest)
+        z0 = top - c - tooth - 1.0                                  # here the cone is 1 mm outside the crest
+        ring = doc.add_cylinder(crest + 2.0, c + tooth + 2.0, name="Thread chamfer", plane_origin=[0.0, 0.0, z0], **UP)
+        cone = doc.add_cylinder(crest + 1.0, c + tooth + 2.0, name="Thread chamfer cone", taper_angle=45.0,
+                                plane_origin=[0.0, 0.0, z0], **UP)
+        doc.combine_bodies(ring.body_id, cone.body_id, "cut")
+        doc.combine_bodies(jar.body_id, ring.body_id, "cut")
+        # the lid: a cone c wider than the crest at its mouth, up into the neck's bore
+        rise = c + tooth + spec.wall / 2.0 + 1.5
+        mouth = doc.add_cylinder(crest + c + 1.0, rise, name="Lid mouth chamfer", taper_angle=45.0,
+                                 plane_origin=[0.0, 0.0, h - 1.0], **UP)
+        doc.combine_bodies(lid.body_id, mouth.body_id, "cut")
     if spec.lid_beside:   # upside down (its top on the bed) beside the jar
         doc.move_body(lid.body_id, dx=spec.diameter + GAP_BESIDE, dz=-h, rx=180.0)
     return {"jar": jar.body_id, "lid": lid.body_id}

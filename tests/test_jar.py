@@ -22,7 +22,7 @@ def test_one_undo_step_with_editable_steps():
     assert len(doc.undo_stack) == 1
     types = [f.feature_type for f in doc.timeline.features]
     assert types == ["cylinder", "cylinder", "combine", "shell", "thread", "fillet", "cylinder", "combine", "cylinder", "combine",
-                     "offset_face", "move"]
+                     "offset_face", "cylinder", "cylinder", "combine", "combine", "cylinder", "combine", "move"]
     doc.undo()
     assert not doc.bodies and not doc.timeline.features
 
@@ -54,6 +54,25 @@ def test_lid_can_be_screwed_all_the_way_off(kw):
         off = lid.rotate((0, 0, deg)).translate((0, 0, spec.pitch * deg / 360.0))
         assert (jar ^ off).volume() < 1e-3, deg
     assert len(lid.decompose()) == 1
+
+
+def _radii(body, z):
+    import numpy as np
+    cut = body ^ m3d.Manifold.cube((100, 100, 0.04)).translate((-50, -50, z - 0.02))
+    return np.hypot(*np.array(cut.to_mesh().vert_properties)[:, :2].T)
+
+
+def test_thread_chamfer_on_the_jar_rim_and_in_the_lid_mouth():
+    """Lennart #70: a 45° lead-in on the jar's top thread and in the lid's mouth, so the lid finds the thread."""
+    _, plain, plain_lid = _jar(lid_beside=False, thread_chamfer=0.0)
+    _, jar, lid = _jar(lid_beside=False)                                  # 1 mm by default
+    assert _radii(plain, 49.95).max() > 16.0
+    assert _radii(jar, 49.95).max() == pytest.approx(15.05, abs=0.1)      # the rim's outer edge chamfered 1 mm
+    assert _radii(jar, 49.0).max() < _radii(plain, 49.0).max() - 0.3      # carried out through the thread's start
+    assert _radii(jar, 47.5).max() == pytest.approx(_radii(plain, 47.5).max(), abs=1e-3)   # the thread below stays
+    assert _radii(jar, 49.95).min() == pytest.approx(14.0, abs=0.05)      # the inside is untouched
+    assert _radii(plain_lid, 40.05).min() < 16.5 and _radii(lid, 40.05).min() > 17.9      # the lid's mouth opens up
+    assert (jar ^ lid).volume() < 1e-6 and len(jar.decompose()) == 1 and len(lid.decompose()) == 1
 
 
 def test_without_tolerance_the_threads_touch_and_no_plug_is_left():

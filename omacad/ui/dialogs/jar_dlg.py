@@ -25,6 +25,8 @@ class JarDialog(BaseFeatureDialog):
         ("pitch", "Pitch:", 0.5, 50.0, "Rise of the thread per turn."),
         ("tolerance", "Thread tolerance:", -1.0, 1.0, "Offset Face on the lid's thread. Minus gives more room (looser), "
                                                       "plus less (tighter). -0.2 suits most FDM printers."),
+        ("thread_chamfer", "Thread chamfer:", 0.0, 10.0, "45° lead-in on the jar's top thread and in the lid's mouth, "
+                                                         "so the lid finds the thread. 0 = none."),
         ("lid_top", "Lid top:", 0.4, 50.0, "Thickness of the lid's top."),
     )
 
