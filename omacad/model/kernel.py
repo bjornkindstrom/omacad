@@ -265,6 +265,61 @@ class CadKernel:
         return CadKernel.edge_round_tool(edge, size, kind, extend)
 
     @staticmethod
+    def round_cove_tool(edge, radius: float, extend=0.0) -> m3d.Manifold:
+        """Cut for a negative fillet: a concave cove, the quarter circle centred on the sharp edge itself, so the
+        surface leaves one face a radius from the edge and meets the other a radius away (Lennart #79).
+
+        Supports straight, square edges and full circular rims, the box and cylinder cases. Other edge types
+        return an empty tool so the caller can report them as skipped.
+        """
+        r = abs(float(radius))
+        if r <= 1e-6 or not getattr(edge, "convex", False):
+            return m3d.Manifold()
+        # Local x runs into the solid along the first face, y along the second; the margin lies outside.
+        m = 0.05 * r + 1e-3
+        arc = [(r * math.cos(ph), r * math.sin(ph)) for ph in np.linspace(0.0, math.pi / 2.0, 33)]
+        profile = [(-m, -m), (r, -m), *arc, (-m, r)]
+        if getattr(edge, "kind", "") == "line":
+            theta = math.acos(float(np.clip(edge.d1 @ edge.d2, -1.0, 1.0)))
+            if abs(theta - math.pi / 2.0) > math.radians(2.0):
+                return m3d.Manifold()
+            t = (edge.p1 - edge.p0) / max(float(np.linalg.norm(edge.p1 - edge.p0)), 1e-12)
+            origin = edge.p0.copy()
+            ext_start, ext_end = (extend if isinstance(extend, (tuple, list)) else (extend, extend))
+            e1 = np.asarray(edge.d1, dtype=float)
+            e2 = np.asarray(edge.d2, dtype=float) - float(edge.d2 @ e1) * e1
+            e2 /= max(float(np.linalg.norm(e2)), 1e-12)
+            if np.cross(e1, e2) @ t < 0:
+                t, origin = -t, edge.p1.copy()
+                ext_start, ext_end = ext_end, ext_start
+            poly = profile
+            area = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                       for i in range(len(poly)))
+            if area < 0:
+                poly.reverse()
+            length = float(np.linalg.norm(edge.p1 - edge.p0)) + ext_start + ext_end
+            solid = m3d.Manifold.extrude(m3d.CrossSection([[list(map(float, q)) for q in poly]]), height=length)
+            frame = np.column_stack([e1, e2, t, origin - t * ext_start]).astype(float)
+            return solid.transform(frame)
+        if getattr(edge, "kind", "") == "circle" and not edge.is_arc:
+            R = float(edge.radius)
+            # For convex rims, positive local x/y point into the solid.
+            poly = [(R + edge.s1 * x, edge.s2 * y) for x, y in profile]
+            area = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                       for i in range(len(poly)))
+            if area < 0:
+                poly.reverse()
+            if min(p[0] for p in poly) <= 0.0:
+                return m3d.Manifold()
+            cs = m3d.CrossSection([[list(map(float, p)) for p in poly]])
+            if cs.is_empty():
+                return m3d.Manifold()
+            solid = m3d.Manifold.revolve(cs, circular_segments=max(int(getattr(edge, "nseg", 48)), 24))
+            u, v = edge._basis()
+            return solid.transform(np.column_stack([u, v, edge.axis, edge.center]).astype(float))
+        return m3d.Manifold()
+
+    @staticmethod
     def loop_round_tool(edge, size: float, kind: str, arc_segments: int = 16) -> m3d.Manifold:
         """Fillet/chamfer all the way round an outline of straight pieces and arcs: the usual corner
         cross-section swept along the outline (mitred where the direction changes)."""

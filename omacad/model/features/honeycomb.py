@@ -325,7 +325,26 @@ class HoneycombFeature(Feature):
         target = doc.bodies.get(self.target_body_id)
         if not target:
             return
-        target.manifold, self.cells, self.skipped = self.compute(target.manifold, self.faces, self.params())
+        # A picked face can move when an upstream feature is edited (box height is the common
+        # case). If its old plane no longer exists, attach it to the nearest parallel planar face.
+        # Keep the saved reference intact so later recomputes can track the same moving face.
+        faces = self.faces
+        if any(ref.get("kind") == "plane" and find_plane_face(target.manifold, ref) is None for ref in self.faces):
+            from omacad.model.faces import compute_planar_faces
+            planar = compute_planar_faces(target.manifold, self.target_body_id)
+            faces = []
+            for ref in self.faces:
+                if ref.get("kind") != "plane" or find_plane_face(target.manifold, ref) is not None:
+                    faces.append(ref)
+                    continue
+                n, origin = np.asarray(ref["normal"], dtype=float), np.asarray(ref["origin"], dtype=float)
+                candidates = [f for f in planar if float(f.normal @ n) > 0.999]
+                if candidates:
+                    nearest = min(candidates, key=lambda f: abs(float(f.normal @ (origin - f.origin))))
+                    faces.append({**ref, "origin": [float(x) for x in nearest.origin]})
+                else:
+                    faces.append(ref)
+        target.manifold, self.cells, self.skipped = self.compute(target.manifold, faces, self.params())
         target.update_render_mesh()
 
     def to_dict(self) -> Dict[str, Any]:

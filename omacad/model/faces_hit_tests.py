@@ -8,7 +8,7 @@ from omacad.model.faces_types import PlanarFace
 _FACE_STACKS: dict = {}
 
 
-def _ray_triangles(tris: np.ndarray, ray_origin, ray_dir) -> np.ndarray:
+def _ray_triangles(tris: np.ndarray, ray_origin, ray_dir, bary_tol: float = 1e-9) -> np.ndarray:
     """Moller-Trumbore against many triangles (N, 3, 3) at once: hit distance per triangle, inf where missed."""
     o = np.asarray(ray_origin, dtype=np.float64)
     d = np.asarray(ray_dir, dtype=np.float64)
@@ -23,15 +23,16 @@ def _ray_triangles(tris: np.ndarray, ray_origin, ray_dir) -> np.ndarray:
     q = np.cross(s, e1)
     w = (q @ d) * inv
     t = np.einsum("ij,ij->i", e2, q) * inv
-    hit = ok & (u >= -1e-9) & (w >= -1e-9) & (u + w <= 1.0 + 1e-9) & (t > 1e-6)
+    hit = ok & (u >= -bary_tol) & (w >= -bary_tol) & (u + w <= 1.0 + bary_tol) & (t > 1e-6)
     return np.where(hit, t, np.inf)
 
-def ray_hit_face(face: PlanarFace, ray_origin: np.ndarray, ray_dir: np.ndarray) -> Optional[float]:
+def ray_hit_face(face: PlanarFace, ray_origin: np.ndarray, ray_dir: np.ndarray,
+                 bary_tol: float = 1e-9) -> Optional[float]:
     """Nearest hit distance of a ray on one face, or None."""
-    t = _ray_triangles(face.tris, ray_origin, ray_dir)
+    t = _ray_triangles(face.tris, ray_origin, ray_dir, bary_tol)
     return float(t.min()) if len(t) and np.isfinite(t.min()) else None
 
-def ray_hit_faces(faces, ray_origin: np.ndarray, ray_dir: np.ndarray) -> np.ndarray:
+def ray_hit_faces(faces, ray_origin: np.ndarray, ray_dir: np.ndarray, bary_tol: float = 1e-9) -> np.ndarray:
     """Nearest hit distance per face (inf = missed), all triangles of all faces in one go. The triangles
     are stacked once per face list (a body's list is replaced when it is rebuilt): hovering a body with
     thousands of faces stays fast."""
@@ -45,7 +46,7 @@ def ray_hit_faces(faces, ray_origin: np.ndarray, ray_dir: np.ndarray) -> np.ndar
     _, tris, owner = hit
     out = np.full(len(faces), np.inf)
     if len(tris):
-        np.minimum.at(out, owner, _ray_triangles(tris, ray_origin, ray_dir))
+        np.minimum.at(out, owner, _ray_triangles(tris, ray_origin, ray_dir, bary_tol))
     return out
 
 def in_plane_edges(bodies, plane, tol_rel: float = 1e-3):

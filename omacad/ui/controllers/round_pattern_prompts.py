@@ -98,7 +98,9 @@ class RoundPatternPromptsMixin:
                 else:
                     mid = np.array([0.0, 0.0, 0.0])
                     axis = np.array([0.0, 0.0, 1.0])
-                self.viewport.set_extrude_handle(mid, axis, max(0.5, dlg.spn_size.value()), color=(0.10, 0.75, 1.0))
+                if dlg.spn_size.value() < 0:
+                    axis = -axis
+                self.viewport.set_extrude_handle(mid, axis, max(0.5, abs(dlg.spn_size.value())), color=(0.10, 0.75, 1.0))
             else:
                 self.viewport.clear_extrude_handle()
 
@@ -113,8 +115,10 @@ class RoundPatternPromptsMixin:
             for e in edges:
                 try:
                     owner_body = next((b for b in doc_bodies if any(e.same_as(k) for k in b.edges)), doc_bodies[0] if doc_bodies else None)
-                    eff_size = FilletFeature._safe_edge_size(owner_body, e, dlg.spn_size.value()) if owner_body else dlg.spn_size.value()
-                    tool = CadKernel.round_tool(e, eff_size, dlg.kind())
+                    size = abs(dlg.spn_size.value())
+                    eff_size = FilletFeature._safe_edge_size(owner_body, e, size) if owner_body else size
+                    tool = (CadKernel.round_cove_tool(e, eff_size) if dlg.spn_size.value() < 0
+                            else CadKernel.round_tool(e, eff_size, dlg.kind()))
                     solid = tool if solid is None else solid + tool
                 except Exception as ex:
                     problem = str(ex) or "This edge can't be rounded with that size."
@@ -124,7 +128,8 @@ class RoundPatternPromptsMixin:
             update_arrow()
 
         def on_handle_drag(val: float):
-            v = max(0.2, abs(val))
+            sign = -1.0 if dlg.kind() == "fillet" and dlg.spn_size.value() < 0 else 1.0
+            v = sign * max(0.2, abs(val))
             dlg.spn_size.setValue(round(v, 2))
 
         def on_cancel_pick():

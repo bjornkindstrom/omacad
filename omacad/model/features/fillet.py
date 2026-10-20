@@ -294,7 +294,7 @@ class FilletFeature(Feature):
         together; rounding them one after another would hide the neighbouring edges (the first
         rounding turns the faces next to it into curved ones)."""
         self.skipped = 0
-        if self.size <= 1e-6:
+        if abs(self.size) <= 1e-6:
             return
         cut, add = {}, {}
         seen = []
@@ -334,7 +334,17 @@ class FilletFeature(Feature):
 
         for body, edge in seen:
             ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
-            eff_size = self._safe_edge_size(body, edge, self.size)
+            size = abs(self.size)
+            if self.size < 0 and self.kind == "fillet":
+                # Negative fillet cuts a concave cove, limited to convex box edges and full circular
+                # rims; chamfer remains unsigned.
+                tool = CadKernel.round_cove_tool(edge, self._safe_edge_size(body, edge, size), extend=ext)
+                if tool.is_empty():
+                    self.skipped += 1
+                else:
+                    cut.setdefault(body.body_id, []).append(tool)
+                continue
+            eff_size = self._safe_edge_size(body, edge, size)
             curved_fill = (self._circular_neighbor_tool(body, edge, self.size)
                            if self.kind == "fillet" and not edge.convex else None)
             if curved_fill is not None:
@@ -344,14 +354,15 @@ class FilletFeature(Feature):
             elif not edge.convex and getattr(edge, "kind", "") == "line":
                 tool = self._mitred_tool(body, edge, [e for b, e in seen if b is body], eff_size)
             elif getattr(edge, "kind", "") == "circle" and edge.is_arc:
-                tool = CadKernel.circle_round_tool(edge, self.size, self.kind, reach=self._arc_reach(body, edge))
+                tool = CadKernel.circle_round_tool(edge, size, self.kind, reach=self._arc_reach(body, edge))
             else:
                 tool = CadKernel.round_tool(edge, eff_size, self.kind, extend=ext)
             (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
 
         # Inside corners of a face outline: the two bevel bands end square at the corner and leave a notch there.
         # Material survives only where one wall still allows it, so what must go is the overlap of both bands.
-        convex = [(b, e) for b, e in seen if e.convex and getattr(e, "kind", "") == "line"]
+        convex = ([(b, e) for b, e in seen if e.convex and getattr(e, "kind", "") == "line"]
+                  if self.size >= 0 or self.kind != "fillet" else [])
         for i in range(len(convex)):
             for j in range(i + 1, len(convex)):
                 (ba, ea), (bb, eb) = convex[i], convex[j]

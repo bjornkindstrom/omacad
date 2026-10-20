@@ -19,20 +19,29 @@ class RoundEdgesDialog(BaseFeatureDialog):
         self.cmb_kind.setCurrentIndex(1 if kind == "chamfer" else 0)
         form.addRow("Type:", self.cmb_kind)
         self.spn_size = ExprDoubleSpinBox()
-        self.spn_size.setRange(0.01, 10000.0)
+        self.spn_size.setRange(-10000.0 if kind == "fillet" else 0.01, 10000.0)
         self.spn_size.setDecimals(3)
         self.spn_size.setSuffix(" mm")
         self.spn_size.setValue(size)
-        self.spn_size.setToolTip("Radius (fillet) or distance (chamfer). Formulas and parameter names work.")
+        self.spn_size.setToolTip("Radius (fillet) or distance (chamfer). A negative fillet cuts a concave cove into supported outside edges. Formulas and parameter names work.")
         form.addRow("Size:", self.spn_size)
         self.lbl_count = QLabel("" if editing else "Click edges in the viewport to select them (click again to deselect). X = see-through for hidden edges, double-click = whole loop, Shift+double-click = loop on the other face, Backspace = undo last, Ctrl+Backspace = clear.")
         self.lbl_count.setWordWrap(True)
         self.main_layout.addWidget(self.lbl_count)
         self.main_layout.addLayout(form)
         self.add_buttons()
-        self.cmb_kind.currentIndexChanged.connect(lambda *_: self.changed.emit())
+        self.cmb_kind.currentIndexChanged.connect(self._kind_changed)
         self.spn_size.valueChanged.connect(lambda *_: self.changed.emit())
         QTimer.singleShot(0, lambda: (self.spn_size.setFocus(), self.spn_size.selectAll()))
+
+    def _kind_changed(self, *_):
+        if self.kind() == "fillet":
+            self.spn_size.setRange(-10000.0, 10000.0)
+        else:
+            if self.spn_size.value() < 0:
+                self.spn_size.setValue(abs(self.spn_size.value()))
+            self.spn_size.setRange(0.01, 10000.0)
+        self.changed.emit()
 
     def kind(self) -> str:
         return "chamfer" if self.cmb_kind.currentIndex() == 1 else "fillet"

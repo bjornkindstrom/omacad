@@ -131,6 +131,7 @@ class MenuSetupMixin:
         menu_help.addAction(act_report)
         act_request = QAction("Request a change…", self)
         act_request.setShortcut(QKeySequence("F8"))
+        act_request.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         act_request.setToolTip("Ask for a change or a new feature: your text, a screenshot, the model and the log are sent to the owner on GitHub")
         act_request.triggered.connect(self.on_request_change)
         menu_help.addAction(act_request)

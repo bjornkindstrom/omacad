@@ -100,14 +100,21 @@ class PickerMixin:
                     continue
                 e = edges[k]
                 s = int(np.flatnonzero((seg_edge == k) & (seg_d == d))[0])
-                # hidden behind a face? test the point of the edge nearest the cursor
-                mid = (pts[seg_start[s]] + pts[seg_start[s] + 1]) / 2.0
-                direction = mid - origin
+                # Test visibility at the point on the polyline nearest the cursor. Using
+                # the segment midpoint can shift the ray onto the adjacent face and make
+                # a visible circular rim look hidden, especially on shallow views.
+                i = seg_start[s]
+                a2, b2 = self.project_points(pts[[i, i + 1]])[0]
+                ab2 = b2 - a2
+                den = float(ab2 @ ab2)
+                t = float(np.clip(((np.array([x, y]) - a2) @ ab2) / den, 0.0, 1.0)) if den > 1e-12 else 0.0
+                point = pts[i] + t * (pts[i + 1] - pts[i])
+                direction = point - origin
                 dist = float(np.linalg.norm(direction))
                 direction = direction / dist if dist > 1e-9 else direction
                 blocked = (not xray) and any(
-                    self._ray_hits_body_aabb(bd, origin, direction, dist)
-                    and bool((ray_hit_faces(bd.faces, origin, direction) < dist - 1e-3).any())
+                    self._ray_hits_body_aabb(bd, origin, direction, dist + 1e-3)
+                    and bool((ray_hit_faces(bd.faces, origin, direction) < dist - 2e-2).any())
                     for bd in self.doc.bodies.values() if bd.visible and len(bd.faces)
                 )
                 if not blocked:
@@ -203,7 +210,7 @@ class PickerMixin:
         for body in self.doc.bodies.values():
             if not body.visible or not self._ray_hits_body_aabb(body, origin, ray_dir, best_t):
                 continue
-            hits = ray_hit_faces(body.faces, origin, ray_dir) if len(body.faces) else np.zeros(0)
+            hits = ray_hit_faces(body.faces, origin, ray_dir, bary_tol=2e-4) if len(body.faces) else np.zeros(0)
             candidates = [(body.faces[i], float(hits[i])) for i in np.flatnonzero(np.isfinite(hits))]
             if getattr(self, "edge_pick_mode", False):
                 from dataclasses import replace
@@ -412,7 +419,7 @@ class PickerMixin:
             elif not body.visible:
                 continue
             if len(body.faces):
-                hits = ray_hit_faces(body.faces, origin, ray_dir)
+                hits = ray_hit_faces(body.faces, origin, ray_dir, bary_tol=2e-4)
                 i = int(np.argmin(hits))
                 if hits[i] < face_t:
                     face_best, face_t = ("face", body.faces[i]), float(hits[i])

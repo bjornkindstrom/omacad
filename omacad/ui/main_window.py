@@ -780,6 +780,9 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             marked = dlg.marked_image()
             if marked is not None:
                 images["screenshot_marked.png"] = self._png(marked)
+        for i, (name, image) in enumerate(dlg.additional_images(), 1):
+            safe_name = Path(name).name.replace("/", "_").replace("\\", "_")
+            images[f"attachment_{i:02d}_{safe_name}"] = self._png(image)
         v = self.viewport
         extra = {"kind": "request for change", "camera": {"azimuth": v.azimuth, "elevation": v.elevation, "distance": v.distance},
                  "window_size": [self.width(), self.height()]}

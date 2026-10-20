@@ -5,7 +5,7 @@ parameter name or a formula using them, e.g. width/2 + 3. Change a parameter her
 that uses it is rebuilt.
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton,
                                QTableWidget, QTableWidgetItem, QVBoxLayout)
@@ -78,7 +78,30 @@ class ParametersDialog(QDialog):
         for q in doc.parameters:
             self._append(q.name, q.expr, q.comment)
         self.table.cellChanged.connect(self.recalculate)
+        self.table.cellClicked.connect(self._edit_expression_on_click)
         self.recalculate()
+
+    def _edit_expression_on_click(self, row: int, column: int):
+        """Start editing an expression immediately, keeping its current text ready to change."""
+        if column != COL_EXPR:
+            return
+        item = self.table.item(row, column)
+        if item is None:
+            return
+        self.table.editItem(item)
+        QTimer.singleShot(0, lambda: self._prepare_expression_editor(item))
+
+    def _prepare_expression_editor(self, item):
+        editor = self.table.focusWidget()
+        if editor is None or not self.table.isPersistentEditorOpen(item):
+            # Qt's delegate editor is a child of the viewport; find the active line editor there.
+            from PySide6.QtWidgets import QLineEdit
+            editors = self.table.viewport().findChildren(QLineEdit)
+            editor = next((w for w in editors if w.isVisible()), None)
+        if editor is not None:
+            editor.setStyleSheet("QLineEdit { background: white; color: black; }")
+            editor.setFocus()
+            editor.setCursorPosition(len(editor.text()))
 
     # ---- rows ------------------------------------------------------------------------
     def _append(self, name: str, expr: str, comment: str = ""):

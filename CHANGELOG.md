@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.9.69 - 2026-10-20
+
+### Added
+- Fillet accepts a negative radius that cuts a concave cove into selected convex square edges and full circular rims; unsupported edge types are reported as skipped (Lennart #79).
+- Request a change accepts multiple additional image attachments, and Jar with Lid has a Reset to defaults button (Lennart #82, #83).
+
+### Fixed
+- Parameter-driven number fields now use dark text on a light background so the expression is readable across themes (Lennart #80).
+- Clicking a parameter expression starts editing it immediately, with a visible white editor and the cursor at the end of its current value; F8 can open Request a change while a dialog is active (Lennart #81).
+- Honeycomb reattaches a moved planar face to the nearest parallel face when an earlier feature changes its position, preserving the pattern through timeline edits (Lennart #82).
+- Circular edges left by an annular cut in a cylinder are now detected and selectable for Fillet/Chamfer. Boolean seam fragments had made the edge graph branch at microscopic duplicate segments.
+- Face picking now tolerates tiny barycentric errors at boolean-generated triangle boundaries, so the annular floor after a circular cut remains selectable for another Extrude.
+- Edge picking on shallow-view rims (e.g. a hole's circular rim in a cylindrical extrude) now tests visibility at the exact point on the edge nearest the cursor, not the segment midpoint; this prevents false occlusion that hid selectable edges in views from certain angles.
+
 ## 0.9.9.68 - 2026-10-19
 
 ### Added

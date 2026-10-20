@@ -186,6 +186,7 @@ class FeedbackDialog(QDialog):
             if isinstance(w, QLabel):
                 w.setWordWrap(True)
         self.image: Optional[MarkableImage] = None
+        self._attachments: List[Tuple[str, QImage]] = []
         self._note_label = QLabel("<b>Your message:</b> (type in the framed box below)")
         if screenshot is not None and not screenshot.isNull():
             tools = QHBoxLayout()
@@ -206,6 +207,10 @@ class FeedbackDialog(QDialog):
                                 ("Use the screenshot", self.use_builtin_image)):
                 b = QPushButton(label)
                 b.clicked.connect(slot)
+                tools.addWidget(b)
+            if mode == "request":
+                b = QPushButton("Add images…")
+                b.clicked.connect(self.choose_attachments)
                 tools.addWidget(b)
             tools.addStretch()
             lay.addLayout(tools)
@@ -275,6 +280,20 @@ class FeedbackDialog(QDialog):
             return
         self.image.set_pixmap(pix)
         self.own = True
+
+    def choose_attachments(self) -> None:
+        """Adds several images alongside the screenshot to a change request."""
+        paths, _ = QFileDialog.getOpenFileNames(self, "Add images to request", "",
+                                                "Images (*.png *.jpg *.jpeg *.bmp *.webp *.gif)")
+        for path in paths:
+            pix = QPixmap(path)
+            if not pix.isNull():
+                from pathlib import Path
+                self._attachments.append((Path(path).name, pix.toImage()))
+        self._note_label.setText(f"<b>Your message:</b> ({len(self._attachments)} additional image(s) attached)")
+
+    def additional_images(self) -> List[Tuple[str, QImage]]:
+        return list(self._attachments)
 
     def use_builtin_image(self) -> None:
         self.image.set_pixmap(self._builtin)

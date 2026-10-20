@@ -181,7 +181,9 @@ class ExprDoubleSpinBox(QDoubleSpinBox):
         on = self.expression() is not None
         if bool(self.property("formula")) != on:
             self.setProperty("formula", on)
-            self.setStyleSheet("ExprDoubleSpinBox[formula=\"true\"] { color: #7DD3FC; }" if on else "")
+            self.setStyleSheet("ExprDoubleSpinBox[formula=\"true\"] { color: #111111; background-color: #F4C875; }"
+                               "ExprDoubleSpinBox[formula=\"true\"] QLineEdit { color: #111111; background-color: #F4C875; }"
+                               if on else "")
 
     def focusInEvent(self, event):
         names = sorted(expr.get_variables())

@@ -1,7 +1,7 @@
 """Dialog for Jar with Lid: the sizes of a threaded jar and its screw lid; every field has a slider when docked."""
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QLabel
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel, QPushButton
 from omacad.model.jar import PROFILES, JarSpec
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.ui.dialogs.base import BaseFeatureDialog
@@ -57,10 +57,26 @@ class JarDialog(BaseFeatureDialog):
         self.chk_beside.toggled.connect(lambda *_: self.changed.emit())
         form.addRow("Lid:", self.chk_beside)
         self.main_layout.addLayout(form)
+        reset_row = QHBoxLayout()
+        reset_row.addStretch()
+        self.btn_reset = QPushButton("Reset to defaults")
+        self.btn_reset.setAutoDefault(False)
+        self.btn_reset.clicked.connect(self.reset_defaults)
+        reset_row.addWidget(self.btn_reset)
+        self.main_layout.addLayout(reset_row)
         self.lbl_info = QLabel("")
         self.lbl_info.setWordWrap(True)
         self.main_layout.addWidget(self.lbl_info)
         self.add_buttons()
+
+    def reset_defaults(self):
+        """Restore the original Jar with Lid values, regardless of saved previous settings."""
+        spec = JarSpec()
+        for key, spin in self.spins.items():
+            spin.set_expression(str(getattr(spec, key)))
+        self.cmb_profile.setCurrentIndex(PROFILES.index(spec.profile))
+        self.chk_beside.setChecked(spec.lid_beside)
+        self.changed.emit()
 
     def spec(self) -> JarSpec:
         return JarSpec(**{k: s.value() for k, s in self.spins.items()},
