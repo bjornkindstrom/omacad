@@ -191,6 +191,20 @@ class CadKernel:
         return solid.warp_batch(push)
 
     @staticmethod
+    def has_needles(solid: m3d.Manifold, thin: float = 1e-3) -> bool:
+        """True when a triangle is thinner than `thin` mm (its height over the longest edge): a strip a boolean
+        left where two almost-equal walls meet, e.g. a skin of a wall standing above a cut's floor."""
+        mesh = solid.to_mesh64()
+        tris = np.asarray(mesh.tri_verts, dtype=np.int64)
+        if len(tris) == 0:
+            return False
+        p = np.asarray(mesh.vert_properties[:, :3], dtype=float)[tris]
+        sides = [p[:, 1] - p[:, 0], p[:, 2] - p[:, 1], p[:, 0] - p[:, 2]]
+        area2 = np.linalg.norm(np.cross(sides[0], -sides[2]), axis=1)     # twice the triangle area
+        longest = np.max([np.linalg.norm(e, axis=1) for e in sides], axis=0)
+        return bool(np.any(area2 < thin * np.maximum(longest, 1e-30)))
+
+    @staticmethod
     def has_sheets(solid: m3d.Manifold) -> bool:
         """True when two real (non-needle) triangles meet back to back along an edge: a zero-thickness sheet."""
         mesh = solid.to_mesh64()

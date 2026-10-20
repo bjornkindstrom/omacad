@@ -69,6 +69,10 @@ def _bbox_overlap(a: m3d.Manifold, b: m3d.Manifold, tol: float = 1e-6) -> bool:
 CUT_CLEARANCE = 1e-3   # mm a cutter is grown when a cut leaves strips: invisible, wider than facet mismatch
 
 
+def _triangle_count(solid: m3d.Manifold) -> int:
+    return len(solid.to_mesh().tri_verts)
+
+
 def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, tool: m3d.Manifold) -> None:
     """Shared by Extrude and Revolve: add `tool` as a new body, or join/cut/intersect it with every body it touches."""
     def new_body():
@@ -107,13 +111,19 @@ def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, to
             # later edge picks), so the exact cut is kept.
             result = body.manifold - tool
             nudged = body.manifold - CadKernel.grown(tool, 1e-6)
-            if len(nudged.to_mesh().tri_verts) < len(result.to_mesh().tri_verts) or CadKernel.has_sheets(result):
+            if _triangle_count(nudged) < _triangle_count(result) or CadKernel.has_sheets(result):
                 result = nudged
+            # A profile drawn on the wall is cut into its own flat pieces, so its sides wander up
+            # to a facet's sagitta (0.5 um at 360 segments) around the wall. The leftovers are either
+            # zero-thickness sheets or a skin a few 1e-5 mm thick that stands above the floor (a
+            # moved body rounds its corners differently from the sketch). Only when a micron of
+            # clearance removes the needles (fewer triangles) is it used; exact volumes otherwise.
             if CadKernel.has_sheets(result):
-                # A profile drawn on the wall is cut into its own flat pieces, so its sides wander up
-                # to a facet's sagitta (0.5 um at 360 segments) around the wall and paper-thin
-                # strips survive. Only then: an invisible micron of clearance (exact volumes otherwise).
                 result = body.manifold - CadKernel.grown(tool, CUT_CLEARANCE)
+            elif CadKernel.has_needles(result):
+                clear = body.manifold - CadKernel.grown(tool, CUT_CLEARANCE)
+                if _triangle_count(clear) < _triangle_count(result):
+                    result = clear
         elif operation == "intersect":
             result = body.manifold ^ tool
         else:

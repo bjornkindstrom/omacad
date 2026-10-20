@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.71 - 2026-10-20
+
+### Fixed
+- An Extrude cut that matches a moved body's outline no longer leaves a wall skin standing above the floor: the cut now takes the 1 um cutter clearance when the result has needle triangles and it removes them (report 20261020-220439).
+
 ## 0.9.9.70 - 2026-10-20
 
 ### Fixed
