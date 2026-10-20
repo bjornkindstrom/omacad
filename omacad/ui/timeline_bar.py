@@ -181,6 +181,7 @@ class TimelineBar(QWidget):
     edit_sketch_requested = Signal(str)
     highlight_changed = Signal(object, object)  # (material the step added, material it removed), or (None, None)
     flash_sketch_requested = Signal(object)     # sketch id to show highlighted for a moment, or None
+    step_edges_changed = Signal(object)         # edges a Fillet/Chamfer step rounds, to outline in the view ([] = none)
     status_message = Signal(str)
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
@@ -192,6 +193,7 @@ class TimelineBar(QWidget):
         self._hovering: Optional[int] = None      # step number under the mouse (its changes are shown while it is there)
         self._hover_step: Optional[int] = None
         self._changes_cache: dict = {}
+        self._edges_cache: dict = {}
         self._hover_timer = QTimer(self)
         self._hover_timer.setSingleShot(True)
         self._hover_timer.setInterval(90)           # a quick sweep over the chips does not compute every step
@@ -277,10 +279,11 @@ class TimelineBar(QWidget):
         """Re-renders feature nodes according to timeline state."""
         if self._highlighted is not None or self._hovering is not None:
             self._highlighted = self._hovering = None
-            self.highlight_changed.emit(None, None)
+            self._show(None)
             self.flash_sketch_requested.emit(None)
         self._hover_timer.stop()
         self._changes_cache.clear()
+        self._edges_cache.clear()
         # Clear existing nodes
         while self.nodes_layout.count() > 1:
             item = self.nodes_layout.takeAt(0)
@@ -332,6 +335,24 @@ class TimelineBar(QWidget):
             self._changes_cache[step_index] = self.doc.step_changes(step_index - 1)
         return self._changes_cache[step_index]
 
+    def _edges(self, step_index: int) -> list:
+        """The edges a Fillet/Chamfer step rounds, as they were before it (other steps: none)."""
+        if step_index not in self._edges_cache:
+            feat = self.doc.timeline.features[step_index - 1]
+            before = self.doc.step_states.get(step_index - 1)
+            self._edges_cache[step_index] = (feat.edges_in(before) if feat.feature_type == "fillet" and before
+                                             else [])
+        return self._edges_cache[step_index]
+
+    def _show(self, step_index: Optional[int]):
+        """Colours what a step changed in the model and outlines the edges it rounds; None clears both."""
+        if step_index is None:
+            self.highlight_changed.emit(None, None)
+            self.step_edges_changed.emit([])
+            return
+        self.highlight_changed.emit(*self._changes(step_index))
+        self.step_edges_changed.emit(self._edges(step_index))
+
     def on_node_hovered(self, step_index: int):
         self._hover_step = step_index
         self._hover_timer.start()
@@ -343,10 +364,7 @@ class TimelineBar(QWidget):
         if self._hovering == step_index:       # back to what a click had coloured (or nothing)
             self._hovering = None
             self.flash_sketch_requested.emit(None)
-            if self._highlighted is not None:
-                self.highlight_changed.emit(*self._changes(self._highlighted))
-            else:
-                self.highlight_changed.emit(None, None)
+            self._show(self._highlighted)
 
     def _apply_hover(self):
         """Mouse rested on a chip: colour what that step added (green) / removed (red) in the model, or show its sketch."""
@@ -357,10 +375,10 @@ class TimelineBar(QWidget):
         self._hovering = step
         if feat.feature_type == "sketch":
             self.flash_sketch_requested.emit(feat.sketch.sketch_id)
-            self.highlight_changed.emit(None, None)
+            self._show(None)
         else:
             self.flash_sketch_requested.emit(None)
-            self.highlight_changed.emit(*self._changes(step))
+            self._show(step)
 
     def on_node_clicked(self, step_index: int):
         """A click colours what that step changed in the model (green = added, red = removed); a second click
@@ -370,11 +388,10 @@ class TimelineBar(QWidget):
             return
         if self._highlighted == step_index:
             self._highlighted = None
-            self.highlight_changed.emit(None, None)
+            self._show(None)
             return
-        added, removed = self._changes(step_index)
         self._highlighted = step_index
-        self.highlight_changed.emit(added, removed)
+        self._show(step_index)
 
     def on_node_edit(self, step_index: int):
         """Double-click: edit that step (a sketch opens in sketch mode)."""

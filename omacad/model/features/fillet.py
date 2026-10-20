@@ -8,7 +8,7 @@ import math
 import numpy as np
 import manifold3d as m3d
 from omacad.model.kernel import CadKernel
-from omacad.model.faces import edge_from_ref, fuzzy_edge_from_ref
+from omacad.model.faces import edge_from_ref, fuzzy_edge_from_ref, compute_planar_edges
 from omacad.model.features.base import Feature
 
 
@@ -121,6 +121,120 @@ class FilletFeature(Feature):
                                 limit = min(limit, dist * 0.99 / reach_per_size)
         return max(limit, 0.01)
 
+    @staticmethod
+    def _circular_neighbor_tool(body, edge, size: float):
+        """Build the concave blend between a straight face and an axial circular face.
+
+        The ordinary edge tool treats both neighbours as tangent planes. For a cylinder
+        that substitutes a tangent line for the curved wall and can leave a lip. This
+        section uses the true circle as the second boundary and is extruded along the edge.
+        """
+        if size <= 1e-6 or getattr(edge, "kind", "") != "line" or edge.convex:
+            return None
+        t = np.asarray(edge.p1 - edge.p0, dtype=float)
+        length = float(np.linalg.norm(t))
+        if length <= 1e-8:
+            return None
+        t /= length
+        midpoint = (edge.p0 + edge.p1) * 0.5
+        matches = []
+        for circle in body.edges:
+            if getattr(circle, "kind", "") != "circle" or abs(float(circle.axis @ t)) < 0.999:
+                continue
+            center_mid = circle.center + t * float((midpoint - circle.center) @ t)
+            radial = midpoint - center_mid
+            radial -= t * float(radial @ t)
+            radial_len = float(np.linalg.norm(radial))
+            if radial_len <= 1e-8 or abs(radial_len - circle.radius) > max(0.15, 0.01 * circle.radius):
+                continue
+            radial /= radial_len
+            alignments = (abs(float(radial @ edge.n1)), abs(float(radial @ edge.n2)))
+            if max(alignments) < 0.98:
+                continue
+            # The other adjacent face is the straight profile wall.
+            plane_normal = np.asarray(edge.n2 if alignments[0] > alignments[1] else edge.n1, dtype=float)
+            matches.append((max(alignments), circle, plane_normal))
+        if not matches:
+            return None
+
+        _alignment, circle, plane_normal = max(matches, key=lambda item: item[0])
+        u = np.cross(t, plane_normal)
+        u_len = float(np.linalg.norm(u))
+        if u_len <= 1e-8:
+            return None
+        u /= u_len
+        # Orient the section consistently with the adjacent planar face.
+        if abs(float(u @ edge.d1)) < abs(float(u @ edge.d2)):
+            u = -u
+        v = np.cross(t, u)
+        v /= max(float(np.linalg.norm(v)), 1e-12)
+
+        origin = np.asarray(edge.p0, dtype=float)
+        center = np.array(circle.center, dtype=float, copy=True)
+        center -= t * float((center - origin) @ t)
+        circle_center = np.array([float((center - origin) @ u), float((center - origin) @ v)])
+        radius = float(circle.radius)
+        half_chord_sq = radius * radius - circle_center[1] * circle_center[1]
+        if half_chord_sq <= 1e-8:
+            return None
+        half_chord = math.sqrt(half_chord_sq)
+        qx = min((circle_center[0] - half_chord, circle_center[0] + half_chord), key=abs)
+        corner = np.array([qx, 0.0])
+
+        face_angle = math.acos(float(np.clip(edge.d1 @ edge.d2, -1.0, 1.0)))
+        half_angle = face_angle / 2.0
+        bisector = edge.d1 + edge.d2
+        bisector /= max(float(np.linalg.norm(bisector)), 1e-12)
+        expected = corner + np.array([bisector @ u, bisector @ v]) * size / max(math.sin(half_angle), 1e-8)
+
+        centers = []
+        for side in (-1.0, 1.0):
+            cy = side * size
+            for offset in (-1.0, 1.0):
+                center_distance = radius + offset * size
+                if center_distance <= 1e-8:
+                    continue
+                dx_sq = center_distance**2 - (cy - circle_center[1])**2
+                if dx_sq < -1e-8:
+                    continue
+                dx = math.sqrt(max(0.0, dx_sq))
+                centers.extend((np.array([circle_center[0] - dx, cy]),
+                                np.array([circle_center[0] + dx, cy])))
+        if not centers:
+            return None
+        blend_center = min(centers, key=lambda p: float(np.linalg.norm(p - expected)))
+        center_distance = float(np.linalg.norm(blend_center - circle_center))
+        if center_distance <= 1e-8:
+            return None
+        line_touch = np.array([blend_center[0], 0.0])
+        circle_touch = circle_center + (blend_center - circle_center) * (radius / center_distance)
+
+        def arc_points(c, r, a, b, segments):
+            a0 = math.atan2(float(a[1] - c[1]), float(a[0] - c[0]))
+            a1 = math.atan2(float(b[1] - c[1]), float(b[0] - c[0]))
+            sweep = (a1 - a0 + math.pi) % (2.0 * math.pi) - math.pi
+            return [c + r * np.array([math.cos(a0 + sweep * i / segments),
+                                      math.sin(a0 + sweep * i / segments)])
+                    for i in range(1, segments)]
+
+        section = ([corner, line_touch]
+                   + arc_points(blend_center, size, line_touch, circle_touch, 32)
+                   + [circle_touch]
+                   + arc_points(circle_center, radius, circle_touch, corner, 48))
+        area = sum(section[i][0] * section[(i + 1) % len(section)][1]
+                   - section[(i + 1) % len(section)][0] * section[i][1]
+                   for i in range(len(section)))
+        if abs(area) <= 1e-8:
+            return None
+        if area < 0:
+            section.reverse()
+        cross_section = m3d.CrossSection([[list(map(float, p)) for p in section]])
+        if cross_section.is_empty():
+            return None
+        solid = m3d.Manifold.extrude(cross_section, length)
+        transform = np.column_stack((u, v, t, origin)).astype(float)
+        return solid.transform(transform)
+
     def _mitred_tool(self, body, edge, edges, size):
         """Fill tool for a straight edge at the foot of a wall. Where the next selected foot edge meets it on the
         same floor, both bands run past the corner and are cut off along the bisector (mitred), so the roundings
@@ -154,6 +268,26 @@ class FilletFeature(Feature):
         for m, off in trims:
             tool = tool.trim_by_plane([float(x) for x in m], off)
         return tool
+
+    def edges_in(self, manifolds: dict) -> list:
+        """The edges this step rounds, found in the bodies as they were before it (`manifolds`: body id -> solid),
+        so the view can show which edges a step in the timeline is about."""
+        cands = []
+        for m in manifolds.values():
+            try:
+                bb = np.array(m.bounding_box())
+                cands.append((compute_planar_edges(m), 0.75 * float(np.linalg.norm(bb[3:] - bb[:3]))))
+            except Exception:
+                pass
+        out = []
+        for ref in self.edges:
+            hit = next((e for edges, _ in cands if (e := edge_from_ref(ref, edges)) is not None), None)
+            if hit is None:
+                hit = next((e for edges, reach in cands
+                            if (e := fuzzy_edge_from_ref(ref, edges, used=out, reach=reach)) is not None), None)
+            if hit is not None:
+                out.append(hit)
+        return out
 
     def execute(self, doc: Any) -> None:
         """All edges are matched against the body as it is *before* this step and the tools are applied
@@ -201,7 +335,11 @@ class FilletFeature(Feature):
         for body, edge in seen:
             ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
             eff_size = self._safe_edge_size(body, edge, self.size)
-            if getattr(edge, "kind", "") == "loop" and not edge.convex:
+            curved_fill = (self._circular_neighbor_tool(body, edge, self.size)
+                           if self.kind == "fillet" and not edge.convex else None)
+            if curved_fill is not None:
+                tool = curved_fill
+            elif getattr(edge, "kind", "") == "loop" and not edge.convex:
                 tool = CadKernel.foot_fill_tool(body.manifold, edge, self.size, self.kind)
             elif not edge.convex and getattr(edge, "kind", "") == "line":
                 tool = self._mitred_tool(body, edge, [e for b, e in seen if b is body], eff_size)

@@ -410,8 +410,17 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
             if mod_bids and mod_bids[0] in tmp_doc_bodies:
                 vp.set_preview(tmp_doc_bodies[mod_bids[0]].manifold, "new_body")
 
-        if not _exec_with_preview(win, doc, dlg, _preview_fillet, mod_bids[:1]):
-            return False
+        kept_edges = list(getattr(vp, "step_edges", []))
+
+        def _show_edges():      # outline the edges this step rounds, so you can tell which of several it is
+            vp.step_edges = feat.edges_in(state_before)
+
+        try:
+            if not _exec_with_preview(win, doc, dlg, _preview_fillet, mod_bids[:1], start=_show_edges):
+                return False
+        finally:
+            if vp is not None:
+                vp.step_edges = kept_edges
         return commit(size=dlg.spn_size.value(), kind=dlg.kind(), exprs=dlg.get_expressions())
 
     if t == "offset_face":

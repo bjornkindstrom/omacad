@@ -316,6 +316,24 @@ class PickerMixin:
             self.draw_thick_lines(mvp, flat(self.selected_edges), (*theme.palette().highlight01(), 1.0), 4.0)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
+    def set_step_edges(self, edges):
+        self.step_edges = list(edges or [])
+        self.update()
+
+    def render_step_edges(self, mvp: np.ndarray):
+        """The edges of the Fillet/Chamfer step chosen in the timeline (or open for editing), in dark blue and
+        through the material, so you can tell which of several rounds it is."""
+        if not self.step_edges or self.prog_thick is None:
+            return
+        segs = []
+        for e in self.step_edges:
+            pts = e.polyline()
+            for i in range(len(pts) - 1):
+                segs += [*pts[i], *pts[i + 1]]
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        self.draw_thick_lines(mvp, segs, (0.05, 0.22, 0.78, 1.0), 4.5)
+        GL.glEnable(GL.GL_DEPTH_TEST)
+
     # ---- Sketch element selection --------------------------------------------
 
     def begin_plane_pick(self, purpose: str = "sketch"):

@@ -276,6 +276,7 @@ class OverlayMixin:
 
         # 4b. Parametric Dimension Annotations & Interactive Badges
         self.draw_dimensions(painter)
+        self.draw_sketch_pattern_dimensions(painter)
 
         self.draw_dyn_fields(painter)  # on top of everything else
         self.draw_smart_circle(painter)

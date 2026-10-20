@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.9.68 - 2026-10-19
+
+### Added
+- Timeline: clicking (or resting the mouse on) a Fillet/Chamfer step outlines the edges that step rounds in dark blue, through the material, and the outline stays while you edit the step, so with several chamfers you can see which one you are changing (Lennart #67).
+
+## 0.9.9.67 - 2026-10-19
+
+### Fixed
+- Concave fillets along a straight edge beside a cylindrical face now use the cylinder's actual circular section, following the curved wall along the full edge. The previous planar approximation left a pointed spike, and its clearance estimate collapsed the requested 6.8 mm radius to about 0.043 mm (problem report).
+
 Versions: 0.x while the feature set is still growing, 1.0 when Omacad is a complete and dependable CAD. Since 0.9.9 every change is a tiny step (0.9.9.1, 0.9.9.2, ...); 1.0 comes only when the owner says so.
 The version lives in `omacad/__init__.py`; every build is published as release `v<version>` (and as `latest`).
 

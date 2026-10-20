@@ -226,6 +226,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self.hover_patch = None  # triangle corners (n, 3) of the curved surface under the cursor (Offset Face)
         self._hover_patch_time = 0.0
         self.highlighted_faces: list = []  # list of faces or dicts to highlight (e.g. Shell open faces)
+        self.step_edges: list = []         # edges of the Fillet/Chamfer step picked in the timeline or being edited
 
         self.primitive_handles = None
 
@@ -508,6 +509,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self.render_section_cap(mvp)
         if self.section is not None:
             self.render_preview(mvp)      # after the opaque cut face, so a cut preview shows through it
+        self.render_step_edges(mvp)       # on top of the preview: which edges the step being edited rounds
         self.render_extrude_handle(mvp)
         self.render_move_gizmo(mvp)
         if (self.offset_preview is not None or self.fillet_preview is not None) and self.prog_thick is not None:

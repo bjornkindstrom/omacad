@@ -6,6 +6,7 @@ gives the lid its tolerance (minus = looser), and the neck's bore is cut away so
 
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, List
+import manifold3d as m3d
 
 PROFILES = ("trapezoidal_45", "round", "iso_60")
 UP = dict(plane_normal=[0.0, 0.0, 1.0], plane_u=[1.0, 0.0, 0.0], plane_v=[0.0, 1.0, 0.0])
@@ -125,3 +126,27 @@ def build_jar(doc, spec: JarSpec) -> Dict[str, str]:
     if spec.lid_beside:   # upside down (its top on the bed) beside the jar
         doc.move_body(lid.body_id, dx=spec.diameter + GAP_BESIDE, dz=-h, rx=180.0)
     return {"jar": jar.body_id, "lid": lid.body_id}
+
+
+def build_jar_silhouette(spec: JarSpec, segments: int = 24) -> m3d.Manifold:
+    """Fast visual-only revolve of a jar and lid. Omits threads, chamfers and exact fit clearances."""
+    r, h, w = spec.diameter / 2.0, spec.height, spec.wall
+    nr = spec.neck_diameter / 2.0
+    # One closed radial section: outside, neck, inside neck, shoulder, jar cavity and bottom.
+    jar_section = m3d.CrossSection([[
+        # A tiny overlap keeps the neck joined to the jar in the coarse preview mesh.
+        (0.0, 0.0), (r, 0.0), (r, h), (nr, h - 0.05),
+        (nr, h + spec.neck_height), (nr - w, h + spec.neck_height),
+        (nr - w, h), (r - w, h), (r - w, w), (0.0, w),
+    ]])
+    jar = m3d.Manifold.revolve(jar_section, circular_segments=segments)
+
+    # Lid is a simple cup with its closed top on the bed, placed beside the jar like the print layout.
+    lh = spec.neck_height + spec.lid_top
+    lid_section = m3d.CrossSection([[
+        (0.0, 0.0), (r, 0.0), (r, lh), (nr - w / 2.0, lh),
+        (nr - w / 2.0, spec.lid_top), (0.0, spec.lid_top),
+    ]])
+    lid = m3d.Manifold.revolve(lid_section, circular_segments=segments)
+    lid = lid.translate((spec.diameter + GAP_BESIDE, 0.0, 0.0))
+    return jar + lid
