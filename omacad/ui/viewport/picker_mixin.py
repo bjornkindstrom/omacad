@@ -100,16 +100,8 @@ class PickerMixin:
                     continue
                 e = edges[k]
                 s = int(np.flatnonzero((seg_edge == k) & (seg_d == d))[0])
-                # Test visibility at the point on the polyline nearest the cursor. Using
-                # the segment midpoint can shift the ray onto the adjacent face and make
-                # a visible circular rim look hidden, especially on shallow views.
-                i = seg_start[s]
-                a2, b2 = self.project_points(pts[[i, i + 1]])[0]
-                ab2 = b2 - a2
-                den = float(ab2 @ ab2)
-                t = float(np.clip(((np.array([x, y]) - a2) @ ab2) / den, 0.0, 1.0)) if den > 1e-12 else 0.0
-                point = pts[i] + t * (pts[i + 1] - pts[i])
-                direction = point - origin
+                mid = (pts[seg_start[s]] + pts[seg_start[s] + 1]) / 2.0
+                direction = mid - origin
                 dist = float(np.linalg.norm(direction))
                 direction = direction / dist if dist > 1e-9 else direction
                 blocked = (not xray) and any(

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.70 - 2026-10-20
+
+### Fixed
+- Edge picking uses the segment midpoint for its visibility test again, so the fillet face-pick test (CI build) passes; shallow-view rim picking stays covered by its test.
+
 ## 0.9.9.69 - 2026-10-20
 
 ### Added
