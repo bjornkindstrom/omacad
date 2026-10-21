@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
-                               QFileDialog, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+                               QApplication, QFileDialog, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 MARK_COLOUR = QColor(255, 45, 45)
 MARK_WIDTH = 5.0           # in screenshot pixels, so marks look the same at any zoom
@@ -204,6 +204,7 @@ class FeedbackDialog(QDialog):
             self.own = False
             for label, slot in (("Undo mark", lambda: self.image.undo()), ("Clear marks", lambda: self.image.clear()),
                                 ("Fit", lambda: self.image.fit()), ("Use my own image…", self.choose_own_image),
+                                ("Paste image from clipboard", self.paste_own_image),
                                 ("Use the screenshot", self.use_builtin_image)):
                 b = QPushButton(label)
                 b.clicked.connect(slot)
@@ -279,6 +280,20 @@ class FeedbackDialog(QDialog):
             self._note_label.setText("<b>That file could not be read as an image.</b> Choose a PNG or JPEG.")
             return
         self.image.set_pixmap(pix)
+        self.own = True
+
+    def paste_own_image(self) -> None:
+        """Uses an image copied from another application as the request image."""
+        clipboard = QApplication.clipboard()
+        image = clipboard.image()
+        if image.isNull():
+            pixmap = clipboard.pixmap()
+            if not pixmap.isNull():
+                image = pixmap.toImage()
+        if image.isNull():
+            self._note_label.setText("<b>No image found in the clipboard.</b> Copy a screenshot first.")
+            return
+        self.image.set_pixmap(QPixmap.fromImage(image))
         self.own = True
 
     def choose_attachments(self) -> None:

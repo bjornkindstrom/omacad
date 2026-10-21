@@ -1,5 +1,8 @@
 # Omacad: guide för AI-agenter
 
+## Senaste lösningar
+- **Klistra in bild i Request a change** (0.9.9.72, Lennart #86): knappen `Paste image from clipboard` hämtar bilddata från systemets urklipp och använder bilden som egen bilaga, med samma markeringar och återställning till appens skärmbild som filvalet.
+
 Läs den här filen först. Den är minnet för alla agenter (Claude, Codex, OpenCode, ...) som arbetar i det här repot: vad programmet är, hur koden hänger ihop, reglerna, och **lösningsloggen** med varje fel vi redan rättat och varför. Håll den uppdaterad: efter varje rättning lägger du till en rad i lösningsloggen (se längst ned).
 
 ## Vad Omacad är

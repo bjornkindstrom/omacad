@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.72 - 2026-10-21
+
+### Added
+- Request a change can use an image copied to the clipboard from another application (Lennart #86).
+
 ## 0.9.9.71 - 2026-10-20
 
 ### Fixed
