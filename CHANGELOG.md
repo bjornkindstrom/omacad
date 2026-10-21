@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.76 - 2026-10-21
+
+### Fixed
+- Emboss bent onto a flat wall of a tapered hex prism: the wall's normals form a ring around the axis (the taper tilts them), so the surface passed as a 28 mm cylinder. The cylinder detector now requires every face normal to point radially from the fitted axis. Report 20261021-205724.
+
 ## 0.9.9.75 - 2026-10-21
 
 ### Fixed

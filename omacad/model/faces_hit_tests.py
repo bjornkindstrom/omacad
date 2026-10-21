@@ -5,6 +5,8 @@ import math
 import numpy as np
 from omacad.model.faces_types import PlanarFace
 
+RADIAL_TOLERANCE_DEG = 10.0      # how far a cylinder's face normal may tilt from the radius through its centre
+
 _FACE_STACKS: dict = {}
 
 
@@ -240,6 +242,15 @@ def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
     # Verify fit quality: points should be at distance ~ radius from axis
     dists_to_axis = np.linalg.norm(diff - np.outer(diff @ axis, axis) - (du * u_vec + dv * v_vec), axis=1)
     if float(np.std(dists_to_axis)) > 0.15 * radius:
+        return None
+
+    # A cylinder's face normals point straight out from its axis. A flat wall of a big-radius fit (a 20 mm hex
+    # wall "fits" a 28 mm circle within 0.15 * R) keeps one normal across its width, so it is refused here.
+    tri_mid = patch.reshape(-1, 3, 3).mean(axis=1)
+    radial = tri_mid - center_on_axis
+    radial -= np.outer(radial @ axis, axis)
+    radial /= np.maximum(np.linalg.norm(radial, axis=1), 1e-12)[:, None]
+    if float(np.min(np.abs(np.sum(nrm * radial, axis=1)))) < math.cos(math.radians(RADIAL_TOLERANCE_DEG)):
         return None
 
     z_coords = (patch - center_on_axis) @ axis
