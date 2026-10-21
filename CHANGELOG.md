@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.9.75 - 2026-10-21
+
+### Fixed
+- Emboss wrapped onto a cylinder wall whose top edge has a fillet: the wall was not recognised (the fillet joins it into one smooth patch), so the letters fell back to a flat face 36 mm away and floated. The cylinder detector now keeps the wall triangles of such a patch, also used by picking. Report 20261021-204118.
+
+## 0.9.9.74 - 2026-10-21
+
+### Changed
+- Split Body now stores the source solid geometry in its timeline step. Earlier sketch and feature edits no longer change either split result, while the split plane can still be edited.
+
+## 0.9.9.73 - 2026-10-21
+
+### Changed
+- Origin and construction planes now display over the projected bounds of visible bodies, so a plane used to split a body visibly covers it.
+
 ## 0.9.9.72 - 2026-10-21
 
 ### Added

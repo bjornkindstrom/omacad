@@ -114,6 +114,43 @@ def smooth_patch_vertices(mesh, tri_idx: int, max_angle_deg: float = 35.0):
                     stack.append(nb)
     return tri[sorted(seen)].reshape(-1, 3)
 
+def _normal_axis(nrm) -> Optional[np.ndarray]:
+    """The axis a set of face normals is perpendicular to (smallest singular vector), or None when the normals
+    spread in all three directions (a sphere or torus, not a cylinder)."""
+    try:
+        _, s, vh = np.linalg.svd(nrm)
+    except Exception:
+        return None
+    if s[2] / max(s[0], 1e-9) > 0.35:
+        return None
+    return vh[2].copy()
+
+
+def _wall_mask(nrm, ref, tol: float = 0.02, steps: int = 720) -> Optional[np.ndarray]:
+    """Triangles of a cylinder wall inside a mixed patch (a fillet joins the wall and is smooth enough to be in it).
+    The wall's axis is perpendicular to `ref`, the normal of the triangle the ray hit, so the candidate axes are
+    the directions in that plane. The axis with the most inliers wins, provided its inlier normals spread around
+    a circle: a flat cap has all normals equal and is perpendicular to many axes, so it is refused."""
+    if len(nrm) < 3:
+        return None
+    e1 = np.cross(ref, [1.0, 0.0, 0.0])
+    if np.linalg.norm(e1) < 0.3:
+        e1 = np.cross(ref, [0.0, 1.0, 0.0])
+    e1 = e1 / np.linalg.norm(e1)
+    e2 = np.cross(ref, e1)
+    th = np.linspace(0.0, np.pi, steps, endpoint=False)
+    axes = np.outer(np.cos(th), e1) + np.outer(np.sin(th), e2)
+    inl = np.abs(nrm @ axes.T) < tol
+    counts = inl.sum(axis=0)
+    for k in np.argsort(-counts):
+        if counts[k] < 3:
+            break
+        s = np.linalg.svd(nrm[inl[:, k]], compute_uv=False)
+        if s[1] > 0.5 * s[0]:
+            return inl[:, k]
+    return None
+
+
 def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
     """Detect if the smooth patch around tri_idx is a cylindrical surface (pin/bolt or internal hole).
 
@@ -143,15 +180,22 @@ def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
         return None
 
     # For a cylindrical surface, face normals are perpendicular to the cylinder axis: nrm @ axis ~ 0
-    # SVD on face normals: the singular vector with smallest singular value is the axis
-    try:
-        _, s, vh = np.linalg.svd(nrm)
-        if s[2] / max(s[0], 1e-9) > 0.35:
-            # Normals vary in all 3 directions (e.g. sphere or torus), not cylinder
+    axis = _normal_axis(nrm)
+    if axis is None:
+        # A fillet or round that runs into the wall is smooth enough to join the patch, and its normals spread out
+        # of the wall's plane. Keep only the wall: the triangles whose normals are perpendicular to one axis.
+        t = np.asarray(mesh.vertices, dtype=np.float64).reshape(-1, 3, 3)[tri_idx]
+        ref = np.cross(t[1] - t[0], t[2] - t[0])
+        if np.linalg.norm(ref) < 1e-12:
             return None
-        axis = vh[2].copy()
-    except Exception:
-        return None
+        keep = _wall_mask(nrm, ref / np.linalg.norm(ref))
+        if keep is None or int(keep.sum()) < 24:
+            return None
+        patch = patch.reshape(-1, 3, 3)[keep].reshape(-1, 3)
+        nrm = nrm[keep]
+        axis = _normal_axis(nrm)
+        if axis is None:
+            return None
 
     axis_len = float(np.linalg.norm(axis))
     if axis_len < 1e-6:
