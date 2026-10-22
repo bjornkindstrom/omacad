@@ -1,4 +1,4 @@
-"""Origin plane markers cover only the first quadrant (positive u and v) and stay small."""
+"""Origin plane markers are centred on the origin, small on an empty model and large enough to cover the bodies."""
 import os
 
 import pytest
@@ -27,12 +27,21 @@ def test_marker_size_is_small_and_grows_with_the_model(view):
     assert view._origin_quadrant_size() == pytest.approx(75.0)
 
 
-def test_only_first_quadrant_can_be_picked(view):
+def test_origin_plane_is_picked_on_all_sides_of_the_origin_but_not_far_away(view):
     view.begin_plane_pick("sketch")
     view.azimuth, view.elevation = 0.0, 89.9
     plane = view.doc.origin_planes["XY"]
     at = lambda u, v: view.world_to_screen(plane.uv_to_world(u, v))
-    inside, outside_neg, outside_far = at(8, 8), at(-8, -8), at(35, 8)
-    assert view._pick_plane_target(*inside) == ("origin", "XY")
-    assert view._pick_plane_target(*outside_neg) is None
-    assert view._pick_plane_target(*outside_far) is None
+    assert view._pick_plane_target(*at(8, 8)) == ("origin", "XY")
+    assert view._pick_plane_target(*at(-8, -8)) == ("origin", "XY")
+    assert view._pick_plane_target(*at(35, 8)) is None
+
+
+def test_origin_plane_grows_to_cover_a_body_beside_the_origin(view):
+    view.doc.add_box(40, 40, 10)
+    view.begin_plane_pick("sketch")
+    view.azimuth, view.elevation = 0.0, 89.9
+    plane = view.doc.origin_planes["XY"]
+    mesh = next(iter(view.doc.bodies.values())).render_mesh
+    far = max(abs(float(mesh.bounds_min[0])), abs(float(mesh.bounds_max[0])))
+    assert view._plane_half_size(plane) >= far
