@@ -929,10 +929,16 @@ class Document:
             op = self.origin_planes[plane_id]
             plane_origin = list(op.origin)
             plane_normal = list(op.normal)
+        frozen_source = None
+        source_body = self.bodies[body_id].manifold.to_mesh()
+        frozen_source = {
+            "vertices": np.asarray(source_body.vert_properties[:, :3], dtype=np.float32).tolist(),
+            "triangles": np.asarray(source_body.tri_verts, dtype=np.int32).tolist(),
+        }
         feat = SplitBodyFeature(
             feat_id, f"Split Body {n}", body_id, plane_id,
             plane_origin=plane_origin, plane_normal=plane_normal,
-            new_body_name=new_body_name
+            new_body_name=new_body_name, frozen_source=frozen_source,
         )
         self.timeline.add_feature(feat)
         feat.execute(self)

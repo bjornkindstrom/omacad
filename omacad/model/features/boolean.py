@@ -4,6 +4,7 @@ Omacad - Boolean, Split and Delete Body Features
 
 from typing import Dict, Any, Optional, List
 import numpy as np
+import manifold3d as m3d
 from omacad.model.kernel import CadKernel
 from omacad.model.features.base import Feature, Body
 
@@ -73,6 +74,7 @@ class SplitBodyFeature(Feature):
         plane_origin: Optional[List[float]] = None,
         plane_normal: Optional[List[float]] = None,
         new_body_name: Optional[str] = None,
+        frozen_source: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(feature_id, "split_body", name)
         self.target_body_id = target_body_id
@@ -80,6 +82,7 @@ class SplitBodyFeature(Feature):
         self.plane_origin = [float(x) for x in plane_origin] if plane_origin is not None else None
         self.plane_normal = [float(x) for x in plane_normal] if plane_normal is not None else None
         self.new_body_name = new_body_name
+        self.frozen_source = frozen_source
 
     def execute(self, doc: Any) -> None:
         target = doc.bodies.get(self.target_body_id)
@@ -108,9 +111,18 @@ class SplitBodyFeature(Feature):
         normal = normal / norm
         d = float(np.dot(normal, origin))
 
+        # New split steps cut a saved copy of the source solid, so edits to sketches and
+        # features before this step cannot reshape either resulting body. Older files
+        # without a snapshot retain their original parametric behavior.
+        source = target.manifold
+        if self.frozen_source is not None:
+            verts = np.asarray(self.frozen_source["vertices"], dtype=np.float32)
+            tris = np.asarray(self.frozen_source["triangles"], dtype=np.int32)
+            source = m3d.Manifold(m3d.Mesh(vert_properties=verts, tri_verts=tris))
+
         # Split manifold into two watertight solid bodies
-        part1 = target.manifold.trim_by_plane(normal, d)
-        part2 = target.manifold.trim_by_plane(-normal, -d)
+        part1 = source.trim_by_plane(normal, d)
+        part2 = source.trim_by_plane(-normal, -d)
 
         if part1.is_empty() or part2.is_empty() or part1.volume() < 1e-6 or part2.volume() < 1e-6:
             return
@@ -140,4 +152,5 @@ class SplitBodyFeature(Feature):
             "plane_origin": self.plane_origin,
             "plane_normal": self.plane_normal,
             "new_body_name": self.new_body_name,
+            "frozen_source": self.frozen_source,
         }

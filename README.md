@@ -10,7 +10,7 @@ Box, cylinder och prisma (hexagon) har **Taper angle**: positiv vinkel smalnar a
 
 Primitiver: dra kroppen i förhandsvisningen med vänster musknapp för att placera den i X/Y; dra de blå måtthandtagen för att ändra boxens längd/bredd/höjd, cylinderns radie/höjd eller sfärens radie (prisma: mått över planen och höjd). Placeringen och måtten följer med; OK skapar och Esc avbryter. **Prism** (tidigare Hexagon) har samma val som Cylinder (Shell Wall, Outer/Inner Edge, Taper, placering på yta) och väggen, rundningen och lutningen mäts vinkelrätt mot planen. Ihåliga former gör du med **Shell Wall** direkt i Box-, Cylinder- och Prism-panelen (0 = massiv, öppen topp när väggen är större än 0).
 
-**Version 0.9.9.72** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
+**Version 0.9.9.76** (se [CHANGELOG.md](CHANGELOG.md)). 0.x medan funktionerna växer, 1.0 när Omacad är ett komplett och pålitligt CAD.
 
 **Omacad** är ett native parametriskt 3D CAD-program för **Omarchy Linux** (Arch + Hyprland/Wayland), inspirerat av **Autodesk Fusion 360**.
 Byggt med **Python 3.14**, **PySide6 (Qt6) + OpenGL**, **manifold3d** (vattentäta booleans), **shapely** och **SolveSpace** (skiss-villkor).

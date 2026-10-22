@@ -525,6 +525,7 @@ class Exporter:
                     plane_origin=f_data.get("plane_origin"),
                     plane_normal=f_data.get("plane_normal"),
                     new_body_name=f_data.get("new_body_name"),
+                    frozen_source=f_data.get("frozen_source"),
                 )
                 doc.timeline.add_feature(feat)
             elif ft == "shell":
