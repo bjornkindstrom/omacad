@@ -250,7 +250,8 @@ def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
     radial = tri_mid - center_on_axis
     radial -= np.outer(radial @ axis, axis)
     radial /= np.maximum(np.linalg.norm(radial, axis=1), 1e-12)[:, None]
-    if float(np.min(np.abs(np.sum(nrm * radial, axis=1)))) < math.cos(math.radians(RADIAL_TOLERANCE_DEG)):
+    # A few stray triangles (a fillet's edge, a coarse facet) may tilt more, so judge the 90th percentile.
+    if float(np.percentile(np.abs(np.sum(nrm * radial, axis=1)), 10)) < math.cos(math.radians(RADIAL_TOLERANCE_DEG)):
         return None
 
     z_coords = (patch - center_on_axis) @ axis
