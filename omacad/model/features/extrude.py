@@ -1,6 +1,7 @@
 """
 Omacad - Extrude Feature
-Linear extrusion of a sketch profile (one_side, symmetric, two_sides; new_body, join, cut, intersect, auto).
+Linear extrusion of a sketch profile (one_side, symmetric, two_sides; new_body, join, cut, intersect, auto),
+optionally twisted about the profile's centre.
 """
 
 from typing import Any, Optional, Dict, Tuple, List
@@ -36,6 +37,7 @@ class ExtrudeFeature(ProfileRefs, Feature):
         extra_refs=None,
         holes=None,
         start_offset: float = 0.0,
+        twist: float = 0.0,
     ):
         super().__init__(feature_id, "extrude", name)
         self.sketch_id = sketch_id
@@ -51,6 +53,7 @@ class ExtrudeFeature(ProfileRefs, Feature):
         self.direction = direction
         self.distance2 = float(distance2)
         self.start_offset = float(start_offset)
+        self.twist = float(twist)     # degrees the profile turns from bottom to top (Lennart #85)
 
     def region(self, doc: Any, sketch: Any, idxs) -> Any:
         """What is extruded, as a shapely geometry in the sketch's plane: the chosen profiles (also those of
@@ -151,11 +154,52 @@ class ExtrudeFeature(ProfileRefs, Feature):
         if height < 1e-6:
             return None
 
-        solid = m3d.Manifold.extrude(cs, height=float(height))
+        if abs(self.twist) > 1e-6:
+            solid = self._twisted(cs, height)
+        else:
+            solid = m3d.Manifold.extrude(cs, height=float(height))
         if abs(z0) > 1e-9:
             solid = solid.translate((0.0, 0.0, float(z0)))
         solid = solid.transform(sketch.plane.get_transform_matrix_3x4())
         return solid if not solid.is_empty() else None
+
+    def _twisted(self, cs: m3d.CrossSection, height: float) -> m3d.Manifold:
+        """The profile turned `twist` degrees about its own centre (area centroid) over the height, sliced finely
+        enough that each slice turns at most ~2 degrees (coarser in interactive previews)."""
+        from omacad.model import quality
+        # area centroid from the signed contours (holes run the other way and subtract)
+        area = cx = cy = 0.0
+        for ring in cs.to_polygons():
+            x, y = np.asarray(ring, dtype=float).T
+            xn, yn = np.roll(x, -1), np.roll(y, -1)
+            cross = x * yn - xn * y
+            area += cross.sum() / 2.0
+            cx += ((x + xn) * cross).sum() / 6.0
+            cy += ((y + yn) * cross).sum() / 6.0
+        if abs(area) > 1e-12:
+            cx, cy = cx / area, cy / area
+        else:
+            bb = cs.bounds()
+            cx, cy = (bb[0] + bb[2]) / 2.0, (bb[1] + bb[3]) / 2.0
+        step = 6.0 if quality.is_interactive_mode() else 2.0
+        n = max(1, int(np.ceil(abs(self.twist) / step)))
+        # Each side quad of a slice is split into two triangles the same way round, which bulges the wall
+        # outward by an amount that does not shrink with more slices; it shrinks with shorter profile edges,
+        # so long edges are cut into short pieces first (a hexagon twisted 90 degrees: +0.6 % volume -> ~0.03 %).
+        bb = cs.bounds()
+        piece = max(bb[2] - bb[0], bb[3] - bb[1]) / (40.0 if not quality.is_interactive_mode() else 12.0)
+        rings = []
+        for ring in cs.to_polygons():
+            pts = np.asarray(ring, dtype=float)
+            out = []
+            for i in range(len(pts)):
+                a_, b_ = pts[i], pts[(i + 1) % len(pts)]
+                k = max(1, int(np.ceil(float(np.linalg.norm(b_ - a_)) / max(piece, 1e-9))))
+                out.extend(a_ + (b_ - a_) * (j / k) for j in range(k))
+            rings.append([(float(x) - cx, float(y) - cy) for x, y in out])
+        fine = m3d.CrossSection(rings, m3d.FillRule.Positive)
+        solid = m3d.Manifold.extrude(fine, height=float(height), n_divisions=n, twist_degrees=float(self.twist))
+        return solid.translate((cx, cy, 0.0))
 
     def resolve_operation(self, doc: Any) -> str:
         """The 'Auto' choice. Into material -> cut; sitting on a body's face and going outward ->
@@ -217,6 +261,7 @@ class ExtrudeFeature(ProfileRefs, Feature):
             "direction": self.direction,
             "distance2": self.distance2,
             "start_offset": self.start_offset,
+            "twist": self.twist,
             "extra_refs": [[sid, i, list(sig)] for sid, i, sig in self.extra_refs],
             "holes": [[sid, i, list(sig)] for sid, i, sig in self.holes],
             **self.profile_refs_dict(),

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.9.78 - 2026-10-23
+
+### Added
+- Extrude Twist (Lennart #85): the profile turns the given number of degrees about its own centre from start to end, for twisted vases and columns. Profile edges are cut into short pieces so the twisted walls keep the exact volume (within 0.03 %). Saved, editable from the timeline and accepts formulas.
+
+### Fixed
+- Sketches with a circle always reported 3 degrees of freedom too many, so a circle placed with Smart Circle (diameter + two distances) still made the sketch look under-defined (#84). The solver's workplane normal is now a constant.
+
 ## 0.9.9.77 - 2026-10-23
 
 ### Changed

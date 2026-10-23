@@ -136,7 +136,11 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
         else:
             c = sys_.add_point_2d(ent.center[0], ent.center[1], wp)
             if normal is None:
+                # the workplane normal is a constant: in the free group its quaternion counted as 3 extra
+                # degrees of freedom, so a fully dimensioned sketch with a circle still said "under defined"
+                sys_.set_group(FIXED_GROUP)
                 normal = sys_.add_normal_3d(1.0, 0.0, 0.0, 0.0)
+                sys_.set_group(FREE_GROUP if ent.entity_id not in fixed else FIXED_GROUP)
             r = sys_.add_distance(float(ent.radius), wp)
             geo[ent.entity_id] = sys_.add_circle(normal, c, r, wp)
             pts[(ent.entity_id, "center")] = c

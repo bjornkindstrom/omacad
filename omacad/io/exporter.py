@@ -477,7 +477,7 @@ class Exporter:
                     f_data.get("direction", "one_side"), f_data.get("distance2", 0.0),
                     extra_profiles=f_data.get("extra_profiles", []),
                     extra_refs=f_data.get("extra_refs", []), holes=f_data.get("holes", []),
-                    start_offset=f_data.get("start_offset", 0.0),
+                    start_offset=f_data.get("start_offset", 0.0), twist=f_data.get("twist", 0.0),
                 )
                 feat.load_profile_refs(f_data)
                 doc.timeline.add_feature(feat)

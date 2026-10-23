@@ -164,6 +164,9 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
         dlg.spn_dist.setValue(feat.distance)
         dlg.spn_dist2.setValue(abs(feat.distance2))
         dlg.spn_offset.setValue(getattr(feat, "start_offset", 0.0))
+        dlg.spn_twist.setValue(getattr(feat, "twist", 0.0))
+        if feat.exprs.get("twist"):
+            dlg.spn_twist.set_expression(feat.exprs["twist"])
         if feat.exprs.get("distance"):
             dlg.spn_dist.set_expression(feat.exprs["distance"])
         if feat.exprs.get("distance2"):
@@ -181,7 +184,7 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
                 return
             tmp = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, op, direction, dist2,
                                  extra_profiles=feat.extra_profiles, extra_refs=feat.extra_refs, holes=feat.holes,
-                                 start_offset=start_offset)
+                                 start_offset=start_offset, twist=dlg.get_twist())
             solid = tmp.build_solid(doc)
             vp.set_preview(solid, op if op != "auto" else feat.operation)
 
@@ -196,10 +199,10 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
         if op == "auto":  # decide with the step's own parameters and the bodies before it, as when it was made
             op = ExtrudeFeature("tmp", "tmp", s_id, p_idx, dist, "auto", direction, dist2,
                                 extra_profiles=feat.extra_profiles, extra_refs=feat.extra_refs, holes=feat.holes,
-                                start_offset=start_offset).resolve_operation(_StateBefore(doc, state_before))
+                                start_offset=start_offset, twist=dlg.get_twist()).resolve_operation(_StateBefore(doc, state_before))
         return commit(sketch_id=s_id, profile_idx=p_idx, distance=dist,
                                 direction=direction, distance2=dist2, start_offset=start_offset,
-                                operation=op, exprs=dlg.get_expressions())
+                                twist=dlg.get_twist(), operation=op, exprs=dlg.get_expressions())
 
     if t == "emboss":
         from omacad.ui.dialogs import EmbossDialog

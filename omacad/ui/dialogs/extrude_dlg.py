@@ -60,6 +60,14 @@ class ExtrudeDialog(BaseFeatureDialog):
         self.spn_offset.setToolTip("Start offset along the sketch normal before the extrusion begins (0 = starts at the sketch plane)")
         form.addRow("Start Offset:", self.spn_offset)
 
+        # Twist: the profile turns about its centre on the way up (Lennart #85; Fusion needs a sweep for this)
+        self.spn_twist = ExprDoubleSpinBox()
+        self.spn_twist.setRange(-3600.0, 3600.0)
+        self.spn_twist.setValue(0.0)
+        self.spn_twist.setSuffix(" °")
+        self.spn_twist.setToolTip("Turn the profile this many degrees about its centre from start to end (0 = straight). Negative turns the other way.")
+        form.addRow("Twist:", self.spn_twist)
+
         # Direction
         self.cmb_dir = QComboBox()
         self.cmb_dir.addItems(["One Side", "Symmetric", "Two Sides"])
@@ -95,7 +103,7 @@ class ExtrudeDialog(BaseFeatureDialog):
         QTimer.singleShot(0, self, self.focus_primary)   # the context drops it if the panel is gone
         for sig in (self.cmb_profile.currentIndexChanged, self.cmb_dir.currentIndexChanged,
                     self.cmb_op.currentIndexChanged, self.spn_dist.valueChanged, self.spn_dist2.valueChanged,
-                    self.spn_offset.valueChanged):
+                    self.spn_offset.valueChanged, self.spn_twist.valueChanged):
             sig.connect(lambda *_: self.changed.emit())
 
     def reload_profiles(self):
@@ -142,11 +150,15 @@ class ExtrudeDialog(BaseFeatureDialog):
             "distance": self.spn_dist.expression(),
             "distance2": self.spn_dist2.expression(),
             "start_offset": self.spn_offset.expression(),
+            "twist": self.spn_twist.expression(),
         }
         return {k: v for k, v in out.items() if v}
 
     def get_start_offset(self) -> float:
         return self.spn_offset.value()
+
+    def get_twist(self) -> float:
+        return self.spn_twist.value()
 
     def get_direction(self):
         return ["one_side", "symmetric", "two_sides"][self.cmb_dir.currentIndex()], self.spn_dist2.value()

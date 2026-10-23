@@ -70,7 +70,7 @@ class SolidFeaturePromptsMixin:
             if s_id is not None:
                 extra, refs, holes = parts(s_id, p_idx)
                 feat = ExtrudeFeature("preview", "preview", s_id, p_idx, dist, op, direction, dist2, extra_profiles=extra,
-                                      extra_refs=refs, holes=holes, start_offset=start_offset)
+                                      extra_refs=refs, holes=holes, start_offset=start_offset, twist=dlg.get_twist())
                 try:
                     solid = feat.build_solid(self.doc)
                     if op == "auto":
@@ -135,7 +135,7 @@ class SolidFeaturePromptsMixin:
                     extra, refs, holes = parts(s_id, p_idx)
                     self.doc.extrude_profile(s_id, p_idx, dist, op, direction=direction, distance2=dist2,
                                              extra_profiles=extra, extra_refs=refs, holes=holes,
-                                             start_offset=start_offset)
+                                             start_offset=start_offset, twist=dlg.get_twist())
                     self.doc.timeline.last_added.exprs = dlg.get_expressions()
                     op = self.doc.timeline.last_added.operation  # what Auto resolved to
                     self.doc.selected_profile = None

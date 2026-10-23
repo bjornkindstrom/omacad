@@ -32,7 +32,8 @@ MORE = {
                       "Sketch returns to 3D.", "draw 2d plane face start"),
     "extrude": ("Pick closed profiles in the view (Shift+click adds more), type the distance or drag the arrow. "
                 "Auto joins, cuts or makes a new body depending on where it starts. Two sides, symmetric and a start "
-                "offset are in the panel. Also: right-click a face > Extrude this Face.", "pull push pad pocket cut boss"),
+                "offset are in the panel. Twist turns the profile about its centre on the way (a twisted vase). Also: right-click "
+                "a face > Extrude this Face.", "pull push pad pocket cut boss twist spiral"),
     "revolve": ("Pick a profile and an axis (a construction line in the sketch, or the sketch's X/Y axis), set the "
                 "angle.", "lathe turn rotate around axis"),
     "emboss": ("Text or any profile in a sketch on a face: positive depth raises it, negative presses it in. Wraps "

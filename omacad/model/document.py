@@ -547,12 +547,13 @@ class Document:
         extra_refs=None,
         holes=None,
         start_offset: float = 0.0,
+        twist: float = 0.0,
     ) -> None:
         feat_id = self._feature_id("extrude")
         feat_name = name or f"Extrude {len([f for f in self.timeline.features if f.feature_type == 'extrude']) + 1}"
         feat = ExtrudeFeature(feat_id, feat_name, sketch_id, profile_idx, distance, operation, direction, distance2,
                               extra_profiles=extra_profiles, extra_refs=extra_refs, holes=holes,
-                              start_offset=start_offset)
+                              start_offset=start_offset, twist=twist)
         self.timeline.add_feature(feat)
         feat.execute(self)
         self.hide_used_sketches()
@@ -742,7 +743,7 @@ class Document:
         "prism": ("across_flats", "sides", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
                   "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
         "sphere": ("radius",),
-        "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation"),
+        "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation", "twist"),
         "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
         "combine": ("target_body_id", "tool_body_id", "operation", "keep_tool"),
