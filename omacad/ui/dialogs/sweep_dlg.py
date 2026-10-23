@@ -9,12 +9,13 @@ from omacad.ui.expr_spin import ExprDoubleSpinBox
 OPERATIONS = (("new_body", "New Body"), ("join", "Join"), ("cut", "Cut"), ("intersect", "Intersect"))
 TITLES = {"sweep": "Sweep", "loft": "Loft", "pipe": "Pipe"}
 HELP = {
-    "sweep": "Click the profile in the 3D view, then a line, arc or circle of the path: everything joined to it "
-             "comes along. Profile / Path below says which one the next click picks.",
+    "sweep": "Click the profile in the 3D view, then the path: body edges (as in Fillet; joined edges follow, X = "
+             "see-through) or a sketch's line, arc or circle (everything joined to it comes along). Profile / Path "
+             "below says which one the next click picks.",
     "loft": "Click the profiles in the order the loft passes through them (two or more, on different planes). "
             "Click a profile again to drop it.",
-    "pipe": "Click a line, arc or circle of the path in the 3D view (everything joined to it comes along) and set the "
-            "diameter; a wall thickness makes it a tube.",
+    "pipe": "Click the path in the 3D view - body edges (as in Fillet) or a sketch's line, arc or circle; joined "
+            "pieces come along - and set the diameter; a wall thickness makes it a tube.",
 }
 
 
@@ -61,7 +62,7 @@ class SweepLoftDialog(BaseFeatureDialog):
             b.clicked.connect(lambda _c=False, t=target: self.set_active(t))
         if mode != "pipe":
             form.addRow(self.btn_profile if mode == "sweep" else QLabel("Profiles:"), self.lbl_profiles)
-        self.lbl_path = QLabel("click a line, arc or circle")
+        self.lbl_path = QLabel("click an edge, a line, arc or circle")
         self.path_ref = None                # (sketch id, [entity ids])
         if mode != "loft":
             form.addRow(self.btn_path, self.lbl_path)
@@ -125,6 +126,14 @@ class SweepLoftDialog(BaseFeatureDialog):
         self.lbl_path.setText(f"{sketch.name}: {len(ids)} element{'s' if len(ids) != 1 else ''}")
         self.changed.emit()
         return True
+
+    def set_edge_path(self, refs) -> None:
+        """Body edges as the path (picked like Fillet edges); none = no path."""
+        from omacad.model.features.sweep import EDGES
+        self.path_ref = (EDGES, list(refs)) if refs else None
+        self.lbl_path.setText(f"{len(refs)} edge{'s' if len(refs) != 1 else ''}" if refs else
+                              "click an edge, a line, arc or circle")
+        self.changed.emit()
 
     def path(self):
         return self.path_ref

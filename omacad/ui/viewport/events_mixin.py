@@ -402,6 +402,11 @@ class ViewportEventsMixin:
             self._press_pos = None
             self.is_orbiting = False
             self.is_panning = False
+            if getattr(self, "path_pick_mode", False):    # a Sweep / Pipe path: sketch curves count as well as edges
+                curve = self.pick_sketch_curve(event.position().x(), event.position().y())
+                if curve is not None:
+                    self.sketch_curve_picked.emit(*curve)
+                    return
             e = self._pick_edge(event.position().x(), event.position().y())
             if e is not None:
                 if event.modifiers() & Qt.KeyboardModifier.ControlModifier:   # Ctrl+click only removes

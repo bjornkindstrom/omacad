@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.10 - 2026-10-23
+
+### Added
+- Sweep / Pipe path from body edges (Björn): with Path active the edges are picked exactly as in Fillet (hover, joined edges follow, X = see-through, a face = its outline); a sketch's line, arc or circle still works too. Esc closes the tool as in Fillet.
+
 ## 0.9.9.80.9 - 2026-10-23
 
 ### Fixed

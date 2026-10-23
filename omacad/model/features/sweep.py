@@ -14,13 +14,64 @@ import manifold3d as m3d
 from omacad.model.features.base import Feature, ProfileRefs, combine_with_bodies, find_profile, profile_signature
 from omacad.model.sweep_geometry import loft_solid, path_frames, pipe_solid, sweep_solid
 
-PathRef = Tuple[str, List[str]]          # (sketch id, entity ids of the path's lines / arcs / circle)
+PathRef = Tuple[str, list]   # (sketch id, entity ids of lines / arcs / a circle) or (EDGES, [body edge refs])
+EDGES = "@edges"
+
+
+def norm_path(path) -> tuple:
+    """A path reference as stored: sketch element ids as strings, body edge refs in Fillet's form."""
+    if path[0] == EDGES:
+        from omacad.model.features.fillet import FilletFeature
+        return (EDGES, [FilletFeature._norm_ref(r) for r in path[1]])
+    return (str(path[0]), [str(i) for i in path[1]])
+
+
+def _edge_path_points(doc: Any, refs):
+    """World points along body edges (as picked for a Fillet: lines, circles, outlines) joined end to end."""
+    from omacad.model.faces import edge_from_ref, fuzzy_edge_from_ref
+    pieces = []
+    for ref in refs:
+        hit = None
+        for body in doc.bodies.values():
+            hit = edge_from_ref(ref, body.edges) or fuzzy_edge_from_ref(ref, body.edges, used=[], reach=1.0)
+            if hit is not None:
+                break
+        if hit is None:
+            raise ValueError("An edge of the path is gone.")
+        pieces.append(np.asarray(hit.polyline(96), dtype=float))
+    if len(pieces) == 1 and np.linalg.norm(pieces[0][0] - pieces[0][-1]) < 1e-6:
+        return pieces[0][:-1], True                     # a whole circle or outline
+    chain = list(pieces.pop(0))
+    tol = 1e-3
+    while pieces:                                       # join the pieces end to end, turning them as needed
+        for i, pc in enumerate(pieces):
+            if np.linalg.norm(pc[0] - chain[-1]) < tol:
+                chain += list(pc[1:])
+            elif np.linalg.norm(pc[-1] - chain[-1]) < tol:
+                chain += list(pc[::-1][1:])
+            elif np.linalg.norm(pc[-1] - chain[0]) < tol:
+                chain = list(pc[:-1]) + chain
+            elif np.linalg.norm(pc[0] - chain[0]) < tol:
+                chain = list(pc[::-1][:-1]) + chain
+            else:
+                continue
+            pieces.pop(i)
+            break
+        else:
+            raise ValueError("The picked edges must join end to end.")
+    pts = np.asarray(chain, dtype=float)
+    closed = len(pts) > 2 and np.linalg.norm(pts[0] - pts[-1]) < tol
+    return (pts[:-1] if closed else pts), closed
 
 
 def path_points(doc: Any, path_ref: PathRef, step_deg: float = 4.0):
-    """World points along a path of sketch elements in travel order, and whether it closes."""
+    """World points along a path (sketch elements or body edges) in travel order, and whether it closes."""
     from omacad.model.sketch_entities import SketchCircle
     from omacad.model.sketch_offset import build_chains, to_seg
+    if path_ref[0] == EDGES:
+        pts, closed = _edge_path_points(doc, path_ref[1])
+        keep = [0] + [i for i in range(1, len(pts)) if np.linalg.norm(pts[i] - pts[i - 1]) > 1e-9]
+        return pts[keep], closed
     sketch_id, ids = path_ref
     sketch = doc.sketches.get(sketch_id)
     if sketch is None:
@@ -67,7 +118,7 @@ class SweepFeature(ProfileRefs, Feature):
         self.sketch_id = sketch_id
         self.profile_idx = int(profile_idx)
         self.extra_profiles: List[int] = []
-        self.path = (str(path[0]), [str(i) for i in path[1]])
+        self.path = norm_path(path)
         self.operation = operation
         self.twist = float(twist)
 
@@ -104,7 +155,7 @@ class SweepFeature(ProfileRefs, Feature):
     def to_dict(self) -> Dict[str, Any]:
         return {"feature_id": self.feature_id, "feature_type": self.feature_type, "name": self.name,
                 "suppressed": self.suppressed, "sketch_id": self.sketch_id, "profile_idx": self.profile_idx,
-                "path": [self.path[0], list(self.path[1])], "operation": self.operation, "twist": self.twist,
+                "path": [self.path[0], [list(r) if isinstance(r, tuple) else r for r in self.path[1]]], "operation": self.operation, "twist": self.twist,
                 **self.profile_refs_dict()}
 
 
@@ -114,7 +165,7 @@ class PipeFeature(Feature):
     def __init__(self, feature_id: str, name: str, path: PathRef, diameter: float = 5.0, thickness: float = 0.0,
                  operation: str = "new_body"):
         super().__init__(feature_id, "pipe", name)
-        self.path = (str(path[0]), [str(i) for i in path[1]])
+        self.path = norm_path(path)
         self.diameter = float(diameter)
         self.thickness = float(thickness)
         self.operation = operation
@@ -134,7 +185,7 @@ class PipeFeature(Feature):
 
     def to_dict(self) -> Dict[str, Any]:
         return {"feature_id": self.feature_id, "feature_type": self.feature_type, "name": self.name,
-                "suppressed": self.suppressed, "path": [self.path[0], list(self.path[1])],
+                "suppressed": self.suppressed, "path": [self.path[0], [list(r) if isinstance(r, tuple) else r for r in self.path[1]]],
                 "diameter": self.diameter, "thickness": self.thickness, "operation": self.operation}
 
 

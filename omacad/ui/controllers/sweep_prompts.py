@@ -13,15 +13,16 @@ class SweepPromptsMixin:
         from omacad.model.features.sweep import LoftFeature, PipeFeature, SweepFeature, path_points
         from omacad.ui.dialogs.sweep_dlg import SweepLoftDialog, TITLES
         title = TITLES[mode]
-        if not self.doc.sketches:
-            QMessageBox.information(self, title, "Draw the profile and the path in sketches first.")
+        if mode != "pipe" and not self.doc.sketches:
+            QMessageBox.information(self, title, "Draw the profile in a sketch first.")
             return
         if self.inspector.current_tool_dlg is not None:
             return
         from omacad.ui.dialogs.sweep_dlg import path_entities
         candidates = [sid for sid, sk in self.doc.sketches.items() if path_entities(sk)]
-        if mode != "loft" and not candidates:
-            QMessageBox.information(self, title, "No sketch has lines, arcs or a circle to use as the path.")
+        if mode != "loft" and not candidates and not any(b.edges for b in self.doc.bodies.values()):
+            QMessageBox.information(self, title, "There is nothing to use as the path: draw it in a sketch or make "
+                                                 "a body whose edges it can follow.")
             return
         dlg = SweepLoftDialog(self.doc, mode, self, embedded=True)
         shown = {sid: sk.visible for sid, sk in self.doc.sketches.items()}
@@ -54,12 +55,24 @@ class SweepPromptsMixin:
                 dlg.set_path(others[0], path_entities(self.doc.sketches[others[0]])[0])
                 show_path()
 
+        def on_edges():
+            dlg.set_edge_path([e.ref() for e in self.viewport.selected_edges])
+            show_path()
+
         def on_active(target):
             self.viewport.path_pick_mode = target == "path"
+            if target == "path" and not self.viewport.edge_pick_mode:
+                keep = list(self.viewport.selected_edges)
+                self.viewport.begin_edge_pick()            # body edges like Fillet: hover, joined edges, X see-through
+                self.viewport.selected_edges = keep if dlg.path() and dlg.path()[0] == "@edges" else []
+            elif target != "path" and self.viewport.edge_pick_mode:
+                self.viewport.edge_pick_mode = False
+                self.viewport.hover_edge = None
             self.status_label.setText(f"{title}: click " + ("a line, arc or circle of the path." if target == "path"
                                                              else "the profile."))
 
         def on_curve(sketch_id, entity_id):
+            self.viewport.selected_edges = []              # a sketch path replaces picked edges
             if dlg.set_path(sketch_id, entity_id):
                 show_path()
                 self.status_label.setText(f"{title}: path picked. Adjust the values, OK.")
@@ -68,6 +81,8 @@ class SweepPromptsMixin:
 
         dlg.active_changed.connect(on_active)
         self.viewport.sketch_curve_picked.connect(on_curve)
+        self.viewport.edges_selection_changed.connect(on_edges)
+        self.viewport.edge_pick_cancelled.connect(dlg.reject)       # Esc while picking edges closes the tool
         on_active(dlg.active)
         if mode == "pipe":
             default_path()
@@ -110,6 +125,10 @@ class SweepPromptsMixin:
         def on_finished(result):
             self.viewport.profile_picked.disconnect(on_pick)
             self.viewport.sketch_curve_picked.disconnect(on_curve)
+            self.viewport.edges_selection_changed.disconnect(on_edges)
+            self.viewport.edge_pick_cancelled.disconnect(dlg.reject)
+            if self.viewport.edge_pick_mode:
+                self.viewport.end_edge_pick()
             self.viewport.profile_chain_mode = False
             self.viewport.path_pick_mode = False
             self.viewport.step_edges = []

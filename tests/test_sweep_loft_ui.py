@@ -114,3 +114,38 @@ def test_sweep_from_a_profile_in_the_middle_of_a_curved_path():
     assert abs(m.volume() - math.pi * 4 * length) < 0.01 * math.pi * 4 * length
     bb = m.bounding_box()
     assert abs(bb[4] - 20.0) < 0.1 and abs(bb[3] - 52.0) < 0.1      # it follows the arc up to its end at (50, 20)
+
+
+def test_pipe_along_body_edges_picked_like_fillet(win):
+    """The path can be body edges, picked as in Fillet (joined edges follow): a pipe round the top of a box."""
+    from omacad.ui.dialogs.sweep_dlg import SweepLoftDialog
+    doc = win.doc
+    box = doc.add_box(40, 20, 10)
+    top = box.manifold.bounding_box()[5]
+    win.prompt_sweep_tool("pipe")
+    dlg = win.findChildren(SweepLoftDialog)[-1]
+    v = win.viewport
+    assert v.edge_pick_mode and v.path_pick_mode
+    edge = next(e for e in box.edges if getattr(e, "kind", "line") == "line"
+                and abs(e.p0[2] - top) < 1e-9 and abs(e.p1[2] - top) < 1e-9 and abs(e.p0[1] - e.p1[1]) < 1e-9)
+    v._toggle_edge(edge)            # a click on one top edge
+    v.selected_edges = [e for e in box.edges if getattr(e, "kind", "line") == "line"
+                        and abs(e.p0[2] - top) < 1e-9 and abs(e.p1[2] - top) < 1e-9]   # + the other three (Shift-like)
+    v.edges_selection_changed.emit()
+    assert dlg.path()[0] == "@edges" and len(dlg.path()[1]) == 4
+    dlg.spn_diam.setValue(2.0)
+    dlg.spn_thick.setValue(0.0)
+    dlg.cmb_op.setCurrentIndex(1)   # Join
+    dlg.accept()
+    QApplication.processEvents()
+    feat = doc.timeline.features[-1]
+    assert feat.feature_type == "pipe" and not v.edge_pick_mode
+    ring = 2 * (40 + 20)            # a closed square ring: half the round section sticks out of the box
+    added = next(iter(doc.bodies.values())).manifold.volume() - 40 * 20 * 10
+    assert 0.4 * math.pi * ring < added < 0.85 * math.pi * ring
+    from omacad.io.exporter import Exporter
+    import tempfile, os
+    path = os.path.join(tempfile.mkdtemp(), "e.omacad")
+    Exporter.save_project(doc, path)
+    again = Exporter.load_project(path)
+    assert abs(next(iter(again.bodies.values())).manifold.volume() - next(iter(doc.bodies.values())).manifold.volume()) < 1e-6
