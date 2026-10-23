@@ -14,7 +14,8 @@ import manifold3d as m3d
 from omacad.model.timeline import (
     PatternFeature, FilletFeature, Body, Timeline, BoxFeature, CylinderFeature, PrismFeature,
     SphereFeature, ExtrudeFeature, EmbossFeature, RevolveFeature, HoleFeature, DeleteBodyFeature, SketchFeature, SplitBodyFeature, ShellFeature, MoveFeature,
-    ImportMeshFeature, ThreadFeature, OffsetFaceFeature, HoneycombFeature
+    ImportMeshFeature, ThreadFeature, OffsetFaceFeature, HoneycombFeature, ConeFeature, SweepFeature, LoftFeature,
+    PipeFeature
 )
 from omacad.model.sketch import Sketch, SketchPlane, SketchConstraint
 from omacad.model.sketch_solver import solve_sketch, SolveResult
@@ -304,6 +305,46 @@ class Document:
         self.notify_changed()
         return self.bodies[f"body_{feat_id}"]
 
+    @undoable("Cone")
+    def add_cone(self, radius: float, top_radius: float, height: float, center: Any = False, name: Optional[str] = None,
+                 **params) -> Body:
+        """A cone (top radius 0) or frustum, placed like a Cylinder (Björn #46)."""
+        feat_id = self._feature_id("cone")
+        feat_name = name or f"Cone {len([f for f in self.timeline.features if f.feature_type == 'cone']) + 1}"
+        feat = ConeFeature(feat_id, feat_name, radius, height, center, top_radius=top_radius, **params)
+        feat.execute(self)
+        self.timeline.add_feature(feat)
+        self.notify_changed()
+        return self.bodies[f"body_{feat_id}"]
+
+    def _add_body_step(self, feat) -> Any:
+        """Adds a step that makes or changes bodies, builds it and hides the sketches it used."""
+        self.timeline.add_feature(feat)
+        feat.execute(self)
+        self.hide_used_sketches()
+        self.notify_changed()
+        return feat
+
+    @undoable("Sweep")
+    def add_sweep(self, sketch_id: str, profile_idx: int, path, operation: str = "new_body", twist: float = 0.0):
+        """Sweep a profile along a path of sketch lines/arcs: path = (sketch id, [entity ids])."""
+        n = len([f for f in self.timeline.features if f.feature_type == "sweep"]) + 1
+        return self._add_body_step(SweepFeature(self._feature_id("sweep"), f"Sweep {n}", sketch_id, profile_idx,
+                                                path, operation, twist))
+
+    @undoable("Pipe")
+    def add_pipe(self, path, diameter: float, thickness: float = 0.0, operation: str = "new_body"):
+        n = len([f for f in self.timeline.features if f.feature_type == "pipe"]) + 1
+        return self._add_body_step(PipeFeature(self._feature_id("pipe"), f"Pipe {n}", path, diameter, thickness,
+                                               operation))
+
+    @undoable("Loft")
+    def add_loft(self, profiles, operation: str = "new_body"):
+        """Loft through profiles [(sketch id, profile index), ...] in that order."""
+        sections = [LoftFeature.section_ref(self, sid, idx) for sid, idx in profiles]
+        n = len([f for f in self.timeline.features if f.feature_type == "loft"]) + 1
+        return self._add_body_step(LoftFeature(self._feature_id("loft"), f"Loft {n}", sections, operation))
+
     @undoable("Sphere")
     def add_sphere(self, radius: float, name: Optional[str] = None, translation: Any = None) -> Body:
         feat_id = self._feature_id("sphere")
@@ -469,10 +510,24 @@ class Document:
         self.notify_changed()
         return sk, best_profile(sk)
 
+    @staticmethod
+    def _sketches_used_by(feat) -> list:
+        """Sketches a step reads besides its `sketch_id`: a Sweep's or Pipe's path, a Loft's profiles."""
+        out = []
+        path = getattr(feat, "path", None)
+        if isinstance(path, tuple) and path:
+            out.append(path[0])
+        out += [s[0] for s in getattr(feat, "sections", None) or []]
+        return out
+
     def hide_used_sketches(self) -> None:
-        """Sketches that already made a solid (extrude/revolve) are hidden so they stop cluttering the
-        view; the eye in the browser shows them again."""
-        used = {getattr(f, "sketch_id", None) for f in self.timeline.features if f.feature_type in ("extrude", "revolve", "emboss")}
+        """Sketches that already made a solid (extrude/revolve/sweep/loft/pipe) are hidden so they stop cluttering
+        the view; the eye in the browser shows them again."""
+        used = {getattr(f, "sketch_id", None) for f in self.timeline.features
+                if f.feature_type in ("extrude", "revolve", "emboss", "sweep")}
+        for f in self.timeline.features:
+            if f.feature_type in ("sweep", "pipe", "loft"):
+                used.update(self._sketches_used_by(f))
         for sk in self.sketches.values():
             if sk.sketch_id in used and sk is not self.active_sketch:
                 sk.visible = False
@@ -761,6 +816,11 @@ class Document:
         "prism": ("across_flats", "sides", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
                   "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
         "sphere": ("radius",),
+        "cone": ("radius", "top_radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
+                 "wall_thickness"),
+        "sweep": ("sketch_id", "profile_idx", "path", "operation", "twist"),
+        "pipe": ("path", "diameter", "thickness", "operation"),
+        "loft": ("sections", "operation"),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation", "twist"),
         "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
@@ -834,6 +894,7 @@ class Document:
         for j in range(index + 1, len(feats)):
             other = feats[j]
             sketch_refs = [r[0] for r in list(getattr(other, "extra_refs", None) or []) + list(getattr(other, "holes", None) or [])]
+            sketch_refs += self._sketches_used_by(other)
             uses_sketch = (isinstance(feat, SketchFeature)
                            and feat.sketch.sketch_id in [getattr(other, "sketch_id", None)] + sketch_refs)
             uses_body = (

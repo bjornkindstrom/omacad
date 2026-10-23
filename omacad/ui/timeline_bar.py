@@ -28,6 +28,10 @@ class FeatureNodeWidget(QFrame):
         "box": "📦",
         "cylinder": "🥫",
         "prism": "⬢",
+        "cone": "🔺",
+        "sweep": "〰️",
+        "loft": "🏺",
+        "pipe": "🧪",
         "sphere": "⚽",
         "sketch": "✏️",
         "extrude": "⬆️",
@@ -131,6 +135,12 @@ class FeatureNodeWidget(QFrame):
             return f"{f.name}\nRadius {f.radius:g}, height {f.height:g} mm"
         if t == "prism":
             return f"{f.name}\n{f.sides} sides, {f.across_flats:g} across flats, height {f.height:g} mm"
+        if t == "cone":
+            return f"{f.name}\nRadius {f.radius:g} to {f.top_radius:g}, height {f.height:g} mm"
+        if t == "pipe":
+            return f"{f.name}\nDiameter {f.diameter:g} mm" + (f", wall {f.thickness:g} mm" if f.thickness else "")
+        if t in ("sweep", "loft"):
+            return f"{f.name}\n{f.operation.replace('_', ' ')}"
         if t == "sphere":
             return f"{f.name}\nRadius {f.radius:g} mm"
         if t == "pattern":

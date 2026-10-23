@@ -6,6 +6,7 @@ from omacad.ui.controllers.solid_feature_prompts import SolidFeaturePromptsMixin
 from omacad.ui.controllers.primitive_prompts import PrimitivePromptsMixin
 from omacad.ui.controllers.body_prompts import BodyPromptsMixin
 from omacad.ui.controllers.canvas_prompts import CanvasPromptsMixin
+from omacad.ui.controllers.sweep_prompts import SweepPromptsMixin
 
 
 class ToolPromptsMixin(
@@ -15,5 +16,6 @@ class ToolPromptsMixin(
     PrimitivePromptsMixin,
     BodyPromptsMixin,
     CanvasPromptsMixin,
+    SweepPromptsMixin,
 ):
     """Stable combined prompt API used by :class:`MainWindow`."""

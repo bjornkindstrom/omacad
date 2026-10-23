@@ -337,7 +337,10 @@ class CylinderFeature(Feature):
                 solid = solid - cavity.translate((0.0, 0.0, t))
             if is_centered:
                 solid = solid.translate((0.0, 0.0, -self.height / 2.0))
+        return self._place(solid)
 
+    def _place(self, solid: m3d.Manifold) -> m3d.Manifold:
+        """The solid built round the Z axis moved onto its plane (a picked face) and shifted by the translation."""
         if self.plane_origin is not None and self.plane_normal is not None:
             n = np.array(self.plane_normal, dtype=float)
             n_len = float(np.linalg.norm(n))
@@ -387,6 +390,49 @@ class CylinderFeature(Feature):
             "inner_round_kind": self.inner_round_kind,
         }
 
+
+
+class ConeFeature(CylinderFeature):
+    """A cone or frustum (Björn #46): bottom `radius`, `top_radius` (0 = a point) and height, placed like a Cylinder.
+    Shell Wall hollows it with the wall square to the slanted side; the top stays open while there is room for it."""
+
+    def __init__(self, feature_id: str, name: str, radius: float, height: float, center: Any = False,
+                 top_radius: float = 0.0, **kw):
+        kw.pop("taper_angle", None)
+        super().__init__(feature_id, name, radius, height, center, **kw)
+        self.feature_type = "cone"
+        self.top_radius = max(0.0, float(top_radius))
+
+    def build_solid(self) -> m3d.Manifold:
+        r, rt, h = self.radius, self.top_radius, self.height
+        if r <= 1e-6 or h <= 1e-6:
+            raise ValueError("The cone needs a radius and a height.")
+        from omacad.model import quality
+        seg = quality.circle_segments()
+        solid = m3d.Manifold.cylinder(h, r, rt, circular_segments=seg)
+        t = self.wall_thickness
+        if t > 1e-4:
+            if t >= h or t >= r:
+                raise ValueError("Shell wall must be thinner than the radius and the height.")
+            slope = (r - rt) / h
+            grow = t * math.sqrt(1.0 + slope * slope)        # wall square to the slanted side
+            r_in = lambda z: r - z * slope - grow
+            if r_in(t) <= 0.05:
+                raise ValueError("Shell wall too thick for this cone.")
+            if r_in(h) > 0.05:                                # open top, cut a hair past it
+                cavity = m3d.Manifold.cylinder(h - t + 1e-3, r_in(t), r_in(h + 1e-3), circular_segments=seg)
+            else:                                             # pointed: a closed hollow up to the inner tip
+                tip = (r - grow) / slope
+                cavity = m3d.Manifold.cylinder(tip - t, r_in(t), 0.0, circular_segments=seg)
+            solid = solid - cavity.translate((0.0, 0.0, t))
+        if self.center is True or self.center == "center":
+            solid = solid.translate((0.0, 0.0, -h / 2.0))
+        return self._place(solid)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        d["top_radius"] = self.top_radius
+        return d
 
 
 class PrismFeature(CylinderFeature):

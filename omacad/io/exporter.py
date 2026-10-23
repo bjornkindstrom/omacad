@@ -13,7 +13,8 @@ import trimesh
 from omacad.model.document import Document, Parameter, default_origin_vis
 from omacad.model.timeline import (Body, SketchFeature, BoxFeature, CylinderFeature, PrismFeature, SphereFeature,
                                     ExtrudeFeature, EmbossFeature, RevolveFeature, CombineFeature, FilletFeature,
-                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature, HoneycombFeature)
+                                    PatternFeature, SplitBodyFeature, ShellFeature, MoveFeature, ImportMeshFeature, HoleFeature, DeleteBodyFeature, ThreadFeature, OffsetFaceFeature, HoneycombFeature,
+                                    ConeFeature, SweepFeature, LoftFeature, PipeFeature)
 from omacad import applog
 from omacad.model.sketch import Sketch
 from omacad.model.timeline import ProfileRefs
@@ -465,6 +466,25 @@ class Exporter:
                 doc.timeline.add_feature(feat)
             elif ft == "sphere":
                 feat = SphereFeature(fid, fname, f_data["radius"], translation=f_data.get("translation"))
+                doc.timeline.add_feature(feat)
+            elif ft == "cone":
+                feat = ConeFeature(fid, fname, f_data["radius"], f_data["height"], f_data.get("center", False),
+                                   top_radius=f_data.get("top_radius", 0.0), wall_thickness=f_data.get("wall_thickness", 0.0),
+                                   plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
+                                   plane_u=f_data.get("plane_u"), plane_v=f_data.get("plane_v"),
+                                   translation=f_data.get("translation"))
+                doc.timeline.add_feature(feat)
+            elif ft == "sweep":
+                feat = SweepFeature(fid, fname, f_data["sketch_id"], f_data["profile_idx"], f_data["path"],
+                                    f_data.get("operation", "new_body"), f_data.get("twist", 0.0))
+                feat.load_profile_refs(f_data)
+                doc.timeline.add_feature(feat)
+            elif ft == "pipe":
+                feat = PipeFeature(fid, fname, f_data["path"], f_data.get("diameter", 5.0), f_data.get("thickness", 0.0),
+                                   f_data.get("operation", "new_body"))
+                doc.timeline.add_feature(feat)
+            elif ft == "loft":
+                feat = LoftFeature(fid, fname, f_data["sections"], f_data.get("operation", "new_body"))
                 doc.timeline.add_feature(feat)
             elif ft == "sketch":
                 sk = Sketch.from_dict(f_data["sketch"])

@@ -24,6 +24,7 @@ from omacad.model.features import (
     BoxFeature,
     CylinderFeature,
     PrismFeature,
+    ConeFeature,
     SphereFeature,
     SketchFeature,
     ExtrudeFeature,
@@ -43,6 +44,9 @@ from omacad.model.features import (
     ThreadFeature,
     OffsetFaceFeature,
     HoneycombFeature,
+    SweepFeature,
+    LoftFeature,
+    PipeFeature,
 )
 
 
@@ -203,6 +207,10 @@ __all__ = [
     "BoxFeature",
     "CylinderFeature",
     "PrismFeature",
+    "ConeFeature",
+    "SweepFeature",
+    "LoftFeature",
+    "PipeFeature",
     "SphereFeature",
     "SketchFeature",
     "ExtrudeFeature",

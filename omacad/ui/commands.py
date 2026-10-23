@@ -37,8 +37,12 @@ _ALL = [
     _c("revolve", "Revolve", "🔄", "Turn a sketch profile around an axis or edge into a solid", signal="revolve_clicked"),
     _c("emboss", "Emboss", "🔖", "Raise or press text (any sketch profile) into a face: positive depth raises it, "
        "negative presses it in", signal="emboss_clicked"),
+    _c("sweep", "Sweep", "〰️", "Carry a sketch profile along a path (lines and arcs in a sketch)", signal="sweep_clicked"),
+    _c("loft", "Loft", "🏺", "A skin through two or more profiles on different planes, in order", signal="loft_clicked"),
+    _c("pipe", "Pipe", "🧪", "A round rod or tube along a path (lines and arcs in a sketch)", signal="pipe_clicked"),
     _c("box", "Box", "📦", "A rectangular box; the panel can also hollow, round and taper it", signal="box_clicked"),
     _c("cylinder", "Cylinder", "🥫", "A cylinder; the panel can also hollow, round and taper it", signal="cylinder_clicked"),
+    _c("cone", "Cone", "🔺", "A cone or frustum: bottom and top radius (0 = a point) and height", signal="cone_clicked"),
     _c("hexagon", "Prism", "⬢", "A regular prism (6 sides = hexagon), sized across flats", signal="hexagon_clicked"),
     _c("thread", "Thread / Coil", "🔩", "3D-printable threads and coils, on a cylinder or on their own",
        signal="thread_clicked"),
@@ -127,8 +131,8 @@ COMMANDS: Dict[str, Command] = {c.cid: c for c in _ALL}
 
 # A dropdown in the ribbon: (dropdown id, label, icon, tip, [command ids]). With the matching setting off its
 # commands stand as separate buttons instead (Settings > ribbon layout).
-PRIMITIVES = ("primitives", "Primitives", "📦", "Box, Cylinder, Prism, Thread / Coil, Jar with Lid (each panel can "
-              "hollow, round and taper)", ["box", "cylinder", "hexagon", "thread", "jar"])
+PRIMITIVES = ("primitives", "Primitives", "📦", "Box, Cylinder, Cone, Prism, Pipe, Thread / Coil, Jar with Lid (each "
+              "panel can hollow, round and taper)", ["box", "cylinder", "cone", "hexagon", "pipe", "thread", "jar"])
 INSERT = ("insert", "Insert", "🖼️", "Canvas (Image) and Import 3MF", ["canvas", "import_3mf"])
 MODIFY_BODY = ("modify_body", "Body", "🔗", "Combine, Split Body, Shell, Offset Face, Move",
                ["combine", "split_body", "shell", "offset_face", "move"])
@@ -136,7 +140,7 @@ INSPECT = ("inspect", "Inspect", "📏", "Measure, Section View, Document Statis
 PATTERNS = ["pattern_linear", "pattern_circular", "mirror", "pattern_fill"]   # the Pattern button's arrow
 
 SOLID_GROUPS: List[Tuple[str, list]] = [
-    ("CREATE", ["create_sketch", "extrude", "revolve", "emboss", PRIMITIVES, "pattern", "honeycomb", "offset_plane",
+    ("CREATE", ["create_sketch", "extrude", "revolve", "sweep", "loft", "emboss", PRIMITIVES, "pattern", "honeycomb", "offset_plane",
                 INSERT]),
     ("MODIFY", ["fillet", "chamfer", MODIFY_BODY, "parameters", "delete"]),
     ("INSPECT", [INSPECT]),
@@ -151,7 +155,8 @@ SKETCH_GROUPS: List[Tuple[str, list]] = [
 
 # Menu bar, in the ribbon's order (None = separator). File, Edit, View and Help are built in menu_setup.
 MENUS: List[Tuple[str, list]] = [
-    ("Create", ["create_sketch", "extrude", "revolve", "emboss", None, "box", "cylinder", "hexagon", "thread", "jar",
+    ("Create", ["create_sketch", "extrude", "revolve", "sweep", "loft", "emboss", None, "box", "cylinder", "cone",
+                "hexagon", "pipe", "thread", "jar",
                 None, "pattern_linear", "pattern_circular", "mirror", "pattern_fill", "honeycomb", None,
                 "offset_plane", "canvas"]),
     ("Modify", ["fillet", "chamfer", "shell", "offset_face", None, "combine", "split_body", "move", None,
@@ -163,7 +168,7 @@ MENUS: List[Tuple[str, list]] = [
 # What the current selection suggests (Ribbon.sync_context): those buttons get an accent border. Nothing moves, so
 # the hands keep finding the buttons where they always are; the border just says "this fits what you picked".
 CONTEXT: Dict[str, List[str]] = {
-    "profile": ["extrude", "revolve", "emboss"],
+    "profile": ["extrude", "revolve", "sweep", "loft", "emboss"],
     "edges": ["fillet", "chamfer"],
     "body": ["move", "shell", "split_body", "offset_face", "fillet", "chamfer"],
     "bodies": ["combine", "move"],

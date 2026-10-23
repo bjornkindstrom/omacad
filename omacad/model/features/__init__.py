@@ -21,6 +21,7 @@ from omacad.model.features.primitives import (
     BoxFeature,
     CylinderFeature,
     PrismFeature,
+    ConeFeature,
     SphereFeature,
     SketchFeature,
 )
@@ -43,6 +44,7 @@ from omacad.model.features.transform import (
 from omacad.model.features.thread import ThreadFeature
 from omacad.model.features.offset_face import OffsetFaceFeature
 from omacad.model.features.honeycomb import HoneycombFeature
+from omacad.model.features.sweep import SweepFeature, LoftFeature, PipeFeature
 
 __all__ = [
     "OffsetFaceFeature",
@@ -62,6 +64,10 @@ __all__ = [
     "BoxFeature",
     "CylinderFeature",
     "PrismFeature",
+    "ConeFeature",
+    "SweepFeature",
+    "LoftFeature",
+    "PipeFeature",
     "SphereFeature",
     "SketchFeature",
     "ExtrudeFeature",

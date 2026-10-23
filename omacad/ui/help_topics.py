@@ -36,6 +36,14 @@ MORE = {
                 "a face > Extrude this Face.", "pull push pad pocket cut boss twist spiral"),
     "revolve": ("Pick a profile and an axis (a construction line in the sketch, or the sketch's X/Y axis), set the "
                 "angle.", "lathe turn rotate around axis"),
+    "sweep": ("Click the profile in the view and choose the sketch with the path (lines and arcs in one chain, or a "
+              "circle). The profile is carried along it; Twist turns it over the length.", "path rail follow spring"),
+    "loft": ("Click the first profile, then Shift+click the next ones in order (each on its own plane). The skin "
+             "passes through them; holes are not lofted.", "blend transition skin"),
+    "pipe": ("Choose the sketch with the path and the diameter; a wall thickness makes it a tube. Bends and corners "
+             "follow the path.", "tube hose wire rod path"),
+    "cone": ("Bottom radius, top radius (0 = a point) and height, placed like a cylinder; Shell Wall hollows it.",
+             "frustum taper point funnel"),
     "emboss": ("Text or any profile in a sketch on a face: positive depth raises it, negative presses it in. Wraps "
                "round cylinders.", "deboss engrave text letters"),
     "pattern": ("Pick the steps to copy in the timeline or the list (a rib and its fillets together), then the kind: "

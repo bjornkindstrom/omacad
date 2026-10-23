@@ -489,6 +489,56 @@ class PrismDialog(CylinderDialog):
         return out
 
 
+class ConeDialog(CylinderDialog):
+    """The Cylinder panel for a cone or frustum (Björn #46): bottom radius, top radius (0 = a point), height.
+    Taper and edge rounds do not apply; Shell Wall hollows it."""
+
+    def __init__(self, parent=None, embedded: bool = False):
+        super().__init__(parent, embedded)
+        self.setWindowTitle("Create Cone")
+        self.form.labelForField(self.spn_radius).setText("Bottom radius:")
+        self.spn_radius.setValue(20.0)
+        self.spn_top = ExprDoubleSpinBox()
+        self.spn_top.setRange(0.0, 10000.0)
+        self.spn_top.setValue(0.0)
+        self.spn_top.setSuffix(" mm")
+        self.spn_top.setToolTip("Radius at the top (0 = a point; larger than the bottom = widening).")
+        self.spn_top.valueChanged.connect(lambda _: self.changed.emit())
+        self.form.insertRow(self.form.getWidgetPosition(self.spn_radius)[0] + 1, "Top radius:", self.spn_top)
+        for w in (self.spn_taper, self.spn_outer_round, self.spn_inner_round):
+            w.setValue(0.0)
+            row = self.form.getWidgetPosition(w)[0]
+            if row < 0:                      # the field sits in a row layout: hide that row
+                for r in range(self.form.rowCount()):
+                    item = self.form.itemAt(r, QFormLayout.ItemRole.FieldRole)
+                    lay = item.layout() if item is not None else None
+                    if lay is not None and any(lay.itemAt(i).widget() is w for i in range(lay.count())):
+                        row = r
+                        break
+            if row >= 0:
+                self.form.setRowVisible(row, False)
+
+    def top_radius(self) -> float:
+        return self.spn_top.value()
+
+    def accept(self):
+        from omacad.model.features.primitives import ConeFeature
+        try:
+            ConeFeature("validate", "Validate", *self.get_values()[:2], top_radius=self.top_radius(),
+                        **self.get_smart_params()).build_solid()
+        except ValueError as exc:
+            self.lbl_problem.setText(str(exc))
+            return
+        BaseFeatureDialog.accept(self)
+
+    def get_expressions(self) -> dict:
+        out = super().get_expressions()
+        e = self.spn_top.expression()
+        if e:
+            out["top_radius"] = e
+        return out
+
+
 class SphereDialog(BaseFeatureDialog):
     """Dialog for creating a primitive sphere."""
 

@@ -143,15 +143,22 @@ class PrimitivePromptsMixin:
         """Hexagon (any regular prism): the Cylinder flow with flat sides, sized across flats."""
         self.prompt_cylinder(prism=True)
 
+    def prompt_cone(self):
+        """Cone / frustum (Björn #46): the Cylinder flow with a top radius."""
+        self.prompt_cylinder(cone=True)
+
     @leaves_sketch
-    def prompt_cylinder(self, prism=False):
-        from omacad.model.features.primitives import CylinderFeature, PrismFeature
-        dlg = PrismDialog(self) if prism else CylinderDialog(self)
-        label = "Prism" if prism else "Cylinder"
+    def prompt_cylinder(self, prism=False, cone=False):
+        from omacad.model.features.primitives import ConeFeature, CylinderFeature, PrismFeature
+        from omacad.ui.dialogs.primitives_dlg import ConeDialog
+        dlg = PrismDialog(self) if prism else ConeDialog(self) if cone else CylinderDialog(self)
+        label = "Prism" if prism else "Cone" if cone else "Cylinder"
 
         def make_feature(fid, name, size, h, center, **params):
             if prism:
                 return PrismFeature(fid, name, size, h, center, sides=dlg.sides(), **params)
+            if cone:
+                return ConeFeature(fid, name, size, h, center, top_radius=dlg.top_radius(), **params)
             return CylinderFeature(fid, name, size, h, center, **params)
 
 
@@ -200,6 +207,9 @@ class PrimitivePromptsMixin:
                              translation=getattr(dlg, "placement_offset", (0, 0, 0)), **smart)
                 if prism:
                     body = self.doc.add_prism(r, h, sides=dlg.sides(), **place)
+                elif cone:
+                    place.pop("taper_angle", None)
+                    body = self.doc.add_cone(r, dlg.top_radius(), h, **place)
                 else:
                     body = self.doc.add_cylinder(r, h, **place)
                 self.doc.timeline.last_added.exprs = dlg.get_expressions()

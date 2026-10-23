@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.9.80.1 - 2026-10-23
+
+Versions now have a fifth part for small steps (0.9.9.80.1, .2 ...).
+
+### Added
+- Sweep (Björn #46): a sketch profile carried along a path (a sketch's lines and arcs in one chain, or a circle), with Twist. Holes in the profile stay open.
+- Loft: a skin through two or more profiles on different planes, in the order they are clicked.
+- Pipe: a round rod or tube (wall thickness) along a path; sharp corners get a mitre.
+- Cone: bottom and top radius (0 = a point) and height, placed like a Cylinder; Shell Wall hollows it.
+- All four are in the ribbon (Sweep and Loft next to Revolve, Cone and Pipe under Primitives), the Create menu and the help, with live previews, and can New Body / Join / Cut / Intersect.
+
 ## 0.9.9.80 - 2026-10-23
 
 ### Added
