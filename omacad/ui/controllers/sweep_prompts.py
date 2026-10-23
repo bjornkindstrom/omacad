@@ -10,7 +10,7 @@ class SweepPromptsMixin:
 
     @leaves_sketch
     def prompt_sweep_tool(self, mode: str):
-        from omacad.model.features.sweep import LoftFeature, PipeFeature, SweepFeature
+        from omacad.model.features.sweep import LoftFeature, PipeFeature, SweepFeature, path_points
         from omacad.ui.dialogs.sweep_dlg import SweepLoftDialog, TITLES
         title = TITLES[mode]
         if not self.doc.sketches:
@@ -18,10 +18,12 @@ class SweepPromptsMixin:
             return
         if self.inspector.current_tool_dlg is not None:
             return
-        dlg = SweepLoftDialog(self.doc, mode, self, embedded=True)
-        if mode != "loft" and dlg.cmb_path.count() == 0:
+        from omacad.ui.dialogs.sweep_dlg import path_entities
+        candidates = [sid for sid, sk in self.doc.sketches.items() if path_entities(sk)]
+        if mode != "loft" and not candidates:
             QMessageBox.information(self, title, "No sketch has lines, arcs or a circle to use as the path.")
             return
+        dlg = SweepLoftDialog(self.doc, mode, self, embedded=True)
         shown = {sid: sk.visible for sid, sk in self.doc.sketches.items()}
         for sk in self.doc.sketches.values():          # the profiles must be visible to be clicked
             sk.visible = True
@@ -29,8 +31,51 @@ class SweepPromptsMixin:
         self.viewport.profile_chain_mode = mode == "loft"   # Loft: each click adds a profile, from any plane
         self.dock(dlg)
 
+        class _PathLine:            # the picked path, outlined in the view like a timeline step's edges
+            def __init__(self, pts):
+                self.pts = pts
+
+            def polyline(self, n: int = 2):
+                return self.pts
+
+        def show_path():
+            try:
+                pts, closed = path_points(self.doc, dlg.path())
+                self.viewport.step_edges = [_PathLine(list(pts) + ([pts[0]] if closed else []))]
+            except Exception:
+                self.viewport.step_edges = []
+            self.viewport.update()
+
+        def default_path():
+            """One sketch besides the profile's has path elements: take it, so the common case needs no click."""
+            used = {s for s, _ in dlg.profiles}
+            others = [sid for sid in candidates if sid not in used]
+            if dlg.path() is None and len(others) == 1:
+                dlg.set_path(others[0], path_entities(self.doc.sketches[others[0]])[0])
+                show_path()
+
+        def on_active(target):
+            self.viewport.path_pick_mode = target == "path"
+            self.status_label.setText(f"{title}: click " + ("a line, arc or circle of the path." if target == "path"
+                                                             else "the profile."))
+
+        def on_curve(sketch_id, entity_id):
+            if dlg.set_path(sketch_id, entity_id):
+                show_path()
+                self.status_label.setText(f"{title}: path picked. Adjust the values, OK.")
+            else:
+                self.status_label.setText(f"{title}: that element cannot be a path.")
+
+        dlg.active_changed.connect(on_active)
+        self.viewport.sketch_curve_picked.connect(on_curve)
+        on_active(dlg.active)
+        if mode == "pipe":
+            default_path()
+
         def feature():
             path = dlg.path()
+            if mode != "loft" and path is None:
+                return None
             if mode == "pipe":
                 return PipeFeature("preview", title, path, dlg.spn_diam.value(), dlg.spn_thick.value(), dlg.operation())
             if not dlg.profiles:
@@ -57,10 +102,17 @@ class SweepPromptsMixin:
         def on_pick():
             chosen = ([self.doc.selected_profile] if self.doc.selected_profile else []) + list(self.doc.selected_extra)
             dlg.set_profiles(chosen[:1] if mode == "sweep" else chosen)
+            if mode == "sweep" and dlg.profiles:
+                default_path()
+                if dlg.path() is None:
+                    dlg.set_active("path")          # next: the path, as Fusion moves on to its Path field
 
         def on_finished(result):
             self.viewport.profile_picked.disconnect(on_pick)
+            self.viewport.sketch_curve_picked.disconnect(on_curve)
             self.viewport.profile_chain_mode = False
+            self.viewport.path_pick_mode = False
+            self.viewport.step_edges = []
             self.viewport.set_preview(None)
             for sid, vis in shown.items():
                 if sid in self.doc.sketches:
@@ -69,7 +121,9 @@ class SweepPromptsMixin:
             if result:
                 path, op = dlg.path(), dlg.operation()
                 try:
-                    if mode == "pipe":
+                    if mode != "loft" and path is None:
+                        feat = None
+                    elif mode == "pipe":
                         feat = self.doc.add_pipe(path, dlg.spn_diam.value(), dlg.spn_thick.value(), op)
                     elif mode == "sweep" and dlg.profiles:
                         feat = self.doc.add_sweep(*dlg.profiles[0], path, op, dlg.spn_twist.value())
@@ -78,6 +132,8 @@ class SweepPromptsMixin:
                     else:
                         self.status_label.setText(f"{title}: pick the profile(s) first.")
                         return
+                    if feat is None:
+                        raise ValueError("pick the path first.")
                     feat.exprs = dlg.get_expressions()
                     self.status_label.setText(f"{feat.name} created.")
                 except Exception as exc:

@@ -83,9 +83,14 @@ class SweepFeature(ProfileRefs, Feature):
         centre = outer.mean(axis=0)
         if not closed and np.linalg.norm(path[-1] - centre) < np.linalg.norm(path[0] - centre):
             path = path[::-1]                               # start at the end the profile sits on
-        start = path[0]
-        _t, r, b, _s, _a = path_frames(path, closed, sketch.plane.u_axis)
-        local = lambda pts: np.column_stack([(pts - start) @ r[0], (pts - start) @ b[0]])
+        # the section is read off in the frame where the profile sits on the path (it need not be at an end)
+        k = int(np.argmin(np.linalg.norm(path - centre, axis=1)))
+        t, r, b, _s, _a = path_frames(path, closed, sketch.plane.u_axis)
+        at = path[k]
+        local = lambda pts: np.column_stack([(pts - at) @ r[k], (pts - at) @ b[k]])
+        n = np.asarray(sketch.plane.normal, dtype=float)
+        if abs(float(n @ t[k])) < 0.05:
+            raise ValueError("The profile lies along the path: it has to cross it (draw it on a plane across the path).")
         solid = sweep_solid(local(outer), path, closed, r[0], self.twist)
         for h in holes:
             solid = solid - sweep_solid(local(h), path, closed, r[0], self.twist)

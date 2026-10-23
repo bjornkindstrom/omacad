@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.9.80.9 - 2026-10-23
+
+### Fixed
+- Sweep / Pipe: the path was "the newest sketch", so with the profile drawn last the profile was swept round itself. The path is now clicked in the 3D view like in Fusion (a line, arc or circle; everything joined to it comes along) and outlined; Profile / Path buttons say which the next click picks, and after the profile it moves on to Path. With only one other sketch that can be a path it is taken at once.
+- Sweep from a profile in the middle of a curved path: the section is read off where the profile sits, not at the path's start. A profile lying along the path says so instead of making nothing.
+
 ## 0.9.9.80.8 - 2026-10-23
 
 ### Fixed

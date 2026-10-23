@@ -489,6 +489,11 @@ class ViewportEventsMixin:
         self._press_pos = None
         self.is_orbiting = False
         self.is_panning = False
+        if was_click and getattr(self, "path_pick_mode", False):
+            curve = self.pick_sketch_curve(event.position().x(), event.position().y())
+            if curve is not None:                 # a Sweep / Pipe path: the clicked curve and what joins it
+                self.sketch_curve_picked.emit(*curve)
+                return
         if was_click:
             picked = self.pick_profile(event.position().x(), event.position().y())
             doc = self.doc

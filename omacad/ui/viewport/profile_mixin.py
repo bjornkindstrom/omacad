@@ -33,6 +33,30 @@ class ProfileMixin:
                                  if manifolds else None)
         self.update()
 
+    def pick_sketch_curve(self, x: float, y: float):
+        """(sketch id, entity id) of the drawn line, arc or circle of a finished, visible sketch under the cursor
+        (nearest plane first), else None. Used to pick a Sweep / Pipe path in the 3D view."""
+        from omacad.model.sketch_entities import SketchArc, SketchCircle, SketchLine
+        proj, view, _ = self.get_matrices()
+        origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        tol = self._entity_tolerance()
+        best, best_t = None, float("inf")
+        for s_id, sketch in self.doc.sketches.items():
+            if not sketch.visible or sketch is self.doc.active_sketch:
+                continue
+            hit = ray_plane_intersect(origin, ray_dir, sketch.plane.origin, sketch.plane.normal)
+            if hit is None:
+                continue
+            t = float(np.linalg.norm(hit - origin))
+            if t >= best_t:
+                continue
+            u, v = sketch.plane.world_to_uv(hit)
+            ent = sketch.hit_test(u, v, tol)
+            if (isinstance(ent, (SketchLine, SketchArc, SketchCircle)) and not getattr(ent, "is_construction", False)
+                    and not getattr(ent, "projected", False)):
+                best, best_t = (s_id, ent.entity_id), t
+        return best
+
     def pick_profile(self, x: float, y: float) -> Optional[Tuple[str, int]]:
         """Returns (sketch_id, profile_idx) of the smallest closed profile under the cursor."""
         proj, view, _ = self.get_matrices()

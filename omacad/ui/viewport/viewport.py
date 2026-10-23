@@ -79,6 +79,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
     construction_mode_changed = Signal(bool)
     sketch_tool_changed = Signal(str)
     profile_picked = Signal()
+    sketch_curve_picked = Signal(str, str)   # (sketch id, entity id) clicked while a path is being picked
     plane_picked = Signal(object)       # SketchPlane chosen for a new sketch
     plane_pick_cancelled = Signal()
     section_base_picked = Signal(object)   # plane a section view is cut along

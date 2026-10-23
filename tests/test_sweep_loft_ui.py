@@ -55,14 +55,62 @@ def test_loft_and_pipe_panels(win):
     assert abs(next(iter(doc.bodies.values())).manifold.volume() - want) < 0.01 * want
 
     path = doc.start_sketch("XZ")
-    path.add_line((30, 0), (30, 40))
+    line = path.add_line((30, 0), (30, 40))
     doc.finish_sketch()
     win.prompt_sweep_tool("pipe")
     dlg = win.findChildren(SweepLoftDialog)[-1]
-    dlg.cmb_path.setCurrentIndex(dlg.cmb_path.findData(path.sketch_id))
+    win.viewport.sketch_curve_picked.emit(path.sketch_id, line.entity_id)
     dlg.spn_diam.setValue(4.0)
     dlg.accept()
     QApplication.processEvents()
     pipe = doc.timeline.features[-1]
     assert pipe.feature_type == "pipe"
     assert abs(doc.bodies[f"body_{pipe.feature_id}"].manifold.volume() - math.pi * 4 * 40) < 0.01 * math.pi * 160
+
+
+def test_sweep_path_is_clicked_not_the_newest_sketch(win):
+    """Drawn as most people do it: the path first, then the profile. The newest sketch (the profile) used to become
+    the path, so the circle was swept round itself. Now the other sketch is taken, or the path is clicked."""
+    from omacad.ui.dialogs.sweep_dlg import SweepLoftDialog
+    doc = win.doc
+    path = doc.start_sketch("XY")
+    a = path.add_line((0, 0), (30, 0))
+    path.add_arc((30, 0), (30 + 20 * math.sin(math.pi / 4), 20 - 20 * math.cos(math.pi / 4)), (50, 20))
+    doc.finish_sketch()
+    prof = doc.start_sketch("YZ")
+    prof.add_circle((0, 0), 2)
+    doc.finish_sketch()
+    win.prompt_sweep_tool("sweep")
+    dlg = win.findChildren(SweepLoftDialog)[-1]
+    assert dlg.active == "profile" and dlg.path() is None
+    doc.selected_profile, doc.selected_extra = (prof.sketch_id, 0), []
+    win.viewport.profile_picked.emit()
+    assert dlg.path() is not None and dlg.path()[0] == path.sketch_id and len(dlg.path()[1]) == 2
+    win.viewport.sketch_curve_picked.emit(path.sketch_id, a.entity_id)       # a click on the line: the whole chain
+    assert len(dlg.path()[1]) == 2
+    dlg.accept()
+    QApplication.processEvents()
+    feat = doc.timeline.features[-1]
+    length = 30 + math.pi / 2 * 20
+    assert feat.feature_type == "sweep"
+    assert abs(doc.bodies[f"body_{feat.feature_id}"].manifold.volume() - math.pi * 4 * length) < 0.01 * math.pi * 4 * length
+
+
+def test_sweep_from_a_profile_in_the_middle_of_a_curved_path():
+    from omacad.model.document import Document
+    doc = Document()
+    path = doc.start_sketch("XY")
+    path.add_line((0, 0), (30, 0))
+    path.add_arc((30, 0), (30 + 20 * math.sin(math.pi / 4), 20 - 20 * math.cos(math.pi / 4)), (50, 20))
+    doc.finish_sketch()
+    plane = doc.construction_plane(doc.add_construction_plane(doc.origin_planes["YZ"], 15.0, origin=(0, 0, 0)))
+    prof = doc.start_sketch_on_plane(plane)
+    prof.add_circle(tuple(prof.plane.world_to_uv((15.0, 0.0, 0.0))), 2)
+    doc.finish_sketch()
+    from omacad.ui.dialogs.sweep_dlg import path_entities
+    doc.add_sweep(prof.sketch_id, 0, (path.sketch_id, path_entities(path)))
+    m = next(iter(doc.bodies.values())).manifold
+    length = 30 + math.pi / 2 * 20
+    assert abs(m.volume() - math.pi * 4 * length) < 0.01 * math.pi * 4 * length
+    bb = m.bounding_box()
+    assert abs(bb[4] - 20.0) < 0.1 and abs(bb[3] - 52.0) < 0.1      # it follows the arc up to its end at (50, 20)
