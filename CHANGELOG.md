@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.5 - 2026-10-23
+
+### Fixed
+- Chamfers at the foot of a wall that meet round its outside corner met in a mitred ridge that stuck out past the bevels; the bevel now swings round the corner edge (a cone), like the fillet's rolling ball.
+
 ## 0.9.9.80.4 - 2026-10-23
 
 ### Fixed

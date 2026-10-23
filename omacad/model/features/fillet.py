@@ -348,11 +348,12 @@ class FilletFeature(Feature):
         return trims
 
     def _wall_corner(self, body, ea, eb, v):
-        """Two fillet foot edges on the same floor that meet at `v` round the outside corner of a wall (the side of a
-        rib meets its end). Fusion's rolling ball swings round the wall's corner edge there, so the roundings flow
-        into each other; a mitre would leave a crease. Returns (floor normal, corner edge direction going up, wall
-        normal of `ea`, wall normal of `eb`, radius), or None for an inside corner, a chamfer or unequal sizes."""
-        if self.kind != "fillet" or self.size <= 0:
+        """Two fillet/chamfer foot edges on the same floor that meet at `v` round the outside corner of a wall (the
+        side of a rib meets its end). Fusion's rolling ball swings round the wall's corner edge there, so the
+        roundings flow into each other; a mitre would leave a crease. A chamfer's bevel swings round the same way.
+        Returns (floor normal, corner edge direction going up, wall normal of `ea`, wall normal of `eb`, radius),
+        or None for an inside corner or unequal fillet sizes."""
+        if self.size <= 0:
             return None
         faces_a = [(ea.n1, ea.d1), (ea.n2, ea.d2)]
         faces_b = [(eb.n1, eb.d1), (eb.n2, eb.d2)]
@@ -375,13 +376,14 @@ class FilletFeature(Feature):
                     return None
                 ra = self._safe_edge_size(body, ea, abs(self.size))
                 rb = self._safe_edge_size(body, eb, abs(self.size))
-                if abs(ra - rb) > 1e-6:
+                if self.kind == "fillet" and abs(ra - rb) > 1e-6:
                     return None
                 return na, cd, wall_a, wall_b, ra
         return None
 
     def _wall_corner_tools(self, seen):
-        """(body id, fill, balls) for each outside wall corner between two selected foot edges (`_wall_corner`)."""
+        """(body id, fill, balls) for each outside wall corner between two selected foot edges (`_wall_corner`);
+        a chamfer has no balls (None)."""
         feet = [(b, e) for b, e in seen if not e.convex and getattr(e, "kind", "") == "line"]
         out = []
         for i in range(len(feet)):
@@ -393,9 +395,54 @@ class FilletFeature(Feature):
                 if v is None:
                     continue
                 corner = self._wall_corner(ba, ea, eb, v)
-                if corner is not None:
+                if corner is None:
+                    continue
+                if self.kind == "chamfer":
+                    nf, cd, wall_a, wall_b, _r = corner
+                    bevels = [self._bevel_plane(ba, e, v) for e in (ea, eb)]
+                    out.append((ba.body_id, self.wall_chamfer_tool(v, nf, cd, wall_a, wall_b, *bevels), None))
+                else:
                     out.append((ba.body_id, *self.wall_corner_tool(v, *corner)))
         return out
+
+    def _bevel_plane(self, body, edge, v):
+        """(normal, point) of the bevel face the chamfer band of the foot edge `edge` gets (as in `_mitred_tool`)."""
+        a, b = self.tool_sizes(edge, self._safe_edge_size(body, edge, abs(self.size)))
+        t = edge.p1 - edge.p0
+        pa, pb = v + a * edge.d1, v + (a if b is None else b) * edge.d2
+        n = np.cross(t, pb - pa)
+        return n / np.linalg.norm(n), pa
+
+    @staticmethod
+    def wall_chamfer_tool(v, nf, cd, wall_a, wall_b, bevel_a, bevel_b, step_deg: float = 3.0):
+        """The chamfer round an outside wall corner at `v` (see `wall_corner_tool`): each band's bevel meets the
+        corner edge (going up along `cd`) and the floor in the plane where the band stops; in between the bevel
+        swings round the corner edge, its floor point on an arc round `v`. Returns the fill."""
+        def floor_dir(u):
+            g = u - float(u @ nf) / float(cd @ nf) * cd      # the floor's line in the plane of cd and u
+            return g / np.linalg.norm(g)
+
+        def along(direction, plane):
+            n, p = plane
+            return float(n @ (p - v)) / float(n @ direction)
+
+        heights = [along(cd, bevel) for bevel in (bevel_a, bevel_b)]
+        reaches = [along(floor_dir(wall), bevel) for wall, bevel in ((wall_a, bevel_a), (wall_b, bevel_b))]
+        w = wall_b - (wall_a @ wall_b) * wall_a
+        w = w / np.linalg.norm(w)
+        sweep = math.acos(float(np.clip(wall_a @ wall_b, -1.0, 1.0)))
+        n = max(4, int(math.ceil(math.degrees(sweep) / step_deg)))
+        e = 1e-3 * max(1.0, max(heights + reaches))
+        slices = []
+        for k in range(n + 1):
+            s = k / n
+            u = math.cos(sweep * s) * wall_a + math.sin(sweep * s) * w
+            top = v + ((1 - s) * heights[0] + s * heights[1]) * cd
+            foot = v + ((1 - s) * reaches[0] + s * reaches[1]) * floor_dir(u)
+            # a hair into the wall and the floor, so the fill overlaps the body instead of touching it along the edge
+            slices.append([v - e * u - e * nf, top - e * u, top, foot, foot - e * nf])
+        hulls = [m3d.Manifold.hull_points([tuple(map(float, p)) for p in slices[k] + slices[k + 1]]) for k in range(n)]
+        return m3d.Manifold.batch_boolean(hulls, m3d.OpType.Add)
 
     @staticmethod
     def wall_corner_tool(v, nf, cd, wall_a, wall_b, r, step_deg: float = 3.0):
@@ -606,7 +653,9 @@ class FilletFeature(Feature):
                     cut.setdefault(ba.body_id, []).append(corner)
 
         for body_id, fill, balls in self._wall_corner_tools(seen):
-            add[body_id] = [t - balls for t in add.get(body_id, [])] + [fill]
+            if balls is not None:
+                add[body_id] = [t - balls for t in add.get(body_id, [])]
+            add.setdefault(body_id, []).append(fill)
 
         if self.size > 0:
             for body_id, tool in self._corner_tools(seen):
