@@ -300,15 +300,20 @@ class FilletFeature(Feature):
                 corner = self._wall_corner(body, edge, other, v)
                 if corner is not None:
                     # outside corner of the wall: the band stops where the ball starts to swing round the corner
-                    nf, cd, wall, wall_b, _r = corner
-                    m = np.cross(cd, wall)
-                    m = m / np.linalg.norm(m)
-                    if float(m @ ta) < 0.0:
-                        m = -m
+                    nf, cd, wall, wall_b, r = corner
                     ext[k] = reach
-                    trims.append((m, float(m @ v)))
                     if self.kind == "chamfer":
+                        m = np.cross(cd, wall)
+                        m = m / np.linalg.norm(m)
+                        if float(m @ ta) < 0.0:
+                            m = -m
+                        trims.append((m, float(m @ v)))
                         trims.extend(self._lowered_top(body, edge, other, v, ta, nf, cd, wall, wall_b))
+                    else:
+                        # square across the band through the ball's first touch on the corner edge: where that edge
+                        # leans, a plane along it would let the band run on past the ball near the floor
+                        t = v + r * (1.0 - float(nf @ wall)) / float(nf @ cd) * cd
+                        trims.append((ta, float(ta @ t)))
                     break
                 m = ta - tb
                 m = m / np.linalg.norm(m)
@@ -497,7 +502,7 @@ class FilletFeature(Feature):
             centres.append(c)
         hulls = [m3d.Manifold.hull_points([tuple(map(float, p)) for p in slices[k] + slices[k + 1]]) for k in range(n)]
         fill = m3d.Manifold.batch_boolean(hulls, m3d.OpType.Add)
-        ball = m3d.Manifold.sphere(r, circular_segments=48)
+        ball = m3d.Manifold.sphere(r, circular_segments=96)   # as fine as the bands (24 pieces a quarter turn)
         balls = m3d.Manifold.batch_boolean(
             [m3d.Manifold.hull(ball.translate(tuple(map(float, centres[k]))) + ball.translate(tuple(map(float, centres[k + 1]))))
              for k in range(n)], m3d.OpType.Add)

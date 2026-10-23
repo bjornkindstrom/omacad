@@ -9,6 +9,7 @@ from omacad.io.exporter import Exporter
 from omacad.model.document import Document
 
 DOC = Path(__file__).parent / "data" / "fillet_rib_outside_corner.omacad"
+LEANING = Path(__file__).parent / "data" / "fillet_leaning_rib_corner.omacad"
 
 
 def _feet_at(body, v):
@@ -55,3 +56,22 @@ def test_rib_end_and_side_fillets_flow_round_the_corner():
     beyond = pts[(pts[:, 0] > v[0] + 1e-3) & (pts[:, 1] > v[1] + 1e-3)]
     assert len(beyond) > 10
     assert np.linalg.norm(beyond - v[:2], axis=1).max() < reach + 0.1
+
+
+def test_band_beside_a_leaning_corner_edge_stops_at_the_ball():
+    """Report 20261023-214720: the rib's side leans, so its corner edge with the square end leans too. The end band
+    was cut along that edge, ran on past the ball near the floor, and the swept ball cut it off as a loose strip
+    (a triangle on the floor)."""
+    doc = Exporter.load_project(str(LEANING))
+    feat = doc.timeline.features[-1]
+    result = next(iter(doc.bodies.values())).manifold
+    assert feat.skipped == 0 and result.genus() == 0
+    for z in (25.001, 25.01):
+        assert len(result.slice(z).decompose()) == 1
+    # where the two bands meet there is no step: the corner is as fine as the bands
+    mesh = result.to_mesh()
+    tri = np.asarray(mesh.vert_properties)[:, :3][np.asarray(mesh.tri_verts)]
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    c = tri.mean(axis=1)
+    step = (np.abs(c[:, 0] - 10.0) < 0.02) & (c[:, 1] > -8) & (c[:, 1] < 1) & (n[:, 0] > 0.99 * np.linalg.norm(n, axis=1))
+    assert np.linalg.norm(n[step], axis=1).sum() / 2 < 0.05

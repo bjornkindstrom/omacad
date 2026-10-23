@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.7 - 2026-10-23
+
+### Fixed
+- A fillet round the outside corner of a wall whose side leans left a loose strip (a small triangle) on the floor and a ledge where the bands met: the band beside the leaning corner edge was cut along that edge and ran on past the rolling ball near the floor. Each band now stops square across itself where the ball first touches the corner edge, and the corner's ball is as finely cut as the bands.
+
 ## 0.9.9.80.6 - 2026-10-23
 
 ### Fixed
