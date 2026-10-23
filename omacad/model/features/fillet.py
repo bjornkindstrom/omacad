@@ -297,6 +297,17 @@ class FilletFeature(Feature):
                 same_face = any(float(na @ nb) > 0.999 for na in (edge.n1, edge.n2) for nb in (other.n1, other.n2))
                 if not same_face or abs(float(ta @ tb)) > 0.999:
                     continue
+                corner = self._wall_corner(body, edge, other, v)
+                if corner is not None:
+                    # outside corner of the wall: the band stops where the ball starts to swing round the corner
+                    _nf, cd, wall, _wall_b, _r = corner
+                    m = np.cross(cd, wall)
+                    m = m / np.linalg.norm(m)
+                    if float(m @ ta) < 0.0:
+                        m = -m
+                    ext[k] = reach
+                    trims.append((m, float(m @ v)))
+                    break
                 m = ta - tb
                 m = m / np.linalg.norm(m)
                 ext[k] = reach
@@ -335,6 +346,86 @@ class FilletFeature(Feature):
                     m = -m
                 trims.append((m, float(m @ v)))
         return trims
+
+    def _wall_corner(self, body, ea, eb, v):
+        """Two fillet foot edges on the same floor that meet at `v` round the outside corner of a wall (the side of a
+        rib meets its end). Fusion's rolling ball swings round the wall's corner edge there, so the roundings flow
+        into each other; a mitre would leave a crease. Returns (floor normal, corner edge direction going up, wall
+        normal of `ea`, wall normal of `eb`, radius), or None for an inside corner, a chamfer or unequal sizes."""
+        if self.kind != "fillet" or self.size <= 0:
+            return None
+        faces_a = [(ea.n1, ea.d1), (ea.n2, ea.d2)]
+        faces_b = [(eb.n1, eb.d1), (eb.n2, eb.d2)]
+        for ia, (na, da) in enumerate(faces_a):
+            for ib, (nb, _db) in enumerate(faces_b):
+                if float(na @ nb) < 0.999:
+                    continue
+                far = eb.p1 if np.linalg.norm(eb.p0 - v) < 1e-4 else eb.p0
+                tb = (far - v) / max(float(np.linalg.norm(far - v)), 1e-12)
+                if float(tb @ da) > -1e-3:
+                    return None       # the other edge runs into this floor: an inside corner
+                wall_a, wall_b = faces_a[1 - ia][0], faces_b[1 - ib][0]
+                cd = np.cross(wall_a, wall_b)
+                if np.linalg.norm(cd) < 1e-6:
+                    return None
+                cd = cd / np.linalg.norm(cd)
+                if float(cd @ na) < 0.0:
+                    cd = -cd
+                if float(cd @ na) < 0.05:
+                    return None
+                ra = self._safe_edge_size(body, ea, abs(self.size))
+                rb = self._safe_edge_size(body, eb, abs(self.size))
+                if abs(ra - rb) > 1e-6:
+                    return None
+                return na, cd, wall_a, wall_b, ra
+        return None
+
+    def _wall_corner_tools(self, seen):
+        """(body id, fill, balls) for each outside wall corner between two selected foot edges (`_wall_corner`)."""
+        feet = [(b, e) for b, e in seen if not e.convex and getattr(e, "kind", "") == "line"]
+        out = []
+        for i in range(len(feet)):
+            for j in range(i + 1, len(feet)):
+                (ba, ea), (bb, eb) = feet[i], feet[j]
+                if ba is not bb:
+                    continue
+                v = next((p for p in (ea.p0, ea.p1) if min(np.linalg.norm(p - eb.p0), np.linalg.norm(p - eb.p1)) < 1e-4), None)
+                if v is None:
+                    continue
+                corner = self._wall_corner(ba, ea, eb, v)
+                if corner is not None:
+                    out.append((ba.body_id, *self.wall_corner_tool(v, *corner)))
+        return out
+
+    @staticmethod
+    def wall_corner_tool(v, nf, cd, wall_a, wall_b, r, step_deg: float = 3.0):
+        """The rounding round an outside wall corner at `v` on the floor `nf`, the wall's corner edge going up along
+        `cd`. The ball (radius r) rests on the floor and leans on the corner edge while it turns from wall_a to
+        wall_b. Each slice holds the floor point under the corner, the touch points on the edge and the floor and the
+        ball centre; the hull of neighbouring slices minus the swept ball is the fill. Returns (fill, swept balls):
+        the balls also come off the two bands, which run straight on where the ball already turns."""
+        w = wall_b - (wall_a @ wall_b) * wall_a
+        w = w / np.linalg.norm(w)
+        sweep = math.acos(float(np.clip(wall_a @ wall_b, -1.0, 1.0)))
+        n = max(4, int(math.ceil(math.degrees(sweep) / step_deg)))
+        e = 1e-3 * max(1.0, r)
+        slices, centres = [], []
+        for k in range(n + 1):
+            phi = sweep * k / n
+            u = math.cos(phi) * wall_a + math.sin(phi) * w
+            t = v + r * (1.0 - float(nf @ u)) / float(nf @ cd) * cd       # where the ball touches the corner edge
+            c = t + r * u
+            k_floor = t - float(nf @ (t - v)) * nf
+            # a hair into the wall and the floor, so the fill overlaps the body instead of touching it along the edge
+            slices.append([v - e * u - e * nf, k_floor - e * u - e * nf, t - e * u, t, c, c - r * nf, c - r * nf - e * nf])
+            centres.append(c)
+        hulls = [m3d.Manifold.hull_points([tuple(map(float, p)) for p in slices[k] + slices[k + 1]]) for k in range(n)]
+        fill = m3d.Manifold.batch_boolean(hulls, m3d.OpType.Add)
+        ball = m3d.Manifold.sphere(r, circular_segments=48)
+        balls = m3d.Manifold.batch_boolean(
+            [m3d.Manifold.hull(ball.translate(tuple(map(float, centres[k]))) + ball.translate(tuple(map(float, centres[k + 1]))))
+             for k in range(n)], m3d.OpType.Add)
+        return fill - balls, balls
 
     def _corner_tools(self, seen):
         """Where three selected outside edges meet square at a vertex (a box corner), the edge tools alone leave a
@@ -513,6 +604,9 @@ class FilletFeature(Feature):
                     continue
                 if not corner.is_empty():
                     cut.setdefault(ba.body_id, []).append(corner)
+
+        for body_id, fill, balls in self._wall_corner_tools(seen):
+            add[body_id] = [t - balls for t in add.get(body_id, [])] + [fill]
 
         if self.size > 0:
             for body_id, tool in self._corner_tools(seen):

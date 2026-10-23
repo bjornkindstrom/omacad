@@ -32,10 +32,10 @@ def test_corners_are_filled_not_notched():
     h = 0.5                                              # height above the plate
     reach = r - math.sqrt(r * r - (r - h) ** 2)          # how far the rounding sticks out from the wall at that height
     apothem = 10.0 * math.cos(math.pi / 8)
-    for k in range(8):                                   # every wall corner: a point just inside the mitred rounding
-        a = math.radians(45 * k)
+    for k in range(8):                                   # every wall corner: a point just inside the rounding, which
+        a = math.radians(45 * k)                         # rolls round the corner edge (as far out as along the walls)
         corner_r = 10.0
-        d_out = 0.95 * reach / math.cos(math.pi / 8)
+        d_out = 0.95 * reach
         p = (30 + (corner_r + d_out) * math.cos(a), 30 + (corner_r + d_out) * math.sin(a), 5 + h)
         probe = __import__("manifold3d").Manifold.cube((0.02, 0.02, 0.02), True).translate(p)
         assert not (probe ^ m).is_empty(), f"corner {k} is notched"

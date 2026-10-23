@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.4 - 2026-10-23
+
+### Fixed
+- Fillets at the foot of a wall that meet round its outside corner (the side and the end of a rib) met in a sharp mitred crease; the rounding now rolls round the corner edge and the two flow into each other, as in Fusion.
+
 ## 0.9.9.80.3 - 2026-10-23
 
 ### Fixed
