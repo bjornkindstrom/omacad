@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.6 - 2026-10-23
+
+### Fixed
+- Chamfers round the outside corner of a wall whose two sides lean differently met the corner edge at two heights, so their top lines did not line up; both bands now meet at the lower point, the higher band's top coming down to it over the last chamfer distance.
+
 ## 0.9.9.80.5 - 2026-10-23
 
 ### Fixed

@@ -300,13 +300,15 @@ class FilletFeature(Feature):
                 corner = self._wall_corner(body, edge, other, v)
                 if corner is not None:
                     # outside corner of the wall: the band stops where the ball starts to swing round the corner
-                    _nf, cd, wall, _wall_b, _r = corner
+                    nf, cd, wall, wall_b, _r = corner
                     m = np.cross(cd, wall)
                     m = m / np.linalg.norm(m)
                     if float(m @ ta) < 0.0:
                         m = -m
                     ext[k] = reach
                     trims.append((m, float(m @ v)))
+                    if self.kind == "chamfer":
+                        trims.extend(self._lowered_top(body, edge, other, v, ta, nf, cd, wall, wall_b))
                     break
                 m = ta - tb
                 m = m / np.linalg.norm(m)
@@ -414,20 +416,47 @@ class FilletFeature(Feature):
         return n / np.linalg.norm(n), pa
 
     @staticmethod
+    def _bevel_reach(v, nf, cd, wall, bevel):
+        """(height up the corner edge `cd`, reach out over the floor `nf`) where the bevel plane `bevel` of the band
+        next to `wall` meets the corner edge and the floor in the plane where the band stops at the corner `v`."""
+        g = wall - float(wall @ nf) / float(cd @ nf) * cd      # the floor's line in the plane of cd and the wall normal
+        g = g / np.linalg.norm(g)
+        n, p = bevel
+        along = lambda direction: float(n @ (p - v)) / float(n @ direction)
+        return along(cd), along(g), g
+
+    def _lowered_top(self, body, edge, other, v, ta, nf, cd, wall, wall_b):
+        """Where two walls lean differently, the same chamfer distance meets their common corner edge at two
+        heights. The bands are made to meet at one point there, the lower one: the higher band's top comes down to it
+        over the last chamfer distance before the corner (a flat facet through its floor point at the corner).
+        Returns the trim plane for `edge`'s band, or nothing when it is the lower one."""
+        h, reach, g = self._bevel_reach(v, nf, cd, wall, self._bevel_plane(body, edge, v))
+        h_other = self._bevel_reach(v, nf, cd, wall_b, self._bevel_plane(body, other, v))[0]
+        if h <= h_other + 1e-6:
+            return []
+        low, foot = v + h_other * cd, v + reach * g
+        back = v + h * cd + reach * ta               # on the band's top line, one chamfer distance from the corner
+        m = np.cross(back - foot, low - foot)
+        m = m / np.linalg.norm(m)
+        inside = v + 0.25 * (low - v) + 0.25 * (foot - v)
+        if float(m @ inside) < float(m @ foot):
+            m = -m
+        return [(m, float(m @ foot))]
+
+    @staticmethod
     def wall_chamfer_tool(v, nf, cd, wall_a, wall_b, bevel_a, bevel_b, step_deg: float = 3.0):
         """The chamfer round an outside wall corner at `v` (see `wall_corner_tool`): each band's bevel meets the
-        corner edge (going up along `cd`) and the floor in the plane where the band stops; in between the bevel
-        swings round the corner edge, its floor point on an arc round `v`. Returns the fill."""
+        floor in the plane where the band stops, and both meet the corner edge (going up along `cd`) at the lower of
+        their two heights (`_lowered_top`); in between the bevel swings round the corner edge, its floor point on an
+        arc round `v`. Returns the fill."""
+        meets = [FilletFeature._bevel_reach(v, nf, cd, wall, bevel) for wall, bevel in ((wall_a, bevel_a), (wall_b, bevel_b))]
+        height = min(h for h, _r, _g in meets)
+        heights = [height, height]
+        reaches = [r for _h, r, _g in meets]
+
         def floor_dir(u):
             g = u - float(u @ nf) / float(cd @ nf) * cd      # the floor's line in the plane of cd and u
             return g / np.linalg.norm(g)
-
-        def along(direction, plane):
-            n, p = plane
-            return float(n @ (p - v)) / float(n @ direction)
-
-        heights = [along(cd, bevel) for bevel in (bevel_a, bevel_b)]
-        reaches = [along(floor_dir(wall), bevel) for wall, bevel in ((wall_a, bevel_a), (wall_b, bevel_b))]
         w = wall_b - (wall_a @ wall_b) * wall_a
         w = w / np.linalg.norm(w)
         sweep = math.acos(float(np.clip(wall_a @ wall_b, -1.0, 1.0)))
