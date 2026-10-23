@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.3 - 2026-10-23
+
+### Fixed
+- Clicking the foot of a wall for a chamfer also took the end edge of a fillet band lying in the same line, so the chamfer filled one and cut the other; joined edges now only follow edges of the same kind (inside or outside corner).
+
 ## 0.9.9.80.2 - 2026-10-23
 
 ### Fixed

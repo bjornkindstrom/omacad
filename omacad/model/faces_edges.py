@@ -11,7 +11,9 @@ from omacad.model.faces_topology import _coplanar, _curved_roots, _sliver_roots
 
 def tangent_chain(edge, edges) -> list:
     """`edge` plus every straight piece or arc joined to it end to end with a smooth (tangent) turn,
-    e.g. the straight side and the rounded corner next to it. Corners with a visible knick stop the chain."""
+    e.g. the straight side and the rounded corner next to it. Corners with a visible knick stop the chain, and so
+    does a switch between an inside and an outside corner (the foot of a wall running on into the end of a fillet
+    band): one rounding would fill there and cut here."""
     def ends(e):
         pts = e.polyline()
         t0 = pts[1] - pts[0]
@@ -25,7 +27,7 @@ def tangent_chain(edge, edges) -> list:
         cur = frontier.pop()
         for p, t in ends(cur):
             for c in pool:
-                if any(c.same_as(k) for k in chain):
+                if getattr(c, "convex", None) != getattr(cur, "convex", None) or any(c.same_as(k) for k in chain):
                     continue
                 for q, u in ends(c):
                     # both directions point away from the joint, so a smooth continuation has them opposite
