@@ -302,11 +302,39 @@ class FilletFeature(Feature):
                 ext[k] = reach
                 trims.append((m, float(m @ v)))
                 break
+            else:
+                trims.extend(self._face_end_trims(body, edge, v, ta))
         a, b = self.tool_sizes(edge, size)
         tool = CadKernel.round_tool(edge, a, self.kind, extend=tuple(ext), size2=b)
         for m, off in trims:
             tool = tool.trim_by_plane([float(x) for x in m], off)
         return tool
+
+    @staticmethod
+    def _face_end_trims(body, edge, v, ta):
+        """Where a face next to a foot edge narrows at the end `v` (the side of a triangular rib leans in), the
+        band must stop at that side, carried straight out of the face, like Fusion; a square end would fill air
+        beside the narrowing face. Returns (normal, offset) planes that keep the band's own side."""
+        trims = []
+        for d, n in ((edge.d1, edge.n1), (edge.d2, edge.n2)):
+            for other in body.edges:
+                if other is edge or getattr(other, "kind", "") != "line":
+                    continue
+                if np.linalg.norm(other.p0 - v) < 1e-4:
+                    q = other.p1
+                elif np.linalg.norm(other.p1 - v) < 1e-4:
+                    q = other.p0
+                else:
+                    continue
+                tb = (q - v) / max(float(np.linalg.norm(q - v)), 1e-12)
+                if abs(float(tb @ n)) > 1e-3 or float(tb @ d) < 1e-3 or float(ta @ tb) < 1e-3:
+                    continue  # not a side of this face leaning in over the edge
+                m = np.cross(tb, n)
+                m = m / max(float(np.linalg.norm(m)), 1e-12)
+                if float(m @ ta) < 0.0:
+                    m = -m
+                trims.append((m, float(m @ v)))
+        return trims
 
     def _corner_tools(self, seen):
         """Where three selected outside edges meet square at a vertex (a box corner), the edge tools alone leave a

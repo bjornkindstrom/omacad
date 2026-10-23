@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.2 - 2026-10-23
+
+### Fixed
+- A fillet at the foot of a wall that narrows (the sloping sides of a triangular rib) filled the air beside the wall; the rounding now stops at the wall's sides, carried straight out, as in Fusion.
+
 ## 0.9.9.80.1 - 2026-10-23
 
 Versions now have a fifth part for small steps (0.9.9.80.1, .2 ...).
