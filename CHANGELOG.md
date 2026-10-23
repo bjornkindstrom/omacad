@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.9.79 - 2026-10-23
+
+### Fixed
+- Face outlines in a sketch (Include face edges) come in as lines and arcs that share their ends. A rounded lid gave ~190 tiny pieces whose corners stopped 0.01 mm short of the straight edges, plus mesh seams: one click picked only part of the outline, Offset lost the corner radius and no closed profile was found (Björn #56, #58).
+- Emboss over a flat wall that runs into a rounded corner left the letters floating at the sketch plane. When no single plane or cylinder carries the text it is now projected onto the surface as it is; parts beyond the body are left out (Björn #57).
+- Fill face pattern did nothing in a box: its walls counted as a filled block and a lid parked above it cast its outline onto the floor. Only material standing on the face is an obstacle now, with holes respected (Björn #59).
+- Curved surfaces are shaded smooth (sharp edges stay crisp); the floor of wrapped text showed blotches and fan streaks (Björn #61).
+- The value box for editing a sketch dimension could stay in the view for good after clicking elsewhere; a click elsewhere now takes the value (Björn #77).
+
+### Added
+- Tab in a tool panel moves between its number fields only, and Tab in the 3D view jumps into the open panel (Björn #47).
+- Duplicate a sketch from the browser (right-click > Duplicate), as a new step (Björn #65).
+
 ## 0.9.9.78 - 2026-10-23
 
 ### Added

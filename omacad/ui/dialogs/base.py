@@ -104,6 +104,30 @@ class BaseFeatureDialog(QDialog):
                 return field
         return None
 
+    def number_fields(self) -> list:
+        """The visible, editable number fields in the order Tab visits them."""
+        out = []
+        w = self.nextInFocusChain()
+        while w is not None and w is not self:
+            if (isinstance(w, (QDoubleSpinBox, QSpinBox)) and w.isVisibleTo(self) and w.isEnabled()
+                    and not w.isReadOnly() and w not in out):
+                out.append(w)
+            w = w.nextInFocusChain()
+        return out
+
+    def focusNextPrevChild(self, forward: bool) -> bool:
+        """Tab / Shift+Tab move between the number fields only (as in Fusion), wrapping round, with the value
+        selected so typing replaces it (Björn #47). Panels without number fields keep Qt's own order."""
+        fields = self.number_fields()
+        if not fields:
+            return super().focusNextPrevChild(forward)
+        cur = self.focusWidget()
+        idx = next((i for i, f in enumerate(fields) if f is cur or f.isAncestorOf(cur)), None) if cur else None
+        nxt = fields[0] if idx is None else fields[(idx + (1 if forward else -1)) % len(fields)]
+        nxt.setFocus(Qt.FocusReason.TabFocusReason)
+        nxt.lineEdit().selectAll()
+        return True
+
     def focus_primary(self) -> bool:
         """Put the cursor in the primary field with its text selected, so the first digit replaces it."""
         field = self.primary_field()

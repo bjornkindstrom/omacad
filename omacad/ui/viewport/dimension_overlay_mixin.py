@@ -422,11 +422,24 @@ class DimensionOverlayMixin:
         outcome = []
         box.committed.connect(lambda: (outcome.append(True), loop.quit()))
         box.cancelled.connect(lambda: (outcome.append(False), loop.quit()))
+
+        def focus_moved(_old, new):
+            # A click elsewhere in Omacad takes the value, as in Fusion. Before, the box only listened for Enter and
+            # Esc while it had the focus, so after a click outside it stayed in the view for good (Björn #77).
+            if new is not None and new is not box and not box.isAncestorOf(new) and not outcome:
+                outcome.append(True)
+                loop.quit()
+
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance().focusChanged.connect(focus_moved)
         pos = self.mapFromGlobal(QCursor.pos())
         box.place_near(pos.x(), pos.y())
         box.show()
         box.focus_value()
-        loop.exec()
+        try:
+            loop.exec()
+        finally:
+            QApplication.instance().focusChanged.disconnect(focus_moved)
         result = box.result() if outcome and outcome[0] else None
         box.hide()
         box.deleteLater()

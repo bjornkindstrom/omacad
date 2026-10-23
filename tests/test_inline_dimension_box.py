@@ -98,3 +98,21 @@ def test_status_bar_shows_the_sketch_status_instead_of_a_banner():
     w.doc.active_sketch = None
     w.doc.notify_changed()
     assert w.lbl_sketch_status.text() == ""
+
+
+def test_editing_box_takes_the_value_when_you_click_elsewhere(view):
+    """#77: the box for an existing dimension only listened for Enter/Esc; after a click outside it stayed forever."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication, QLineEdit
+    from omacad.ui.inline_value import InlineValueBox
+    elsewhere = QLineEdit()
+
+    def type_and_leave():
+        box = view.findChild(InlineValueBox)
+        box.spin.lineEdit().setText("12")
+        QApplication.instance().focusChanged.emit(box.spin, elsewhere)
+
+    QTimer.singleShot(0, type_and_leave)
+    value, _expr = view.prompt_dimension_inline("d1", 5.0, 0.1, 1000.0, " mm")
+    assert value == 12.0
+    assert view.findChild(InlineValueBox) is None or not view.findChild(InlineValueBox).isVisible()

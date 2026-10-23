@@ -617,6 +617,9 @@ class SketchToolsMixin:
             if self._dyn_can_start():
                 self.keyPressEvent(e)
                 return True
+            panel = self._typing_panel()
+            if panel is not None and panel.focus_primary():   # Tab from the view goes to the open panel's numbers (#47)
+                return True
         return super().event(e)
     def draw_dyn_fields(self, painter: QPainter):
         """Floating value boxes next to the shape being drawn."""

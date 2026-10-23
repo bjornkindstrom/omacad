@@ -54,7 +54,12 @@ class EmbossFeature(ExtrudeFeature):
         cs = region_cross_section(region)
         M = sketch.plane.get_transform_matrix_3x4()
         surface = None if self.flip else self._surface_behind(doc, M, region)
-        if surface and surface["kind"] == "cylinder":
+        field = None if self.flip or surface is not None else self._height_field(doc, M, region)
+        if field is not None:
+            # the letters sit over faces of different kinds (a flat wall running into a rounded corner): no single
+            # plane or cylinder carries them, so they are projected onto the surface as it is (Björn #57)
+            solid = self._projected(M, region, field)
+        elif surface and surface["kind"] == "cylinder":
             solid = self._wrapped(cs, M, surface, region)
         else:
             z0 = surface["z"] if surface else 0.0      # a flat face behind the sketch plane: the letters start on it
@@ -66,6 +71,96 @@ class EmbossFeature(ExtrudeFeature):
             solid = m3d.Manifold.extrude(cs, height=float(hi - lo)).translate((0.0, 0.0, float(lo + z0)))
             solid = solid.transform(M)
         return solid if solid is not None and not solid.is_empty() else None
+
+    @staticmethod
+    def _height_field(doc: Any, M, region, cells: int = 160) -> Optional[Dict[str, Any]]:
+        """Where the bodies' surface lies under the letters, seen along the sketch normal: a grid over the region's
+        bounds with the sketch-z of the nearest surface facing the sketch in each cell (NaN where there is none),
+        made by rasterising the facing triangles (a z-buffer), plus the footprint those triangles cover."""
+        from shapely.geometry import Polygon as _Poly
+        from shapely.ops import unary_union
+        A = np.vstack([np.asarray(M, dtype=float).reshape(3, 4), [0.0, 0.0, 0.0, 1.0]])
+        inv = np.linalg.inv(A)
+        minx, miny, maxx, maxy = region.bounds
+        size = max(maxx - minx, maxy - miny, 1e-6)
+        step = max(size / cells, 0.05)
+        pad = 2 * step
+        xs = np.arange(minx - pad, maxx + pad + step, step)
+        ys = np.arange(miny - pad, maxy + pad + step, step)
+        H = np.full((len(ys), len(xs)), np.nan)
+        polys = []
+        for body in doc.bodies.values():
+            mesh = body.render_mesh
+            if mesh is None or len(mesh.vertices) == 0 or not body.visible:
+                continue
+            tri = np.asarray(mesh.vertices, dtype=float).reshape(-1, 3)
+            tri = (tri @ inv[:3, :3].T + inv[:3, 3]).reshape(-1, 3, 3)
+            n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+            keep = ((n[:, 2] > 1e-12) & (tri[:, :, 0].max(1) >= xs[0]) & (tri[:, :, 0].min(1) <= xs[-1])
+                    & (tri[:, :, 1].max(1) >= ys[0]) & (tri[:, :, 1].min(1) <= ys[-1]) & (tri[:, :, 2].max(1) < 0.0))
+            for t in tri[keep]:
+                (x0, y0, z0), (x1, y1, z1), (x2, y2, z2) = t
+                det = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+                if abs(det) < 1e-14:
+                    continue
+                polys.append(_Poly(t[:, :2]))
+                i0 = max(0, int(np.floor((min(x0, x1, x2) - xs[0]) / step)))
+                i1 = min(len(xs) - 1, int(np.ceil((max(x0, x1, x2) - xs[0]) / step)))
+                j0 = max(0, int(np.floor((min(y0, y1, y2) - ys[0]) / step)))
+                j1 = min(len(ys) - 1, int(np.ceil((max(y0, y1, y2) - ys[0]) / step)))
+                if i1 < i0 or j1 < j0:
+                    continue
+                gx, gy = np.meshgrid(xs[i0:i1 + 1], ys[j0:j1 + 1])
+                a = ((y1 - y2) * (gx - x2) + (x2 - x1) * (gy - y2)) / det
+                b = ((y2 - y0) * (gx - x2) + (x0 - x2) * (gy - y2)) / det
+                c = 1.0 - a - b
+                inside = (a >= -1e-9) & (b >= -1e-9) & (c >= -1e-9)
+                z = a * z0 + b * z1 + c * z2
+                sub = H[j0:j1 + 1, i0:i1 + 1]
+                upd = inside & (np.isnan(sub) | (z > sub))     # nearest to the sketch (largest z) wins
+                sub[upd] = z[upd]
+        if not polys or np.all(np.isnan(H)):
+            return None
+        return {"xs": xs, "ys": ys, "H": H, "step": step, "footprint": unary_union(polys).buffer(1e-6)}
+
+    @staticmethod
+    def _surface_z(field, x, y):
+        """Bilinear surface height at points (x, y); cells without surface take their nearest neighbours."""
+        H = field["H"].copy()
+        for _ in range(8):           # grow known heights into empty cells next to them (letters reaching an edge)
+            if not np.isnan(H).any():
+                break
+            nb = np.stack([np.roll(H, k, axis=a) for a in (0, 1) for k in (1, -1)])
+            fill = np.isnan(H) & ~np.all(np.isnan(nb), axis=0)
+            H[fill] = np.where(np.isnan(nb), -np.inf, nb).max(axis=0)[fill]
+        H = np.where(np.isnan(H), np.nanmin(H), H)
+        xs, ys, step = field["xs"], field["ys"], field["step"]
+        fx = np.clip((x - xs[0]) / step, 0, len(xs) - 1.000001)
+        fy = np.clip((y - ys[0]) / step, 0, len(ys) - 1.000001)
+        i, j = fx.astype(int), fy.astype(int)
+        tx, ty = fx - i, fy - j
+        return ((H[j, i] * (1 - tx) + H[j, i + 1] * tx) * (1 - ty)
+                + (H[j + 1, i] * (1 - tx) + H[j + 1, i + 1] * tx) * ty)
+
+    def _projected(self, M, region, field) -> Optional[m3d.Manifold]:
+        """The letters projected along the sketch normal onto the surface under them: each point of the shape keeps
+        its place in the sketch and stands `depth` above (or below) the surface there. Parts beyond the body's
+        outline are left out."""
+        from shapely import segmentize
+        region = region.intersection(field["footprint"])
+        if region.is_empty or region.area < 1e-9:
+            return None
+        step = field["step"]
+        cs = region_cross_section(segmentize(region, max_segment_length=2 * step))
+        d = float(self.depth)
+        lo, hi = (-max(EPS, 2 * step), d) if d > 0 else (d, max(EPS, 2 * step))
+        prism = m3d.Manifold.extrude(cs, height=1.0).refine_to_length(2 * step)
+
+        def warp(pts):
+            z0 = self._surface_z(field, pts[:, 0], pts[:, 1])
+            return np.column_stack([pts[:, 0], pts[:, 1], z0 + lo + pts[:, 2] * (hi - lo)])
+
+        return prism.warp_batch(warp).transform(M)
 
     def _surface_behind(self, doc: Any, M, region) -> Optional[Dict[str, Any]]:
         """The first outer cylinder or flat face (parallel to the sketch plane) a ray from the letters hits going

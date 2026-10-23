@@ -14,6 +14,98 @@ from omacad.model.sketch_entities import (
 from omacad.model.sketch_types import SketchConstraint, SketchDimension
 
 
+def _outline_rings(segs, tol: float = 5e-3):
+    """Splits reference segments into the closed rings of the region they enclose (outer outlines and holes, as
+    simplified point lists) and the segments that are not part of such an outline (returned as they are)."""
+    if not segs:
+        return [], segs
+    try:
+        noded = unary_union([LineString([a, b]) for a, b in segs])
+        cells = [c.buffer(0) for c in polygonize(noded)]
+    except Exception:
+        return [], segs
+    if not cells or len(cells) > 2000:
+        return [], segs
+    # A closed loop of edges also encloses a cell where there is a hole: count how many outlines each cell lies in;
+    # even = material of the face, odd = a hole (a boss inside a hole is even again). Specks under 0.01 mm² are
+    # seams of the mesh (two tessellations of a corner crossing), never holes anyone drew: they count as material.
+    filled = [Polygon(c.exterior) for c in cells]
+    material = []
+    for i, c in enumerate(cells):
+        if c.area < 1e-2:
+            material.append(c)
+            continue
+        p = c.representative_point()
+        depth = sum(1 for j, f in enumerate(filled) if j != i and f.area > c.area and f.contains(p))
+        if depth % 2 == 0:
+            material.append(c)
+    region = unary_union(material)
+    polys = [g for g in (region.geoms if hasattr(region, "geoms") else [region]) if not g.is_empty and g.area > tol * tol]
+    if not polys:
+        return [], segs
+    rings = []
+    for poly in polys:
+        for ring in [poly.exterior, *poly.interiors]:
+            pts = list(ring.simplify(tol).coords)[:-1]
+            if len(pts) >= 3:
+                rings.append([(float(x), float(y)) for x, y in pts])
+    # what is left: edges outside the enclosed region (dangling ones). Those on its outline are in the rings, and
+    # those inside it are seams of the mesh (tiny triangles where two tessellations of a corner overlap)
+    covered = unary_union(polys).buffer(10 * tol)
+    rest = [(a, b) for a, b in segs if not covered.contains(Point((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))]
+    return rings, rest
+
+
+def _ring_pieces(ring, max_turn_deg: float = 20.0, length_ratio: float = 3.0):
+    """("line", a, b) / ("arc", start, mid, end) / ("circle", centre, r) pieces for a closed ring of points: runs of short, evenly turning pieces that fit one circle become an
+    arc (the whole ring a circle), everything else straight lines with collinear pieces merged. A run ends at a sharp
+    turn or where the piece length jumps (a straight edge running tangent into a rounded corner)."""
+    pts = np.asarray(ring, dtype=float)
+    n = len(pts)
+    seg = np.roll(pts, -1, axis=0) - pts                     # piece i runs from point i to point i+1
+    length = np.linalg.norm(seg, axis=1)
+    ang = np.arctan2(seg[:, 1], seg[:, 0])
+    turn = (ang - np.roll(ang, 1) + np.pi) % (2 * np.pi) - np.pi     # turn at point i (from piece i-1 to piece i)
+    prev_len = np.roll(length, 1)
+    ratio = np.maximum(length, prev_len) / np.maximum(np.minimum(length, prev_len), 1e-12)
+    breaks = [i for i in range(n) if abs(math.degrees(turn[i])) > max_turn_deg or ratio[i] > length_ratio]
+
+    def fit(points):
+        A = np.c_[2 * points[:, 0], 2 * points[:, 1], np.ones(len(points))]
+        sol, *_ = np.linalg.lstsq(A, (points ** 2).sum(axis=1), rcond=None)
+        c = sol[:2]
+        r = float(np.sqrt(max(sol[2] + c @ c, 0.0)))
+        return c, r, float(np.abs(np.linalg.norm(points - c, axis=1) - r).max())
+
+    if not breaks:                                           # one even curve all round: a circle
+        c, r, res = fit(pts)
+        if n >= 6 and r > 1e-6 and res < max(2e-3 * r, 5e-3):
+            return [("circle", (float(c[0]), float(c[1])), r)]
+        breaks = [0]
+    out = []
+    for k, b0 in enumerate(breaks):
+        b1 = breaks[(k + 1) % len(breaks)]
+        idx = list(range(b0, b1 + 1)) if b1 > b0 else list(range(b0, n)) + list(range(0, b1 + 1))
+        run = pts[idx]
+        if len(run) >= 4:                                    # three or more pieces: an arc?
+            c, r, res = fit(run)
+            turning = abs(float(np.sum(turn[idx[1:-1]])))
+            if r > 1e-6 and res < max(2e-3 * r, 5e-3) and turning > math.radians(5.0) and r < 1e4:
+                out.append(("arc", tuple(map(float, run[0])), tuple(map(float, run[len(run) // 2])), tuple(map(float, run[-1]))))
+                continue
+        start = run[0]
+        for i in range(1, len(run)):
+            if i < len(run) - 1:
+                d1, d2 = run[i] - run[i - 1], run[i + 1] - run[i]
+                n1, n2 = np.linalg.norm(d1), np.linalg.norm(d2)
+                if n1 > 1e-12 and n2 > 1e-12 and abs(float(d1 @ d2) / (n1 * n2) - 1.0) < 1e-6:
+                    continue
+            if np.linalg.norm(run[i] - start) > 1e-6:
+                out.append(("line", tuple(map(float, start)), tuple(map(float, run[i]))))
+            start = run[i]
+    return out
+
+
 class SketchEditingMixin:
     """Entity editing and geometry construction methods inherited by :class:`Sketch`."""
 
@@ -165,6 +257,31 @@ class SketchEditingMixin:
         def key(p):
             return (round(p[0], 3), round(p[1], 3))
 
+        new = []
+
+        def add(ent):
+            ent.projected = True
+            self.entities.append(ent)
+            new.append(ent)
+
+        # The face outline as closed rings first: a tessellated body gives a rounded corner as dozens of tiny
+        # pieces (sometimes two slightly different tessellations on top of each other, and pieces that stop
+        # 0.01 mm short of the straight edge). Read as one outline, each ring becomes lines and arcs sharing their
+        # end points, so the outline is closed and an offset keeps the radius (Björn #58).
+        rings, segs = _outline_rings(segs)
+        for ring in rings:
+            for kind, *geo in _ring_pieces(ring):
+                if kind == "line":
+                    a_, b_ = geo
+                    if (round(a_[0], 3), round(a_[1], 3), round(b_[0], 3), round(b_[1], 3)) not in have:
+                        add(SketchLine(self._new_entity_id("line"), a_, b_))
+                elif kind == "arc":
+                    add(SketchArc(self._new_entity_id("arc"), *geo))
+                elif (round(geo[0][0], 3), round(geo[0][1], 3), round(geo[1], 3)) not in {
+                        (round(e.center[0], 3), round(e.center[1], 3), round(e.radius, 3))
+                        for e in self.entities if e.entity_type == "circle"}:
+                    add(SketchCircle(self._new_entity_id("circle"), *geo))
+
         adj: Dict[tuple, list] = {}
         for a, b in segs:
             adj.setdefault(key(a), []).append((b, a))
@@ -195,13 +312,6 @@ class SketchEditingMixin:
             for q, _ in nbrs:
                 if (k0, key(q)) not in used:
                     chains.append(walk(pos[k0], q))
-
-        new = []
-
-        def add(ent):
-            ent.projected = True
-            self.entities.append(ent)
-            new.append(ent)
 
         for chain in chains:
             pts = np.array(chain, dtype=float)

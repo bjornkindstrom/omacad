@@ -566,6 +566,30 @@ class CadKernel:
         return ops[operation](target, tool)
 
     @staticmethod
+    def _shaded_triangles(manifold: m3d.Manifold, v, f, smooth_below_deg: float = 30.0):
+        """Unrolled triangle corners and their normals. Curved surfaces are shaded smooth (vertex normals shared
+        across edges flatter than `smooth_below_deg`, sharp CAD edges stay crisp): with one flat normal per triangle
+        the irregular triangles of a wrapped emboss floor showed as blotches and fan streaks (Björn #61)."""
+        try:
+            mesh = manifold.calculate_normals(0, smooth_below_deg).to_mesh()
+            props = np.asarray(mesh.vert_properties)
+            tris = np.asarray(mesh.tri_verts)
+            if props.shape[1] >= 6 and len(tris) == len(f):
+                normals = props[tris].reshape(-1, props.shape[1])[:, 3:6]
+                length = np.linalg.norm(normals, axis=1, keepdims=True)
+                if np.all(np.isfinite(normals)) and np.all(length > 0.5):
+                    return (props[tris].reshape(-1, props.shape[1])[:, :3].astype(np.float32),
+                            (normals / length).astype(np.float32))
+        except Exception as e:      # fall back to flat shading, which is always right, and say why
+            from omacad import applog
+            applog.log("ERROR", f"smooth normals: {e!r}")
+        v0, v1, v2 = v[f[:, 0]], v[f[:, 1]], v[f[:, 2]]
+        cross_prod = np.cross(v1 - v0, v2 - v0)
+        lengths = np.linalg.norm(cross_prod, axis=1, keepdims=True)
+        lengths[lengths == 0] = 1.0
+        return v[f].reshape(-1, 3).astype(np.float32), np.repeat(cross_prod / lengths, 3, axis=0).astype(np.float32)
+
+    @staticmethod
     def extract_render_mesh(manifold: m3d.Manifold, edge_angle_threshold_deg: float = 20.0) -> RenderMesh:
         """
         Extract triangle buffers and sharp CAD feature edges for OpenGL rendering.
@@ -585,18 +609,7 @@ class CadKernel:
                 center=np.zeros(3, dtype=np.float32)
             )
 
-        # Flat shaded vertices per triangle for crisp CAD rendering
-        tri_verts = v[f].reshape(-1, 3).astype(np.float32)
-
-        # Compute face normals
-        v0 = v[f[:, 0]]
-        v1 = v[f[:, 1]]
-        v2 = v[f[:, 2]]
-        cross_prod = np.cross(v1 - v0, v2 - v0)
-        lengths = np.linalg.norm(cross_prod, axis=1, keepdims=True)
-        lengths[lengths == 0] = 1.0
-        face_normals = cross_prod / lengths
-        tri_normals = np.repeat(face_normals, 3, axis=0).astype(np.float32)
+        tri_verts, tri_normals = CadKernel._shaded_triangles(manifold, v, f)
 
         # Extract sharp CAD edges using trimesh
         try:

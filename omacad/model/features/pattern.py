@@ -343,16 +343,23 @@ class PatternFeature(Feature):
         c0 = foot.representative_point()
 
         now_bodies = ([now] if now is not None and not now.is_empty() else []) + [b for b in (other_bodies or []) if not b.is_empty()]
+        # Only material standing on the face is in the way: a band just above it, as high as the copies reach.
+        # A body further up (a lid parked above a box) cast its whole outline onto the floor and left no room (#59).
+        reach_up = 1.0
+        if not added.is_empty():
+            reach_up = max(reach_up, float(added.transform(inv).bounding_box()[5]))
         obs_polys = []
         for b in now_bodies:
             m_plane = b.transform(inv)
-            above = m_plane.trim_by_plane([0.0, 0.0, 1.0], 0.05)
+            above = m_plane.trim_by_plane([0.0, 0.0, 1.0], 0.05).trim_by_plane([0.0, 0.0, -1.0], -(reach_up + 0.05))
             if not above.is_empty():
+                # even-odd over the outline's rings: the walls of a box are a ring with a hole, not a filled block
+                shadow = Polygon()
                 for ring in above.project().to_polygons():
                     if len(ring) >= 3:
-                        p = Polygon(ring).buffer(0)
-                        if p.is_valid and p.area > 1e-6:
-                            obs_polys.append(p)
+                        shadow = shadow.symmetric_difference(Polygon(ring).buffer(0))
+                if shadow.is_valid and shadow.area > 1e-6:
+                    obs_polys.append(shadow)
         all_obs = unary_union(obs_polys).difference(foot.buffer(0.02)) if obs_polys else Polygon()
 
         regions = []

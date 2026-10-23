@@ -72,3 +72,26 @@ def test_backspace_still_undoes_the_last_picked_edge(view):
     assert view.selected_edges == ["a"]
     assert dlg.spn_size.lineEdit().text() == before
     dlg.close()
+
+
+def test_tab_walks_the_number_fields_only():
+    """#47: Tab in a tool panel goes from number to number (skipping lists and buttons), wrapping round."""
+    from omacad.ui.dialogs.extrude_dlg import ExtrudeDialog
+    doc = Document()
+    sk = doc.start_sketch("XY")
+    sk.add_rect((0, 0), (10, 10))
+    doc.finish_sketch()
+    dlg = ExtrudeDialog(doc)
+    dlg.show()
+    QApplication.processEvents()
+    fields = dlg.number_fields()
+    assert dlg.spn_dist in fields and dlg.spn_twist in fields
+    assert all(f.isVisibleTo(dlg) for f in fields)
+    dlg.spn_dist.setFocus()
+    seen = []
+    for _ in range(len(fields)):
+        dlg.focusNextPrevChild(True)
+        w = dlg.focusWidget()
+        seen.append(next(f for f in fields if f is w or f.isAncestorOf(w)))
+    assert seen[-1] is dlg.spn_dist and len(set(map(id, seen))) == len(fields)
+    dlg.close()

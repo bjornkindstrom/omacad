@@ -436,6 +436,7 @@ class BrowserTree(QWidget):
             add("⬆️ Extrude\tE", lambda: self.extrude_sketch_requested.emit(item_id))
             add("📐 Offset Plane…", lambda: self.offset_plane_requested.emit("sketch", item_id))
             add("✏️ Edit Sketch", lambda: self.edit_sketch_requested.emit(item_id))
+            add("📄 Duplicate", lambda: self.doc.duplicate_sketch(item_id))
             sk = self.doc.sketches.get(item_id)
             if sk is not None:
                 from omacad.model.sketch import SketchText

@@ -494,6 +494,23 @@ class Document:
         self.notify_changed()
         return sketch
 
+    @undoable("Duplicate Sketch")
+    def duplicate_sketch(self, sketch_id: str) -> Optional[Sketch]:
+        """A copy of a finished sketch on the same plane, as a new step at the end of the history (Björn #65);
+        move or edit it afterwards like any sketch."""
+        src = self.sketches.get(sketch_id)
+        if src is None or src is self.active_sketch:
+            return None
+        new_id, _n = self._sketch_id()
+        data = dict(src.to_dict(), sketch_id=new_id, name=f"{src.name} (copy)")
+        sketch = Sketch.from_dict(data)
+        sketch.visible = True
+        sketch.solve_profiles()
+        self.sketches[new_id] = sketch
+        self.timeline.add_feature(SketchFeature(f"feat_{new_id}", sketch.name, sketch))
+        self.notify_changed()
+        return sketch
+
     def edit_sketch(self, sketch_id: str) -> Optional[Sketch]:
         sketch = self.sketches.get(sketch_id)
         if sketch:
