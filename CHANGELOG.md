@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80 - 2026-10-23
+
+### Added
+- Plane at Angle (Björn #51): the Offset Plane panel has an Angle and a "Rotate about" choice (the start plane's X or Y direction, or a straight edge you click). The plane is turned about that axis and then offset; the preview follows.
+
 ## 0.9.9.79 - 2026-10-23
 
 ### Fixed

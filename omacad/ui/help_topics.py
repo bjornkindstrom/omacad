@@ -41,8 +41,9 @@ MORE = {
     "pattern": ("Pick the steps to copy in the timeline or the list (a rib and its fillets together), then the kind: "
                 "linear, circular round an axis, mirror across a plane, or filling a face.", "array copy repeat"),
     "honeycomb": ("Pick flat or round faces; set cell shape, size, wall, margin and depth or Through.", "hexagon cells lattice vent"),
-    "offset_plane": ("Click a plane or flat face and type the distance, or touch any surface (a cylinder's side).",
-                     "construction plane workplane"),
+    "offset_plane": ("Click a plane or flat face and type the distance, or touch any surface (a cylinder's side). "
+                     "Angle turns the plane about its X or Y direction or about an edge you click (Plane at Angle).",
+                     "construction plane workplane angle rotate tilt"),
     "fillet": ("Pick edges (X or Alt picks hidden ones through the model), type the radius. A whole tangent chain "
                "is picked with one click (untick Tangent chain for single edges), a face picks all its edges. The view shows the "
                "finished body; box corners where three fillets meet become a rolling ball.", "round radius edge"),

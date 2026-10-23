@@ -8,6 +8,7 @@ from typing import Dict, Optional, List, Callable, Tuple, Any
 from omacad.model import quality
 import copy
 import functools
+import math
 import numpy as np
 import manifold3d as m3d
 from omacad.model.timeline import (
@@ -1156,18 +1157,39 @@ class Document:
             self.bodies[body_id].visible = not self.bodies[body_id].visible
             self.notify_changed()
 
+    @staticmethod
+    def angled_plane(normal, origin, distance: float = 0.0, angle: float = 0.0, axis_point=None, axis_dir=None):
+        """(origin, normal) of a plane turned `angle` degrees about an axis lying in the base plane and then moved
+        `distance` along its own normal (Fusion's Plane at Angle + Offset Plane in one). The axis runs through
+        `axis_point` (default: `origin`) along `axis_dir` (projected into the base plane); angle 0 = a plain offset."""
+        n = np.asarray(normal, dtype=float)
+        n = n / np.linalg.norm(n)
+        p = np.asarray(origin if axis_point is None else axis_point, dtype=float)
+        if abs(angle) > 1e-12 and axis_dir is not None:
+            d = np.asarray(axis_dir, dtype=float)
+            d = d - n * float(d @ n)
+            if np.linalg.norm(d) > 1e-9:
+                d = d / np.linalg.norm(d)
+                a = math.radians(float(angle))
+                n = n * math.cos(a) + np.cross(d, n) * math.sin(a) + d * float(d @ n) * (1 - math.cos(a))
+                n = n / np.linalg.norm(n)
+        else:
+            p = np.asarray(origin, dtype=float)
+        return p + n * float(distance), n
+
     @undoable("Offset Plane")
-    def add_construction_plane(self, base_plane, distance: float, name: str = None, origin=None) -> str:
-        """A plane parallel to `base_plane`, `distance` mm along its normal.
+    def add_construction_plane(self, base_plane, distance: float, name: str = None, origin=None,
+                               angle: float = 0.0, axis_point=None, axis_dir=None) -> str:
+        """A plane parallel to `base_plane`, `distance` mm along its normal; with `angle` it is first turned about
+        the axis (`axis_point`, `axis_dir`) lying in the base plane (Björn #51).
 
         `origin` optionally supplies an in-plane-shifted base point.
         """
-        n = np.asarray(base_plane.normal, dtype=float)
-        n = n / np.linalg.norm(n)
         pid = f"plane_{len(self.construction_planes) + 1}"
         while pid in self.construction_planes:
             pid += "_"
-        plane_origin = np.asarray(base_plane.origin if origin is None else origin, dtype=float) + n * float(distance)
+        plane_origin, n = self.angled_plane(base_plane.normal, base_plane.origin if origin is None else origin,
+                                            distance, angle, axis_point, axis_dir)
         self.construction_planes[pid] = {"name": name or f"Plane {len(self.construction_planes) + 1}",
                                          "origin": [float(x) for x in plane_origin], "normal": [float(x) for x in n], "visible": True}
         self.notify_changed()

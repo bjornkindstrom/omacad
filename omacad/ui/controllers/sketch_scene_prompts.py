@@ -65,14 +65,22 @@ class SketchScenePromptsMixin:
         self.dock(dlg)
         self.status_label.setText("Offset Plane: type the distance in mm (or drag the 3D arrow). Click 'To surface…' to touch a surface.")
 
+        frame = base if getattr(base, "u_axis", None) is not None else SketchPlane.from_face(n, o, name="PLANE")
+
+        def placed():
+            """(origin, normal) of the new plane: turned about the chosen axis, then offset (#51)."""
+            point, direction = dlg.get_axis(frame)
+            return self.doc.angled_plane(n, o, dlg.spn_dist.value(), dlg.get_angle(), point, direction)
+
         def update_preview():
             dist = dlg.spn_dist.value()
-            plane = SketchPlane.from_face(n, o + n * dist, name="PLANE")
+            po, pn = placed()
+            plane = SketchPlane.from_face(pn, po, name="PLANE")
             # Keep sketch coordinates anchored as usual, but draw the marker
             # around the part instead of around world origin.
-            plane.display_origin = np.asarray(o + n * dist, dtype=np.float32)
+            plane.display_origin = np.asarray(po, dtype=np.float32)
             self.viewport.set_preview_plane(plane)
-            self.viewport.set_extrude_handle(o, n, dist if abs(dist) > 0.1 else 5.0, color=(0.75, 0.55, 0.95))
+            self.viewport.set_extrude_handle(po - pn * dist, pn, dist if abs(dist) > 0.1 else 5.0, color=(0.75, 0.55, 0.95))
 
         def on_handle_drag(dist: float):
             dlg.spn_dist.setValue(round(dist, 3))
@@ -107,11 +115,41 @@ class SketchScenePromptsMixin:
 
         dlg.surface_requested.connect(start_surface_pick)
 
+        edge_wired = []
+
+        def unwire_edge():
+            if edge_wired:
+                self.viewport.edges_selection_changed.disconnect(on_edge_picked)
+                edge_wired.clear()
+
+        def on_edge_picked():
+            edges = [e for e in self.viewport.selected_edges if hasattr(e, "p0") and hasattr(e, "p1")]
+            if not edges:
+                return
+            e = edges[-1]
+            p0, p1 = np.asarray(e.p0, dtype=float), np.asarray(e.p1, dtype=float)
+            unwire_edge()
+            self.viewport.end_edge_pick()
+            dlg.set_edge((p0 + p1) / 2.0, p1 - p0)
+            self.status_label.setText("Offset Plane: the plane turns about that edge. Type the angle.")
+
+        def start_edge_pick():
+            unwire_edge()
+            self.viewport.begin_edge_pick()
+            self.viewport.edges_selection_changed.connect(on_edge_picked)
+            edge_wired.append(True)
+            self.status_label.setText("Offset Plane: click a straight edge to turn the plane about.")
+
+        dlg.edge_requested.connect(start_edge_pick)
+
         def cleanup():
             try:
                 self.viewport.surface_picked.disconnect(on_surface_picked)
             except Exception:
                 pass
+            unwire_edge()
+            if self.viewport.edge_pick_mode:
+                self.viewport.end_edge_pick()
             try:
                 self.viewport.extrude_handle_dragged.disconnect(on_handle_drag)
             except Exception:
@@ -123,7 +161,9 @@ class SketchScenePromptsMixin:
 
         if dlg.exec():
             dist = dlg.spn_dist.value()
-            pid = self.doc.add_construction_plane(base, dist, origin=o)
+            point, direction = dlg.get_axis(frame)
+            pid = self.doc.add_construction_plane(base, dist, origin=o, angle=dlg.get_angle(),
+                                                  axis_point=point, axis_dir=direction)
             self.status_label.setText(f"{self.doc.construction_planes[pid]['name']} created {dist:.3f} mm from {base.name}.")
         cleanup()
 
