@@ -379,10 +379,12 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
         from omacad.model.timeline import FilletFeature
         from omacad.model.features.base import Body
         from omacad.model.faces import compute_planar_edges
-        dlg = RoundEdgesDialog(win, feat.kind, feat.size, editing=True)
+        dlg = RoundEdgesDialog(win, feat.kind, feat.size, editing=True, chamfer_type=feat.chamfer_type,
+                               size2=feat.size2, angle=feat.angle, flip=feat.flip)
         dlg.setWindowTitle(f"Edit {feat.name}")
-        if feat.exprs.get("size"):
-            dlg.spn_size.set_expression(feat.exprs["size"])
+        for key, spin in (("size", dlg.spn_size), ("size2", dlg.spn_size2), ("angle", dlg.spn_angle)):
+            if feat.exprs.get(key):
+                spin.set_expression(feat.exprs[key])
 
         # Find which body was modified by this fillet step and precompute its edges once
         after_state = states.get(index + 1, {})
@@ -405,7 +407,9 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
             class _TmpDoc:
                 bodies = tmp_doc_bodies
 
-            tmp = FilletFeature("tmp", "tmp", feat.edges, dlg.spn_size.value(), dlg.kind())
+            v = dlg.values()
+            tmp = FilletFeature("tmp", "tmp", feat.edges, v["size"], v["kind"], v["chamfer_type"], v["size2"],
+                                v["angle"], v["flip"])
             tmp.execute(_TmpDoc)
             if mod_bids and mod_bids[0] in tmp_doc_bodies:
                 vp.set_preview(tmp_doc_bodies[mod_bids[0]].manifold, "new_body")
@@ -421,7 +425,7 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
         finally:
             if vp is not None:
                 vp.step_edges = kept_edges
-        return commit(size=dlg.spn_size.value(), kind=dlg.kind(), exprs=dlg.get_expressions())
+        return commit(**dlg.values(), exprs=dlg.get_expressions())
 
     if t == "offset_face":
         from omacad.ui.dialogs import OffsetFaceDialog

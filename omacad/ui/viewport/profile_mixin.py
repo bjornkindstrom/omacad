@@ -26,6 +26,13 @@ class ProfileMixin:
         self.preview_extra = (CadKernel.extract_render_mesh(extra), extra_op) if extra is not None and not extra.is_empty() else None
         self.preview_op = operation
         self.update()
+    def set_display_override(self, manifolds: Optional[dict]):
+        """Draws these solids (body id -> manifold) in place of the bodies, which keep their edges and faces for
+        picking; None restores them. Fillet/Chamfer uses it to show the finished result while edges are picked."""
+        self.display_override = ({bid: CadKernel.extract_render_mesh(m) for bid, m in manifolds.items()}
+                                 if manifolds else None)
+        self.update()
+
     def pick_profile(self, x: float, y: float) -> Optional[Tuple[str, int]]:
         """Returns (sketch_id, profile_idx) of the smallest closed profile under the cursor."""
         proj, view, _ = self.get_matrices()

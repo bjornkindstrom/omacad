@@ -18,13 +18,51 @@ class FilletFeature(Feature):
     Edges are remembered by their end points and found again on rebuild, so the step survives
     changes elsewhere as long as the edge is still there."""
 
-    def __init__(self, feature_id: str, name: str, edges, size: float, kind: str = "fillet"):
+    CHAMFER_TYPES = ("equal", "two", "angle")    # Fusion: Equal distance, Two distances, Distance and angle
+
+    def __init__(self, feature_id: str, name: str, edges, size: float, kind: str = "fillet",
+                 chamfer_type: str = "equal", size2: float = 0.0, angle: float = 45.0, flip: bool = False):
         super().__init__(feature_id, "fillet", name)
         # each entry: ((x,y,z),(x,y,z)) for a straight edge, or ("circle", centre, axis, radius)
         self.edges = [self._norm_ref(e) for e in edges]
         self.size = float(size)
         self.kind = kind  # "fillet" or "chamfer"
+        self.chamfer_type = chamfer_type if chamfer_type in self.CHAMFER_TYPES else "equal"
+        self.size2 = float(size2)     # "two": distance on the second face
+        self.angle = float(angle)     # "angle": degrees between the first face and the bevel
+        self.flip = bool(flip)        # swap which face gets the first distance
         self.skipped = 0  # edges that could not be found/applied in the last rebuild
+
+    def second_distance(self) -> float:
+        """The chamfer's distance on the second face (= size for an equal chamfer or a fillet)."""
+        if self.kind != "chamfer" or self.chamfer_type == "equal":
+            return abs(self.size)
+        if self.chamfer_type == "two":
+            return abs(self.size2) if self.size2 > 1e-9 else abs(self.size)
+        return abs(self.size) * math.tan(math.radians(min(max(self.angle, 1.0), 89.0)))
+
+    def tool_sizes(self, edge, size: float):
+        """(distance along the tool's face 1, distance along face 2) for `edge`, `size` being the (possibly clearance
+        limited) first distance. The first distance lies on the flat face of a circle or outline, and for a straight
+        edge on the face that is most horizontal (top/bottom), so a mix of edges bevels the same way; Flip swaps."""
+        second = self.second_distance() * size / max(abs(self.size), 1e-12)
+        if abs(second - size) < 1e-9:
+            return size, None
+        first_is_face1 = True
+        if getattr(edge, "kind", "") == "line":
+            z1, z2 = abs(float(edge.n1[2])), abs(float(edge.n2[2]))
+            if abs(z1 - z2) < 1e-6:
+                z1, z2 = abs(float(edge.n1[0])), abs(float(edge.n2[0]))
+            first_is_face1 = z1 >= z2 - 1e-9
+        if self.flip:
+            first_is_face1 = not first_is_face1
+        return (size, second) if first_is_face1 else (second, size)
+
+    def _limited_sizes(self, body, edge, size: float):
+        """tool_sizes after the clearance limit, judged on the larger of the two distances."""
+        big = max(size, self.second_distance() * size / max(abs(self.size), 1e-12))
+        scale = self._safe_edge_size(body, edge, big) / max(big, 1e-12)
+        return self.tool_sizes(edge, size * scale)
 
     @staticmethod
     def _norm_ref(e):
@@ -264,10 +302,71 @@ class FilletFeature(Feature):
                 ext[k] = reach
                 trims.append((m, float(m @ v)))
                 break
-        tool = CadKernel.round_tool(edge, size, self.kind, extend=tuple(ext))
+        a, b = self.tool_sizes(edge, size)
+        tool = CadKernel.round_tool(edge, a, self.kind, extend=tuple(ext), size2=b)
         for m, off in trims:
             tool = tool.trim_by_plane([float(x) for x in m], off)
         return tool
+
+    def _corner_tools(self, seen):
+        """Where three selected outside edges meet square at a vertex (a box corner), the edge tools alone leave a
+        pointed bump (three cylinders crossing). Fusion's rolling ball rounds that corner into a sphere, and a chamfer
+        gets a small flat triangle; this is the extra cut for each such corner: the corner cube minus the ball (fillet)
+        or the cube below the triangle (equal chamfer). Corners with unequal sizes keep the plain result."""
+        if self.kind == "chamfer" and self.chamfer_type != "equal":
+            return []
+        lines = [(b, e) for b, e in seen if e.convex and getattr(e, "kind", "") == "line"]
+        out, done = [], []
+        for body, edge in lines:
+            for v in (edge.p0, edge.p1):
+                if any(body is b and np.linalg.norm(v - q) < 1e-4 for b, q in done):
+                    continue
+                meet = []
+                for b2, e2 in lines:
+                    if b2 is not body:
+                        continue
+                    if np.linalg.norm(e2.p0 - v) < 1e-4:
+                        meet.append((e2, e2.p1))
+                    elif np.linalg.norm(e2.p1 - v) < 1e-4:
+                        meet.append((e2, e2.p0))
+                if len(meet) != 3:
+                    continue
+                done.append((body, v))
+                ts = [(far - v) / max(float(np.linalg.norm(far - v)), 1e-12) for _e, far in meet]
+                if any(abs(float(ts[i] @ ts[j])) > 1e-3 for i in range(3) for j in range(i + 1, 3)):
+                    continue        # not a square corner
+                # each edge's faces must run along the other two edges (a real outside corner of the solid)
+                ok = True
+                for k, (e3, _far) in enumerate(meet):
+                    others = [ts[j] for j in range(3) if j != k]
+                    if not all(max(float(d @ o) for o in others) > 0.999 for d in (e3.d1, e3.d2)):
+                        ok = False
+                if not ok:
+                    continue
+                sizes = [self._safe_edge_size(body, e3, abs(self.size)) for e3, _ in meet]
+                if max(sizes) - min(sizes) > 1e-6:
+                    continue
+                r = sizes[0]
+                tool = self.corner_tool(r, self.kind)
+                t1, t2, t3 = ts
+                if float(np.cross(t1, t2) @ t3) < 0:
+                    t2, t3 = t3, t2
+                mat = np.column_stack([t1, t2, t3, v]).astype(float)
+                out.append((body.body_id, tool.transform(mat)))
+        return out
+
+    @staticmethod
+    def corner_tool(r: float, kind: str) -> m3d.Manifold:
+        """The extra cut at a square outside corner in local coordinates (corner at the origin, edges along +x/+y/+z):
+        fillet = cube [0, r]^3 minus the ball of radius r centred at (r, r, r), chamfer = the part of the cube below
+        the plane x + y + z = 2r. The cube reaches a hair outside the corner so the cut is clean."""
+        m = 1e-3 * max(1.0, r)
+        cube = m3d.Manifold.cube((r + m, r + m, r + m)).translate((-m, -m, -m))
+        if kind == "chamfer":
+            k = 1.0 / math.sqrt(3.0)
+            return cube.trim_by_plane((-k, -k, -k), -2.0 * r * k)
+        ball = m3d.Manifold.sphere(r, circular_segments=96).translate((r, r, r))
+        return cube - ball
 
     def edges_in(self, manifolds: dict) -> list:
         """The edges this step rounds, found in the bodies as they were before it (`manifolds`: body id -> solid),
@@ -345,6 +444,7 @@ class FilletFeature(Feature):
                     cut.setdefault(body.body_id, []).append(tool)
                 continue
             eff_size = self._safe_edge_size(body, edge, size)
+            a, b = self._limited_sizes(body, edge, size)
             curved_fill = (self._circular_neighbor_tool(body, edge, self.size)
                            if self.kind == "fillet" and not edge.convex else None)
             if curved_fill is not None:
@@ -354,9 +454,10 @@ class FilletFeature(Feature):
             elif not edge.convex and getattr(edge, "kind", "") == "line":
                 tool = self._mitred_tool(body, edge, [e for b, e in seen if b is body], eff_size)
             elif getattr(edge, "kind", "") == "circle" and edge.is_arc:
-                tool = CadKernel.circle_round_tool(edge, size, self.kind, reach=self._arc_reach(body, edge))
+                a, b = self.tool_sizes(edge, size)
+                tool = CadKernel.circle_round_tool(edge, a, self.kind, reach=self._arc_reach(body, edge), size2=b)
             else:
-                tool = CadKernel.round_tool(edge, eff_size, self.kind, extend=ext)
+                tool = CadKernel.round_tool(edge, a, self.kind, extend=ext, size2=b)
             (cut if edge.convex else add).setdefault(body.body_id, []).append(tool)
 
         # Inside corners of a face outline: the two bevel bands end square at the corner and leave a notch there.
@@ -374,16 +475,20 @@ class FilletFeature(Feature):
                 same_face = any(float(na @ nb) > 0.999 for na in (ea.n1, ea.n2) for nb in (eb.n1, eb.n2))
                 if not shared or not same_face or abs(float(da @ db)) > 0.999:
                     continue
-                sa = self._safe_edge_size(ba, ea, self.size)
-                sb = self._safe_edge_size(bb, eb, self.size)
-                ext = 40.0 * min(sa, sb) + 10.0
+                sa = self._limited_sizes(ba, ea, self.size)
+                sb = self._limited_sizes(bb, eb, self.size)
+                ext = 40.0 * max(min(sa[0], sb[0]), min(sa[1] or sa[0], sb[1] or sb[0])) + 10.0
                 try:
-                    corner = (CadKernel.edge_round_tool(ea, sa, self.kind, extend=ext)
-                              ^ CadKernel.edge_round_tool(eb, sb, self.kind, extend=ext))
+                    corner = (CadKernel.edge_round_tool(ea, sa[0], self.kind, extend=ext, size2=sa[1])
+                              ^ CadKernel.edge_round_tool(eb, sb[0], self.kind, extend=ext, size2=sb[1]))
                 except Exception:
                     continue
                 if not corner.is_empty():
                     cut.setdefault(ba.body_id, []).append(corner)
+
+        if self.size > 0:
+            for body_id, tool in self._corner_tools(seen):
+                cut.setdefault(body_id, []).append(tool)
 
         for body_id in set(cut) | set(add):
             body = doc.bodies.get(body_id)
@@ -414,4 +519,8 @@ class FilletFeature(Feature):
             "edges": [list(e) if isinstance(e[0], str) else [list(e[0]), list(e[1])] for e in self.edges],
             "size": self.size,
             "kind": self.kind,
+            "chamfer_type": self.chamfer_type,
+            "size2": self.size2,
+            "angle": self.angle,
+            "flip": self.flip,
         }

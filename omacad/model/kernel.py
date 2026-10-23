@@ -93,12 +93,13 @@ class CadKernel:
         return manifold
 
     @staticmethod
-    def edge_round_tool(edge, size: float, kind: str, extend=0.0, arc_segments: int = 24) -> m3d.Manifold:
+    def edge_round_tool(edge, size: float, kind: str, extend=0.0, arc_segments: int = 24, size2=None) -> m3d.Manifold:
         """The sliver along an edge that a chamfer/fillet removes (convex edge) or fills in (concave).
 
         Cross-section in the plane across the edge, with the corner at the origin and e1 along face 1:
         chamfer = triangle (corner, A, B); fillet = corner, A, arc towards the corner, B, where A and B
-        are the tangent points a distance size/tan(theta/2) along the faces."""
+        are the tangent points a distance size/tan(theta/2) along the faces. `size2`: a chamfer's distance
+        along face 2 (d2) when it differs from `size` (two distances / distance and angle)."""
         t = (edge.p1 - edge.p0) / np.linalg.norm(edge.p1 - edge.p0)
         origin = edge.p0.copy()
         ext_start, ext_end = (extend if isinstance(extend, (tuple, list)) else (extend, extend))   # at p0, at p1
@@ -118,10 +119,11 @@ class CadKernel:
         m = 1e-3 * max(1.0, float(size)) if convex else 0.0
         if kind == "chamfer":
             s = float(size)
+            s2 = s if size2 is None else float(size2)
             A = np.array([s, 0.0])
-            B = s * np.array([math.cos(theta), math.sin(theta)])
+            B = s2 * np.array([math.cos(theta), math.sin(theta)])
             if m > 0:
-                poly = [(-m, -m), (s, -m), tuple(A), tuple(B), (-m, s)]
+                poly = [(-m, -m), (s, -m), tuple(A), tuple(B), (-m, s2)]
             else:
                 poly = [(0.0, 0.0), tuple(A), tuple(B)]
         else:
@@ -267,16 +269,17 @@ class CadKernel:
         return result
 
     @staticmethod
-    def round_tool(edge, size: float, kind: str, extend=0.0) -> m3d.Manifold:
-        """Tool body for a straight or circular edge."""
+    def round_tool(edge, size: float, kind: str, extend=0.0, size2=None) -> m3d.Manifold:
+        """Tool body for a straight or circular edge. `size2`: second chamfer distance (see edge_round_tool);
+        wrapped edges only take equal distances."""
         if getattr(edge, "kind", "") == "wrapped":
             from omacad.model.wrapped_edges import wrapped_round_tool
             return wrapped_round_tool(edge, size, kind)
         if getattr(edge, "kind", "line") == "circle":
-            return CadKernel.circle_round_tool(edge, size, kind)
+            return CadKernel.circle_round_tool(edge, size, kind, size2=size2)
         if getattr(edge, "kind", "line") == "loop":
-            return CadKernel.loop_round_tool(edge, size, kind)
-        return CadKernel.edge_round_tool(edge, size, kind, extend)
+            return CadKernel.loop_round_tool(edge, size, kind, size2=size2)
+        return CadKernel.edge_round_tool(edge, size, kind, extend, size2=size2)
 
     @staticmethod
     def round_cove_tool(edge, radius: float, extend=0.0) -> m3d.Manifold:
@@ -334,13 +337,14 @@ class CadKernel:
         return m3d.Manifold()
 
     @staticmethod
-    def loop_round_tool(edge, size: float, kind: str, arc_segments: int = 16) -> m3d.Manifold:
+    def loop_round_tool(edge, size: float, kind: str, arc_segments: int = 16, size2=None) -> m3d.Manifold:
         """Fillet/chamfer all the way round an outline of straight pieces and arcs: the usual corner
         cross-section swept along the outline (mitred where the direction changes)."""
         P = np.asarray(edge.pts, dtype=float)
         n = np.asarray(edge.n, dtype=float)
         N = len(P)
         r = float(size)
+        r2 = r if size2 is None else float(size2)       # chamfer distance up/down the wall
         t = np.roll(P, -1, axis=0) - P                      # segment i goes from point i to point i+1
         t /= np.maximum(np.linalg.norm(t, axis=1), 1e-12)[:, None]
         inw = np.cross(n, t)                                # into the face (it lies on the left)
@@ -355,7 +359,7 @@ class CadKernel:
         convex = bool(getattr(edge, "convex", True))
         if convex:
             if kind == "chamfer":
-                sec = [(-m, m), (r, m), (r, 0.0), (0.0, -r), (-m, -r)]
+                sec = [(-m, m), (r, m), (r, 0.0), (0.0, -r2), (-m, -r2)]
             else:
                 arc = [(r + r * math.cos(ph), -r + r * math.sin(ph))
                        for ph in np.linspace(math.pi / 2, math.pi, arc_segments + 1)]
@@ -364,7 +368,7 @@ class CadKernel:
             # the foot of a wall rising from the face: material is ADDED in the corner between face and wall
             # (a = along the face away from the wall, h = up the wall); the margin overlaps the existing material
             if kind == "chamfer":
-                sec = [(-m, -m), (r, -m), (r, 0.0), (0.0, r), (-m, r)]
+                sec = [(-m, -m), (r, -m), (r, 0.0), (0.0, r2), (-m, r2)]
             else:
                 arc = [(r - r * math.cos(b), r - r * math.sin(b)) for b in np.linspace(math.pi / 2, 0.0, arc_segments + 1)]
                 sec = [(-m, -m), (r, -m)] + arc + [(-m, r)]
@@ -492,9 +496,9 @@ class CadKernel:
         return joints
 
     @staticmethod
-    def circle_round_tool(edge, size: float, kind: str, arc_segments: int = 24, reach=(0.0, 0.0)) -> m3d.Manifold:
+    def circle_round_tool(edge, size: float, kind: str, arc_segments: int = 24, reach=(0.0, 0.0), size2=None) -> m3d.Manifold:
         """Same cross-section as a straight edge (a right angle between the flat face and the cylinder
-        wall) revolved around the circle's axis."""
+        wall) revolved around the circle's axis. `size2`: chamfer distance along the wall."""
         R = float(edge.radius)
         # The wall of the original solid is a polygon whose chords sag inside the radius; a tool that
         # only reached R would leave a hair-thin lip along the old edge (visible as a leftover line).
@@ -504,7 +508,8 @@ class CadKernel:
         m = 2.0 * sag + 1e-3 * max(1.0, R)
         if kind == "chamfer":
             s = float(size)
-            local = [(-m, -m), (s, -m), (s, 0.0), (0.0, s), (-m, s)]
+            s2 = s if size2 is None else float(size2)
+            local = [(-m, -m), (s, -m), (s, 0.0), (0.0, s2), (-m, s2)]
         else:
             r = float(size)
             # tangent points A=(r,0) on the face and B=(0,r) on the wall; the arc is centred at (r,r)

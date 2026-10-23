@@ -43,8 +43,10 @@ MORE = {
     "offset_plane": ("Click a plane or flat face and type the distance, or touch any surface (a cylinder's side).",
                      "construction plane workplane"),
     "fillet": ("Pick edges (X or Alt picks hidden ones through the model), type the radius. A whole tangent chain "
-               "is picked with one click.", "round radius edge"),
-    "chamfer": ("Pick edges, type the size. Inside corners get material added.", "bevel edge"),
+               "is picked with one click (untick Tangent chain for single edges), a face picks all its edges. The view shows the "
+               "finished body; box corners where three fillets meet become a rolling ball.", "round radius edge"),
+    "chamfer": ("Pick edges, type the size. Chamfer type: Equal distance, Two distances or Distance and angle "
+                "(Flip swaps the faces). Inside corners get material added.", "bevel edge two distances angle"),
     "shell": ("Pick the body, the wall thickness, and click faces to leave them open.", "hollow wall thickness"),
     "offset_face": ("Click flat faces, holes or pins and type how far they move: + adds material, − removes it. On a "
                     "thread it changes only the thread, for a looser or tighter fit.", "tolerance fit clearance hole pin"),

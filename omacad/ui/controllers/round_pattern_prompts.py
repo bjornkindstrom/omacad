@@ -105,26 +105,40 @@ class RoundPatternPromptsMixin:
                 self.viewport.clear_extrude_handle()
 
         def preview():
-            from omacad.model.kernel import CadKernel
             from omacad.model.timeline import FilletFeature
+            from omacad.model.features.base import Body
             edges = self.viewport.selected_edges
             dlg.set_count(len(edges))
-            solid, problem = None, None
-            # Find which body owns each edge for clearance checks
-            doc_bodies = list(self.doc.bodies.values())
-            for e in edges:
-                try:
-                    owner_body = next((b for b in doc_bodies if any(e.same_as(k) for k in b.edges)), doc_bodies[0] if doc_bodies else None)
-                    size = abs(dlg.spn_size.value())
-                    eff_size = FilletFeature._safe_edge_size(owner_body, e, size) if owner_body else size
-                    tool = (CadKernel.round_cove_tool(e, eff_size) if dlg.spn_size.value() < 0
-                            else CadKernel.round_tool(e, eff_size, dlg.kind()))
-                    solid = tool if solid is None else solid + tool
-                except Exception as ex:
-                    problem = str(ex) or "This edge can't be rounded with that size."
-            if problem:
-                self.status_label.setText(f"Fillet/Chamfer: {problem}")
-            self.viewport.set_preview(solid, "new_body")
+            if not edges:
+                self.viewport.set_display_override(None)
+                update_arrow()
+                return
+            # Like Fusion: run the real step on copies of the bodies and draw the finished result in their place
+            # (the originals keep their edges, so picking goes on working).
+            tmp_bodies = {}
+            for bid, b in self.doc.bodies.items():
+                t = Body(bid, b.name, b.manifold, edges=list(b.edges))
+                t.update_render_mesh = lambda: None
+                tmp_bodies[bid] = t
+
+            class _TmpDoc:
+                bodies = tmp_bodies
+
+            v = dlg.values()
+            tmp = FilletFeature("preview", "preview", [e.ref() for e in edges], v["size"], v["kind"],
+                                v["chamfer_type"], v["size2"], v["angle"], v["flip"])
+            try:
+                tmp.execute(_TmpDoc)
+            except Exception as ex:
+                self.viewport.set_display_override(None)
+                self.status_label.setText(f"Fillet/Chamfer: {ex or 'these edges cannot be rounded with that size.'}")
+                update_arrow()
+                return
+            changed = {bid: t.manifold for bid, t in tmp_bodies.items()
+                       if t.manifold is not self.doc.bodies[bid].manifold}
+            self.viewport.set_display_override(changed)
+            if tmp.skipped:
+                self.status_label.setText(f"Fillet/Chamfer: {tmp.skipped} edge(s) cannot be rounded with that size.")
             update_arrow()
 
         def on_handle_drag(val: float):
@@ -143,6 +157,8 @@ class RoundPatternPromptsMixin:
             except (RuntimeError, TypeError):
                 pass
             self.viewport.clear_extrude_handle()
+            self.viewport.set_display_override(None)
+            self.viewport.edge_tangent_chain = True
             edges = [e.ref() for e in self.viewport.selected_edges]
             self._round_dlg = None
             dlg.deleteLater()
@@ -150,13 +166,18 @@ class RoundPatternPromptsMixin:
             self.viewport.end_edge_pick()
             self.viewport.set_preview(None)
             if result and edges:
-                spin = dlg.spn_size.value()
-                feat = self.doc.add_fillet(edges, spin, dlg.kind(), exprs=dlg.get_expressions())
+                v = dlg.values()
+                spin = v.pop("size")
+                feat = self.doc.add_fillet(edges, spin, v.pop("kind"), exprs=dlg.get_expressions(), **v)
                 note = f" ({feat.skipped} edge(s) could not be rounded)" if feat.skipped else ""
                 self.status_label.setText(f"{feat.name}: {len(edges)} edge(s), {spin:g} mm.{note}")
             elif result:
                 self.status_label.setText("No edges were selected.")
 
+        def on_chain(on: bool):
+            self.viewport.edge_tangent_chain = on
+
+        dlg.tangent_chain_toggled.connect(on_chain)
         self.viewport.edges_selection_changed.connect(preview)
         self.viewport.edge_pick_cancelled.connect(on_cancel_pick)
         self.viewport.extrude_handle_dragged.connect(on_handle_drag)

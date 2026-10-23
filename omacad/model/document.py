@@ -504,11 +504,14 @@ class Document:
         return None
 
     @undoable("Fillet")
-    def add_fillet(self, edges, size: float, kind: str = "fillet", exprs=None) -> FilletFeature:
-        """Fillet or chamfer the given edges ((p0, p1) world coordinates each)."""
+    def add_fillet(self, edges, size: float, kind: str = "fillet", exprs=None, chamfer_type: str = "equal",
+                   size2: float = 0.0, angle: float = 45.0, flip: bool = False) -> FilletFeature:
+        """Fillet or chamfer the given edges ((p0, p1) world coordinates each). A chamfer can have two distances
+        (`size2`) or a distance and an angle, like Fusion's Chamfer types."""
         n = len([f for f in self.timeline.features if f.feature_type == "fillet"]) + 1
         feat_id = self._feature_id("fillet")
-        feat = FilletFeature(feat_id, f"{'Chamfer' if kind == 'chamfer' else 'Fillet'} {n}", edges, size, kind)
+        feat = FilletFeature(feat_id, f"{'Chamfer' if kind == 'chamfer' else 'Fillet'} {n}", edges, size, kind,
+                             chamfer_type, size2, angle, flip)
         feat.exprs = dict(exprs or {})
         self.timeline.add_feature(feat)
         feat.execute(self)
@@ -743,7 +746,7 @@ class Document:
         "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),
         "combine": ("target_body_id", "tool_body_id", "operation", "keep_tool"),
-        "fillet": ("size", "kind"),
+        "fillet": ("size", "kind", "chamfer_type", "size2", "angle", "flip"),
         "thread": ("diameter", "pitch", "length", "is_female", "clearance", "profile", "taper_lead_in", "taper_turns", "target_body_id", "operation", "plane_origin", "plane_normal", "plane_u", "plane_v", "anchor", "anchor_gap", "host_length", "grow", "follow_host", "host_offset"),
         "pattern": ("source_ids", "kind", "axis1", "count1", "spacing1", "axis2", "count2", "spacing2",
                     "mirror_mode", "about", "angle", "rotation_axis", "axis_origin", "axis_direction"),

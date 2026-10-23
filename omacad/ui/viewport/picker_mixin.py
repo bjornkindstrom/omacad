@@ -267,7 +267,7 @@ class PickerMixin:
 
     def _toggle_edge(self, e):
         """Click: the edge and everything joined to it smoothly is added, or removed if `e` is already picked."""
-        chain = tangent_chain(e, self._visible_edges())
+        chain = tangent_chain(e, self._visible_edges()) if getattr(self, "edge_tangent_chain", True) else [e]
         if any(self._same_edge(sel, e) for sel in self.selected_edges):
             self.selected_edges = [s for s in self.selected_edges if not any(self._same_edge(s, c) for c in chain)]
         else:

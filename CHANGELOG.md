@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.9.77 - 2026-10-23
+
+### Changed
+- Fillet/Chamfer works more like Fusion 360: while you pick edges the view shows the finished, rounded body in place of the original instead of loose blue tool slivers.
+- Box corners where three filleted edges meet are now a rolling-ball sphere (before: a pointed bump where three cylinders crossed); with an equal chamfer the corner gets a flat triangle.
+- Chamfer types: Equal distance, Two distances and Distance and angle, with Flip to swap the faces. The first distance lies on the top/bottom face of a straight edge and on the flat face of a circle or outline.
+- Tangent chain checkbox in the panel: off picks single edges only.
+
 ## 0.9.9.76 - 2026-10-21
 
 ### Fixed
