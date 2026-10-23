@@ -26,6 +26,7 @@ class SweepPromptsMixin:
         for sk in self.doc.sketches.values():          # the profiles must be visible to be clicked
             sk.visible = True
         self.doc.selected_profile, self.doc.selected_extra = None, []
+        self.viewport.profile_chain_mode = mode == "loft"   # Loft: each click adds a profile, from any plane
         self.dock(dlg)
 
         def feature():
@@ -59,6 +60,7 @@ class SweepPromptsMixin:
 
         def on_finished(result):
             self.viewport.profile_picked.disconnect(on_pick)
+            self.viewport.profile_chain_mode = False
             self.viewport.set_preview(None)
             for sid, vis in shown.items():
                 if sid in self.doc.sketches:
@@ -87,6 +89,6 @@ class SweepPromptsMixin:
         dlg.finished.connect(on_finished)
         self.status_label.setText(f"{title}: " + ("set the path and the diameter." if mode == "pipe" else
                                                   "click the profile." if mode == "sweep" else
-                                                  "click the first profile, Shift+click the next ones in order."))
+                                                  "click the profiles in order (a click again drops one)."))
         self.doc.notify_changed()
         preview()

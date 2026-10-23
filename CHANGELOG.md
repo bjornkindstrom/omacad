@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.8 - 2026-10-23
+
+### Fixed
+- Loft did not work: Shift+click only adds profiles from the same plane (as Extrude needs), so the second profile on another plane was silently dropped and a Loft never got two. With Loft open every click now adds a profile from any plane, in order; a second click drops it again.
+
 ## 0.9.9.80.7 - 2026-10-23
 
 ### Fixed

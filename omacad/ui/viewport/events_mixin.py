@@ -103,6 +103,22 @@ class ViewportEventsMixin:
             return no_mods and event.key() in SKETCH_KEYS
         return self._typing_panel() is not None and self._types_into_panel(event)
 
+    def toggle_profile_in_selection(self, picked) -> None:
+        """Shift+click: add a profile to the selection or remove it again. Normally only profiles of one sketch or of
+        sketches in the same plane go together (Extrude); in `profile_chain_mode` (Loft) every click adds a profile
+        from any plane, in click order."""
+        doc = self.doc
+        chosen = ([doc.selected_profile] if doc.selected_profile else []) + list(doc.selected_extra)
+        if picked in chosen:
+            chosen.remove(picked)
+        elif (getattr(self, "profile_chain_mode", False) or not chosen or chosen[0][0] == picked[0]
+              or self._sketches_share_plane(chosen[0][0], picked[0])):
+            chosen.append(picked)
+        doc.selected_profile = chosen[0] if chosen else None
+        doc.selected_extra = chosen[1:]
+        self.profile_picked.emit()
+        self.update()
+
     def keyPressEvent(self, event):
         # A tool panel is open (Extrude, Fillet, Chamfer, Shell, ...): typing a number or a parameter name in the 3D
         # view goes straight into its main field, Enter is OK. Backspace stays "undo last edge" while edges are picked.
@@ -476,17 +492,9 @@ class ViewportEventsMixin:
         if was_click:
             picked = self.pick_profile(event.position().x(), event.position().y())
             doc = self.doc
-            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier and picked is not None:
-                # Shift+click adds a profile to the selection, or removes it again
-                chosen = ([doc.selected_profile] if doc.selected_profile else []) + list(doc.selected_extra)
-                if picked in chosen:
-                    chosen.remove(picked)
-                elif not chosen or chosen[0][0] == picked[0] or self._sketches_share_plane(chosen[0][0], picked[0]):
-                    chosen.append(picked)   # profiles of one sketch, or of sketches drawn in the same plane
-                doc.selected_profile = chosen[0] if chosen else None
-                doc.selected_extra = chosen[1:]
-                self.profile_picked.emit()
-                self.update()
+            if picked is not None and (event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+                                       or getattr(self, "profile_chain_mode", False)):
+                self.toggle_profile_in_selection(picked)
             elif picked != doc.selected_profile or doc.selected_extra:
                 doc.selected_profile = picked
                 doc.selected_extra = []

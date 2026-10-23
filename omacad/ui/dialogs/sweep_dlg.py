@@ -11,8 +11,8 @@ TITLES = {"sweep": "Sweep", "loft": "Loft", "pipe": "Pipe"}
 HELP = {
     "sweep": "Click the profile to sweep in the 3D view, then choose the sketch that holds the path (its lines and "
              "arcs in one chain, or a circle).",
-    "loft": "Click the profiles in the order the loft passes through them: the first one, then Shift+click the next "
-            "ones (two or more, on different planes).",
+    "loft": "Click the profiles in the order the loft passes through them (two or more, on different planes). "
+            "Click a profile again to drop it.",
     "pipe": "Choose the sketch that holds the path (its lines and arcs in one chain, or a circle) and the diameter; "
             "a wall thickness makes it a tube.",
 }

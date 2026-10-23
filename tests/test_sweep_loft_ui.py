@@ -43,8 +43,10 @@ def test_loft_and_pipe_panels(win):
     doc.finish_sketch()
     win.prompt_sweep_tool("loft")
     dlg = win.findChildren(SweepLoftDialog)[-1]
-    doc.selected_profile, doc.selected_extra = (a.sketch_id, 0), [(b.sketch_id, 0)]
-    win.viewport.profile_picked.emit()
+    # clicks in the view: each adds a profile, though they lie on different planes (Shift+click used to drop the
+    # second one, so a Loft never got two profiles)
+    win.viewport.toggle_profile_in_selection((a.sketch_id, 0))
+    win.viewport.toggle_profile_in_selection((b.sketch_id, 0))
     assert dlg.profiles == [(a.sketch_id, 0), (b.sketch_id, 0)]
     dlg.accept()
     QApplication.processEvents()
