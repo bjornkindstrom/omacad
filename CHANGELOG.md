@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.17 - 2026-10-24
+
+### Fixed
+- Fillet and chamfer on a polygon's corner cut a notch (report 20261024-084617): the tool reached out of the body with points square to the first face, which lie inside the material when the faces meet at anything but 90 degrees (a hexagon's 120 degree corner got a triangular notch in the next face, visible at the top). The tool now reaches out along each face's own normal, so every corner angle loses exactly its corner region.
+
 ## 0.9.9.80.16 - 2026-10-24
 
 ### Fixed

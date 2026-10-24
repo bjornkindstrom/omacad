@@ -117,13 +117,18 @@ class CadKernel:
         half = theta / 2.0
         convex = getattr(edge, "convex", True)
         m = 1e-3 * max(1.0, float(size)) if convex else 0.0
+        # A convex tool reaches a hair out of the body, past each face along its outward normal (face 1 lies
+        # along +x, face 2 at angle theta); a point square to the axes would sit inside the material when the
+        # faces are not at 90 degrees (a hexagon's 120 degree corner got a notch in face 2).
+        n1, n2 = np.array([0.0, -1.0]), np.array([-math.sin(theta), math.cos(theta)])
+        out1, out2, out0 = tuple(m * n1), tuple(m * n2), tuple(m * (n1 + n2))
         if kind == "chamfer":
             s = float(size)
             s2 = s if size2 is None else float(size2)
             A = np.array([s, 0.0])
             B = s2 * np.array([math.cos(theta), math.sin(theta)])
             if m > 0:
-                poly = [(-m, -m), (s, -m), tuple(A), tuple(B), (-m, s2)]
+                poly = [out0, tuple(A + out1), tuple(A), tuple(B), tuple(B + out2)]
             else:
                 poly = [(0.0, 0.0), tuple(A), tuple(B)]
         else:
@@ -138,7 +143,7 @@ class CadKernel:
             arc = [(c[0] + r * math.cos(pa + sweep * k / arc_segments), c[1] + r * math.sin(pa + sweep * k / arc_segments))
                    for k in range(1, arc_segments)]
             if m > 0:
-                poly = [(-m, -m), (s, -m), tuple(A)] + arc + [tuple(B), (-m, s)]
+                poly = [out0, tuple(A + out1), tuple(A)] + arc + [tuple(B), tuple(B + out2)]
             else:
                 poly = [(0.0, 0.0), tuple(A)] + arc + [tuple(B)]
         area = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
