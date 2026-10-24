@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.16 - 2026-10-24
+
+### Fixed
+- Origin and construction planes were drawn far too large (report 20261024-084018): each plane was a square around its origin reaching the farthest body corner on every side, so a 500 mm box standing on XY got 1050 mm XZ/YZ planes reaching 525 mm below the floor. A plane now spans the bodies' projected bounds plus a 5 % margin (a small square on an empty model), and picking uses the same rectangle.
+
 ## 0.9.9.80.15 - 2026-10-24
 
 ### Fixed

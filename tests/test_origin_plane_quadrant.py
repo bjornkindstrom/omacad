@@ -1,4 +1,4 @@
-"""Origin plane markers are centred on the origin, small on an empty model and large enough to cover the bodies."""
+"""Origin plane markers are small on an empty model and grow to the projected bounds of the bodies, no further."""
 import os
 
 import pytest
@@ -44,4 +44,15 @@ def test_origin_plane_grows_to_cover_a_body_beside_the_origin(view):
     plane = view.doc.origin_planes["XY"]
     mesh = next(iter(view.doc.bodies.values())).render_mesh
     far = max(abs(float(mesh.bounds_min[0])), abs(float(mesh.bounds_max[0])))
-    assert view._plane_half_size(plane) >= far
+    u0, u1, v0, v1 = view._plane_rect(plane)
+    assert u1 >= far and v1 >= far
+
+
+def test_plane_hugs_a_tall_box_standing_on_the_origin(view):
+    """Report 20261024-084018: a 500 mm box on XY drew XZ/YZ as 1050 mm squares, out to z = -525 below the floor."""
+    view.doc.add_box(500, 500, 500, center="bottom_center")
+    u0, u1, v0, v1 = view._plane_rect(view.doc.origin_planes["XZ"])
+    assert (u1 - u0, v1 - v0) == (pytest.approx(550.0), pytest.approx(550.0))   # box + 5 % margin on each side
+    plane = view.doc.origin_planes["XZ"]
+    zs = sorted(float(plane.uv_to_world(u, v)[2]) for u in (u0, u1) for v in (v0, v1))
+    assert zs[0] == pytest.approx(-25.0) and zs[-1] == pytest.approx(525.0)

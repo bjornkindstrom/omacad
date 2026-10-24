@@ -366,14 +366,6 @@ class PickerMixin:
         self.plane_pick_purpose = "sketch"
         self.update()
 
-    def _origin_plane_half_size(self) -> float:
-        ext = 30.0
-        for b in self.doc.bodies.values():
-            if b.visible and b.render_mesh is not None and len(b.render_mesh.vertices):
-                ext = max(ext, float(np.abs(b.render_mesh.bounds_min).max()) * 1.2,
-                          float(np.abs(b.render_mesh.bounds_max).max()) * 1.2)
-        return ext
-
     def _origin_quadrant_size(self) -> float:
         """Side of the marker drawn for each origin plane: only its first quadrant (positive u and v), kept small."""
         ext = 20.0
@@ -383,9 +375,10 @@ class PickerMixin:
                           float(np.abs(b.render_mesh.bounds_max).max()) * 0.75)
         return ext
 
-    def _plane_half_size(self, plane) -> float:
-        """Plane marker half-size, enlarged to cover the projected bounds of visible bodies."""
-        half = self._origin_quadrant_size() / 2
+    def _plane_rect(self, plane) -> tuple[float, float, float, float]:
+        """Plane marker as (u0, u1, v0, v1): the projected bounds of the visible bodies plus a 5 % margin
+        (a small square around the plane origin on an empty model), not a square out to the farthest corner."""
+        us, vs = [], []
         for body in self.doc.bodies.values():
             mesh = body.render_mesh
             if not body.visible or mesh is None or not len(mesh.vertices):
@@ -395,8 +388,17 @@ class PickerMixin:
                 for y in (lo[1], hi[1]):
                     for z in (lo[2], hi[2]):
                         u, v = plane.world_to_uv(np.array([x, y, z], dtype=float))
-                        half = max(half, abs(float(u)), abs(float(v)))
-        return half * 1.05
+                        us.append(float(u))
+                        vs.append(float(v))
+        if not us:
+            return -10.0, 10.0, -10.0, 10.0
+        margin = 0.05 * max(max(us) - min(us), max(vs) - min(vs), 20.0)
+        return min(us) - margin, max(us) + margin, min(vs) - margin, max(vs) + margin
+
+    @staticmethod
+    def _rect_corners(plane, rect):
+        u0, u1, v0, v1 = rect
+        return [plane.uv_to_world(u0, v0), plane.uv_to_world(u1, v0), plane.uv_to_world(u1, v1), plane.uv_to_world(u0, v1)]
 
     def _pick_plane_target(self, x: float, y: float):
         """Nearest origin plane (within its drawn quad) or planar body face under the cursor."""
@@ -420,8 +422,8 @@ class PickerMixin:
                 continue
             u, v = plane.world_to_uv(hit)
             t = float(np.linalg.norm(hit - origin))
-            half = self._plane_half_size(plane)
-            inside = abs(u) <= half and abs(v) <= half
+            u0, u1, v0, v1 = self._plane_rect(plane)
+            inside = u0 <= u <= u1 and v0 <= v <= v1
             if inside and t < best_t:
                 best, best_t = key, t
         # Body faces take priority over origin planes (a plane passing through a body
@@ -597,17 +599,13 @@ class PickerMixin:
         picking = self.plane_pick_mode and self.plane_pick_purpose not in ("offset_surface", "shell_face", "thread_surface", "offset_face", "pattern_axis")
         for name, plane in self.doc.origin_planes.items():
             if (picking or (not self.plane_pick_mode and self.doc.origin_visible("plane", name))):
-                half = self._plane_half_size(plane)
-                corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
-                           plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]
+                corners = self._rect_corners(plane, self._plane_rect(plane))
                 out.append((("origin", name), f"{name} Plane", corners, self.PLANE_COLORS[name]))
         if not (self.plane_pick_mode and self.plane_pick_purpose in ("offset_surface", "shell_face", "offset_face")):
             for pid, c in self.doc.construction_planes.items():
                 if c.get("visible", True):
                     plane = self.doc.construction_plane(pid)
-                    half = self._plane_half_size(plane)
-                    corners = [plane.uv_to_world(-half, -half), plane.uv_to_world(half, -half),
-                               plane.uv_to_world(half, half), plane.uv_to_world(-half, half)]
+                    corners = self._rect_corners(plane, self._plane_rect(plane))
                     out.append((("cplane", pid), c.get("name", pid), corners, self.CPLANE_COLOR))
         return out
 
