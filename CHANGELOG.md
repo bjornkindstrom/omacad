@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.15 - 2026-10-24
+
+### Fixed
+- Clicking a face in Fillet/Chamfer took only some of its edges (report 20261024-082418): on a honeycomb box side, the closed cell outlines were taken and every cell made of straight edges was left out. A face click now takes all its edges, closed loops and straight or round edges together.
+
 ## 0.9.9.80.14 - 2026-10-24
 
 ### Fixed

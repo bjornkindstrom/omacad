@@ -239,14 +239,12 @@ class PickerMixin:
                     and any(p.index == face.index for p in e.patches)]
         n = np.asarray(face.normal, dtype=float)
         orig = np.asarray(face.origin, dtype=float)
-        loops = [e for e in body.edges if getattr(e, "kind", "") == "loop"
-                 and abs(float(e.n @ n) - 1.0) < 1e-2
-                 and abs(float((e.centroid - orig) @ n)) < 1e-3]
-        if loops:
-            return loops
         res = []
-        for e in body.edges:
-            if getattr(e, "kind", "") == "line":
+        for e in body.edges:   # closed loops and straight/round edges together: a face can have both
+            if getattr(e, "kind", "") == "loop":
+                if abs(float(e.n @ n) - 1.0) < 1e-2 and abs(float((e.centroid - orig) @ n)) < 1e-3:
+                    res.append(e)
+            elif getattr(e, "kind", "") == "line":
                 if abs(float((e.p0 - orig) @ n)) < 1e-3 and abs(float((e.p1 - orig) @ n)) < 1e-3:
                     if abs(float(e.n1 @ n) - 1.0) < 1e-2 or abs(float(e.n2 @ n) - 1.0) < 1e-2:
                         res.append(e)
