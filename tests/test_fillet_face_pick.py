@@ -63,10 +63,10 @@ def test_fillet_face_click_selects_all_boundary_loops():
 
     vp = MockViewport()
 
-    # Verify _edges_of_face finds all 13 boundary/hole loops of face 44
+    # _edges_of_face finds the 13 closed boundary/hole loops of face 44 and the straight sides of its hexagon holes
     face_edges = vp._edges_of_face(face44, b)
-    assert len(face_edges) == 13
-    assert all(isinstance(e, LoopEdge) for e in face_edges)
+    assert sum(isinstance(e, LoopEdge) for e in face_edges) == 13
+    assert sum(e.kind == "line" for e in face_edges) == 338
 
     # Pick point inside the face interior (away from edge boundary)
     interior_pt = np.array([-6.57015991, 11.38846048, 0.0])    # far from every loop
@@ -94,9 +94,9 @@ def test_fillet_face_click_selects_all_boundary_loops():
         if not any(vp._same_edge(k, fe) for k in vp.selected_edges):
             vp.selected_edges.append(fe)
 
-    assert len(vp.selected_edges) == 13
+    assert len(vp.selected_edges) == len(face_edges)
 
-    # Applying chamfer with these 13 loop edges succeeds without error or skipped items
+    # Applying chamfer with all these edges succeeds without error or skipped items
     feat = FilletFeature("test_chamfer", "Chamfer", [e.ref() for e in vp.selected_edges], 1.0, kind="chamfer")
     doc.timeline.features.append(feat)
     doc.timeline.recompute(doc)

@@ -233,25 +233,26 @@ class PickerMixin:
 
 
     def _edges_of_face(self, face, body) -> list:
-        """All edges forming the boundary and holes of a planar face."""
+        """All edges forming the boundary and holes of a planar face: closed loops, lines and circles together."""
         if face.index < 0:
             return [e for e in body.edges if e.kind == "wrapped"
                     and any(p.index == face.index for p in e.patches)]
         n = np.asarray(face.normal, dtype=float)
         orig = np.asarray(face.origin, dtype=float)
         res = []
-        for e in body.edges:   # closed loops and straight/round edges together: a face can have both
-            if getattr(e, "kind", "") == "loop":
-                if abs(float(e.n @ n) - 1.0) < 1e-2 and abs(float((e.centroid - orig) @ n)) < 1e-3:
-                    res.append(e)
-            elif getattr(e, "kind", "") == "line":
-                if abs(float((e.p0 - orig) @ n)) < 1e-3 and abs(float((e.p1 - orig) @ n)) < 1e-3:
-                    if abs(float(e.n1 @ n) - 1.0) < 1e-2 or abs(float(e.n2 @ n) - 1.0) < 1e-2:
-                        res.append(e)
-            elif getattr(e, "kind", "") == "circle":
-                if abs(float((e.center - orig) @ n)) < 1e-3:
-                    if abs(float(e.axis @ n) - 1.0) < 1e-2 or abs(float(e.axis @ n) + 1.0) < 1e-2:
-                        res.append(e)
+        for e in body.edges:
+            kind = getattr(e, "kind", "")
+            if kind == "loop":
+                ok = abs(float(e.n @ n) - 1.0) < 1e-2 and abs(float((e.centroid - orig) @ n)) < 1e-3
+            elif kind == "line":
+                ok = abs(float((e.p0 - orig) @ n)) < 1e-3 and abs(float((e.p1 - orig) @ n)) < 1e-3 \
+                    and (abs(float(e.n1 @ n) - 1.0) < 1e-2 or abs(float(e.n2 @ n) - 1.0) < 1e-2)
+            elif kind == "circle":
+                ok = abs(float((e.center - orig) @ n)) < 1e-3 and abs(abs(float(e.axis @ n)) - 1.0) < 1e-2
+            else:
+                ok = False
+            if ok and _on_face_outline(e, face):   # not an edge of another face in the same plane
+                res.append(e)
         return res
 
     def _idle_hover_ok(self) -> bool:
@@ -694,3 +695,13 @@ class PickerMixin:
         screen, front = self.project_points(world_pt)
         return (float(screen[0, 0]), float(screen[0, 1])) if front[0] else None
 
+
+def _on_face_outline(edge, face, tol: float = 1e-2) -> bool:
+    """A point of `edge` lies on a side of one of the face's triangles (the outline runs along them)."""
+    pl = edge.polyline()
+    p = (pl[0] + pl[1]) / 2 if edge.kind == "line" else pl[0]
+    a = face.tris.reshape(-1, 3)
+    b = np.roll(face.tris, -1, axis=1).reshape(-1, 3)
+    ab = b - a
+    t = np.clip(((p - a) * ab).sum(1) / np.maximum((ab * ab).sum(1), 1e-18), 0.0, 1.0)
+    return bool(np.min(np.linalg.norm(a + ab * t[:, None] - p, axis=1)) < tol)
