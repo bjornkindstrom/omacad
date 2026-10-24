@@ -571,6 +571,44 @@ class CadKernel:
         return ops[operation](target, tool)
 
     @staticmethod
+    def _face_normals(v, f):
+        cross_prod = np.cross(v[f[:, 1]] - v[f[:, 0]], v[f[:, 2]] - v[f[:, 0]])
+        lengths = np.linalg.norm(cross_prod, axis=1, keepdims=True)
+        lengths[lengths == 0] = 1.0
+        return cross_prod / lengths
+
+    @staticmethod
+    def _flat_triangles(v, f, smooth_below_deg: float = 30.0, coplanar_deg: float = 0.5):
+        """Mask of triangles in a flat patch (triangles joined edge to edge at under `coplanar_deg`) that is
+        walled in by sharp edges in two different directions, like a box side. Smooth vertex normals must not
+        tilt them: a wall that touches a curved surface at a shallow angle (a twisted extrude on a box) showed
+        dark fans on the flat wall. A strip of a cylinder wall has sharp edges in one direction only (its rim)."""
+        tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
+        angles, adj = tm.face_adjacency_angles, tm.face_adjacency
+        parent = np.arange(len(f))
+
+        def root(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        for a, b in adj[angles < np.radians(coplanar_deg)]:
+            parent[root(a)] = root(b)
+        sharp = angles >= np.radians(smooth_below_deg)
+        directions = {}          # patch -> first sharp edge direction
+        flat_roots = set()
+        edges = tm.face_adjacency_edges[sharp]
+        for (a, b), (p, q) in zip(adj[sharp], edges):
+            d = v[q] - v[p]
+            d = d / (np.linalg.norm(d) or 1.0)
+            for patch in (root(a), root(b)):
+                first = directions.setdefault(patch, d)
+                if np.linalg.norm(np.cross(first, d)) > 0.1:
+                    flat_roots.add(patch)
+        return np.array([root(i) in flat_roots for i in range(len(f))], dtype=bool)
+
+    @staticmethod
     def _shaded_triangles(manifold: m3d.Manifold, v, f, smooth_below_deg: float = 30.0):
         """Unrolled triangle corners and their normals. Curved surfaces are shaded smooth (vertex normals shared
         across edges flatter than `smooth_below_deg`, sharp CAD edges stay crisp): with one flat normal per triangle
@@ -583,8 +621,14 @@ class CadKernel:
                 normals = props[tris].reshape(-1, props.shape[1])[:, 3:6]
                 length = np.linalg.norm(normals, axis=1, keepdims=True)
                 if np.all(np.isfinite(normals)) and np.all(length > 0.5):
+                    normals = normals / length
+                    flat = CadKernel._flat_triangles(v, f)
+                    if flat.any():
+                        normals = normals.reshape(-1, 3, 3)
+                        normals[flat] = CadKernel._face_normals(v, f)[flat][:, None, :]
+                        normals = normals.reshape(-1, 3)
                     return (props[tris].reshape(-1, props.shape[1])[:, :3].astype(np.float32),
-                            (normals / length).astype(np.float32))
+                            normals.astype(np.float32))
         except Exception as e:      # fall back to flat shading, which is always right, and say why
             from omacad import applog
             applog.log("ERROR", f"smooth normals: {e!r}")

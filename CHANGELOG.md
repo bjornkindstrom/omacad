@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.18 - 2026-10-24
+
+### Fixed
+- Dark fans on the flat walls of a box under a twisted extrude (report 20261024-110308): the smooth vertex normals averaged the wall with the twisted surface that touches it at a shallow angle, so the wall was shaded up to 18 degrees off. It was only the on-screen shading (the exported mesh/STEP was fine, which is why Bambu Studio showed nothing). Flat patches walled in by sharp edges in two directions now keep their own normal.
+
 ## 0.9.9.80.17 - 2026-10-24
 
 ### Fixed
