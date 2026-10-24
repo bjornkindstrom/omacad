@@ -61,6 +61,7 @@ class SweepPromptsMixin:
 
         def on_active(target):
             self.viewport.path_pick_mode = target == "path"
+            self.viewport.profile_chain_mode = mode == "loft" or (mode == "sweep" and target == "profile")
             if target == "path" and not self.viewport.edge_pick_mode:
                 keep = list(self.viewport.selected_edges)
                 self.viewport.begin_edge_pick()            # body edges like Fillet: hover, joined edges, X see-through
@@ -69,6 +70,7 @@ class SweepPromptsMixin:
                 self.viewport.edge_pick_mode = False
                 self.viewport.hover_edge = None
             self.status_label.setText(f"{title}: click " + ("a line, arc or circle of the path." if target == "path"
+                                                             else "the profiles (each click adds one, a click again drops it), then Path." if mode == "sweep"
                                                              else "the profile."))
 
         def on_curve(sketch_id, entity_id):
@@ -119,9 +121,7 @@ class SweepPromptsMixin:
             chosen = ([self.doc.selected_profile] if self.doc.selected_profile else []) + list(self.doc.selected_extra)
             dlg.set_profiles([c for c in chosen if c[0] == chosen[0][0]] if mode == "sweep" and chosen else chosen)   # Sweep: one sketch
             if mode == "sweep" and dlg.profiles:
-                default_path()
-                if dlg.path() is None:
-                    dlg.set_active("path")          # next: the path, as Fusion moves on to its Path field
+                default_path()                      # more profiles may follow: Path is chosen with its own button
 
         def on_finished(result):
             self.viewport.profile_picked.disconnect(on_pick)

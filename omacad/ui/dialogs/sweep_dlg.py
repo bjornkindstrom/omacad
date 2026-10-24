@@ -9,7 +9,7 @@ from omacad.ui.expr_spin import ExprDoubleSpinBox
 OPERATIONS = (("new_body", "New Body"), ("join", "Join"), ("cut", "Cut"), ("intersect", "Intersect"))
 TITLES = {"sweep": "Sweep", "loft": "Loft", "pipe": "Pipe"}
 HELP = {
-    "sweep": "Click the profile in the 3D view (Shift+click adds more profiles of the same sketch), then the path: body edges (as in Fillet; joined edges follow, X = "
+    "sweep": "Click the profiles in the 3D view (every click adds one, a click again drops it; same sketch), then press Path and click the path: body edges (as in Fillet; joined edges follow, X = "
              "see-through) or a sketch's line, arc or circle (everything joined to it comes along). Profile / Path "
              "below says which one the next click picks.",
     "loft": "Click the profiles in the order the loft passes through them (two or more, on different planes). "

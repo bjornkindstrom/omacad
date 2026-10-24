@@ -163,8 +163,14 @@ def test_sweep_panel_keeps_shift_clicked_profiles_of_one_sketch(win):
     doc.finish_sketch()
     win.prompt_sweep_tool("sweep")
     dlg = win.findChildren(SweepLoftDialog)[-1]
+    assert win.viewport.profile_chain_mode            # plain clicks add profiles, no Shift needed
     win.viewport.toggle_profile_in_selection((prof.sketch_id, 0))
+    win.viewport.profile_picked.emit()
     win.viewport.toggle_profile_in_selection((prof.sketch_id, 1))
+    win.viewport.profile_picked.emit()
+    assert dlg.active == "profile"                    # still on Profile: more may follow, Path has its own button
+    dlg.set_active("path")
+    assert not win.viewport.profile_chain_mode
     assert dlg.profiles == [(prof.sketch_id, 0), (prof.sketch_id, 1)] and "2 profiles" in dlg.lbl_profiles.text()
     dlg.accept()
     QApplication.processEvents()

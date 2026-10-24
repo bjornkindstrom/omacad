@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.21 - 2026-10-24
+
+### Changed
+- Sweep: every plain click on a profile adds it (a click again drops it), no Shift and no Profile button per part. The panel stays on Profile until you press Path, then you click the path.
+
 ## 0.9.9.80.20 - 2026-10-24
 
 ### Added
