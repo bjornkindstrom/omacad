@@ -149,3 +149,25 @@ def test_pipe_along_body_edges_picked_like_fillet(win):
     Exporter.save_project(doc, path)
     again = Exporter.load_project(path)
     assert abs(next(iter(again.bodies.values())).manifold.volume() - next(iter(doc.bodies.values())).manifold.volume()) < 1e-6
+
+
+def test_sweep_panel_keeps_shift_clicked_profiles_of_one_sketch(win):
+    from omacad.ui.dialogs.sweep_dlg import SweepLoftDialog
+    doc = win.doc
+    path = doc.start_sketch("XY")
+    path.add_line((0, 0), (30, 0))
+    doc.finish_sketch()
+    prof = doc.start_sketch("YZ")
+    prof.add_rect((-12, -1), (-8, 1))
+    prof.add_rect((8, -1), (12, 1))
+    doc.finish_sketch()
+    win.prompt_sweep_tool("sweep")
+    dlg = win.findChildren(SweepLoftDialog)[-1]
+    win.viewport.toggle_profile_in_selection((prof.sketch_id, 0))
+    win.viewport.toggle_profile_in_selection((prof.sketch_id, 1))
+    assert dlg.profiles == [(prof.sketch_id, 0), (prof.sketch_id, 1)] and "2 profiles" in dlg.lbl_profiles.text()
+    dlg.accept()
+    QApplication.processEvents()
+    feat = doc.timeline.features[-1]
+    assert feat.feature_type == "sweep" and feat.extra_profiles == [1]
+    assert abs(doc.bodies[f"body_{feat.feature_id}"].manifold.volume() - 480) < 1.0

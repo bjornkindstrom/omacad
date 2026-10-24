@@ -476,7 +476,8 @@ class Exporter:
                 doc.timeline.add_feature(feat)
             elif ft == "sweep":
                 feat = SweepFeature(fid, fname, f_data["sketch_id"], f_data["profile_idx"], f_data["path"],
-                                    f_data.get("operation", "new_body"), f_data.get("twist", 0.0))
+                                    f_data.get("operation", "new_body"), f_data.get("twist", 0.0),
+                                    f_data.get("extra_profiles"))
                 feat.load_profile_refs(f_data)
                 doc.timeline.add_feature(feat)
             elif ft == "pipe":

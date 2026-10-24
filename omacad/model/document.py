@@ -326,11 +326,12 @@ class Document:
         return feat
 
     @undoable("Sweep")
-    def add_sweep(self, sketch_id: str, profile_idx: int, path, operation: str = "new_body", twist: float = 0.0):
-        """Sweep a profile along a path of sketch lines/arcs: path = (sketch id, [entity ids])."""
+    def add_sweep(self, sketch_id: str, profile_idx: int, path, operation: str = "new_body", twist: float = 0.0,
+                  extra_profiles=None):
+        """Sweep a profile (and more profiles of the same sketch) along a path: path = (sketch id, [entity ids])."""
         n = len([f for f in self.timeline.features if f.feature_type == "sweep"]) + 1
         return self._add_body_step(SweepFeature(self._feature_id("sweep"), f"Sweep {n}", sketch_id, profile_idx,
-                                                path, operation, twist))
+                                                path, operation, twist, extra_profiles))
 
     @undoable("Pipe")
     def add_pipe(self, path, diameter: float, thickness: float = 0.0, operation: str = "new_body"):
@@ -818,7 +819,7 @@ class Document:
         "sphere": ("radius",),
         "cone": ("radius", "top_radius", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
                  "wall_thickness"),
-        "sweep": ("sketch_id", "profile_idx", "path", "operation", "twist"),
+        "sweep": ("sketch_id", "profile_idx", "extra_profiles", "path", "operation", "twist"),
         "pipe": ("path", "diameter", "thickness", "operation"),
         "loft": ("sections", "operation", "twist"),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation", "twist"),

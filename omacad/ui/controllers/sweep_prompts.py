@@ -97,7 +97,8 @@ class SweepPromptsMixin:
                 return None
             if mode == "sweep":
                 sid, idx = dlg.profiles[0]
-                return SweepFeature("preview", title, sid, idx, path, dlg.operation(), dlg.spn_twist.value())
+                return SweepFeature("preview", title, sid, idx, path, dlg.operation(), dlg.spn_twist.value(),
+                                    [i for _s, i in dlg.profiles[1:]])
             if len(dlg.profiles) < 2:
                 return None
             return LoftFeature("preview", title, [LoftFeature.section_ref(self.doc, s, i) for s, i in dlg.profiles],
@@ -116,7 +117,7 @@ class SweepPromptsMixin:
 
         def on_pick():
             chosen = ([self.doc.selected_profile] if self.doc.selected_profile else []) + list(self.doc.selected_extra)
-            dlg.set_profiles(chosen[:1] if mode == "sweep" else chosen)
+            dlg.set_profiles([c for c in chosen if c[0] == chosen[0][0]] if mode == "sweep" and chosen else chosen)   # Sweep: one sketch
             if mode == "sweep" and dlg.profiles:
                 default_path()
                 if dlg.path() is None:
@@ -145,7 +146,7 @@ class SweepPromptsMixin:
                     elif mode == "pipe":
                         feat = self.doc.add_pipe(path, dlg.spn_diam.value(), dlg.spn_thick.value(), op)
                     elif mode == "sweep" and dlg.profiles:
-                        feat = self.doc.add_sweep(*dlg.profiles[0], path, op, dlg.spn_twist.value())
+                        feat = self.doc.add_sweep(*dlg.profiles[0], path, op, dlg.spn_twist.value(), [i for _s, i in dlg.profiles[1:]])
                     elif mode == "loft" and len(dlg.profiles) >= 2:
                         feat = self.doc.add_loft(dlg.profiles, op, dlg.spn_twist.value())
                     else:

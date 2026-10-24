@@ -113,11 +113,11 @@ class SweepFeature(ProfileRefs, Feature):
     """A profile swept along a path (Fusion's Sweep, single path). `twist` turns it over the length."""
 
     def __init__(self, feature_id: str, name: str, sketch_id: str, profile_idx: int, path: PathRef,
-                 operation: str = "new_body", twist: float = 0.0):
+                 operation: str = "new_body", twist: float = 0.0, extra_profiles=None):
         super().__init__(feature_id, "sweep", name)
         self.sketch_id = sketch_id
         self.profile_idx = int(profile_idx)
-        self.extra_profiles: List[int] = []
+        self.extra_profiles: List[int] = [int(i) for i in (extra_profiles or [])]   # more profiles of the same sketch
         self.path = norm_path(path)
         self.operation = operation
         self.twist = float(twist)
@@ -127,10 +127,18 @@ class SweepFeature(ProfileRefs, Feature):
         if sketch is None:
             return None
         self.resolve_profile_refs(sketch)
-        if not 0 <= self.profile_idx < len(sketch.profiles):
+        idxs = [self.profile_idx] + [i for i in self.extra_profiles if i != self.profile_idx]
+        if not all(0 <= i < len(sketch.profiles) for i in idxs):
             return None
         path, closed = path_points(doc, self.path)
-        outer, holes = _profile_world(sketch, sketch.profiles[self.profile_idx])
+        solids = [self._swept(sketch, sketch.profiles[i], path, closed) for i in idxs]
+        solid = solids[0]
+        for extra in solids[1:]:
+            solid = solid + extra
+        return solid if not solid.is_empty() else None
+
+    def _swept(self, sketch, profile, path, closed) -> m3d.Manifold:
+        outer, holes = _profile_world(sketch, profile)
         centre = outer.mean(axis=0)
         if not closed and np.linalg.norm(path[-1] - centre) < np.linalg.norm(path[0] - centre):
             path = path[::-1]                               # start at the end the profile sits on
@@ -145,7 +153,7 @@ class SweepFeature(ProfileRefs, Feature):
         solid = sweep_solid(local(outer), path, closed, r[0], self.twist)
         for h in holes:
             solid = solid - sweep_solid(local(h), path, closed, r[0], self.twist)
-        return solid if not solid.is_empty() else None
+        return solid
 
     def execute(self, doc: Any) -> None:
         tool = self.build_solid(doc)
@@ -155,6 +163,7 @@ class SweepFeature(ProfileRefs, Feature):
     def to_dict(self) -> Dict[str, Any]:
         return {"feature_id": self.feature_id, "feature_type": self.feature_type, "name": self.name,
                 "suppressed": self.suppressed, "sketch_id": self.sketch_id, "profile_idx": self.profile_idx,
+                "extra_profiles": list(self.extra_profiles),
                 "path": [self.path[0], [list(r) if isinstance(r, tuple) else r for r in self.path[1]]], "operation": self.operation, "twist": self.twist,
                 **self.profile_refs_dict()}
 

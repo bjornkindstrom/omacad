@@ -9,7 +9,7 @@ from omacad.ui.expr_spin import ExprDoubleSpinBox
 OPERATIONS = (("new_body", "New Body"), ("join", "Join"), ("cut", "Cut"), ("intersect", "Intersect"))
 TITLES = {"sweep": "Sweep", "loft": "Loft", "pipe": "Pipe"}
 HELP = {
-    "sweep": "Click the profile in the 3D view, then the path: body edges (as in Fillet; joined edges follow, X = "
+    "sweep": "Click the profile in the 3D view (Shift+click adds more profiles of the same sketch), then the path: body edges (as in Fillet; joined edges follow, X = "
              "see-through) or a sketch's line, arc or circle (everything joined to it comes along). Profile / Path "
              "below says which one the next click picks.",
     "loft": "Click the profiles in the order the loft passes through them (two or more, on different planes). "
@@ -105,7 +105,8 @@ class SweepLoftDialog(BaseFeatureDialog):
         self.profiles = list(profiles)
         names = [self.doc.sketches[s].name for s, _ in self.profiles if s in self.doc.sketches]
         if self.mode == "sweep":
-            self.lbl_profiles.setText(names[0] if names else "click a profile")
+            self.lbl_profiles.setText((names[0] + (f" ({len(names)} profiles)" if len(names) > 1 else ""))
+                                      if names else "click a profile")
         else:
             self.lbl_profiles.setText(" → ".join(names) if names else "click the first profile")
         self.changed.emit()

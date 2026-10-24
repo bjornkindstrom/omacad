@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.20 - 2026-10-24
+
+### Added
+- Sweep takes several profiles: Shift+click adds more profiles of the same sketch and they are swept together along the path (the panel shows "N profiles"). Saved, editable, undoable.
+
 ## 0.9.9.80.19 - 2026-10-24
 
 ### Added
