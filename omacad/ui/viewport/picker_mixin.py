@@ -171,7 +171,7 @@ class PickerMixin:
     def _edge_loop(self, e, other_face: bool = False):
         """Double-click: the edges joined end to end around one flat face (e.g. the whole top of a box).
         Of the two faces an edge borders, the one facing the camera is used."""
-        if e.kind in ("circle", "loop", "wrapped"):
+        if e.kind in ("circle", "loop", "wrapped", "curve"):
             return [e]
         proj, view, _ = self.get_matrices()
         eye = np.linalg.inv(view)[:3, 3]

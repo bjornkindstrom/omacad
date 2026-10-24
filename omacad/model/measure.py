@@ -106,6 +106,8 @@ def measure_3d(edges) -> Tuple[List[str], list]:
             return [f"Radius {e.radius:.3f} mm", f"Arc length {e.radius * e.sweep:.3f} mm", f"Angle {math.degrees(e.sweep):.1f}°"], []
         if e.kind == "circle":
             return [f"Diameter {2 * e.radius:.3f} mm", f"Radius {e.radius:.3f} mm", f"Circumference {2 * math.pi * e.radius:.3f} mm"], []
+        if e.kind == "curve":
+            return [f"Curve length {e.length:.3f} mm"], []
         return [f"Outline length {e.perimeter:.3f} mm"], []
     a, b = edges
     if a.kind == "line" and b.kind == "line":

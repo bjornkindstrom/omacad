@@ -205,6 +205,8 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
     all_edges = lines + loops + _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals)
     from omacad.model.wrapped_edges import cylindrical_contours
     all_edges += cylindrical_contours(v, f, tm)
+    from omacad.model.curve_edges import curve_edges
+    all_edges += curve_edges(v, f, tm, find, planar)
 
     if cache_key is not None:
         if len(_TOPOLOGY_CACHE) >= _TOPOLOGY_CACHE_MAX:

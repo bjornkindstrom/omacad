@@ -68,6 +68,8 @@ class FilletFeature(Feature):
     def _norm_ref(e):
         if e and e[0] == "wrapped":
             return ("wrapped", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]), bool(e[4]))
+        if e and e[0] == "curve":
+            return ("curve", tuple(map(float, e[1])), float(e[2]))
         if e and e[0] == "circle":
             return ("circle", tuple(map(float, e[1])), tuple(map(float, e[2])), float(e[3]))
         if e and e[0] == "arc":
@@ -627,6 +629,9 @@ class FilletFeature(Feature):
         seen = []
 
         def take(body, edge):
+            if edge.kind == "curve":    # free-form creases can be picked (measure, paths) but not rounded yet
+                self.skipped += 1
+                return
             if any(body is b and edge.same_as(e) for b, e in seen):
                 return  # the same edge selected twice
             seen.append((body, edge))

@@ -73,7 +73,7 @@ class SweepLoftDialog(BaseFeatureDialog):
         if mode == "pipe":
             form.addRow("Diameter:", self.spn_diam)
             form.addRow("Wall:", self.spn_thick)
-        if mode == "sweep":
+        if mode in ("sweep", "loft"):
             form.addRow("Twist:", self.spn_twist)
         self.cmb_op = QComboBox()
         for _key, label in OPERATIONS:

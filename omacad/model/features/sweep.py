@@ -193,8 +193,9 @@ class LoftFeature(Feature):
     """Fusion's Loft: a skin through two or more profiles, in the order they were picked. Each profile is
     remembered as (sketch id, index, signature) and found again when the sketch changes. Holes are not lofted."""
 
-    def __init__(self, feature_id: str, name: str, sections, operation: str = "new_body"):
+    def __init__(self, feature_id: str, name: str, sections, operation: str = "new_body", twist: float = 0.0):
         super().__init__(feature_id, "loft", name)
+        self.twist = float(twist)
         self.sections = [(str(s[0]), int(s[1]), tuple(float(x) for x in s[2])) for s in sections]
         self.operation = operation
 
@@ -213,7 +214,7 @@ class LoftFeature(Feature):
             outer, _holes = _profile_world(sketch, prof)
             rings.append(outer)
             caps.append(np.asarray(prof.exterior_pts, dtype=float))
-        solid = loft_solid(rings, [caps[0], caps[-1]])
+        solid = loft_solid(rings, [caps[0], caps[-1]], twist_deg=self.twist)
         return solid if not solid.is_empty() else None
 
     def execute(self, doc: Any) -> None:
@@ -224,4 +225,4 @@ class LoftFeature(Feature):
     def to_dict(self) -> Dict[str, Any]:
         return {"feature_id": self.feature_id, "feature_type": self.feature_type, "name": self.name,
                 "suppressed": self.suppressed, "sections": [[s, i, list(sig)] for s, i, sig in self.sections],
-                "operation": self.operation}
+                "operation": self.operation, "twist": self.twist}

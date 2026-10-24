@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.9.80.19 - 2026-10-24
+
+### Added
+- Loft has a Twist field like Sweep: the last profile is turned against the first, each ring by its share of the distance along the loft, with extra rings so the skin follows a helix. Saved, editable, undoable.
+- The corner lines of a twisted extrude or a loft (helical creases between curved surfaces) can now be hovered and selected like other edges: measure them, use them as a Sweep/Pipe path. Fillet/Chamfer skip them for now (counted as skipped). Only chains longer than 15 % of the body's diagonal count, so tessellation detail stays out.
+
 ## 0.9.9.80.18 - 2026-10-24
 
 ### Fixed

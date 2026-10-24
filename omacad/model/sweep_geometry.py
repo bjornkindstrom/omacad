@@ -188,26 +188,43 @@ def pipe_solid(path, closed: bool, diameter: float, thickness: float = 0.0, segm
 
 
 # ---- through several profiles ------------------------------------------------------------------------------
-def _between_rings(rings: List[np.ndarray]) -> List[np.ndarray]:
+def _turned(ring: np.ndarray, axis: np.ndarray, deg: float) -> np.ndarray:
+    """`ring` turned `deg` degrees (right-hand) about `axis` through its own centre (Rodrigues)."""
+    c = ring.mean(axis=0)
+    a = math.radians(deg)
+    q = ring - c
+    return c + q * math.cos(a) + np.cross(axis, q) * math.sin(a) + np.outer(q @ axis, axis) * (1 - math.cos(a))
+
+
+def _between_rings(rings: List[np.ndarray], twists: Sequence[float] = ()) -> List[np.ndarray]:
     """Rings put in between where a side segment turns much from one ring to the next (a square's side against a
     circle's arc): the straight skin between them is curved, and one quad per step folds visibly along its
-    diagonal. Linear steps keep the same ruled skin, only finer."""
+    diagonal. Linear steps keep the same ruled skin, only finer. `twists` (degrees turned at each ring, about the
+    loft direction) adds rings so that no step turns more than LOFT_TWIST_DEG, each turned by its own share."""
+    twists = list(twists) or [0.0] * len(rings)
     out = [rings[0]]
-    for a, b in zip(rings, rings[1:]):
+    for k, (a, b) in enumerate(zip(rings, rings[1:])):
+        axis = _unit(b.mean(axis=0) - a.mean(axis=0))
+        if twists[k]:
+            out[-1] = _turned(a, axis, twists[k])
         da, db = np.roll(a, -1, axis=0) - a, np.roll(b, -1, axis=0) - b
         ln = np.linalg.norm(da, axis=1) * np.linalg.norm(db, axis=1)
         ok = ln > 1e-18
         cos = np.einsum("ij,ij->i", da[ok], db[ok]) / ln[ok]
         turn = math.degrees(math.acos(float(np.clip(cos.min(), -1.0, 1.0)))) if ok.any() else 0.0
-        steps = int(min(32, max(1, math.ceil(turn / LOFT_TWIST_DEG))))
-        out += [a + (b - a) * (t / steps) for t in range(1, steps + 1)]
+        dt = twists[k + 1] - twists[k]
+        steps = int(min(256, max(1, math.ceil(turn / LOFT_TWIST_DEG), math.ceil(abs(dt) / LOFT_TWIST_DEG))))
+        for t in range(1, steps + 1):
+            ring = a + (b - a) * (t / steps)
+            out.append(_turned(ring, axis, twists[k] + dt * t / steps) if (twists[k] or dt) else ring)
     return out
 
 
-def loft_solid(rings3d: Sequence[np.ndarray], caps2d: Sequence[np.ndarray], n: int = 128) -> m3d.Manifold:
+def loft_solid(rings3d: Sequence[np.ndarray], caps2d: Sequence[np.ndarray], n: int = 128, twist_deg: float = 0.0) -> m3d.Manifold:
     """A skin through closed 3D rings in order (`caps2d[0]` / `caps2d[-1]` are the first and last ring in their own
     plane coordinates, used for the end caps). The rings are resampled to `n` points, turned the same way round
-    the loft direction, and each one's start is turned to line up with the one before (no twist)."""
+    the loft direction, and each one's start is turned to line up with the one before. `twist_deg` turns the last
+    profile that much against the first, in proportion to the distance along the loft."""
     if len(rings3d) < 2:
         raise ValueError("A loft needs at least two profiles.")
     corners = [ring_corners(r) for r in rings3d]
@@ -234,7 +251,9 @@ def loft_solid(rings3d: Sequence[np.ndarray], caps2d: Sequence[np.ndarray], n: i
             if k == len(rings) - 1:
                 caps[1] = np.roll(caps[1], -s, axis=0)
         out.append(ring)
-    out = _between_rings(out)
+    gaps = np.linalg.norm(np.diff(np.array(cents), axis=0), axis=1)
+    share = np.concatenate([[0.0], np.cumsum(gaps)]) / (gaps.sum() or 1.0)
+    out = _between_rings(out, [twist_deg * x for x in share] if twist_deg else ())
     # the caps' 2D rings must run counter-clockwise for the triangulation; their index order matches the 3D rings
     for i in (0, 1):
         if signed_area(caps[i]) < 0:

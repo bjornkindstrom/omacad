@@ -30,6 +30,8 @@ def edge_from_ref(ref, candidates):
     """The current edge a stored Fillet/Chamfer reference points at (lines may have been shortened)."""
     if ref and ref[0] == "wrapped":
         return next((e for e in candidates if getattr(e, "kind", "") == "wrapped" and e.matches(ref)), None)
+    if ref and ref[0] == "curve":
+        return next((e for e in candidates if getattr(e, "kind", "") == "curve" and e.matches(ref)), None)
     if ref and ref[0] == "arc":
         probe = CircularEdge(np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3]), 1.0, 1.0, True,
                              a0=float(ref[4]), sweep=float(ref[5]))
@@ -56,6 +58,9 @@ def fuzzy_edge_from_ref(ref, candidates, used=(), reach: float = 1e9):
     if ref and ref[0] == "wrapped":
         matches = [e for e in candidates if getattr(e, "kind", "") == "wrapped" and free(e) and e.matches(ref, reach=reach)]
         return min(matches, key=lambda e: np.linalg.norm(e.centroid-np.asarray(ref[1])), default=None)
+    if ref and ref[0] == "curve":
+        matches = [e for e in candidates if getattr(e, "kind", "") == "curve" and free(e) and e.matches(ref, reach=reach)]
+        return min(matches, key=lambda e: np.linalg.norm(e.centroid - np.asarray(ref[1])), default=None)
     if ref and ref[0] in ("circle", "arc"):
         c0, ax, R = np.array(ref[1], dtype=float), np.array(ref[2], dtype=float), float(ref[3])
         cand = [c for c in candidates if getattr(c, "kind", "") == "circle" and free(c) and float(c.axis @ ax) > 0.999

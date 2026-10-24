@@ -339,11 +339,11 @@ class Document:
                                                operation))
 
     @undoable("Loft")
-    def add_loft(self, profiles, operation: str = "new_body"):
+    def add_loft(self, profiles, operation: str = "new_body", twist: float = 0.0):
         """Loft through profiles [(sketch id, profile index), ...] in that order."""
         sections = [LoftFeature.section_ref(self, sid, idx) for sid, idx in profiles]
         n = len([f for f in self.timeline.features if f.feature_type == "loft"]) + 1
-        return self._add_body_step(LoftFeature(self._feature_id("loft"), f"Loft {n}", sections, operation))
+        return self._add_body_step(LoftFeature(self._feature_id("loft"), f"Loft {n}", sections, operation, twist))
 
     @undoable("Sphere")
     def add_sphere(self, radius: float, name: Optional[str] = None, translation: Any = None) -> Body:
@@ -820,7 +820,7 @@ class Document:
                  "wall_thickness"),
         "sweep": ("sketch_id", "profile_idx", "path", "operation", "twist"),
         "pipe": ("path", "diameter", "thickness", "operation"),
-        "loft": ("sections", "operation"),
+        "loft": ("sections", "operation", "twist"),
         "extrude": ("sketch_id", "profile_idx", "distance", "direction", "distance2", "start_offset", "operation", "twist"),
         "emboss": ("sketch_id", "profile_idx", "depth", "flip", "dx", "dy", "rotation", "wrap"),
         "revolve": ("sketch_id", "profile_idx", "segments", "operation", "axis", "angle", "direction", "angle2", "extra_profiles"),

@@ -48,4 +48,6 @@ def describe_edge(edge) -> Optional[Info]:
         return "Circular edge", [("Radius", _mm(r)), ("Diameter", _mm(2 * r)), ("Length", _mm(2 * np.pi * r))]
     if kind in ("loop", "wrapped"):
         return "Outline", [("Length", _mm(edge.perimeter))]
+    if kind == "curve":
+        return "Curved edge", [("Length", _mm(edge.length))]
     return None
