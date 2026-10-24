@@ -34,7 +34,7 @@ def test_fillet_face_click_selects_all_boundary_loops():
             self.selected_edges = []
             self._w, self._h = 2036 - 360, 1114
             self.cam_az = 170.87696587004527
-            self.cam_el = 17.911718750000006
+            self.cam_el = -17.911718750000006       # from below: the bottom face is in sight, not behind the fillets
             self.cam_dist = 99.63236863613498
             self.cam_target = np.array([-4.469699859619141, 11.18025016784668, 5.0])
 
@@ -69,7 +69,7 @@ def test_fillet_face_click_selects_all_boundary_loops():
     assert all(isinstance(e, LoopEdge) for e in face_edges)
 
     # Pick point inside the face interior (away from edge boundary)
-    interior_pt = np.array([-59.15289688, -1.77371557, 0.0])
+    interior_pt = np.array([-6.57015991, 11.38846048, 0.0])    # far from every loop
     scr = vp.world_to_screen(interior_pt)
     assert scr is not None
     sx, sy = scr

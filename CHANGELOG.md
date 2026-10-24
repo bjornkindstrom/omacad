@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.12 - 2026-10-24
+
+### Fixed
+- A loft from a rectangle to a circle showed about 110 small faces with lines between them (report 20261024-065108): resampling cut the rectangle's corners off, and one quad per step between a straight side and the turning arc folded up to 39° along its diagonal. Rings now keep their corners and rings go in between where a side turns, so the skin is one smooth surface. Hovering also no longer lights up a flat face behind a curved surface.
+
 ## 0.9.9.80.11 - 2026-10-24
 
 ### Fixed

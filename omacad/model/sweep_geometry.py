@@ -14,20 +14,44 @@ def _unit(v):
     return v / n if n > 1e-12 else v
 
 
-def resample_ring(ring, n: int) -> np.ndarray:
-    """`n` points evenly spread by length round a closed ring (start kept)."""
+CORNER_DEG = 20.0      # a ring point that turns more than this is a corner a resampled ring keeps
+LOFT_TWIST_DEG = 4.0   # most a side segment may turn from one loft ring to the next before rings go in between
+
+
+def ring_corners(ring) -> List[int]:
+    """Indices of the points where a closed ring turns sharply (a rectangle's corners, not a circle's facets)."""
     pts = np.asarray(ring, dtype=float)
-    closed = np.vstack([pts, pts[:1]])
-    seg = np.linalg.norm(np.diff(closed, axis=0), axis=1)
+    d_in = pts - np.roll(pts, 1, axis=0)
+    d_out = np.roll(pts, -1, axis=0) - pts
+    ln = np.linalg.norm(d_in, axis=1) * np.linalg.norm(d_out, axis=1)
+    cos = np.einsum("ij,ij->i", d_in, d_out) / np.maximum(ln, 1e-18)
+    return [i for i in range(len(pts)) if ln[i] > 1e-18 and cos[i] < math.cos(math.radians(CORNER_DEG))]
+
+
+def _even(pts: np.ndarray, at: np.ndarray) -> np.ndarray:
+    """Points at arc lengths `at` along the open polyline `pts`."""
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
     cum = np.concatenate([[0.0], np.cumsum(seg)])
-    total = cum[-1]
-    if total <= 1e-12:
+    return np.column_stack([np.interp(at, cum, pts[:, d]) for d in range(pts.shape[1])])
+
+
+def resample_ring(ring, n: int, corners: Optional[Sequence[int]] = None) -> np.ndarray:
+    """`n` points spread by length round a closed ring. Every corner (`corners`, by default `ring_corners`) is one
+    of the points, so a rectangle stays a rectangle; without corners the start is kept."""
+    pts = np.asarray(ring, dtype=float)
+    corners = sorted(ring_corners(pts) if corners is None else corners)
+    if not corners or len(corners) > n:
+        corners = [0]
+    spans = [np.vstack([pts[a:b + 1] if a < b else np.vstack([pts[a:], pts[:b + 1]])])
+             for a, b in zip(corners, corners[1:] + corners[:1])]
+    lengths = np.array([float(np.sum(np.linalg.norm(np.diff(sp, axis=0), axis=1))) for sp in spans])
+    if lengths.sum() <= 1e-12:
         return np.repeat(pts[:1], n, axis=0)
-    at = np.linspace(0.0, total, n, endpoint=False)
-    out = np.empty((n, pts.shape[1]))
-    for d in range(pts.shape[1]):
-        out[:, d] = np.interp(at, cum, closed[:, d])
-    return out
+    share = (n - len(spans)) * lengths / lengths.sum()       # points besides the corners, largest remainder
+    extra = np.floor(share).astype(int)
+    extra[np.argsort(extra - share)[:n - len(spans) - int(extra.sum())]] += 1
+    out = [_even(sp, np.linspace(0.0, ln, k + 1, endpoint=False)) for sp, ln, k in zip(spans, lengths, extra)]
+    return np.vstack(out)
 
 
 def signed_area(ring2d) -> float:
@@ -164,14 +188,31 @@ def pipe_solid(path, closed: bool, diameter: float, thickness: float = 0.0, segm
 
 
 # ---- through several profiles ------------------------------------------------------------------------------
+def _between_rings(rings: List[np.ndarray]) -> List[np.ndarray]:
+    """Rings put in between where a side segment turns much from one ring to the next (a square's side against a
+    circle's arc): the straight skin between them is curved, and one quad per step folds visibly along its
+    diagonal. Linear steps keep the same ruled skin, only finer."""
+    out = [rings[0]]
+    for a, b in zip(rings, rings[1:]):
+        da, db = np.roll(a, -1, axis=0) - a, np.roll(b, -1, axis=0) - b
+        ln = np.linalg.norm(da, axis=1) * np.linalg.norm(db, axis=1)
+        ok = ln > 1e-18
+        cos = np.einsum("ij,ij->i", da[ok], db[ok]) / ln[ok]
+        turn = math.degrees(math.acos(float(np.clip(cos.min(), -1.0, 1.0)))) if ok.any() else 0.0
+        steps = int(min(32, max(1, math.ceil(turn / LOFT_TWIST_DEG))))
+        out += [a + (b - a) * (t / steps) for t in range(1, steps + 1)]
+    return out
+
+
 def loft_solid(rings3d: Sequence[np.ndarray], caps2d: Sequence[np.ndarray], n: int = 128) -> m3d.Manifold:
     """A skin through closed 3D rings in order (`caps2d[0]` / `caps2d[-1]` are the first and last ring in their own
     plane coordinates, used for the end caps). The rings are resampled to `n` points, turned the same way round
     the loft direction, and each one's start is turned to line up with the one before (no twist)."""
     if len(rings3d) < 2:
         raise ValueError("A loft needs at least two profiles.")
-    rings = [resample_ring(r, n) for r in rings3d]
-    caps = [resample_ring(c, n) for c in (caps2d[0], caps2d[-1])]
+    corners = [ring_corners(r) for r in rings3d]
+    rings = [resample_ring(r, n, c) for r, c in zip(rings3d, corners)]
+    caps = [resample_ring(caps2d[0], n, corners[0]), resample_ring(caps2d[-1], n, corners[-1])]
     cents = [r.mean(axis=0) for r in rings]
     out = []
     for k, ring in enumerate(rings):
@@ -193,6 +234,7 @@ def loft_solid(rings3d: Sequence[np.ndarray], caps2d: Sequence[np.ndarray], n: i
             if k == len(rings) - 1:
                 caps[1] = np.roll(caps[1], -s, axis=0)
         out.append(ring)
+    out = _between_rings(out)
     # the caps' 2D rings must run counter-clockwise for the triangulation; their index order matches the 3D rings
     for i in (0, 1):
         if signed_area(caps[i]) < 0:

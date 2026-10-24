@@ -214,7 +214,22 @@ class PickerMixin:
             for face, t in candidates:
                 if t < best_t or (face.index < 0 and t <= best_t+1e-6):
                     best, best_t = (body, face), t
+        if best is not None and self._surface_in_front(origin, ray_dir, best_t):
+            return None                 # a curved surface (only planar faces are faces) hides it
         return best
+
+    def _surface_in_front(self, origin, ray_dir, t: float, tol: float = 2e-2) -> bool:
+        """Any visible body surface is hit more than `tol` before `t` along the ray."""
+        from omacad.model.faces import ray_mesh_hit
+        for body in self.doc.bodies.values():
+            mesh = body.render_mesh
+            if not body.visible or mesh is None or not len(mesh.vertices) \
+                    or not self._ray_hits_body_aabb(body, origin, ray_dir, t - tol):
+                continue
+            hit = ray_mesh_hit(mesh, origin, ray_dir)
+            if hit is not None and hit[0] < t - tol:
+                return True
+        return False
 
 
     def _edges_of_face(self, face, body) -> list:
