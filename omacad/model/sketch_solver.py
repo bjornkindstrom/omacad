@@ -3,7 +3,8 @@ Omacad - Sketch constraint solver (SolveSpace)
 
 Translates a Sketch (lines + circles, constraints, and the dimensions that apply to them)
 into a SolveSpace system, solves it and writes the new coordinates back.
-Rectangles, arcs and slots are not part of the solver yet and keep their coordinates.
+Rectangles, arcs and slots are not part of the solver yet and keep their coordinates; a fillet arc's
+two lines are solved as the sharp corner it rounds (Sketch.refit_fillets puts the arc back after).
 """
 
 import math
@@ -39,13 +40,14 @@ def solve_sketch(sketch: Sketch, fixed_ids: Iterable[str] = (), pinned: Iterable
         return SolveResult(True, None, "")
     fixed = {c.refs[0] for c in sketch.constraints if c.ctype == "FIX" and c.refs} | set(fixed_ids)
 
-    sol, msg = _attempt(sketch, ents, fixed, True, tuple(pinned))
+    corners = _sharp_corners(sketch, ents)
+    sol, msg = _attempt(sketch, ents, fixed, True, tuple(pinned), corners)
     if sol is None and not msg.startswith("Constraints would collapse"):
         # SolveSpace reports redundant-but-consistent systems (e.g. a closed triangle with all
         # three lengths dimensioned) as failures: retry without dimensions and accept the
         # result if the dimensions happen to hold.
-        alt, _ = _attempt(sketch, ents, fixed, False, tuple(pinned))
-        if alt is not None and _dims_hold(sketch, ents, alt[0]):
+        alt, _ = _attempt(sketch, ents, fixed, False, tuple(pinned), corners)
+        if alt is not None and _dims_hold(sketch, ents, alt[0], corners):
             sol, msg = alt, ""
     if sol is None:
         sketch.dof = None
@@ -65,7 +67,31 @@ def solve_sketch(sketch: Sketch, fixed_ids: Iterable[str] = (), pinned: Iterable
     return SolveResult(True, dof, "")
 
 
-def _dims_hold(sketch, ents, values, tol=1e-4) -> bool:
+def _sharp_corners(sketch, ents) -> list:
+    """(line_a, end_a, line_b, end_b, corner, trim_a, trim_b) for every fillet between two solver lines. The arc is
+    not in the solver, so lengthening one side left its neighbour where it was and the refit pulled the side back;
+    solved as the sharp corner, the neighbour follows, and a length dimension (which measures the flat) becomes
+    flat + the trims at its ends."""
+    corners = []
+    for arc in sketch.entities:
+        corner = sketch.sharp_corner(arc)
+        info = getattr(arc, "fillet_info", None)
+        if corner is None or info["line_a"] not in ents or info["line_b"] not in ents:
+            continue
+        trims = [math.hypot(p[0] - corner[0], p[1] - corner[1]) for p in (arc.p_start, arc.p_end)]
+        corners.append((info["line_a"], info["end_a"], info["line_b"], info["end_b"], corner, *trims))
+    return corners
+
+
+def _length_add(corners) -> Dict[str, float]:
+    add: Dict[str, float] = {}
+    for la, _, lb, _, _, ta, tb in corners:
+        add[la] = add.get(la, 0.0) + ta
+        add[lb] = add.get(lb, 0.0) + tb
+    return add
+
+
+def _dims_hold(sketch, ents, values, corners=(), tol=1e-4) -> bool:
     """Do the dimensions hold for these solved coordinates? (used to accept redundant systems)"""
     def pos(eid, name):
         v = values[eid]
@@ -77,13 +103,14 @@ def _dims_hold(sketch, ents, values, tol=1e-4) -> bool:
         (x1, y1), (x2, y2) = values[eid]
         return x2 - x1, y2 - y1
 
+    add = _length_add(corners)
     for d in sketch.dimensions:
         a = d.target_entity_id
         if a not in ents:
             continue
         if d.dim_type == "LENGTH" and isinstance(ents[a], SketchLine):
             x, y = line_vec(a)
-            if abs(math.hypot(x, y) - d.value) > tol * max(1.0, d.value):
+            if abs(math.hypot(x, y) - d.value - add.get(a, 0.0)) > tol * max(1.0, d.value):
                 return False
         elif d.dim_type == "ANGLE" and d.refs and d.refs[0] in ents and len(d.pts) == 2:
             u = line_vec(a) if d.pts[0] == "p1" else tuple(-c for c in line_vec(a))
@@ -116,7 +143,7 @@ def _dims_hold(sketch, ents, values, tol=1e-4) -> bool:
     return True
 
 
-def _attempt(sketch, ents, fixed, use_dims, pinned=()):
+def _attempt(sketch, ents, fixed, use_dims, pinned=(), corners=()):
     ents = {e.entity_id: e for e in sketch.entities if isinstance(e, SUPPORTED)}
 
     sys_ = SolverSystem()
@@ -125,12 +152,17 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
     geo: Dict[str, object] = {}
     radii: Dict[str, object] = {}
     normal = None
+    sharp = {}
+    for la, ea, lb, eb, corner, _, _ in corners:
+        sharp[(la, ea)] = sharp[(lb, eb)] = corner
 
     def build(ent):
         nonlocal normal
         if isinstance(ent, SketchLine):
-            a = sys_.add_point_2d(ent.p1[0], ent.p1[1], wp)
-            b = sys_.add_point_2d(ent.p2[0], ent.p2[1], wp)
+            p1 = sharp.get((ent.entity_id, "p1"), ent.p1)
+            p2 = sharp.get((ent.entity_id, "p2"), ent.p2)
+            a = sys_.add_point_2d(p1[0], p1[1], wp)
+            b = sys_.add_point_2d(p2[0], p2[1], wp)
             geo[ent.entity_id] = sys_.add_line_2d(a, b, wp)
             pts[(ent.entity_id, "p1")], pts[(ent.entity_id, "p2")] = a, b
         else:
@@ -196,7 +228,13 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
         elif t == "MIDPOINT" and b and line(b) and c.pts and (a, c.pts[0]) in pts:
             sys_.midpoint(pts[(a, c.pts[0])], geo[b], wp)
 
+    for la, ea, lb, eb, _, _, _ in corners:
+        # a fixed side already holds the corner: joining to it would make e.g. the opposite size dimension redundant
+        if la not in fixed and lb not in fixed:
+            sys_.coincident(pts[(la, ea)], pts[(lb, eb)], wp)
+
     ref_lines: Dict[str, object] = {}  # fixed face edges used by dimensions, created on demand
+    add = _length_add(corners)
 
     # Dimensions that belong to solver entities
     for d in (sketch.dimensions if use_dims else []):
@@ -207,7 +245,8 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=()):
         if ent is None or ent.entity_id in fixed:
             continue
         if d.dim_type == "LENGTH" and isinstance(ent, SketchLine):
-            sys_.distance(pts[(ent.entity_id, "p1")], pts[(ent.entity_id, "p2")], float(d.value), wp)
+            sys_.distance(pts[(ent.entity_id, "p1")], pts[(ent.entity_id, "p2")],
+                          float(d.value) + add.get(ent.entity_id, 0.0), wp)
         elif d.dim_type == "DIAMETER" and isinstance(ent, SketchCircle):
             sys_.diameter(geo[ent.entity_id], float(d.value))
         elif d.dim_type == "RADIUS" and isinstance(ent, SketchCircle):

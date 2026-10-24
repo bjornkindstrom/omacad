@@ -624,21 +624,28 @@ class SketchEditingMixin:
         the corner becomes the intersection of the two lines, then the arc and the line ends are
         rebuilt there with the arc's own radius."""
         for arc in self.entities:
-            info = getattr(arc, "fillet_info", None)
-            params = arc.get_circle_params() if isinstance(arc, SketchArc) and info else None
+            corner = self.sharp_corner(arc)
+            params = arc.get_circle_params() if corner else None
             if not params:
                 continue
-            la, lb = self.get_entity(info.get("line_a")), self.get_entity(info.get("line_b"))
-            if not (isinstance(la, SketchLine) and isinstance(lb, SketchLine)):
-                continue
-            da = (la.p2[0] - la.p1[0], la.p2[1] - la.p1[1])
-            db = (lb.p2[0] - lb.p1[0], lb.p2[1] - lb.p1[1])
-            den = da[0] * db[1] - da[1] * db[0]
-            if abs(den) < 1e-9:
-                continue
-            t = ((lb.p1[0] - la.p1[0]) * db[1] - (lb.p1[1] - la.p1[1]) * db[0]) / den
-            info["corner"] = (la.p1[0] + t * da[0], la.p1[1] + t * da[1])
+            arc.fillet_info["corner"] = corner
             self._update_fillet_arc(arc, params[1])
+
+    def sharp_corner(self, arc) -> Optional[Tuple[float, float]]:
+        """The sharp corner a fillet arc rounds: where its two lines meet when carried on (None if it is no fillet)."""
+        info = getattr(arc, "fillet_info", None)
+        if not (isinstance(arc, SketchArc) and info):
+            return None
+        la, lb = self.get_entity(info.get("line_a")), self.get_entity(info.get("line_b"))
+        if not (isinstance(la, SketchLine) and isinstance(lb, SketchLine)):
+            return None
+        da = (la.p2[0] - la.p1[0], la.p2[1] - la.p1[1])
+        db = (lb.p2[0] - lb.p1[0], lb.p2[1] - lb.p1[1])
+        den = da[0] * db[1] - da[1] * db[0]
+        if abs(den) < 1e-9:
+            return None
+        t = ((lb.p1[0] - la.p1[0]) * db[1] - (lb.p1[1] - la.p1[1]) * db[0]) / den
+        return (la.p1[0] + t * da[0], la.p1[1] + t * da[1])
 
     def find_corners(self, entities: Optional[List[SketchEntity]] = None) -> List[Tuple[Tuple[float, float], SketchLine, SketchLine, str, str]]:
         """Returns all corner vertices (point, line_a, line_b, end_a, end_b) where two non-collinear lines meet."""

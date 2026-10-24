@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.11 - 2026-10-24
+
+### Fixed
+- Changing the length of a straight side between sketch fillets did nothing (report 20261024-064212): the fillet arcs are not in the solver, so the neighbouring side stayed put and the refit pulled the side back to its old length. Filleted corners are now solved as the sharp corner they round, so the neighbours follow and the radii are kept.
+
 ## 0.9.9.80.10 - 2026-10-23
 
 ### Added
