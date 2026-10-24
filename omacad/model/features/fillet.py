@@ -354,6 +354,34 @@ class FilletFeature(Feature):
                 trims.append((m, float(m @ v)))
         return trims
 
+    @staticmethod
+    def _past_the_other_wall(ea, eb, tool_a, tool_b) -> m3d.Manifold:
+        """At an inside corner of a face outline that is not square (a 60 or 120 degree corner of a honeycomb cell),
+        each band run on past the corner also leaves the other wall's material and comes out over the open cell side,
+        where nothing holds that rim up: the outline is the union of the two walls' half planes, each rounded on its
+        own. The overlap of the bands alone leaves a sharp ridge there; this is the missing piece of each band:
+        behind the corner and on the open side of the other wall (empty at a square corner)."""
+        v = next(p for p in (ea.p0, ea.p1) if min(np.linalg.norm(p - eb.p0), np.linalg.norm(p - eb.p1)) < 1e-4)
+
+        def frame(e):
+            far = e.p1 if np.linalg.norm(e.p0 - v) < 1e-4 else e.p0
+            t = (far - v) / max(float(np.linalg.norm(far - v)), 1e-12)
+            other = eb if e is ea else ea
+            shared = max((e.n1, e.n2), key=lambda n: max(float(n @ other.n1), float(n @ other.n2)))
+            wall = e.n2 if shared is e.n1 else e.n1
+            return t, np.asarray(wall, dtype=float)
+
+        (t_a, wall_a), (t_b, wall_b) = frame(ea), frame(eb)
+        pieces = []
+        for t, tool, wall_other, t_other, wall in ((t_a, tool_a, wall_b, t_b, wall_a), (t_b, tool_b, wall_a, t_a, wall_b)):
+            if float(wall @ t_other) < 1e-3 or float(t @ wall_other) < 1e-3:
+                continue          # not an inside corner of the outline: behind it the band runs on into air
+            piece = (tool.trim_by_plane([float(x) for x in -t], float(-t @ v))
+                     .trim_by_plane([float(x) for x in wall_other], float(wall_other @ v)))
+            if piece.volume() > 1e-9:
+                pieces.append(piece)
+        return m3d.Manifold.batch_boolean(pieces, m3d.OpType.Add) if pieces else m3d.Manifold()
+
     def _wall_corner(self, body, ea, eb, v):
         """Two fillet/chamfer foot edges on the same floor that meet at `v` round the outside corner of a wall (the
         side of a rib meets its end). Fusion's rolling ball swings round the wall's corner edge there, so the
@@ -679,8 +707,9 @@ class FilletFeature(Feature):
                 sb = self._limited_sizes(bb, eb, self.size)
                 ext = 40.0 * max(min(sa[0], sb[0]), min(sa[1] or sa[0], sb[1] or sb[0])) + 10.0
                 try:
-                    corner = (CadKernel.edge_round_tool(ea, sa[0], self.kind, extend=ext, size2=sa[1])
-                              ^ CadKernel.edge_round_tool(eb, sb[0], self.kind, extend=ext, size2=sb[1]))
+                    ta_tool = CadKernel.edge_round_tool(ea, sa[0], self.kind, extend=ext, size2=sa[1])
+                    tb_tool = CadKernel.edge_round_tool(eb, sb[0], self.kind, extend=ext, size2=sb[1])
+                    corner = (ta_tool ^ tb_tool) + self._past_the_other_wall(ea, eb, ta_tool, tb_tool)
                 except Exception:
                     continue
                 if not corner.is_empty():

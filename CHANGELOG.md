@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.14 - 2026-10-24
+
+### Fixed
+- Fillet on the rim of honeycomb cells left spikes at the sharp 60° corners where the margin clips a cell (report 20261024-081206): the two rounded bands only met where both overlapped, so a ridge of unrounded rim stood between them behind the corner. Each band now also runs on past the corner where the other wall leaves it open, and the roundings meet in a clean mitre.
+
 ## 0.9.9.80.13 - 2026-10-24
 
 ### Fixed
