@@ -13,7 +13,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
 from omacad.model.features.base import Feature, region_cross_section
-from omacad.model.features.offset_face import _frame, find_plane_face
+from omacad.model.features.offset_face import _frame, cylinder_face_ref, find_plane_face
 
 SHAPES = ("hexagon", "circle", "square", "diamond", "triangle")
 AIR = 0.05          # the tool starts this far out in the air: never a face coinciding with the body's
@@ -119,7 +119,8 @@ class _Rays:
         self.v0, self.e1, self.e2 = t[:, 0], t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
         self.lo, self.hi = t.min(axis=1), t.max(axis=1)
 
-    def hit(self, o, d) -> Optional[float]:
+    def hit(self, o, d) -> Optional[Tuple[float, bool]]:
+        """(distance to the nearest surface, whether the ray enters the material there) or None."""
         o, d = np.asarray(o, dtype=float), np.asarray(d, dtype=float)
         # only triangles whose box the ray can reach (cheap prefilter on the two axes across the ray)
         far = o + d * 1e6
@@ -138,7 +139,10 @@ class _Rays:
         w = (q @ d) * inv
         t = np.einsum("ij,ij->i", e2, q) * inv
         hit = ok & (u >= -1e-9) & (w >= -1e-9) & (u + w <= 1 + 1e-9) & (t > 1e-6)
-        return float(t[hit].min()) if hit.any() else None
+        if not hit.any():
+            return None
+        k = int(np.argmin(np.where(hit, t, np.inf)))
+        return float(t[k]), bool(det[k] > 0.0)      # det = -d . (e1 x e2): positive against an outward face
 
 
 def _depths(points, inward, rays: _Rays, depth: Optional[float]) -> List[float]:
@@ -150,9 +154,15 @@ def _depths(points, inward, rays: _Rays, depth: Optional[float]) -> List[float]:
         # from the air in front (a faceted cylinder lies a hair inside its true radius): in, then out again
         d = np.asarray(d, dtype=float)
         start = np.asarray(p, dtype=float) - AIR * d
-        t_in = rays.hit(start, d)
-        t_out = rays.hit(start + (t_in + 1e-5) * d, d) if t_in is not None else None
-        out.append(t_in + 1e-5 + t_out - AIR + OVERSHOOT if t_out is not None else 0.0)
+        first = rays.hit(start, d)
+        if first is not None and not first[1]:
+            # already in the material (a face that bulges past the picked surface): only on to where it ends,
+            # never across the hollow behind it into the wall opposite
+            out.append(first[0] - AIR + OVERSHOOT)
+            continue
+        t_in = first[0] if first is not None else None
+        second = rays.hit(start + (t_in + 1e-5) * d, d) if t_in is not None else None
+        out.append(t_in + 1e-5 + second[0] - AIR + OVERSHOOT if second is not None else 0.0)
     return out
 
 
@@ -226,7 +236,29 @@ def _cylinder_extent(manifold, M_inv, r: float, length: float, internal: bool):
     return theta, (float(v[vs, 2].min()), float(v[vs, 2].max()))
 
 
+def _refitted(manifold, ref):
+    """The saved cylinder fitted again to the body's own wall. A pick could tilt the axis half a degree, and then
+    the cells on one side start inside the wall and miss its inner face at their edges."""
+    from types import SimpleNamespace
+    from omacad.model.faces_hit_tests import detect_cylinder_surface
+    mesh = manifold.to_mesh()
+    tri = np.asarray(mesh.vert_properties, dtype=np.float64)[:, :3][np.asarray(mesh.tri_verts, dtype=np.int64)]
+    M = _frame(ref["origin"], ref["axis"])
+    M_inv = np.linalg.inv(M)
+    mid = tri.mean(axis=1) @ M_inv[:3, :3].T + M_inv[:3, 3]
+    r, length = float(ref["radius"]), float(ref["length"])
+    # a triangle on the wall, away from the rounds at its ends
+    off = np.abs(np.hypot(mid[:, 0], mid[:, 1]) - r) + np.maximum(np.abs(mid[:, 2] - length / 2.0) - length / 4.0, 0)
+    cyl = detect_cylinder_surface(SimpleNamespace(vertices=tri.reshape(-1, 3)), int(off.argmin()))
+    if (cyl is None or bool(cyl["is_internal"]) != bool(ref.get("internal", False))
+            or abs(float(np.dot(cyl["axis"], M[:3, 2]))) < math.cos(math.radians(5.0))
+            or abs(cyl["radius"] - r) > 0.05 * r):
+        return ref
+    return cylinder_face_ref(cyl)
+
+
 def cylinder_tool(manifold, ref, params, rays: _Rays) -> Tuple[Optional[m3d.Manifold], int]:
+    ref = _refitted(manifold, ref)
     r, internal = float(ref["radius"]), bool(ref.get("internal", False))
     M = _frame(ref["origin"], ref["axis"])
     M_inv = np.linalg.inv(M)

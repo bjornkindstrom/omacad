@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.13 - 2026-10-24
+
+### Fixed
+- Honeycomb Through on a cup with a rounded rim left a row of ragged, half-cut cells (report 20261024-065939): picking the wall next to the fillet tilted the cylinder's axis about 0.6°, so cells on one side started inside the wall and Through measured right across the cup into the opposite wall. The wall is now picked with its true axis, a saved face is fitted to the body again before cutting, and a cell that starts inside the material only goes through that wall.
+
 ## 0.9.9.80.12 - 2026-10-24
 
 ### Fixed

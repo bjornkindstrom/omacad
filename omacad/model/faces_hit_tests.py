@@ -149,8 +149,23 @@ def _wall_mask(nrm, ref, tol: float = 0.02, steps: int = 720) -> Optional[np.nda
             break
         s = np.linalg.svd(nrm[inl[:, k]], compute_uv=False)
         if s[1] > 0.5 * s[0]:
-            return inl[:, k]
+            return _tightened(nrm, inl[:, k], tol)
     return None
+
+
+def _tightened(nrm, mask, tol: float) -> np.ndarray:
+    """The wall mask narrowed around its own axis. The axis with the most inliers leans a little towards the
+    side where it also catches the first ring of a fillet (a lean of 0.6 degrees still keeps every wall normal
+    within `tol`), and the fit through those normals leans with it; halving the tolerance round the fitted axis
+    drops the fillet ring and leaves the wall."""
+    while tol > 0.002:
+        axis = _normal_axis(nrm[mask])
+        tol /= 2.0
+        narrow = np.abs(nrm @ axis) < tol if axis is not None else mask
+        if int(narrow.sum()) < max(3, mask.sum() // 2):
+            break
+        mask = narrow
+    return mask
 
 
 def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
