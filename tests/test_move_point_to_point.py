@@ -91,8 +91,8 @@ def test_move_activate_copy_preserves_source_and_replays_copy():
     source_id = next(iter(d.bodies))
     source_volume = d.bodies[source_id].manifold.volume()
     feat = d.move_body(source_id, dx=25, rz=90, copy_body=True)
-    copy_id = f"body_{feat.feature_id}"
-    assert feat.copy_body
+    copy_id = feat.target_body_id   # the copy has its own Box step, then a plain move (#108)
+    assert not feat.copy_body and copy_id != source_id
     assert set(d.bodies) == {source_id, copy_id}
     assert d.bodies[source_id].manifold.volume() == pytest.approx(source_volume)
     assert d.bodies[copy_id].manifold.volume() == pytest.approx(source_volume)

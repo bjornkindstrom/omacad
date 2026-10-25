@@ -508,7 +508,7 @@ class Exporter:
             elif ft == "sketch":
                 sk = Sketch.from_dict(f_data["sketch"])
                 doc.sketches[sk.sketch_id] = sk
-                feat = SketchFeature(fid, fname, sk)
+                feat = SketchFeature(fid, fname, sk, f_data.get("reference_bodies"))
                 doc.timeline.add_feature(feat)
             elif ft == "extrude":
                 feat = ExtrudeFeature(

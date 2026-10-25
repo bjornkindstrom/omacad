@@ -465,9 +465,10 @@ class Document:
         return self.bodies.get(body_id)
 
 
-    def refresh_sketch_references(self, sketch: Sketch) -> None:
-        """Face outlines of the bodies that exist now, so regions bounded by them can be profiles."""
-        sketch.reference_segments = in_plane_edges(self.bodies.values(), sketch.plane)
+    def refresh_sketch_references(self, sketch: Sketch, body_ids=None) -> None:
+        """Face outlines of the bodies that exist now (or only `body_ids`), so regions bounded by them can be profiles."""
+        bodies = self.bodies.values() if body_ids is None else [self.bodies[b] for b in body_ids if b in self.bodies]
+        sketch.reference_segments = in_plane_edges(bodies, sketch.plane)
         sketch.solve_profiles()
 
     def _feature_id(self, prefix: str) -> str:
@@ -1317,6 +1318,10 @@ class Document:
         """Translates and rotates a 3D solid body parametrically (optionally point to point, see MoveFeature)."""
         if body_id not in self.bodies:
             return None
+        if copy_body:
+            copied = self._copy_body_steps(body_id)
+            if copied is not None:     # a copy with its own steps; else the old copy (a plain body)
+                body_id, copy_body = copied, False
         n = len([f for f in self.timeline.features if f.feature_type == "move"]) + 1
         feat_id = self._feature_id("move")
         target_name = self.bodies[body_id].name
@@ -1328,6 +1333,81 @@ class Document:
         feat.execute(self)
         self.notify_changed()
         return feat
+
+    def _copy_body_steps(self, body_id: str) -> Optional[str]:
+        """Copies every step that built `body_id` (its sketches too) as a new object at the marker, with new ids, so
+        the copy has its own parameters and editing it leaves the original alone (Björn #108). Returns the copy's
+        body id, or None when the body has no steps to copy."""
+        from omacad.io.exporter import Exporter
+        self.timeline.recompute(self)
+        history = self.object_history
+        marker = self.timeline.marker_index
+        feats = self.timeline.features[:marker]
+        needed, sketches, picked = {body_id}, set(), []
+        for f in reversed(feats):
+            sid = f.sketch.sketch_id if f.feature_type == "sketch" else None
+            if not (needed & set(history.outputs.get(f.feature_id, [])) or sid in sketches):
+                continue
+            picked.append(f)
+            needed |= set(history.body_inputs(f))
+            sketches |= set(history.sketch_inputs(f))
+        if not picked or not any(body_id in history.outputs.get(f.feature_id, []) and
+                                 (getattr(f, "created_body_id", f"body_{f.feature_id}") == body_id) for f in picked):
+            return None
+        picked.reverse()
+        taken_f = {f.feature_id for f in self.timeline.features}
+        taken_s = set(self.sketches) | {f.sketch.sketch_id for f in self.timeline.features if f.feature_type == "sketch"}
+
+        def fresh(prefix, taken, n):
+            while f"{prefix}_{n}" in taken:
+                n += 1
+            taken.add(f"{prefix}_{n}")
+            return f"{prefix}_{n}"
+
+        ids = {}
+        for f in picked:
+            if f.feature_type == "sketch":
+                sid = fresh("sketch", taken_s, len(self.sketches) + 1)
+                ids[f.sketch.sketch_id] = sid
+                new = ids[f.feature_id] = fresh("feat", taken_f, 0) if f"feat_{sid}" in taken_f else f"feat_{sid}"
+                taken_f.add(new)
+            else:
+                new = ids[f.feature_id] = fresh(f.feature_id.rsplit("_", 1)[0], taken_f, len(self.timeline.features) + 1)
+                ids[getattr(f, "created_body_id", f"body_{f.feature_id}")] = f"body_{new}"
+
+        def remap(value):
+            if isinstance(value, str):
+                return ids.get(value, value)
+            if isinstance(value, list):
+                return [remap(v) for v in value]
+            if isinstance(value, dict):
+                return {k: remap(v) for k, v in value.items()}
+            return value
+
+        data = Exporter.document_to_dict(self)
+        clones = []
+        for f, f_data in zip(picked, (data["timeline"][self.timeline.features.index(f)] for f in picked)):
+            c = remap(copy.deepcopy(f_data))
+            c["feature_id"] = ids[f.feature_id]
+            if f.feature_type == "sketch":
+                c["sketch"]["name"] = c["name"] = f"{f.name} (copy)"
+                before = self.step_states.get(self.timeline.features.index(f), {})
+                c["reference_bodies"] = remap(list(before))
+            elif getattr(f, "created_body_id", f"body_{f.feature_id}") == body_id:
+                c["name"] = f"{f.name} Copy"
+            clones.append(c)
+        source = history.owners.get(next(f.feature_id for f in picked if f.feature_type != "sketch"))
+        object_id = f"object_{clones[0]['feature_id']}"
+        owners = data["object_history"]["owners"]
+        for c in clones:
+            owners[c["feature_id"]] = object_id
+        source_name = history.objects[source].name if source in history.objects else self.bodies[body_id].name
+        data["object_history"]["names"][object_id] = f"{source_name} Copy"
+        data["object_history"]["active_id"] = object_id
+        data["timeline"][marker:marker] = clones
+        data["marker_index"] = marker + len(clones)
+        Exporter.apply_dict(self, data)
+        return ids[body_id]
 
     @undoable("Lay flat")
     def lay_face_on(self, body_id: str, face_normal, face_origin, plane_point, plane_normal) -> Optional[MoveFeature]:

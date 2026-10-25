@@ -486,13 +486,16 @@ class SphereFeature(Feature):
 
 
 class SketchFeature(Feature):
-    def __init__(self, feature_id: str, name: str, sketch: Sketch):
+    def __init__(self, feature_id: str, name: str, sketch: Sketch, reference_bodies=None):
         super().__init__(feature_id, "sketch", name)
         self.sketch = sketch
+        # Bodies whose face outlines close the profiles; None = every body built so far. A copied object's sketch
+        # sees only the copies of what the original saw, not the original body lying in the same place (#108).
+        self.reference_bodies = list(reference_bodies) if reference_bodies is not None else None
 
     def execute(self, doc: Any) -> None:
         # Register sketch in doc; face outlines of the bodies built so far close its profiles
-        doc.refresh_sketch_references(self.sketch)
+        doc.refresh_sketch_references(self.sketch, self.reference_bodies)
         doc.sketches[self.sketch.sketch_id] = self.sketch
 
     def to_dict(self) -> Dict[str, Any]:
@@ -502,4 +505,5 @@ class SketchFeature(Feature):
             "name": self.name,
             "suppressed": self.suppressed,
             "sketch": self.sketch.to_dict(),
+            **({"reference_bodies": self.reference_bodies} if self.reference_bodies is not None else {}),
         }

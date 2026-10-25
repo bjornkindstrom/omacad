@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.52 - 2026-10-25
+
+### Changed
+- Move with Activate copy makes a full copy of the object (#108): the copy gets its own sketches and steps (Extrude, Fillet, Chamfer, ...) as a new object, and then the move. Every parameter of the copy can be changed without touching the original. Older files keep their plain copies.
+
 ## 0.9.9.80.51 - 2026-10-25
 
 ### Added

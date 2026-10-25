@@ -332,8 +332,8 @@ class BodyPromptsMixin:
             if feat is None:
                 return
             committed.append(feat.feature_id)
-            if copy and f"body_{feat.feature_id}" in self.doc.bodies:   # keep moving the copy just made
-                new_id = f"body_{feat.feature_id}"
+            new_id = f"body_{feat.feature_id}" if feat.copy_body else feat.target_body_id   # a copy has its own steps
+            if copy and new_id != bid and new_id in self.doc.bodies:   # keep moving the copy just made
                 dlg.add_body(new_id, self.doc.bodies[new_id].name)
                 dlg.chk_copy_body.setChecked(False)
                 dlg.select_body(new_id)
@@ -510,11 +510,12 @@ class BodyPromptsMixin:
                 self.viewport.update()
                 return
             if result and bid and bid in self.doc.bodies:
+                copy = dlg.chk_copy_body.isChecked()
                 feat = self.doc.move_body(bid, dx, dy, dz, rx, ry, rz, pivot=pivot, exprs=exprs,
-                                          from_point=frm, to_point=to, copy_body=dlg.chk_copy_body.isChecked())
+                                          from_point=frm, to_point=to, copy_body=copy)
                 if feat:
                     b_name = self.doc.bodies[bid].name if bid in self.doc.bodies else bid
-                    action = "Copied and moved" if feat.copy_body else "Moved"
+                    action = "Copied and moved" if copy else "Moved"
                     self.status_label.setText(f"{action} {b_name}: dx={dx:g}, dy={dy:g}, dz={dz:g} mm, rx={rx:g}°, ry={ry:g}°, rz={rz:g}°.")
                     self.viewport.update()
             else:
