@@ -37,8 +37,10 @@ def tangent_chain(edge, edges) -> list:
                         break
     return chain
 
+LOOP_WALL_LEAN = 0.7   # |cos| between a wall and the face it rounds with: walls up to ~45° off square
+
 def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
-    """Outlines of flat faces made of straight pieces and arcs with square walls (see LoopEdge)."""
+    """Outlines of flat faces made of straight pieces and arcs with square or leaning walls (see LoopEdge)."""
     by_face: dict = {}
     for (a_idx, b_idx), (e0, e1), ang in zip(adj, adj_edges, angles):
         ra, rb = find(int(a_idx)), find(int(b_idx))
@@ -50,11 +52,11 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
             n_pl = normals[pl_tri]
             third_nb = v[[i for i in f[nb_tri] if i not in (e0, e1)][0]]
             third_pl = v[[i for i in f[pl_tri] if i not in (e0, e1)][0]]
-            square = abs(float(normals[nb_tri] @ n_pl)) < 0.1
+            lean = abs(float(normals[nb_tri] @ n_pl))
             side = float(n_pl @ (third_nb - v[e0]))
             # +1: the wall falls away below the face (an outer rim), -1: the wall rises from the face (the foot of a block)
-            ok = (1 if side < -1e-9 else -1 if side > 1e-9 else 0) if square else 0
-            by_face.setdefault(pr, []).append((int(e0), int(e1), ok, nr in planar, third_pl, n_pl))
+            ok = (1 if side < -1e-9 else -1 if side > 1e-9 else 0) if lean < LOOP_WALL_LEAN else 0
+            by_face.setdefault(pr, []).append((int(e0), int(e1), ok, nr in planar, third_pl, n_pl, normals[nb_tri], lean))
     out = []
     for pr, segs in by_face.items():
         comp: dict = {}
@@ -74,8 +76,11 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
             parts.setdefault(vfind(seg[0]), []).append(seg)
         for part in parts.values():
             kinds = {sg[2] for sg in part}
-            if len(kinds) != 1 or 0 in kinds or not any(sg[3] for sg in part) or all(sg[3] for sg in part):
-                continue   # needs both straight pieces (plane/plane) and arcs (plane/curved), all square, all on one side
+            if len(kinds) != 1 or 0 in kinds or all(sg[3] for sg in part):
+                continue   # all walls steep enough and on one side; only flat walls = straight edges of their own
+            leaning = any(sg[7] >= 0.1 for sg in part)
+            if not any(sg[3] for sg in part) and not leaning:
+                continue   # only square curved walls: a circle (_circular_edges)
             nbrs: dict = {}
             for e0, e1, *_ in part:
                 nbrs.setdefault(e0, []).append(e1)
@@ -99,9 +104,21 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
             seg_pts = {order[0], order[1]}
             ref_seg = next((sg for sg in part if {sg[0], sg[1]} == seg_pts), part[0])
             if float((ref_seg[4] - pts[0]) @ left) < 0:
+                order = order[::-1]
                 pts = pts[::-1].copy()
-            out.append(LoopEdge(pts.copy(), n_pl.copy(), kinds == {1}))
+            walls = None
+            if leaning:   # the normal of the wall along each piece, piece k from point k to point k + 1
+                wall_of = {frozenset(sg[:2]): sg[6] for sg in part}
+                walls = np.array([wall_of[frozenset((order[k], order[(k + 1) % len(order)]))] for k in range(len(order))])
+            if walls is not None and not any(sg[3] for sg in part) and _concyclic(pts):
+                continue   # a cone: _circular_edges has it
+            out.append(LoopEdge(pts.copy(), n_pl.copy(), kinds == {1}, walls))
     return out
+
+def _concyclic(pts) -> bool:
+    c = pts.mean(axis=0)
+    r = np.linalg.norm(pts - c, axis=1)
+    return float(r.std()) < 1e-3 * float(r.mean())
 
 def compute_planar_edges(manifold: m3d.Manifold) -> list:
     """Straight edges between two flat faces and full circles between a flat face and a cylinder."""

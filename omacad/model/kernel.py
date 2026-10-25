@@ -362,25 +362,25 @@ class CadKernel:
         folded = bool((np.einsum("ij,ij->i", d_in, t) <= 1e-9).any())
         m = 0.05 * r + 1e-3
         convex = bool(getattr(edge, "convex", True))
-        if convex:
-            if kind == "chamfer":
-                sec = [(-m, m), (r, m), (r, 0.0), (0.0, -r2), (-m, -r2)]
-            else:
-                arc = [(r + r * math.cos(ph), -r + r * math.sin(ph))
-                       for ph in np.linspace(math.pi / 2, math.pi, arc_segments + 1)]
-                sec = [(-m, m), (r, m)] + arc + [(-m, -r)]
-        else:
-            # the foot of a wall rising from the face: material is ADDED in the corner between face and wall
-            # (a = along the face away from the wall, h = up the wall); the margin overlaps the existing material
-            if kind == "chamfer":
-                sec = [(-m, -m), (r, -m), (r, 0.0), (0.0, r2), (-m, r2)]
-            else:
-                arc = [(r - r * math.cos(b), r - r * math.sin(b)) for b in np.linspace(math.pi / 2, 0.0, arc_segments + 1)]
-                sec = [(-m, -m), (r, -m)] + arc + [(-m, r)]
+        walls = getattr(edge, "walls", None)
+
+        def section(wall, a):   # the wall's normal seen in the section plane (a = into the face, h = along n)
+            w2 = None if wall is None else (float(wall @ a), float(wall @ n))
+            return CadKernel._loop_section(kind, convex, r, r2, m, arc_segments, w2)
+
+        if walls is not None:   # at each point the mean of the walls of the pieces on either side
+            walls = np.asarray(walls, dtype=float)
+            at_pts = walls + np.roll(walls, 1, axis=0)
+            at_pts /= np.maximum(np.linalg.norm(at_pts, axis=1), 1e-12)[:, None]
         if folded:
-            return CadKernel._loop_tool_pieces(P, n, t, inw, sec)
-        M = len(sec)
-        verts = np.array([P[i] + a * miter[i] + h * n for i in range(N) for a, h in sec], dtype=np.float64)
+            return CadKernel._loop_tool_pieces(P, n, t, inw, walls, section)
+        if walls is None:
+            secs = [section(None, None)] * N
+        else:
+            mh = miter / np.linalg.norm(miter, axis=1)[:, None]
+            secs = [section(w, a) for w, a in zip(at_pts, mh)]
+        M = len(secs[0])
+        verts = np.array([P[i] + a * miter[i] + h * n for i in range(N) for a, h in secs[i]], dtype=np.float64)
         tris = []
         for i in range(N):
             j = (i + 1) % N
@@ -398,6 +398,32 @@ class CadKernel:
         if solid.is_empty():
             raise ValueError("Could not build the rounding for this outline.")
         return solid
+
+    @staticmethod
+    def _loop_section(kind, convex, r, r2, m, arc_segments, wall=None) -> list:
+        """The corner cross-section of a loop: a = into the face, h = along the face's outward normal, the corner
+        at the origin. `wall` = the wall's outward normal in that plane ((-1, 0) under a rim, (1, 0) for a square
+        wall rising from the face). A convex rim cuts away the corner, a foot (not convex) adds material in it;
+        both reach a margin m past the faces into the empty side (or into the material, for a foot)."""
+        wa, wh = wall or ((-1.0, 0.0) if convex else (1.0, 0.0))
+        k = math.hypot(wa, wh)
+        wa, wh = wa / k, wh / k
+        d = np.array([-wh, wa])                 # along the wall away from the corner
+        s = 1.0 if convex else -1.0             # the margin's side: outside the material, or into the wall
+        O = np.array([(s * m - wh * s * m) / wa, s * m])   # corner of the margins along face and wall
+        wn = np.array([wa, wh]) * s
+        if kind == "chamfer":
+            pts = [O, (r, s * m), (r, 0.0), d * r2, d * r2 + wn * m]
+        else:
+            half = 0.5 * math.acos(float(np.clip(d[0], -1.0, 1.0)))   # half the angle between face and wall
+            reach = r / math.tan(half)
+            c = np.array([reach, -s * r]) if convex else np.array([reach, r])
+            t1, t2 = np.array([reach, 0.0]), d * reach
+            a0 = math.atan2(*(t1 - c)[::-1])
+            a1 = a0 + math.remainder(math.atan2(*(t2 - c)[::-1]) - a0, 2.0 * math.pi)
+            arc = [c + r * np.array([math.cos(ph), math.sin(ph)]) for ph in np.linspace(a0, a1, arc_segments + 1)]
+            pts = [O, (reach, s * m)] + arc + [t2 + wn * m]
+        return [(float(a), float(h)) for a, h in pts]
 
     @staticmethod
     def foot_fill_tool(body: m3d.Manifold, edge, size: float, kind: str) -> m3d.Manifold:
@@ -428,19 +454,32 @@ class CadKernel:
         return CadKernel.loop_round_tool(edge, lo, kind) if lo > 1e-3 else m3d.Manifold()
 
     @staticmethod
-    def _loop_tool_pieces(P, n, t, inw, sec) -> m3d.Manifold:
+    def _loop_tool_pieces(P, n, t, inw, walls, section) -> m3d.Manifold:
         """The corner cross-section extruded along every straight piece of the outline (arcs are many short
-        pieces), merged. Where the radius is larger than a corner arc the pieces overlap and cut a dome."""
+        pieces), merged. Where the radius is larger than a corner arc the pieces overlap and cut a dome.
+        Along leaning walls (`walls` per piece, see LoopEdge) the section follows the wall point by point."""
+        from omacad.model.sweep_geometry import ring_solid
         N = len(P)
         # join consecutive pieces that run in the same direction
         starts = [i for i in range(N) if float(t[i] @ t[i - 1]) < 1.0 - 1e-9]
         if not starts:
             starts = [0]
-        poly = [list(map(float, q)) for q in sec]
-        area = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1] for i in range(len(poly)))
-        if area < 0:
-            poly.reverse()
-        cs = m3d.CrossSection([poly])
+        def ccw(sec):
+            poly = [list(map(float, q)) for q in sec]
+            area = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1] for i in range(len(poly)))
+            return poly[::-1] if area < 0 else poly
+
+        def wall_at(j, i0, i1):   # a piece's end takes its own wall, not the mean with the next piece round the corner
+            if walls is None:
+                return None
+            if j == i0 or j == i1:
+                return walls[i0 if j == i0 else (i1 - 1) % N]
+            w = walls[j - 1] + walls[j]
+            return w / np.linalg.norm(w)
+
+        bisector = lambda i: (inw[i - 1] + inw[i]) / max(float(np.linalg.norm(inw[i - 1] + inw[i])), 1e-12)
+        cs = {i: m3d.CrossSection([ccw(section(None if walls is None else (walls[i - 1] + walls[i]) / 2.0, bisector(i)))])
+              for i in starts}
         pieces = []
         for k, i0 in enumerate(starts):
             i1 = starts[(k + 1) % len(starts)]
@@ -456,9 +495,17 @@ class CadKernel:
             # a hair past both ends, so neighbouring pieces overlap instead of touching face to face (that left
             # zero-thickness flaps in the result)
             eps = 1e-3 + 1e-4 * length
-            solid = m3d.Manifold.extrude(cs, height=length + 2.0 * eps).translate((0.0, 0.0, -eps))
-            mat = np.column_stack([inw[i0], n, t[i0], P[i0]]).astype(float)
-            pieces.append(solid.transform(mat))
+            if walls is None:
+                solid = m3d.Manifold.extrude(cs[i0], height=length + 2.0 * eps).translate((0.0, 0.0, -eps))
+                pieces.append(solid.transform(np.column_stack([inw[i0], n, t[i0], P[i0]]).astype(float)))
+                continue
+            js = [i0]
+            while js[-1] != i1:
+                js.append((js[-1] + 1) % N)
+            secs = [np.array(ccw(section(wall_at(j, i0, i1), inw[i0]))) for j in js]
+            rings = [P[j] + q[:, :1] * inw[i0] + q[:, 1:] * n + (-eps if k == 0 else eps if k == len(js) - 1 else 0.0) * t[i0]
+                     for k, (j, q) in enumerate(zip(js, secs))]
+            pieces.append(ring_solid(rings, secs[0], secs[-1]))
         pieces += CadKernel._loop_joints(P, n, t, inw, starts, cs)
         result = m3d.Manifold.batch_boolean(pieces, m3d.OpType.Add)
         if result.is_empty():
@@ -471,12 +518,12 @@ class CadKernel:
         pieces leave a wedge between them on the face side that nothing cuts: a row of teeth along the arc
         (Björn #78). Fill each with the face-side half of the section turned about the corner, which is exactly
         what a smooth sweep would have covered there."""
-        size = 4.0 * max(abs(x) for poly in cs.to_polygons() for p in poly for x in p) + 1.0
-        half = cs ^ m3d.CrossSection.square((size, 2.0 * size)).translate((0.0, -size))   # a >= 0: the face side
-        if half.is_empty():
-            return []
         joints = []
         for i in starts:
+            size = 4.0 * max(abs(x) for poly in cs[i].to_polygons() for p in poly for x in p) + 1.0
+            half = cs[i] ^ m3d.CrossSection.square((size, 2.0 * size)).translate((0.0, -size))   # a >= 0: the face side
+            if half.is_empty():
+                continue
             turn = float(np.cross(t[i - 1], t[i]) @ n)
             cos = float(np.clip(t[i - 1] @ t[i], -1.0, 1.0))
             if turn >= -1e-9:

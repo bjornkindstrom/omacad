@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.26 - 2026-10-25
+
+### Fixed
+- Fillet/Chamfer: the whole top (or bottom) outline of a twisted extrude can be picked as one edge and rounded; the rounding follows the leaning walls point by point. Before, only a few stray straight pieces of the outline were pickable.
+
 ## 0.9.9.80.25 - 2026-10-25
 
 ### Added

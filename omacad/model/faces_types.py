@@ -1,7 +1,7 @@
 """Face types for CAD mesh geometry."""
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 import math
 import numpy as np
 
@@ -97,10 +97,12 @@ class CircularEdge:
 @dataclass
 class LoopEdge:
     """The whole outline of a flat face that mixes straight pieces and arcs (a plate with rounded corners,
-    a slot ...), where every wall stands square on the face. Rounded or bevelled as one piece."""
+    a slot ...), where the walls stand square on the face or lean (the top of a twisted extrude). Rounded or
+    bevelled as one piece."""
     pts: np.ndarray      # (N, 3) points in order, the face on the left of the direction of travel (not closed)
     n: np.ndarray        # outward unit normal of the flat face
     convex: bool = True
+    walls: Optional[np.ndarray] = None   # (N, 3) outward unit normal of the wall along piece i (point i to i+1); None = square
 
     kind = "loop"
 
