@@ -1,5 +1,7 @@
 # Omacad – färdplan
 
+Genomfört 0.9.9.80.34: rutnätet döljs bakom kroppen även underifrån (#87); dubbla kantval ger inga uppdelade fasytor, och plana fasremsor har kompletta ändsömmar.
+
 Genomfört 0.9.9.80.33: fasning av rundade konturer utan falska kantlinjer; dubbel precision genom ytanalys och fasverktyg.
 
 Genomfört 0.9.0: cirkulära featuregrupper för t.ex. Japandi-ribbor med fillet; val av features i tidslinjen samt cirkel-/cylinderyta som rotationsaxel.

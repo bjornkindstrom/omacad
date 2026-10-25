@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.9.80.34 - 2026-10-25
+
+### Fixed
+- The ground grid stays behind solid bodies when viewing from below, instead of drawing over their surfaces (Björn #87).
+- Selecting a whole outline together with arcs already in it no longer cuts those arcs twice during Fillet/Chamfer, keeping curved faces whole and their rim lines continuous.
+- Long planar chamfer bands remain flat faces, with tangent seams at both ends. Surface classification now measures width perpendicular to each seam rather than along the shortest axis (report 20261025-130556).
+
 ## 0.9.9.80.33 - 2026-10-25
 
 ### Fixed

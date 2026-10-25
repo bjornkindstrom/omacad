@@ -91,22 +91,30 @@ def _curved_roots(v, f, tm, find, groups, adj, angles) -> set:
             for y in real:
                 if x != y and float(normal_of[x] @ normal_of[y]) > np.cos(np.radians(25.0)):
                     shallow.setdefault(x, set()).add(y)
-    width = {}
+    points = {}
+
+    def width_across(r, other):
+        # Measure perpendicular to the seam, not along the group's shortest principal axis.
+        # A long flat chamfer is narrow across its band, but wide towards the curved corner at its end.
+        n, nb = normal_of[r], normal_of[other]
+        across = nb - float(nb @ n) * n
+        length = np.linalg.norm(across)
+        if length < 1e-6:
+            return 0.0  # coplanar patches separated by a sliver do not establish curvature
+        if r not in points:
+            points[r] = v[np.unique(f[np.array(groups[r])].ravel())]
+        return float(np.ptp(points[r] @ (across / length)))
+
     curved = set()
     for r, neighbours in shallow.items():
         if r in sliver:
             continue
-        valid_nb = [n for n in neighbours if n not in sliver]
-        if len(valid_nb) < 2:
-            continue
-        if r not in width:
-            width[r] = _group_min_width(v, f, tm, groups[r])
-        wr_quarter = width[r] * 0.25
         similar = 0
-        for n in valid_nb:
-            if n not in width:
-                width[n] = _group_min_width(v, f, tm, groups[n])
-            if width[n] >= wr_quarter:
+        for n in neighbours:
+            if n in sliver:
+                continue
+            wr, wn = width_across(r, n), width_across(n, r)
+            if wr > 0 and wn >= wr * 0.25:
                 similar += 1
                 if similar >= 2:
                     curved.add(r)

@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+Rutnätet skymmer inte kroppen underifrån. Fasade konturer har sammanhängande ytor och kompletta kantlinjer även när samma båge ingår i flera val (0.9.9.80.34).
+
 Fasning av rundade konturer behåller dubbel precision och ger inga falska kantlinjer över fasen eller väggen (0.9.9.80.33).
 
 **Circular Feature Pattern:** öppna Pattern-pilen → Circular Pattern (Features), välj ribban och dess fillet i tidslinjen/listan, välj rotationsaxel och totalantal. Välj X/Y/Z eller klicka en cirkelkant/cylinderyta. Originalet ingår i antalet; 360° ger ett helt varv.

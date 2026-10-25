@@ -1,5 +1,7 @@
 # Omacad – progress and roadmap
 
+- Ground grid remains behind bodies from below; chamfer outlines keep continuous rims and whole planar/curved faces even with overlapping edge selections (0.9.9.80.34).
+
 - Fixed false crease lines after chamfering curved outlines by retaining double precision in topology and outline tools (0.9.9.80.33).
 
 - Circular Feature Pattern: selected rib + fillet groups, picked/world axes, partial/full circles and timeline selection/editing (0.9.0).

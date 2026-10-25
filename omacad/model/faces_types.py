@@ -125,5 +125,42 @@ class LoopEdge:
         return (float(self.n @ other.n) > 0.999 and np.linalg.norm(self.centroid - other.centroid) < tol
                 and abs(self.perimeter - other.perimeter) < tol)
 
+    def contains_arc(self, edge) -> bool:
+        """Whether this outline already includes the entire circular edge, using its actual chords.
+
+        Fitted circle samples need not coincide with the mesh chords. Compare their radii and angular
+        coverage instead; a nearby concentric arc or an arc with only its ends on the loop is not covered.
+        """
+        if edge.kind != "circle" or self.convex != edge.convex or float(self.n @ edge.axis) < 0.999:
+            return False
+        tol = 1e-5 * max(1.0, edge.radius)
+        q = self.pts - edge.center
+        on_circle = (np.abs(q @ edge.axis) < tol) & (np.abs(np.linalg.norm(q, axis=1) - edge.radius) < tol)
+        u, v = edge._basis()
+        angles = np.arctan2(q @ v, q @ u) - edge.a0
+        intervals = []
+        for i in range(len(q)):
+            j = (i + 1) % len(q)
+            if not (on_circle[i] and on_circle[j]):
+                continue
+            turn = math.remainder(float(angles[j] - angles[i]), 2 * math.pi)
+            if abs(turn) > 1.5 * 2 * math.pi / max(edge.nseg, 6):
+                continue  # a straight chord across the circle does not cover the arc
+            a = float(angles[i]) % (2 * math.pi)
+            lo, hi = sorted((a, a + turn))
+            for shift in (-2 * math.pi, 0.0, 2 * math.pi):
+                intervals.append((lo + shift, hi + shift))
+        covered = 0.0
+        angular_tol = tol / max(edge.radius, 1e-12)
+        for lo, hi in sorted(intervals):
+            if hi < 0:
+                continue
+            if lo > covered + angular_tol:
+                break
+            covered = max(covered, hi)
+            if covered >= edge.sweep - angular_tol:
+                return True
+        return False
+
     def ref(self):
         return ("loop", tuple(map(float, self.centroid)), tuple(map(float, self.n)), float(self.perimeter))

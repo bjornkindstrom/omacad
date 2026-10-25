@@ -302,7 +302,10 @@ class RenderGLMixin:
 
         GL.glUniform4f(loc_col, *theme.palette().grid_rgb01(), 0.5)
         self.set_line_width(1.0)
+        # The ground grid is a backdrop. It must not reject body fragments when the camera is below XY.
+        GL.glDepthMask(GL.GL_FALSE)
         self.draw_buffer_arrays(GL.GL_LINES, loc_pos, grid_data)
+        GL.glDepthMask(GL.GL_TRUE)
 
         GL.glUseProgram(0)
 

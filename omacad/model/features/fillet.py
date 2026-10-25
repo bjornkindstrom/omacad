@@ -664,6 +664,12 @@ class FilletFeature(Feature):
             else:
                 take(*best)
 
+        # A whole outline includes its circular pieces. Cutting those again with independently fitted
+        # circles makes nearly coincident bevels, splitting one surface into many narrow strips.
+        loops = [(body, edge) for body, edge in seen if edge.kind == "loop"]
+        seen = [(body, edge) for body, edge in seen
+                if not any(body is owner and loop.contains_arc(edge) for owner, loop in loops)]
+
         for body, edge in seen:
             ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0
             size = abs(self.size)
