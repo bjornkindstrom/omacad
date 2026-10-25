@@ -62,7 +62,7 @@ class SketchOperationMixin:
             if self.selected_entities:
                 self.fillet_selected_or_prompt()
             else:
-                self.status_message.emit("Fillet: click a corner (Shift+click to pick several corners, then Enter), or click two lines. Esc cancels.")
+                self.status_message.emit("Fillet: click a corner (Shift+click to pick several corners, then Enter), or click two lines or arcs. Esc cancels.")
         self.update()
 
     def project_edges(self):
@@ -413,8 +413,8 @@ class SketchOperationMixin:
         sk = self.doc.active_sketch
         if not sk or not self.selected_entities:
             return
-        from omacad.model.sketch import SketchLine
-        cands = [sk.get_entity(eid) for eid in self.selected_entities if isinstance(sk.get_entity(eid), SketchLine)]
+        from omacad.model.sketch import SketchArc, SketchLine
+        cands = [sk.get_entity(eid) for eid in self.selected_entities if isinstance(sk.get_entity(eid), (SketchLine, SketchArc))]
         if len(cands) == 2:
             self.prompt_fillet_radius(cands[0], cands[1])
             return
@@ -442,4 +442,4 @@ class SketchOperationMixin:
                         self.status_message.emit(f"Fillet: {len(created_arcs)} corners rounded with radius {radius:g} mm.")
                         self.update()
                     return
-        self.status_message.emit("Fillet: click a corner between two lines, or click two lines (Esc cancels).")
+        self.status_message.emit("Fillet: click a corner between lines or arcs, or click two of them (Esc cancels).")

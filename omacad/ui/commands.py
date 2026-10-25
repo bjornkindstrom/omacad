@@ -107,7 +107,7 @@ _ALL = [
     _c("dimension", "Dimension", "dimension", "Click a line, circle or two elements and type the size", "D",
        "sketch_tool_selected", "DIMENSION", ("sketch",)),
     # --- SKETCH: MODIFY ------------------------------------------------------------------------------------------
-    _c("fillet_sketch", "Fillet", "╭", "Round the corner between two lines", "F", "sketch_tool_selected", "FILLET",
+    _c("fillet_sketch", "Fillet", "╭", "Round the corner between two lines or a line and an arc", "F", "sketch_tool_selected", "FILLET",
        ("sketch",)),
     _c("trim", "Trim", "✂️", "Remove a curve up to the nearest crossings, or a dangling end", "T",
        "sketch_tool_selected", "TRIM", ("sketch",)),

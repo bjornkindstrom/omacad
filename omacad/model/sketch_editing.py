@@ -12,6 +12,8 @@ from omacad.model.sketch_entities import (
     ref_id, ref_segment, point_of, rotate_point, move_entity, rotate_entity, entity_key_points
 )
 from omacad.model.sketch_types import SketchConstraint, SketchDimension
+from omacad.model.sketch_fillet_curves import corner_point, end_tangent, fillet_points, trim_end
+from omacad.model.sketch_fillet_curves import ends as fillet_ends
 
 
 def _outline_rings(segs, tol: float = 5e-3):
@@ -570,8 +572,10 @@ class SketchEditingMixin:
         V = info.get("corner")
         end_a = info.get("end_a")
         end_b = info.get("end_b")
-        if not (isinstance(line_a, SketchLine) and isinstance(line_b, SketchLine) and V and end_a and end_b):
+        if not (line_a is not None and line_b is not None and V and end_a and end_b):
             return False
+        if not (isinstance(line_a, SketchLine) and isinstance(line_b, SketchLine)):
+            return self._update_curve_fillet(arc, line_a, end_a, line_b, end_b, V, new_radius)
 
         Pa = line_a.p2 if end_a == "p1" else line_a.p1
         Pb = line_b.p2 if end_b == "p1" else line_b.p1
@@ -619,6 +623,29 @@ class SketchEditingMixin:
                     dim.value = float(new_len)
         return True
 
+    def _update_curve_fillet(self, arc, ent_a, end_a, ent_b, end_b, near, new_radius: float) -> bool:
+        """A fillet where a line meets an arc (or two arcs) takes a new radius: rebuilt from the corner the two
+        curves make when carried on, so it can grow as well as shrink."""
+        V = corner_point(ent_a, end_a, ent_b, end_b, near)
+        pts, _msg = fillet_points(ent_a, end_a, ent_b, end_b, V, new_radius) if V else (None, "")
+        if pts is None:
+            return False
+        self._trim_to_fillet(ent_a, end_a, ent_b, end_b, pts)
+        arc.p_start, arc.p_mid, arc.p_end = pts
+        arc.fillet_info["corner"] = V
+        return True
+
+    def _trim_to_fillet(self, ent_a, end_a, ent_b, end_b, pts) -> None:
+        """Trims both sides to the fillet (Ta, M, Tb) and keeps their length dimensions true."""
+        trim_end(ent_a, end_a, pts[0])
+        trim_end(ent_b, end_b, pts[2])
+        for line in (ent_a, ent_b):
+            if isinstance(line, SketchLine):
+                new_len = math.hypot(line.p2[0] - line.p1[0], line.p2[1] - line.p1[1])
+                for dim in self.dimensions:
+                    if dim.dim_type == "LENGTH" and dim.target_entity_id == line.entity_id:
+                        dim.value = float(new_len)
+
     def refit_fillets(self) -> None:
         """Re-seats every fillet arc after the solver moved its lines (arcs are not solver entities):
         the corner becomes the intersection of the two lines, then the arc and the line ends are
@@ -647,32 +674,28 @@ class SketchEditingMixin:
         t = ((lb.p1[0] - la.p1[0]) * db[1] - (lb.p1[1] - la.p1[1]) * db[0]) / den
         return (la.p1[0] + t * da[0], la.p1[1] + t * da[1])
 
-    def find_corners(self, entities: Optional[List[SketchEntity]] = None) -> List[Tuple[Tuple[float, float], SketchLine, SketchLine, str, str]]:
-        """Returns all corner vertices (point, line_a, line_b, end_a, end_b) where two non-collinear lines meet."""
+    def find_corners(self, entities: Optional[List[SketchEntity]] = None) -> List[Tuple[Tuple[float, float], SketchEntity, SketchEntity, str, str]]:
+        """Returns all corner vertices (point, ent_a, ent_b, end_a, end_b) where two lines or arcs meet at an angle
+        (not tangentially)."""
         corners = []
-        cands = [e for e in (entities or self.entities) if isinstance(e, SketchLine) and not e.is_construction]
+        cands = [e for e in (entities or self.entities) if isinstance(e, (SketchLine, SketchArc)) and not e.is_construction]
         tol = 1e-3
         for i in range(len(cands)):
             for j in range(i + 1, len(cands)):
                 la, lb = cands[i], cands[j]
-                for ea, pa in (("p1", la.p1), ("p2", la.p2)):
-                    for eb, pb in (("p1", lb.p1), ("p2", lb.p2)):
+                for ea, pa in fillet_ends(la):
+                    for eb, pb in fillet_ends(lb):
                         if math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < tol:
-                            other_a = la.p2 if ea == "p1" else la.p1
-                            other_b = lb.p2 if eb == "p1" else lb.p1
-                            va = (other_a[0] - pa[0], other_a[1] - pa[1])
-                            vb = (other_b[0] - pb[0], other_b[1] - pb[1])
-                            na, nb = math.hypot(*va), math.hypot(*vb)
-                            if na > 1e-5 and nb > 1e-5:
-                                cos_th = (va[0] * vb[0] + va[1] * vb[1]) / (na * nb)
-                                if abs(cos_th) < 0.9999:
-                                    corners.append((pa, la, lb, ea, eb))
+                            ta, tb = end_tangent(la, ea, pa), end_tangent(lb, eb, pa)
+                            if ta is not None and tb is not None and abs(float(np.dot(ta, tb))) < 0.9999:
+                                corners.append((pa, la, lb, ea, eb))
                             break
         return corners
 
     def fillet_corner(self, line_a: SketchLine, line_b: SketchLine, radius: float,
                       corner_pt: Optional[Tuple[float, float]] = None) -> Tuple[Optional[SketchArc], str]:
-        """Rounds the corner where line_a and line_b meet with a circular arc of given radius."""
+        """Rounds the corner where line_a and line_b (lines, or a line and an arc, or two arcs) meet with a
+        circular arc of given radius."""
         if radius <= 0.001:
             return None, "The radius must be larger than 0."
 
@@ -682,8 +705,8 @@ class SketchEditingMixin:
 
         if corner_pt is not None:
             best_d = 1e9
-            for ea, pa in (("p1", line_a.p1), ("p2", line_a.p2)):
-                for eb, pb in (("p1", line_b.p1), ("p2", line_b.p2)):
+            for ea, pa in fillet_ends(line_a):
+                for eb, pb in fillet_ends(line_b):
                     d_meeting = math.hypot(pa[0] - pb[0], pa[1] - pb[1])
                     if d_meeting < tol:
                         d_c = math.hypot(pa[0] - corner_pt[0], pa[1] - corner_pt[1])
@@ -692,8 +715,8 @@ class SketchEditingMixin:
                             end_a, end_b = ea, eb
                             V = pa
         if end_a is None:
-            for ea, pa in (("p1", line_a.p1), ("p2", line_a.p2)):
-                for eb, pb in (("p1", line_b.p1), ("p2", line_b.p2)):
+            for ea, pa in fillet_ends(line_a):
+                for eb, pb in fillet_ends(line_b):
                     if math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < tol:
                         end_a, end_b = ea, eb
                         V = pa
@@ -703,6 +726,11 @@ class SketchEditingMixin:
 
         if end_a is None or V is None:
             return None, "The lines do not meet in a common corner."
+        if not (isinstance(line_a, SketchLine) and isinstance(line_b, SketchLine)):
+            pts, msg = fillet_points(line_a, end_a, line_b, end_b, V, radius)
+            if pts is None:
+                return None, msg
+            return self._add_fillet_arc(line_a, end_a, line_b, end_b, V, pts, radius), "OK"
 
         Pa = line_a.p2 if end_a == "p1" else line_a.p1
         Pb = line_b.p2 if end_b == "p1" else line_b.p1
@@ -735,23 +763,18 @@ class SketchEditingMixin:
         b = bsum / np.linalg.norm(bsum)
         C = np.array(V) + (radius / sin_half) * b
         M = tuple(C - radius * b)
+        return self._add_fillet_arc(line_a, end_a, line_b, end_b, V, (Ta, M, Tb), radius), "OK"
 
-        # Trim lines
-        setattr(line_a, end_a, Ta)
-        setattr(line_b, end_b, Tb)
+    def _add_fillet_arc(self, line_a, end_a, line_b, end_b, V, pts, radius: float) -> SketchArc:
+        """Trims both sides to the fillet (Ta, M, Tb) and adds the arc, tied to them, with its radius dimension."""
+        Ta, M, Tb = pts
+        self._trim_to_fillet(line_a, end_a, line_b, end_b, pts)
 
         # Remove coincident constraint between line_a and line_b at this corner
         self.constraints = [
             c for c in self.constraints
             if not (c.ctype == "COINCIDENT" and set(c.refs) == {line_a.entity_id, line_b.entity_id})
         ]
-
-        # Update length dimensions on trimmed lines
-        for line in (line_a, line_b):
-            new_len = math.hypot(line.p2[0] - line.p1[0], line.p2[1] - line.p1[1])
-            for dim in self.dimensions:
-                if dim.dim_type == "LENGTH" and dim.target_entity_id == line.entity_id:
-                    dim.value = float(new_len)
 
         # Create fillet arc
         arc_id = self._new_entity_id("arc")
@@ -773,4 +796,4 @@ class SketchEditingMixin:
         self.add_dimension("RADIUS", arc_id, radius, offset_distance=12.0, name="Fillet")
 
         self.solve_profiles()
-        return arc, "OK"
+        return arc

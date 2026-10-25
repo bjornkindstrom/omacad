@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.25 - 2026-10-25
+
+### Added
+- Sketch Fillet rounds corners where a line meets an arc, or two arcs meet (hover, click, Shift+click, box pick and two-element pick); the fillet stays tangent to both when its radius dimension is changed, and the arc keeps its circle.
+
 ## 0.9.9.80.24 - 2026-10-25
 
 ### Fixed

@@ -82,15 +82,12 @@ class OverlayMixin:
 
                 # Bisector arrow pointing into the corner
                 try:
-                    def line_dir(line):
-                        p1 = np.array(line.p1)
-                        p2 = np.array(line.p2)
-                        d1 = float(np.linalg.norm(p1 - pt))
-                        d2 = float(np.linalg.norm(p2 - pt))
-                        far = p2 if d1 < d2 else p1
-                        d = far - pt
-                        norm = float(np.linalg.norm(d))
-                        return d / norm if norm > 1e-6 else np.array([1.0, 0.0])
+                    from omacad.model.sketch_fillet_curves import end_tangent, ends
+
+                    def line_dir(ent):
+                        end = min(ends(ent), key=lambda e: math.hypot(e[1][0] - pt[0], e[1][1] - pt[1]))[0]
+                        d = end_tangent(ent, end, pt)
+                        return d if d is not None else np.array([1.0, 0.0])
 
                     da = line_dir(la)
                     db = line_dir(lb)

@@ -176,7 +176,7 @@ class PointerMixin:
             if event.button() == Qt.MouseButton.RightButton:
                 if self.fillet_first_line:
                     self.fillet_first_line = None
-                    self.status_message.emit("Fillet: click a corner between two lines, or click two lines (Esc cancels).")
+                    self.status_message.emit("Fillet: click a corner between lines or arcs, or click two of them (Esc cancels).")
                     self.update()
                     return
                 self.set_sketch_tool("NONE")
@@ -204,18 +204,18 @@ class PointerMixin:
                     self.prompt_fillet_radius(la, lb, pt)
                     return
                 ent = self._pick_entity(x, y)
-                from omacad.model.sketch import SketchLine
-                if ent and isinstance(ent, SketchLine):
+                from omacad.model.sketch import SketchArc, SketchLine
+                if ent and isinstance(ent, (SketchLine, SketchArc)):
                     if self.fillet_first_line is None:
                         self.fillet_first_line = ent
-                        self.status_message.emit("Fillet: now click the second line to round the corner between them.")
+                        self.status_message.emit("Fillet: now click the second line or arc to round the corner between them.")
                     else:
                         first = self.fillet_first_line
                         self.fillet_first_line = None
                         if first.entity_id != ent.entity_id:
                             self.prompt_fillet_radius(first, ent)
                         else:
-                            self.status_message.emit("Fillet: pick two different lines.")
+                            self.status_message.emit("Fillet: pick two different lines or arcs.")
                     self.update()
                     return
                 if self._start_rubber(event):
