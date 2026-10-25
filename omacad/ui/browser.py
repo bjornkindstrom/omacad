@@ -522,6 +522,14 @@ class BrowserTree(QWidget):
         elif item_type == "section":
             self.doc.set_section_active(item_id, not self.doc.sections[item_id].get("active"))
 
+    def _move_to_new_object(self, fid):
+        try:
+            self.doc.move_to_new_object(fid)
+        except ValueError as e:
+            self.status_message.emit(str(e))
+            return
+        self.status_message.emit("Moved to a new object (F2 renames it).")
+
     def show_context_menu(self, pos):
         reason = getattr(self, 'busy_reason', lambda: '')()
         if reason:
@@ -556,6 +564,8 @@ class BrowserTree(QWidget):
                 add("Delete feature…", lambda: self.feature_delete_requested.emit(fid))
                 add("Unsuppress" if feat.suppressed else "Suppress", lambda: self.doc.toggle_suppress(index))
                 add("Insert next operation after this step", lambda: self.doc.object_insert_after(oid, fid))
+                if len(self.doc.object_history.objects.get(oid).feature_ids) > 1:
+                    add("Move to new object", lambda: self._move_to_new_object(fid))
                 add("Show object after this step", lambda: self.doc.object_step_to(oid, fid))
                 add("Show complete object", lambda: self.doc.object_fast_forward(oid))
                 for bid in self.doc.object_history.outputs.get(fid, []):

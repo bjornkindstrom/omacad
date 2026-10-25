@@ -878,6 +878,48 @@ class Document:
         self.object_step_to(object_id, feature_id)
         self.object_history.insert_after = (object_id, feature_id)
 
+    @undoable("Move to new object")
+    def move_to_new_object(self, feature_id: str) -> str:
+        """Moves a step out of its object into a new one of its own (Björn #103), e.g. the sketch of a lid drawn on the
+        box's rim. Later steps of the old object come along when they build on what moves: a new body from a moved
+        sketch, or steps that only work on bodies made by moved steps. Returns the new object's id."""
+        history = self.object_history
+        history.sync(self)
+        index = history.index(self, feature_id)
+        old = history.owners.get(feature_id)
+        if index is None or old is None:
+            raise ValueError("The step no longer exists")
+        if len(history.objects[old].feature_ids) < 2:
+            raise ValueError("The step is the whole object already")
+        feats = self.timeline.features
+        moved, sketch_ids, made = [], set(), set()
+
+        def take(f):
+            moved.append(f.feature_id)
+            if f.feature_type == "sketch":
+                sketch_ids.add(f.sketch.sketch_id)
+            created = getattr(f, "created_body_id", f"body_{f.feature_id}")
+            if created in history.outputs.get(f.feature_id, []):
+                made.add(created)
+
+        take(feats[index])
+        for f in feats[index + 1:]:
+            if history.owners.get(f.feature_id) != old:
+                continue
+            new_body = getattr(f, "operation", None) == "new_body" or f.feature_type in ("box", "cylinder", "cone", "prism", "sphere")
+            bodies = set(history.body_inputs(f))
+            if (new_body and sketch_ids & set(history.sketch_inputs(f))) or (bodies and bodies <= made):
+                take(f)
+        new_id = f"object_moved_{feature_id}"
+        for fid in moved:
+            history.owners[fid] = new_id
+        history.names[new_id] = feats[index].name
+        history.markers.pop(old, None)
+        history.active_id = new_id
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return new_id
+
     @undoable("Branch object")
     def branch_object(self, feature_id: str, body_id: str, linked=True):
         from omacad.model.features.branch import BranchFeature

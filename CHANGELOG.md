@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.51 - 2026-10-25
+
+### Added
+- Move to new object (#103): right-click a step in the browser (for example the sketch of a lid drawn on a box's rim) and choose Move to new object. It gets an object of its own, with the later steps that only build on it; the model itself does not change. One undo step; F2 renames the new object.
+
 ## 0.9.9.80.50 - 2026-10-25
 
 ### Fixed
