@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.9.80.24 - 2026-10-25
+
+### Fixed
+- CI: `test_plane_actions.py` still hovered 16 mm out on the XY plane, which since 0.9.9.80.16 only spans the bodies (+5 %); it now hovers between two boxes.
+- Object history: a sketch with projected edges got different dependencies right after Finish Sketch than after undo or reload (they came from replay-time inputs), so undo and Cancel no longer returned the exact document; they now come from the history itself.
+- Browser: an unfinished sketch lists its texts and dimensions again (double-click edits the text).
+
 ## 0.9.9.80.23 - 2026-10-25
 
 ### Changed

@@ -132,7 +132,9 @@ class ObjectHistory:
                 # Existing sketch projections and edge paths search earlier scene
                 # geometry. Keep conservative read dependencies rather than guess
                 # which references may be safely detached during local rollback.
-                deps += [last_body[b] for b in getattr(feat, '_last_body_inputs', ()) if b in last_body]
+                # Every body made before the step, from the history itself: replay-time inputs would differ between
+                # a freshly added step and the same step after undo/reload.
+                deps += list(last_body.values())
             deps += [sketches[s] for s in sk_refs if s in sketches]
             deps += [s for s in source_ids if s in valid]
             source = getattr(feat, 'source_feature_id', None)

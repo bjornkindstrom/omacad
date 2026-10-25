@@ -27,6 +27,22 @@ def add_histories(browser, root):
     if sk and not any(f.feature_type == 'sketch' and f.sketch.sketch_id == sk.sketch_id for f in features.values()):
         node = QTreeWidgetItem(group, ['✏️ ' + sk.name, ''])
         node.setData(0, ROLE, ('sketch', sk.sketch_id))
+        _add_sketch_rows(node, sk)
+
+
+def _add_sketch_rows(node, sketch):
+    """A sketch's dimensions (editable) and texts (double-click edits the text)."""
+    for dim in sketch.dimensions:
+        unit = '°' if dim.dim_type == 'ANGLE' else 'mm'
+        row = QTreeWidgetItem(node, [f'{dim.name or dim.dim_type}: {dim.expr or f"{dim.value:g}"} {unit}', ''])
+        row.setData(0, ROLE, ('dimension', (sketch.sketch_id, dim.dim_id)))
+        row.setFlags(row.flags() | Qt.ItemFlag.ItemIsEditable)
+        row.setToolTip(0, f'{dim.value:g} — double-click to edit')
+    from omacad.model.sketch import SketchText
+    for entity in sketch.entities:
+        if isinstance(entity, SketchText):
+            row = QTreeWidgetItem(node, ['🔤 ' + entity.text.replace('\n', ' ')[:24], ''])
+            row.setData(0, ROLE, ('sketch_text', f'{sketch.sketch_id}:{entity.entity_id}'))
 
 
 def _add_object(browser, group, oid, features, excluded):
@@ -56,17 +72,7 @@ def _add_object(browser, group, oid, features, excluded):
         if feat.feature_type == 'sketch':
             node.setData(0, ROLE, ('sketch', feat.sketch.sketch_id))
             browser._style_eye(node, feat.sketch.visible)
-            for dim in feat.sketch.dimensions:
-                unit = '°' if dim.dim_type == 'ANGLE' else 'mm'
-                row = QTreeWidgetItem(node, [f'{dim.name or dim.dim_type}: {dim.expr or f"{dim.value:g}"} {unit}', ''])
-                row.setData(0, ROLE, ('dimension', (feat.sketch.sketch_id, dim.dim_id)))
-                row.setFlags(row.flags() | Qt.ItemFlag.ItemIsEditable)
-                row.setToolTip(0, f'{dim.value:g} — double-click to edit')
-            from omacad.model.sketch import SketchText
-            for entity in feat.sketch.entities:
-                if isinstance(entity, SketchText):
-                    row = QTreeWidgetItem(node, ['🔤 ' + entity.text.replace('\n', ' ')[:24], ''])
-                    row.setData(0, ROLE, ('sketch_text', f'{feat.sketch.sketch_id}:{entity.entity_id}'))
+            _add_sketch_rows(node, feat.sketch)
         else:
             node.setFlags(node.flags() | Qt.ItemFlag.ItemIsEditable)
             for key in doc.EDITABLE.get(feat.feature_type, ()):

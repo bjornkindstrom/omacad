@@ -26,9 +26,10 @@ def _top_view(vp):
 
 
 def _xy_spot(vp):
-    """A pixel on the XY plane's first quadrant, outside the box (x 20..30, y 20..30 is free)."""
-    q = vp._origin_quadrant_size()
-    return vp.world_to_screen(np.array([q * 0.8, q * 0.8, 0.0]))
+    """A pixel on the XY plane away from the bodies. The plane spans the bodies' bounds (+5 %), so a small second box
+    at (40, 40) stretches it; (30, 25) lies between the two boxes."""
+    vp.doc.add_box(2, 2, 2, translation=(40, 40, 0))
+    return vp.world_to_screen(np.array([30.0, 25.0, 0.0]))
 
 
 def test_plane_lights_up_and_is_a_target_only_while_shown(win):
