@@ -1502,6 +1502,29 @@ class Document:
             return
         self.notify_changed()
 
+    def _object_items(self, object_id: str):
+        """Bodies and sketches of an object and of the objects its Combines used up (the eye on an object row)."""
+        history = self.object_history
+        features = {f.feature_id: f for f in self.timeline.features}
+        items, todo = [], [object_id]
+        while todo:
+            obj = history.objects.get(todo.pop())
+            if obj is None:
+                continue
+            items += [self.bodies[b] for b in obj.body_ids if b in self.bodies]
+            items += [features[f].sketch for f in obj.feature_ids
+                      if f in features and features[f].feature_type == "sketch"]
+            todo += [oid for oid, o in history.objects.items() if o.parent_id == obj.object_id]
+        return items
+
+    def object_visible(self, object_id: str) -> bool:
+        return any(item.visible for item in self._object_items(object_id))
+
+    def set_object_visibility(self, object_id: str, visible: bool) -> None:
+        for item in self._object_items(object_id):
+            item.visible = visible
+        self.notify_changed()
+
     def toggle_sketch_visibility(self, sketch_id: str) -> None:
         if sketch_id in self.sketches:
             self.sketches[sketch_id].visible = not self.sketches[sketch_id].visible

@@ -138,3 +138,26 @@ def test_row_editor_keeps_label_in_sight_and_suggests_parameters(browser):
     QTest.qWait(20)
     feature = browser.doc.timeline.features[0]
     assert feature.height == 10 and feature.exprs['height'] == 'width/2'
+
+
+def test_eye_on_object_row_hides_and_shows_the_whole_object():
+    """Report 20261025-115036: the top of each object's chain gets its own eye."""
+    from omacad.model.jar import JarSpec
+    app = QApplication.instance() or QApplication([])
+    doc = Document()
+    doc.add_jar(JarSpec())
+    widget = BrowserTree(doc)
+    role = Qt.ItemDataRole.UserRole
+    jar = next(item for item, _ in widget._walk() if item.data(0, role) == ('object', 'object_cylinder_1'))
+    lid = next(oid for oid, o in doc.object_history.objects.items() if o.name == 'Lid')
+    jar_bodies = list(doc.object_history.objects['object_cylinder_1'].body_ids)
+    assert jar_bodies and not jar.icon(1).isNull()
+    widget.on_item_clicked(jar, 1)
+    assert not any(doc.bodies[b].visible for b in jar_bodies)
+    assert all(doc.bodies[b].visible for b in doc.object_history.objects[lid].body_ids)
+    assert not doc.object_visible('object_cylinder_1') and doc.object_visible(lid)
+    jar = next(item for item, _ in widget._walk() if item.data(0, role) == ('object', 'object_cylinder_1'))
+    widget.on_item_clicked(jar, 1)
+    assert all(doc.bodies[b].visible for b in jar_bodies)
+    widget.deleteLater()
+    app.processEvents()

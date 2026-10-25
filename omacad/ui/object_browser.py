@@ -60,6 +60,7 @@ def _add_object(browser, group, oid, features, excluded):
     font.setBold(oid == history.active_id)
     parent.setFont(0, font)
     parent.setToolTip(0, 'Active object' if oid == history.active_id else 'Click to activate this object')
+    browser._style_eye(parent, doc.object_visible(oid))
     if obj.origin_feature_id in features:
         link = QTreeWidgetItem(parent, ["🔗 " + features[obj.origin_feature_id].name, ""])
         link.setData(0, ROLE, ("feature_link", obj.origin_feature_id))

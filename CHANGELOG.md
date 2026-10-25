@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.28 - 2026-10-25
+
+### Added
+- Browser: each object row under Objects has its own eye that hides or shows the whole object (its bodies, its sketches and the tool objects a Combine used up). Also in the row's right-click menu and with V.
+
 ## 0.9.9.80.27 - 2026-10-25
 
 ### Added

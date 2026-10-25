@@ -373,6 +373,8 @@ class BrowserTree(QWidget):
             doc.toggle_body_visibility(item_id)
         elif item_type == "sketch":
             doc.toggle_sketch_visibility(item_id)
+        elif item_type == "object":
+            doc.set_object_visibility(item_id, not doc.object_visible(item_id))
         elif item_type == "cplane":
             doc.toggle_construction_plane(item_id)
         elif item_type in ("origin", "axis", "plane"):
@@ -406,6 +408,9 @@ class BrowserTree(QWidget):
         fid = item.data(0, FEATURE_ROLE)
         pick = getattr(self, 'pick_feature', None)
         if fid and pick and pick(fid):
+            return
+        if item_type == "object" and column == 1:
+            self.toggle_visibility(item_type, item_id)
             return
         if item_type == "object":
             self.activate_object(item_id)
@@ -510,6 +515,7 @@ class BrowserTree(QWidget):
         if item_type == "object":
             rename()
             add("Show complete object", lambda: self.doc.object_fast_forward(item_id))
+            show_hide()
         elif item_type in ("parameter", "dimension"):
             from omacad.ui.object_browser import edit_parameter
             add("Edit value…", lambda: edit_parameter(self, item_type, item_id))
