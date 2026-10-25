@@ -28,9 +28,16 @@ class ProfileMixin:
         self.update()
     def set_display_override(self, manifolds: Optional[dict]):
         """Draws these solids (body id -> manifold) in place of the bodies, which keep their edges and faces for
-        picking; None restores them. Fillet/Chamfer uses it to show the finished result while edges are picked."""
+        picking; None restores them. Fillet/Chamfer uses it to show the finished result while edges are picked.
+        Under a section view the solids are cut like the bodies, with their own cut faces."""
+        before, self.display_solids = getattr(self, "display_solids", None) or {}, manifolds or None
         self.display_override = ({bid: CadKernel.extract_render_mesh(m) for bid, m in manifolds.items()}
                                  if manifolds else None)
+        if self.section is not None:
+            for bid in set(before) | set(manifolds or {}):
+                solid = (manifolds or {}).get(bid) or getattr(self.doc.bodies.get(bid), "manifold", None)
+                if solid is not None:
+                    self._cut_into_section(bid, solid)
         self.update()
 
     def pick_sketch_curve(self, x: float, y: float):

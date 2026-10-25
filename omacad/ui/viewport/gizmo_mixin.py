@@ -22,29 +22,35 @@ class GizmoMixin:
         n = np.asarray(normal, dtype=float)
         n = n / np.linalg.norm(n)
         p = np.asarray(origin, dtype=float) + n * float(offset)
-        keep = n if flip else -n                       # the side that stays (the other side faces the viewer)
         plane = SketchPlane.from_face(n, p)
-        inv = np.linalg.inv(np.vstack([plane.get_transform_matrix_3x4(), [0, 0, 0, 1]]))[:3]
-        meshes, caps = {}, []
+        self.section = {"origin": np.asarray(origin, dtype=float), "normal": n, "offset": float(offset), "flip": flip,
+                        "meshes": {}, "caps": [], "mat": plane.get_transform_matrix_3x4()}
         for bid, body in self.doc.bodies.items():
             if not body.visible:
                 continue
             try:
-                kept = body.manifold.trim_by_plane(tuple(keep), float(keep @ p))
-                meshes[bid] = CadKernel.extract_render_mesh(kept)   # empty when the whole body is cut away
-                polys = body.manifold.transform(inv).slice(1e-4 if not flip else -1e-4).to_polygons()
-                if polys:
-                    cs = m3d.CrossSection(polys)
-                    slab = m3d.Manifold.extrude(cs, 0.08).translate((0, 0, -0.04)).transform(plane.get_transform_matrix_3x4())
-                    # each body's cut has its own tint, so touching bodies can be told apart
-                    caps.append({"body_id": bid, "fill": self.SECTION_FILLS[len(caps) % len(self.SECTION_FILLS)],
-                                 "cap": CadKernel.extract_render_mesh(slab), "polys": cs.to_polygons(), "hatch": None})
+                self._cut_into_section(bid, (getattr(self, "display_solids", None) or {}).get(bid, body.manifold))
             except Exception:
                 continue
-        self.section = {"origin": np.asarray(origin, dtype=float), "normal": n, "offset": float(offset), "flip": flip,
-                        "meshes": meshes, "caps": caps, "mat": plane.get_transform_matrix_3x4()}
         self.set_preview_plane(plane if show_plane else None)
         self.update()
+
+    def _cut_into_section(self, bid, manifold):
+        """Puts the kept part of this solid and its cut face into the shown section, in place of the body's own."""
+        sec = self.section
+        flip, mat = sec["flip"], np.asarray(sec["mat"], dtype=float)
+        sec["meshes"][bid] = CadKernel.extract_render_mesh(self.section_trim(manifold))   # empty when all is cut away
+        inv = np.linalg.inv(np.vstack([mat, [0, 0, 0, 1]]))[:3]
+        polys = manifold.transform(inv).slice(1e-4 if not flip else -1e-4).to_polygons()
+        index = next((i for i, c in enumerate(sec["caps"]) if c["body_id"] == bid), len(sec["caps"]))
+        sec["caps"][index:index + 1] = []
+        if polys:
+            cs = m3d.CrossSection(polys)
+            slab = m3d.Manifold.extrude(cs, 0.08).translate((0, 0, -0.04)).transform(mat)
+            # each body's cut has its own tint, so touching bodies can be told apart
+            sec["caps"].insert(index, {"body_id": bid, "fill": self.SECTION_FILLS[index % len(self.SECTION_FILLS)],
+                                       "cap": CadKernel.extract_render_mesh(slab), "polys": cs.to_polygons(),
+                                       "hatch": None})
 
     def section_trim(self, manifold):
         """The part of a solid a section view keeps (the solid itself when no section is shown)."""

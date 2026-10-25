@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.29 - 2026-10-25
+
+### Fixed
+- Fillet/Chamfer (and the browser's value preview) no longer hide an active section view: the live result is cut by the section, with its own cut face, and the section's own cut returns when the tool ends.
+
 ## 0.9.9.80.28 - 2026-10-25
 
 ### Added

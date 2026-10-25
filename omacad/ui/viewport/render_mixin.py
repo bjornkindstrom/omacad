@@ -357,10 +357,10 @@ class RenderGLMixin:
 
             mesh = body.render_mesh
             override = getattr(self, "display_override", None)
-            if override and body.body_id in override:
+            if self.section is not None and body.body_id in self.section["meshes"]:
+                mesh = self.section["meshes"][body.body_id]   # the part left after the cut (of a tool's result too)
+            elif override and body.body_id in override:
                 mesh = override[body.body_id]   # a tool shows its finished result in place of the body (Fillet)
-            elif self.section is not None and body.body_id in self.section["meshes"]:
-                mesh = self.section["meshes"][body.body_id]   # the part left after the cut
             if len(mesh.vertices) == 0:
                 continue
 
