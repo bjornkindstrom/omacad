@@ -150,7 +150,8 @@ class CadKernel:
         theta = math.acos(cos_th)         # angle between the faces, as seen from the edge
         half = theta / 2.0
         convex = getattr(edge, "convex", True)
-        m = 1e-3 * max(1.0, float(size)) if convex else 0.0
+        # a fill reaches a hair into the material too: one that only touches the faces stays a loose piece
+        m = 1e-3 * max(1.0, float(size)) if convex else 1e-4 * max(1.0, float(size))
         # A convex tool reaches a hair out of the body, past each face along its outward normal (face 1 lies
         # along +x, face 2 at angle theta); a point square to the axes would sit inside the material when the
         # faces are not at 90 degrees (a hexagon's 120 degree corner got a notch in face 2).

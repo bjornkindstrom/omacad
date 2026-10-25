@@ -20,7 +20,6 @@ def _shoulder_circles(edges, r):
     return out
 
 
-@pytest.mark.xfail(reason="xfail: edge geometry changed by the twisted-extrude loops (.26) and float64 mesh (.33/.34); to be fixed", strict=False)
 def test_shoulder_edges_of_patterned_jar_are_whole_circles():
     doc = Exporter.load_project(str(Path(__file__).parent / "data" / "shoulder_edge_slivers.omacad"))
     body = doc.bodies["body_cylinder_1"]

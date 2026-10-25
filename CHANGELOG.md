@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.9.80.45 - 2026-10-25
+
+### Fixed
+- A fillet at the foot of a leaning rib no longer leaves the band as a loose piece: fill tools reach a hair into the material.
+- Inner shoulder circles split by a boolean come back as one whole circle instead of a loop plus a gapped arc.
+- Emboss finds the cylinder wall behind a fillet again: sliver triangles are ignored and the wall axis is chosen by area.
+
+### Changed
+- Tests run in parallel (pytest-xdist): the whole suite takes about 2.5 min instead of 25.
+
 ## 0.9.9.80.44 - 2026-10-25
 
 ### Fixed

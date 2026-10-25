@@ -1,6 +1,6 @@
 # Omacad ⚡
 
-Linjer fäster vid 45° och 90°, Construction har en meny för hjälplinje eller hjälpcirkel, mått i browsern markeras i vyn, linjer som slutar på en cirkel ger en yta och dolda kroppar påverkas inte av Extrude (0.9.9.80.44).
+Fillet vid foten av en lutande ribba blir hel, hela cirklar på burkens skuldra kan väljas igen, emboss hittar väggen bakom en fillet och testerna körs parallellt på 2,5 min (0.9.9.80.45).
 
 Temavalet är nu Studio, Graphite, Atelier eller Följ Omarchy; de äldre temana är borttagna och ett sparat äldre val öppnas som Studio (0.9.9.80.42).
 

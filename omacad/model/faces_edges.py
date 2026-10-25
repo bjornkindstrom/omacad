@@ -115,6 +115,23 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
             out.append(LoopEdge(pts.copy(), n_pl.copy(), kinds == {1}, walls))
     return out
 
+def _circles_for_round_loops(loops, circles) -> list:
+    """A square-walled outline whose points all lie on one circle is that circle: a wall split into narrow flat strips
+    by a boolean makes it come out both as a loop and as an arc with a gap. Give back the whole circle instead."""
+    from dataclasses import replace
+    out_loops, circles = [], list(circles)
+    for lp in loops:
+        if lp.walls is None and _concyclic(lp.pts):
+            c = lp.pts.mean(axis=0)
+            r = float(np.linalg.norm(lp.pts - c, axis=1).mean())
+            k = next((i for i, ce in enumerate(circles) if abs(ce.radius - r) < 1e-3 * max(1.0, r)
+                      and np.linalg.norm(ce.center - c) < 1e-3 * max(1.0, r) and abs(float(ce.axis @ lp.n)) > 0.999), None)
+            if k is not None:
+                circles[k] = replace(circles[k], a0=0.0, sweep=2 * np.pi)
+                continue
+        out_loops.append(lp)
+    return out_loops + circles
+
 def _concyclic(pts) -> bool:
     c = pts.mean(axis=0)
     r = np.linalg.norm(pts - c, axis=1)
@@ -207,7 +224,7 @@ def _planar_edges_from(mesh, manifold) -> list:
                     return True
             return False
         lines = [e for e in lines if not on_loop(e)]
-    return lines + loops + _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals)
+    return lines + _circles_for_round_loops(loops, _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals))
 
 def _edge_from(c, t):
     p0, p1 = c["lo"], c["hi"]

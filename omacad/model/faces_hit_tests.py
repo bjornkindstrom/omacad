@@ -128,10 +128,11 @@ def _normal_axis(nrm) -> Optional[np.ndarray]:
     return vh[2].copy()
 
 
-def _wall_mask(nrm, ref, tol: float = 0.02, steps: int = 720) -> Optional[np.ndarray]:
+def _wall_mask(nrm, ref, tol: float = 0.02, steps: int = 720, area=None) -> Optional[np.ndarray]:
     """Triangles of a cylinder wall inside a mixed patch (a fillet joins the wall and is smooth enough to be in it).
     The wall's axis is perpendicular to `ref`, the normal of the triangle the ray hit, so the candidate axes are
-    the directions in that plane. The axis with the most inliers wins, provided its inlier normals spread around
+    the directions in that plane. The axis with the most inlier area wins (the many small triangles of a fillet
+    must not outvote the few tall ones of the wall), provided its inlier normals spread around
     a circle: a flat cap has all normals equal and is perpendicular to many axes, so it is refused."""
     if len(nrm) < 3:
         return None
@@ -144,7 +145,8 @@ def _wall_mask(nrm, ref, tol: float = 0.02, steps: int = 720) -> Optional[np.nda
     axes = np.outer(np.cos(th), e1) + np.outer(np.sin(th), e2)
     inl = np.abs(nrm @ axes.T) < tol
     counts = inl.sum(axis=0)
-    for k in np.argsort(-counts):
+    weight = counts if area is None else (inl * np.asarray(area)[:, None]).sum(axis=0)
+    for k in np.argsort(-weight):
         if counts[k] < 3:
             break
         s = np.linalg.svd(nrm[inl[:, k]], compute_uv=False)
@@ -188,9 +190,10 @@ def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
     tri = patch.reshape(-1, 3, 3)
     nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     ln = np.linalg.norm(nrm, axis=1)
-    if np.any(ln == 0):
+    solid = ln > 1e-9 * float(ln.max())   # sliver triangles of the float64 mesh carry no usable normal
+    if int(solid.sum()) < 24:
         return None
-    nrm = nrm / ln[:, None]
+    patch, tri, nrm, ln = tri[solid].reshape(-1, 3), tri[solid], nrm[solid] / ln[solid][:, None], ln[solid]
 
     # If all normals are almost identical, it's a planar face, not a cylinder
     if float(np.ptp(nrm, axis=0).max()) < 0.15:
@@ -205,7 +208,7 @@ def detect_cylinder_surface(mesh, tri_idx: int) -> Optional[dict]:
         ref = np.cross(t[1] - t[0], t[2] - t[0])
         if np.linalg.norm(ref) < 1e-12:
             return None
-        keep = _wall_mask(nrm, ref / np.linalg.norm(ref))
+        keep = _wall_mask(nrm, ref / np.linalg.norm(ref), area=ln)
         if keep is None or int(keep.sum()) < 24:
             return None
         patch = patch.reshape(-1, 3, 3)[keep].reshape(-1, 3)

@@ -6,7 +6,7 @@ import manifold3d as m3d
 import trimesh
 from omacad.model.faces_types import PlanarFace, PlanarEdge
 from omacad.model.faces_topology import _coplanar, _curved_roots, _sliver_roots
-from omacad.model.faces_edges import _edge_from, _loop_edges, _circular_edges
+from omacad.model.faces_edges import _edge_from, _loop_edges, _circular_edges, _circles_for_round_loops
 
 _TOPOLOGY_CACHE: dict = {}
 _TOPOLOGY_CACHE_MAX = 512
@@ -226,7 +226,7 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
                     return True
             return False
         lines = [e for e in lines if not on_loop(e)]
-    all_edges = lines + loops + _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals)
+    all_edges = lines + _circles_for_round_loops(loops, _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals))
     from omacad.model.wrapped_edges import cylindrical_contours
     all_edges += cylindrical_contours(v, f, tm)
     from omacad.model.curve_edges import curve_edges

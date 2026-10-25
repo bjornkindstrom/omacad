@@ -59,7 +59,6 @@ def test_rib_end_and_side_fillets_flow_round_the_corner():
     assert np.linalg.norm(beyond - v[:2], axis=1).max() < reach + 0.1
 
 
-@pytest.mark.xfail(reason="xfail: edge geometry changed by the twisted-extrude loops (.26) and float64 mesh (.33/.34); to be fixed", strict=False)
 def test_band_beside_a_leaning_corner_edge_stops_at_the_ball():
     """Report 20261023-214720: the rib's side leans, so its corner edge with the square end leans too. The end band
     was cut along that edge, ran on past the ball near the floor, and the swept ball cut it off as a loose strip

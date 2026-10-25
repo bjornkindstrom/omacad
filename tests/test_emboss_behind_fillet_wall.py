@@ -2,7 +2,6 @@
 
 The fillet joins the wall into one smooth patch, so the cylinder fit used to give up and the letters fell back to a
 flat face 36 mm away (floating, "can't emboss on what's behind"). Document from problem report 20261021-204118."""
-import pytest
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +20,6 @@ def _wall_hit():
     return mesh, hit
 
 
-@pytest.mark.xfail(reason="xfail: edge geometry changed by the twisted-extrude loops (.26) and float64 mesh (.33/.34); to be fixed", strict=False)
 def test_cylinder_fit_ignores_the_fillet_that_joins_the_wall():
     mesh, (t, tri) = _wall_hit()
     cyl = detect_cylinder_surface(mesh, tri)
