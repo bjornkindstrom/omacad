@@ -178,3 +178,61 @@ def edit_parameter(browser, kind, item_id):
                 tree.editItem(item, 0)
                 return
     QTimer.singleShot(0, open_editor)
+
+
+def favorite_row(doc, ref):
+    """(label, editor text) of a starred value, or None when what it points at is gone. The label is
+    "<step or sketch> · <value name>: <value>" so the editor can start after the ': '."""
+    kind, a, b = ref
+    if kind == 'parameter':
+        pos = doc.object_history.index(doc, a)
+        if pos is None:
+            return None
+        feat = doc.timeline.features[pos]
+        value = getattr(feat, b, None)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        formula = feat.exprs.get(b)
+        shown = f'{formula} = {value:g}' if formula else f'{value:g}'
+        return f'{feat.name} · {b.replace("_", " ").capitalize()}: {shown} {parameter_unit(b)}'.rstrip(), formula or str(value)
+    sketch = doc.sketches.get(a)
+    if sketch is None:
+        return None
+    if kind == 'dimension':
+        dim = next((d for d in sketch.dimensions if d.dim_id == b), None)
+        if dim is None:
+            return None
+        unit = '°' if dim.dim_type == 'ANGLE' else 'mm'
+        return f'{sketch.name} · {dim.name or dim.dim_type}: {dim.expr or f"{dim.value:g}"} {unit}', dim.expr or str(dim.value)
+    from omacad.model.sketch import SketchText
+    ent = next((e for e in sketch.entities if e.entity_id == b), None)
+    if not isinstance(ent, SketchText):
+        return None
+    return f'{sketch.name} · Text: {ent.text}', ent.text
+
+
+def add_favorites(browser, root):
+    """⭐ Favorites: the starred values in their named groups, editable right here (Björn #110)."""
+    doc = browser.doc
+    if not doc.favorites:
+        return
+    top = QTreeWidgetItem(root, ['⭐ Favorites', ''])
+    top.setData(0, ROLE, ('favorites', ''))
+    top.setExpanded(True)
+    for group in doc.favorites:
+        node = QTreeWidgetItem(top, [group['name'], ''])
+        node.setData(0, ROLE, ('fav_group', group['name']))
+        node.setFlags(node.flags() | Qt.ItemFlag.ItemIsEditable)
+        node.setExpanded(True)
+        for ref in group['items']:
+            row_text = favorite_row(doc, ref)
+            if row_text is None:
+                row = QTreeWidgetItem(node, ['(gone) ' + ' '.join(map(str, ref[1:])), ''])
+                row.setData(0, ROLE, ('fav_gone', tuple(ref)))
+                row.setForeground(0, QColor('#858585'))
+                continue
+            row = QTreeWidgetItem(node, [row_text[0], ''])
+            row.setData(0, ROLE, ('fav', tuple(ref)))
+            row.setFlags(row.flags() | Qt.ItemFlag.ItemIsEditable)
+            row.setToolTip(0, 'Double-click or click the pencil to change it')
+            _pencil(row)

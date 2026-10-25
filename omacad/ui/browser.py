@@ -363,7 +363,8 @@ class BrowserTree(QWidget):
             self._style_eye(g, visible)
             return g
 
-        from omacad.ui.object_browser import add_histories
+        from omacad.ui.object_browser import add_favorites, add_histories
+        add_favorites(self, root)
         add_histories(self, root)
 
         # Canvases
@@ -388,6 +389,10 @@ class BrowserTree(QWidget):
 
     def on_item_renamed(self, item: QTreeWidgetItem, column: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
+        if column == 0 and data and data[0] == "fav_group":
+            if item.text(0) != data[1] and not self.doc.rename_favorite_group(data[1], item.text(0)):
+                self.refresh_tree()
+            return
         if column == 0 and data and data[0] == "object":
             self.doc.rename_object(data[1], item.text(0))
             return
@@ -450,7 +455,7 @@ class BrowserTree(QWidget):
         item_type, item_id = data
         # a dimension row lights up what it measures in the view (Björn #94); any other row clears that
         self.dimension_selected.emit(*(item_id if item_type == "dimension" else ("", "")))
-        if column == 1 and item_type in ("parameter", "dimension"):       # the pencil
+        if column == 1 and item_type in ("parameter", "dimension", "fav"):       # the pencil
             from omacad.ui.object_browser import edit_parameter
             edit_parameter(self, item_type, item_id)
             return
@@ -496,7 +501,7 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
-        if item_type in ("parameter", "dimension"):
+        if item_type in ("parameter", "dimension", "fav"):
             from omacad.ui.object_browser import edit_parameter
             edit_parameter(self, item_type, item_id)
         elif item_type == "feature":
@@ -529,6 +534,37 @@ class BrowserTree(QWidget):
             self.status_message.emit(str(e))
             return
         self.status_message.emit("Moved to a new object (F2 renames it).")
+
+    def _owner_name(self, ref) -> str:
+        """The name of the object a value belongs to: the first guess for a new favourites group."""
+        doc, history = self.doc, self.doc.object_history
+        fid = ref[1] if ref[0] == "parameter" else next(
+            (f.feature_id for f in doc.timeline.features if f.feature_type == "sketch" and f.sketch.sketch_id == ref[1]), None)
+        obj = history.objects.get(history.owners.get(fid))
+        return obj.name if obj else "Favorites"
+
+    def new_favorite_group(self, ref):
+        from PySide6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "New favorites group", "Group name:", text=self._owner_name(ref))
+        if ok and name.strip():
+            self.doc.add_favorite(ref, name)
+
+    def _favorite_menu(self, menu, ref):
+        """⭐ Add to favorites (an existing group, or a new one), or take the value out again (Björn #110)."""
+        menu.addSeparator()
+        current = self.doc.favorite_group_of(ref)
+        sub = menu.addMenu(theme.emoji_icon("⭐", 22),
+                           "Add to favorites" if current is None else f"Move to another group (now in {current})")
+        theme.style_menu(sub)
+        for group in self.doc.favorites:
+            if group["name"] != current:
+                sub.addAction(group["name"]).triggered.connect(
+                    lambda checked=False, g=group["name"]: self.doc.add_favorite(ref, g))
+        if self.doc.favorites and len(self.doc.favorites) > (current is not None):
+            sub.addSeparator()
+        sub.addAction("New group…").triggered.connect(lambda: self.new_favorite_group(ref))
+        if current is not None:
+            theme.action_with_icon(menu, "☆ Remove from favorites").triggered.connect(lambda: self.doc.remove_favorite(ref))
 
     def show_context_menu(self, pos):
         reason = getattr(self, 'busy_reason', lambda: '')()
@@ -581,9 +617,18 @@ class BrowserTree(QWidget):
         elif item_type in ("parameter", "dimension"):
             from omacad.ui.object_browser import edit_parameter
             add("Edit value…", lambda: edit_parameter(self, item_type, item_id))
+            self._favorite_menu(menu, [item_type, *item_id])
             if item_type == "dimension":
                 menu.addSeparator()
                 add("🗑️ Delete dimension", lambda: self.doc.remove_dimension(*item_id))
+        elif item_type in ("fav", "fav_gone"):
+            if item_type == "fav":
+                from omacad.ui.object_browser import edit_parameter
+                add("Edit value…", lambda: edit_parameter(self, item_type, item_id))
+            self._favorite_menu(menu, list(item_id))
+        elif item_type == "fav_group":
+            rename()
+            add("🗑️ Remove group from favorites", lambda: self.doc.remove_favorite_group(item_id))
         elif item_type == "plane":
             add(f"✏️ Create Sketch on {item_id} Plane", lambda: self.start_sketch_on_plane.emit(item_id))
             add("📐 Offset Plane…", lambda: self.offset_plane_requested.emit("plane", item_id))
@@ -660,6 +705,7 @@ class BrowserTree(QWidget):
             s_id, ent_id = item_id.split(":", 1)
             add("🔤 Edit Text…", lambda: self.edit_sketch_text_requested.emit(s_id, ent_id))
             add("✏️ Edit Sketch", lambda: self.edit_sketch_requested.emit(s_id))
+            self._favorite_menu(menu, ["text", s_id, ent_id])
 
         elif item_type in ("origin", "axis", "group"):
             show_hide()

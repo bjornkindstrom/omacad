@@ -339,6 +339,7 @@ class Exporter:
             "sections": doc.sections,
             "origin_vis": doc.origin_vis,
             "canvases": getattr(doc, "canvases", {}),
+            "favorites": getattr(doc, "favorites", []),
             "curve_segments": quality.circle_segments(),   # how finely circles were cut when profiles were numbered
         }
 
@@ -424,6 +425,8 @@ class Exporter:
         for key in ("axes", "planes"):
             doc.origin_vis[key].update({k: bool(v) for k, v in saved_vis.get(key, {}).items() if k in doc.origin_vis[key]})
         doc.canvases = dict(data.get("canvases", {}))
+        doc.favorites = [{"name": g["name"], "items": [list(r) for r in g.get("items", [])]}
+                         for g in data.get("favorites", []) if g.get("name")]
 
         # Load sketches
         for s_data in data.get("sketches", []):

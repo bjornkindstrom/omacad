@@ -102,6 +102,9 @@ class Document:
 
         # Canvases / calibrated reference images: id -> dict(name, plane_id, image_data, width_mm, height_mm, origin_uv, rotation_deg, opacity, visible)
         self.canvases: Dict[str, dict] = {}
+        # Starred values in named groups (Björn #110): [{"name": ..., "items": [["parameter", fid, key] |
+        # ["dimension", sketch_id, dim_id] | ["text", sketch_id, entity_id], ...]}, ...]
+        self.favorites: List[dict] = []
 
         # Active sketch when in Sketch Mode
         self.active_sketch: Optional[Sketch] = None
@@ -945,6 +948,71 @@ class Document:
         self.object_history.active_id = self.object_history.owners[fid]
         self.notify_changed()
         return self.bodies.get('body_' + fid)
+
+    @undoable("Add to favorites")
+    def add_favorite(self, ref, group: str) -> bool:
+        """Stars a value (see `favorites`) in the group of that name, made if new. A value sits in one group only."""
+        ref, group = list(ref), group.strip()
+        if not group:
+            return False
+        for g in self.favorites:
+            if ref in g["items"]:
+                g["items"].remove(ref)
+        target = next((g for g in self.favorites if g["name"] == group), None)
+        if target is None:
+            target = {"name": group, "items": []}
+            self.favorites.append(target)
+        target["items"].append(ref)
+        self.favorites = [g for g in self.favorites if g["items"]]
+        self.notify_changed()
+        return True
+
+    @undoable("Remove from favorites")
+    def remove_favorite(self, ref) -> bool:
+        ref = list(ref)
+        found = any(ref in g["items"] for g in self.favorites)
+        for g in self.favorites:
+            if ref in g["items"]:
+                g["items"].remove(ref)
+        self.favorites = [g for g in self.favorites if g["items"]]
+        self.notify_changed()
+        return found
+
+    @undoable("Rename favorites group")
+    def rename_favorite_group(self, old: str, new: str) -> bool:
+        new = new.strip()
+        group = next((g for g in self.favorites if g["name"] == old), None)
+        if group is None or not new or any(g["name"] == new for g in self.favorites if g is not group):
+            self.notify_changed()
+            return False
+        group["name"] = new
+        self.notify_changed()
+        return True
+
+    @undoable("Remove favorites group")
+    def remove_favorite_group(self, name: str) -> bool:
+        before = len(self.favorites)
+        self.favorites = [g for g in self.favorites if g["name"] != name]
+        self.notify_changed()
+        return len(self.favorites) != before
+
+    def favorite_group_of(self, ref) -> Optional[str]:
+        return next((g["name"] for g in self.favorites if list(ref) in g["items"]), None)
+
+    def set_sketch_text(self, sketch_id: str, entity_id: str, text: str) -> bool:
+        """New wording for a sketch text (from the browser); the steps built on it follow. One undo step."""
+        from omacad.model.sketch import SketchText
+        sketch = self.sketches.get(sketch_id)
+        ent = next((e for e in sketch.entities if e.entity_id == entity_id), None) if sketch else None
+        if not isinstance(ent, SketchText) or not text.strip():
+            return False
+        before = sketch.to_dict()
+        ent.text = text
+        sketch.solve_profiles()
+        if self.record_sketch_change(sketch, before):
+            self.timeline.recompute(self)
+            self.notify_changed()
+        return True
 
     @undoable("Rename object")
     def rename_object(self, object_id: str, name: str):

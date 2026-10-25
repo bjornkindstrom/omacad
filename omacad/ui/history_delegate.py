@@ -3,7 +3,7 @@
 The editor starts after the row's label ("Height: "), so the name of the value stays in sight while it is typed,
 and it suggests parameter names and shows what a formula evaluates to (ExprLineEdit)."""
 from PySide6.QtCore import Qt, QTimer, QEvent
-from PySide6.QtWidgets import QStyledItemDelegate
+from PySide6.QtWidgets import QLineEdit, QStyledItemDelegate
 from omacad.model import expr
 from omacad.ui.expr_spin import ExprLineEdit
 
@@ -12,6 +12,18 @@ def label_prefix(text: str) -> str:
     """The part of a value row before the value: 'Height: ' of 'Height: 10 mm'."""
     head, sep, _rest = text.partition(': ')
     return head + sep if sep else ''
+
+
+def value_ref(data):
+    """(kind, ids) of a value row: a parameter or sketch dimension, or a starred one (also "text"); else None."""
+    if not data:
+        return None
+    if data[0] in ('parameter', 'dimension'):
+        return data
+    if data[0] == 'fav':
+        kind, a, b = data[1]
+        return kind, (a, b)
+    return None
 
 
 class HistoryDelegate(QStyledItemDelegate):
@@ -50,12 +62,16 @@ class HistoryDelegate(QStyledItemDelegate):
             self.browser.preview_changed.emit(None)
 
     def createEditor(self, parent, option, index):
-        data = index.data(Qt.ItemDataRole.UserRole)
-        if data and data[0] in ('parameter', 'dimension'):
+        ref = value_ref(index.data(Qt.ItemDataRole.UserRole))
+        if ref:
             reason = getattr(self.browser, 'busy_reason', lambda: '')()
             if reason:
                 self.browser.status_message.emit(reason)
                 return None
+            if ref[0] == 'text':
+                editor = QLineEdit(parent)
+                editor.setFrame(False)
+                return editor
             expr.set_variables(self.browser.doc.parameter_values())
             editor = ExprLineEdit(parent)
             editor.setFrame(False)
@@ -78,7 +94,7 @@ class HistoryDelegate(QStyledItemDelegate):
         rect.setTop(option.rect.center().y() - height // 2)
         rect.setHeight(height)
         rect.setRight(right)
-        if isinstance(editor, ExprLineEdit):
+        if value_ref(index.data(Qt.ItemDataRole.UserRole)):
             prefix = label_prefix(index.data(Qt.ItemDataRole.DisplayRole) or '')
             if prefix:
                 shift = option.fontMetrics.horizontalAdvance(prefix)
@@ -88,10 +104,17 @@ class HistoryDelegate(QStyledItemDelegate):
 
     def setEditorData(self, editor, index):
         data = index.data(Qt.ItemDataRole.UserRole)
-        if data and data[0] in ('parameter', 'dimension'):
-            kind, ids = data
+        ref = value_ref(data)
+        if ref:
+            kind, ids = ref
             doc = self.browser.doc
-            if kind == 'parameter':
+            if data[0] == 'fav':
+                from omacad.ui.object_browser import favorite_row
+                row = favorite_row(doc, data[1])
+                if row is None:
+                    return
+                value = row[1]
+            elif kind == 'parameter':
                 fid, key = ids
                 pos = doc.object_history.index(doc, fid)
                 if pos is None:
@@ -116,10 +139,10 @@ class HistoryDelegate(QStyledItemDelegate):
         super().setEditorData(editor, index)
 
     def setModelData(self, editor, model, index):
-        data = index.data(Qt.ItemDataRole.UserRole)
-        if not data or data[0] not in ('parameter', 'dimension'):
+        ref = value_ref(index.data(Qt.ItemDataRole.UserRole))
+        if not ref:
             return super().setModelData(editor, model, index)
-        kind, ids = data
+        kind, ids = ref
         text = editor.text()
         # Qt must finish closing its editor before a document notification rebuilds the tree.
         QTimer.singleShot(0, lambda: self.apply_value(kind, ids, text))
@@ -141,6 +164,10 @@ class HistoryDelegate(QStyledItemDelegate):
 def apply_dimension(doc, kind, ids, text):
     if kind == 'parameter':
         return doc.edit_feature_dimension(*ids, text)
+    if kind == 'text':
+        if not doc.set_sketch_text(*ids, text):
+            raise ValueError('Type some text')
+        return True
     from omacad.model.feature_parameters import normalize_parameter_text
     sid, did = ids
     sketch = doc.sketches.get(sid)

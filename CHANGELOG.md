@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.57 - 2026-10-25
+
+### Added
+- Favorites in the browser (#110): right-click a value in the browser (a step's size, a sketch dimension or a sketch text) and choose Add to favorites, into an existing group or a new one (named after the object by default). The starred values gather under ⭐ Favorites, grouped, and can be changed right there with the pencil or a double-click, for example the name on each of three hooks. F2 renames a group; right-click removes a value or a whole group. Saved with the document; every change is one undo step.
+
 ## 0.9.9.80.56 - 2026-10-25
 
 ### Added
