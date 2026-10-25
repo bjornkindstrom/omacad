@@ -194,6 +194,9 @@ class ViewportEventsMixin:
             if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and self.selected_entities:
                 self.delete_selected_entities()
                 return
+            if event.key() == Qt.Key.Key_Delete and self.dimension_to_delete():
+                self.delete_dimension(*self.dimension_to_delete())
+                return
             if event.key() == Qt.Key.Key_A and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 self.selected_entities = {e.entity_id for e in self.doc.active_sketch.entities}
                 self.update()
@@ -362,6 +365,8 @@ class ViewportEventsMixin:
                         self._show_plane_menu(event, target)
                     else:
                         self._show_general_menu(event)
+                elif self.dim_badge_at(event.position().x(), event.position().y()) is not None:
+                    self._show_dimension_menu(event, *self.dim_badge_at(event.position().x(), event.position().y()))
                 elif self.sketch_tool in ("NONE", "DIMENSION") and not self._move:
                     ent = self._pick_entity(event.position().x(), event.position().y())
                     if ent is not None:

@@ -164,6 +164,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self.hud_sketch = HudText(self)
         self.hud_busy = HudText(self)
         self.hud_busy.setVisible(False)
+        self.picked_dim = None                     # (sketch_id, dim_id) picked in the browser: Del deletes it
         self.picked_dim_entities = (None, set())   # (sketch_id, entity ids) of the dimension picked in the browser
         self.flash_sketch_id = None      # a sketch lit up for a moment (hovering its step in the timeline)
         self.text_draft = None           # the SketchText being placed by the Text tool

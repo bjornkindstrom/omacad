@@ -386,6 +386,7 @@ class DimensionOverlayMixin:
         sk = self.doc.sketches.get(sketch_id) if sketch_id else None
         dim = next((d for d in sk.dimensions if d.dim_id == dim_id), None) if sk else None
         self.picked_dim_entities = (sketch_id, {dim.target_entity_id, *dim.refs}) if dim else (None, set())
+        self.picked_dim = (sketch_id, dim_id) if dim else None
         self.update()
 
     def _dim_highlight_ids(self) -> set:

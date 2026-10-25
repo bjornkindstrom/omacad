@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.47 - 2026-10-25
+
+### Added
+- Dimensions can be deleted (#101): right-click a dimension's value in the view or its row in the browser and choose Delete dimension, or press Del with the mouse over the value (or with the dimension picked in the browser). One undo step; the geometry stays and becomes free.
+
 ## 0.9.9.80.46 - 2026-10-25
 
 ### Fixed

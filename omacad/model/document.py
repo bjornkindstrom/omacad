@@ -1618,6 +1618,20 @@ class Document:
         self.notify_changed()
         return True
 
+    def remove_dimension(self, sketch_id: str, dim_id: str) -> bool:
+        """Deletes a dimension (one undo step); the geometry stays where it is and becomes free to move."""
+        sketch = self.sketches.get(sketch_id)
+        if not sketch or not any(d.dim_id == dim_id for d in sketch.dimensions):
+            return False
+        before = sketch.to_dict()
+        sketch.dimensions = [d for d in sketch.dimensions if d.dim_id != dim_id]
+        solve_sketch(sketch)
+        self.record_sketch_change(sketch, before)
+        self.last_message = "Dimension deleted. " + self.sketch_status(sketch)
+        self.timeline.recompute(self)
+        self.notify_changed()
+        return True
+
     @staticmethod
     def sketch_status(sketch: Sketch) -> str:
         if sketch.dof is None:

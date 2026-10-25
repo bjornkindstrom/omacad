@@ -4,7 +4,7 @@ import math
 from typing import Dict
 import numpy as np
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPainter, QPen, QBrush, QFont
+from PySide6.QtGui import QCursor, QPainter, QPen, QBrush, QFont
 from PySide6.QtWidgets import QMenu
 from omacad.model.sketch import SketchArc, SketchCircle, SketchLine, SketchSlot, SketchText, point_of
 from omacad.model.dim_layout import offset_for_point
@@ -199,6 +199,44 @@ class SketchDimensionsMixin:
         d["dim"].offset_distance = float(off)
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
         self.update()
+
+    def dim_badge_at(self, x: float, y: float):
+        """(sketch_id, dim_id) of the dimension badge under the screen point, or None."""
+        for rect, s_id, d_id, _val in list(self.dim_badges.values()):
+            if rect.contains(x, y):
+                return s_id, d_id
+        return None
+
+    def dimension_to_delete(self):
+        """Del in a sketch: the badge under the mouse, else the dimension picked in the browser (#101)."""
+        pos = self.mapFromGlobal(QCursor.pos())
+        hit = self.dim_badge_at(pos.x(), pos.y()) if self.rect().contains(pos) else None
+        return hit or self.picked_dim
+
+    def delete_dimension(self, sketch_id: str, dim_id: str) -> bool:
+        if self.picked_dim == (sketch_id, dim_id):
+            self.show_dimension_entities("", "")
+        ok = self.doc.remove_dimension(sketch_id, dim_id)
+        if ok:
+            self.status_message.emit(self.doc.last_message)
+        self.update()
+        return ok
+
+    def _show_dimension_menu(self, event, sketch_id: str, dim_id: str):
+        """Right-click on a dimension badge: change the value or delete the dimension."""
+        sk = self.doc.sketches.get(sketch_id)
+        dim = next((d for d in sk.dimensions if d.dim_id == dim_id), None) if sk else None
+        if dim is None:
+            return
+        menu = QMenu(self)
+        theme.style_menu(menu)
+        edit = theme.action_with_icon(menu, "✏️ Edit value…")
+        delete = theme.action_with_icon(menu, "🗑️ Delete dimension\tDel")
+        chosen = menu.exec(event.globalPosition().toPoint())
+        if chosen is edit:
+            self.prompt_edit_dimension(sketch_id, dim_id, dim.value)
+        elif chosen is delete:
+            self.delete_dimension(sketch_id, dim_id)
 
     def _dim_drag_release(self):
         d, self._dim_drag = self._dim_drag, None

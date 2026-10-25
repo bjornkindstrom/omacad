@@ -571,6 +571,9 @@ class BrowserTree(QWidget):
         elif item_type in ("parameter", "dimension"):
             from omacad.ui.object_browser import edit_parameter
             add("Edit value…", lambda: edit_parameter(self, item_type, item_id))
+            if item_type == "dimension":
+                menu.addSeparator()
+                add("🗑️ Delete dimension", lambda: self.doc.remove_dimension(*item_id))
         elif item_type == "plane":
             add(f"✏️ Create Sketch on {item_id} Plane", lambda: self.start_sketch_on_plane.emit(item_id))
             add("📐 Offset Plane…", lambda: self.offset_plane_requested.emit("plane", item_id))

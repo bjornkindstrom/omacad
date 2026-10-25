@@ -666,12 +666,16 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
 
     def on_delete_selected(self):
         # In sketch mode Delete removes the selected sketch elements
+        dim = self.viewport.dimension_to_delete() if self.doc.active_sketch else None
+        if dim and not self.viewport.selected_entities and self.viewport.delete_dimension(*dim):
+            self.browser.refresh_tree()
+            return
         if self.doc.active_sketch and self.viewport.selected_entities:
             n = self.viewport.delete_selected_entities()
             self.status_label.setText(f"Deleted {n} sketch element{'s' if n != 1 else ''}.")
             return
         if self.doc.active_sketch:
-            self.status_label.setText("Select sketch elements to delete them.")
+            self.status_label.setText("Select sketch elements to delete them (Del over a dimension deletes it).")
             return
         busy = self._busy_reason()      # the open tool works on the selected bodies
         if busy:
