@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.9.80.30 - 2026-10-25
+
+### Fixed
+- Selecting a step (browser or timeline) colours only the material it really added or removed: the zero-thickness skins left where the body's surface was merely split into other triangles (e.g. over a whole thread after a chamfer) are no longer drawn as green/red stripes.
+- Clicking a step in the browser no longer crashes ("Internal C++ object already deleted"): making the active object bold looked like a rename and rebuilt the tree in the middle of the click.
+
 ## 0.9.9.80.29 - 2026-10-25
 
 ### Fixed

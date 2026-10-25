@@ -45,7 +45,7 @@ from omacad.ui.theme import style
 from omacad.ui.ribbon import Ribbon, RECT_TOOLS
 from omacad.ui.viewport import Viewport3D
 from omacad.ui.browser import BrowserTree
-from omacad.ui.timeline_bar import TimelineBar
+from omacad.ui.timeline_bar import STEP_CHANGE_MIN_THICKNESS, TimelineBar
 from omacad.ui.side_panel import InspectorPanel
 from omacad.ui.canvas_dialog import CanvasEditorDialog
 from omacad.ui.dialogs import (
@@ -229,7 +229,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.browser.busy_reason = self._busy_reason
         self.timeline_bar.status_message.connect(self.status_label.setText)
         self.timeline_bar.highlight_changed.connect(
-            lambda added, removed: self.viewport.set_preview(added, "join", extra=removed, extra_op="cut"))
+            lambda added, removed: self.viewport.set_preview(added, "join", extra=removed, extra_op="cut",
+                                                             min_thickness=STEP_CHANGE_MIN_THICKNESS))
         self.timeline_bar.flash_sketch_requested.connect(self.viewport.set_flash_sketch)
         self.timeline_bar.step_edges_changed.connect(self.viewport.set_step_edges)
         self.browser.export_body_stl.connect(self.export_single_body_stl)

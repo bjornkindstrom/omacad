@@ -15,15 +15,18 @@ class ProfileMixin:
         if sketch_id != self.flash_sketch_id:
             self.flash_sketch_id = sketch_id
             self.update()
-    def set_preview(self, manifold: Optional[m3d.Manifold], operation: str = "new_body", extra=None, extra_op: str = "join"):
+    def set_preview(self, manifold: Optional[m3d.Manifold], operation: str = "new_body", extra=None, extra_op: str = "join",
+                    min_thickness: float = 0.0):
         """Shows a translucent preview solid (None clears it). `extra` is a second solid in another colour
-        (a pattern both adds and removes material). Under a section view only the kept side is shown, like the bodies."""
+        (a pattern both adds and removes material). Under a section view only the kept side is shown, like the bodies.
+        Material thinner than `min_thickness` is not drawn (the skins in the difference between two states)."""
         manifold, extra = self.section_trim(manifold), self.section_trim(extra)
+        mesh = lambda solid: CadKernel.extract_render_mesh(solid, min_thickness=min_thickness)
         if manifold is None or manifold.is_empty():
             self.preview_mesh = None
         else:
-            self.preview_mesh = CadKernel.extract_render_mesh(manifold)
-        self.preview_extra = (CadKernel.extract_render_mesh(extra), extra_op) if extra is not None and not extra.is_empty() else None
+            self.preview_mesh = mesh(manifold)
+        self.preview_extra = (mesh(extra), extra_op) if extra is not None and not extra.is_empty() else None
         self.preview_op = operation
         self.update()
     def set_display_override(self, manifolds: Optional[dict]):

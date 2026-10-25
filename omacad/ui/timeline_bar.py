@@ -185,6 +185,9 @@ class FeatureNodeWidget(QFrame):
         self.context_requested.emit(self.index, event.globalPos())
 
 
+STEP_CHANGE_MIN_THICKNESS = 0.01   # mm: thinner added/removed material is a re-split surface, not a change
+
+
 class TimelineBar(QWidget):
     """Bottom Parametric Timeline bar with history playback."""
 

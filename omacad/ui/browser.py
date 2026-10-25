@@ -204,12 +204,16 @@ class BrowserTree(QWidget):
     def activate_object(self, object_id):
         self.doc.object_history.active_id = object_id
         self.doc.object_history.target_object_id = object_id
-        for item, _ in self._walk():
-            data = item.data(0, Qt.ItemDataRole.UserRole)
-            if data and data[0] == 'object':
-                font = item.font(0)
-                font.setBold(data[1] == object_id)
-                item.setFont(0, font)
+        self.tree.blockSignals(True)  # a font change emits itemChanged, which would look like a rename
+        try:
+            for item, _ in self._walk():
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data and data[0] == 'object':
+                    font = item.font(0)
+                    font.setBold(data[1] == object_id)
+                    item.setFont(0, font)
+        finally:
+            self.tree.blockSignals(False)
 
     def grow_for_editor(self, text, index):
         depth = 1

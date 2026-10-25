@@ -907,6 +907,8 @@ class Document:
     def rename_object(self, object_id: str, name: str):
         if object_id not in self.object_history.objects or not name.strip():
             return False
+        if self.object_history.objects[object_id].name == name.strip():
+            return True
         self.object_history.names[object_id] = name.strip()
         self.notify_changed()
         return True

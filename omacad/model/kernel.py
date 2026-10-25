@@ -625,6 +625,45 @@ class CadKernel:
         return cross_prod / lengths
 
     @staticmethod
+    def thin_triangles(manifold: m3d.Manifold, v, f, thickness: float):
+        """Mask of triangles with less than `thickness` of material behind them: a ray cast inward from the
+        triangle leaves the solid that soon, or never was inside it (its twin lies on top of it, so the first
+        thing met is an entry). The difference of two states of a body is full of such zero-volume skins wherever
+        the two meshes share a surface but split it into other triangles (a thread's twisted quads), and they show
+        as stripes over the model. The ray is tilted a little so that it does not run exactly through the
+        vertices and edges of a symmetric mesh, where hits are missed."""
+        normals, centres = CadKernel._face_normals(v, f), v[f].mean(axis=1)
+        reach = float(np.linalg.norm(np.ptp(v, axis=0))) + 1.0
+        tilt = np.array([0.0123, 0.0071, 0.0037])
+        thin = np.zeros(len(f), dtype=bool)
+        for i, (c, n) in enumerate(zip(centres, normals)):
+            if not n.any():                          # no area: nothing to draw either
+                thin[i] = True
+                continue
+            d = tilt - n
+            d /= np.linalg.norm(d)
+            start = c + d * 1e-4                    # past the triangle itself (float precision)
+            exit_at = CadKernel._first_exit(manifold.ray_cast(tuple(start), tuple(start + d * reach)), d, reach)
+            thin[i] = exit_at is None or exit_at < thickness
+        return thin
+
+    @staticmethod
+    def _first_exit(hits, direction, reach: float):
+        """Distance to where a ray leaves the solid, None if it first enters it (it started outside) or meets
+        nothing. Hits at the same distance are taken together, so that a skin of zero thickness on the way (an
+        entry and an exit at once) is passed through."""
+        k = 0
+        while k < len(hits):
+            at = hits[k].distance
+            net = 0
+            while k < len(hits) and (hits[k].distance - at) * reach < 1e-6:
+                net += 1 if float(np.dot(hits[k].normal, direction)) > 0 else -1
+                k += 1
+            if net:
+                return at * reach if net > 0 else None
+        return None
+
+    @staticmethod
     def _flat_triangles(v, f, smooth_below_deg: float = 30.0, coplanar_deg: float = 0.5):
         """Mask of triangles in a flat patch (triangles joined edge to edge at under `coplanar_deg`) that is
         walled in by sharp edges in two different directions, like a box side. Smooth vertex normals must not
@@ -686,13 +725,16 @@ class CadKernel:
         return v[f].reshape(-1, 3).astype(np.float32), np.repeat(cross_prod / lengths, 3, axis=0).astype(np.float32)
 
     @staticmethod
-    def extract_render_mesh(manifold: m3d.Manifold, edge_angle_threshold_deg: float = 20.0) -> RenderMesh:
+    def extract_render_mesh(manifold: m3d.Manifold, edge_angle_threshold_deg: float = 20.0,
+                            min_thickness: float = 0.0) -> RenderMesh:
         """
-        Extract triangle buffers and sharp CAD feature edges for OpenGL rendering.
+        Extract triangle buffers and sharp CAD feature edges for OpenGL rendering. With `min_thickness`,
+        material thinner than that is left out (see `thin_triangles`).
         """
         mesh = manifold.to_mesh()
         v = mesh.vert_properties[:, :3]
         f = mesh.tri_verts
+        keep = ~CadKernel.thin_triangles(manifold, v, f, min_thickness) if min_thickness > 0 and len(f) else None
 
         if len(f) == 0:
             empty = np.zeros((0, 3), dtype=np.float32)
@@ -706,6 +748,9 @@ class CadKernel:
             )
 
         tri_verts, tri_normals = CadKernel._shaded_triangles(manifold, v, f)
+        if keep is not None:
+            tri_verts = tri_verts.reshape(-1, 3, 3)[keep].reshape(-1, 3)
+            tri_normals = tri_normals.reshape(-1, 3, 3)[keep].reshape(-1, 3)
 
         # Extract sharp CAD edges using trimesh
         try:
@@ -718,6 +763,8 @@ class CadKernel:
             areas = tm.area_faces
             fa = tm.face_adjacency
             sharp_mask &= (areas[fa[:, 0]] > 1e-7 * diag * diag) & (areas[fa[:, 1]] > 1e-7 * diag * diag)
+            if keep is not None:
+                sharp_mask &= keep[fa[:, 0]] & keep[fa[:, 1]]
             sharp_edges = tm.face_adjacency_edges[sharp_mask]
             
             # Also include single-face boundary edges (if open mesh)
