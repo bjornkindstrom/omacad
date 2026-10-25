@@ -1,5 +1,7 @@
 # Omacad – progress and roadmap
 
+- Linear Pattern preserves hollow bodies and fillets in preview and committed copies (0.9.9.80.63).
+
 - Hollow Loft profiles and an editable profile list with add/remove/reorder (0.9.9.80.62).
 
 - Leaning-rib fillet whole, shoulder circles whole, emboss wall behind a fillet, parallel tests (0.9.9.80.45).

@@ -664,7 +664,12 @@ class PatternFeature(Feature):
         if after is None:
             return None
         whole_body = False
-        if self.kind == "circular":
+        if self.kind == "linear" and (before is None or before.is_empty()):
+            # Selecting the body-creating step copies the solid, including its holes.
+            removed, added = m3d.Manifold(), after
+            before = after
+            whole_body = True
+        elif self.kind == "circular":
             removed, added = self._selected_changes(doc, pos, body_id)
             whole_body = before is None or before.is_empty()
             if whole_body:

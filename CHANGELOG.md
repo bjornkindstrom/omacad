@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.63 - 2026-10-25
+
+### Fixed
+- Linear Pattern copies a selected hollow body with its holes and fillets instead of interpreting its void as a cut that disappears on OK (report 20261025-220532).
+
 ## 0.9.9.80.62 - 2026-10-25
 
 ### Fixed

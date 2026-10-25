@@ -1,5 +1,7 @@
 # Omacad – färdplan
 
+Genomfört 0.9.9.80.63: linjärt mönster av ihåliga kroppar ger kompletta kopior efter OK.
+
 Genomfört 0.9.9.80.62: ihåligt loft och redigerbar lista med flera profiler.
 
 Genomfört 0.9.9.80.45: fillet vid lutande ribba, hela skulderkanter, emboss bakom fillet, parallella tester (xdist).

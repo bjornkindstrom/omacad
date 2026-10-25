@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+Linjärt Pattern kopierar nu hela ihåliga kroppar, med hål och avrundningar, både i förhandsvisningen och efter OK (0.9.9.80.63).
+
 Loft bevarar nu hål i väggprofiler. Lägg till, ta bort och ordna profiler i listan, även via Edit på ett befintligt Loft (0.9.9.80.62).
 
 Fillet vid foten av en lutande ribba blir hel, hela cirklar på burkens skuldra kan väljas igen, emboss hittar väggen bakom en fillet och testerna körs parallellt på 2,5 min (0.9.9.80.45).
