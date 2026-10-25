@@ -314,6 +314,10 @@ class SettingsDialog(QDialog):
         self.chk_invert_zoom.setChecked(bool(self.settings.get("invert_zoom", False)))
         lay_sketch.addWidget(self.chk_invert_zoom)
 
+        self.chk_tangent_edges = QCheckBox("Show tangent edges (a line where a flat face runs smoothly into a curve)")
+        self.chk_tangent_edges.setChecked(bool(self.settings.get("show_tangent_edges", False)))
+        lay_sketch.addWidget(self.chk_tangent_edges)
+
         # Grid step
         grid_row = QHBoxLayout()
         lbl_grid = QLabel("Grid step (mm):")
@@ -579,6 +583,7 @@ class SettingsDialog(QDialog):
             self.cmb_pos.setCurrentIndex(idx_p)
         self.chk_autohide.setChecked(True)
         self.chk_invert_zoom.setChecked(False)
+        self.chk_tangent_edges.setChecked(False)
         self.cmb_primitive_decimals.setCurrentIndex(0)
         self.spn_guide_gap.setValue(6.0)
         self.spn_grid.setValue(5.0)
@@ -635,6 +640,7 @@ class SettingsDialog(QDialog):
             "palette_position": self.cmb_pos.currentData(),
             "autohide_palette_on_measure": self.chk_autohide.isChecked(),
             "invert_zoom": self.chk_invert_zoom.isChecked(),
+            "show_tangent_edges": self.chk_tangent_edges.isChecked(),
             "primitive_drag_decimals": self.cmb_primitive_decimals.currentData(),
             "guide_line_gap": self.spn_guide_gap.value(),
             "grid_step": self.spn_grid.value(),

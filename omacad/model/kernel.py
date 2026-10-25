@@ -4,7 +4,7 @@ Wraps Manifold3D and Trimesh for watertight CAD operations and mesh extraction.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 import numpy as np
 import manifold3d as m3d
@@ -21,10 +21,28 @@ class RenderMesh:
     bounds_min: np.ndarray    # [min_x, min_y, min_z]
     bounds_max: np.ndarray    # [max_x, max_y, max_z]
     center: np.ndarray        # [cx, cy, cz]
+    source: Optional[tuple] = field(default=None, repr=False)   # (vertices, triangles, kept mask) for tangent_lines
+    _tangent: Optional[np.ndarray] = field(default=None, repr=False)
+
+    def tangent_lines(self) -> np.ndarray:
+        """Line pairs (like `sharp_lines`) where a flat face runs smoothly into a curved one (Settings > Show tangent
+        edges). Worked out the first time they are drawn: most bodies never need them."""
+        if self._tangent is None:
+            self._tangent = np.zeros((0, 3), dtype=np.float32)
+            if self.source is not None:
+                from omacad.model.faces_surfaces import tangent_edge_mask
+                v, f, keep = self.source
+                tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
+                mask = tangent_edge_mask(v, f, tm, CadKernel.SHARP_EDGE_DEG)
+                if keep is not None:
+                    mask &= keep[tm.face_adjacency[:, 0]] & keep[tm.face_adjacency[:, 1]]
+                self._tangent = v[tm.face_adjacency_edges[mask]].reshape(-1, 3).astype(np.float32)
+        return self._tangent
 
 
 class CadKernel:
     """Provides high-level solid modeling operations."""
+    SHARP_EDGE_DEG = 20.0     # faces meeting at more than this show an edge line
 
     @staticmethod
     def create_box(length: float, width: float, height: float, center: bool = False) -> m3d.Manifold:
@@ -725,7 +743,7 @@ class CadKernel:
         return v[f].reshape(-1, 3).astype(np.float32), np.repeat(cross_prod / lengths, 3, axis=0).astype(np.float32)
 
     @staticmethod
-    def extract_render_mesh(manifold: m3d.Manifold, edge_angle_threshold_deg: float = 20.0,
+    def extract_render_mesh(manifold: m3d.Manifold, edge_angle_threshold_deg: float = SHARP_EDGE_DEG,
                             min_thickness: float = 0.0) -> RenderMesh:
         """
         Extract triangle buffers and sharp CAD feature edges for OpenGL rendering. With `min_thickness`,
@@ -790,7 +808,8 @@ class CadKernel:
             sharp_lines=sharp_lines,
             bounds_min=b_min,
             bounds_max=b_max,
-            center=center
+            center=center,
+            source=(np.asarray(v, dtype=np.float64), np.asarray(f, dtype=np.int64), keep),
         )
 
     @staticmethod

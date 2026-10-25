@@ -12,16 +12,10 @@ _TOPOLOGY_CACHE: dict = {}
 _TOPOLOGY_CACHE_MAX = 512
 
 
-def compute_planar_faces(manifold: m3d.Manifold, body_id: str = "") -> List[PlanarFace]:
-    """Returns every planar facet (>= 2 coplanar adjacent triangles) of the solid."""
-    mesh = manifold.to_mesh()
-    v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
-    f = np.asarray(mesh.tri_verts, dtype=np.int64)
-    if len(f) < 2:
-        return []
-    tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
-
-    # Union-find over adjacent, coplanar triangles (trimesh.facets needs scipy/networkx)
+def _face_groups(v, f, tm):
+    """Union-find over adjacent, coplanar triangles (trimesh.facets needs scipy/networkx). Returns the group root of
+    every triangle, the groups (root -> triangle ids), the roots of real flat faces (not the thin strips of a
+    tessellated curved surface and not boolean slivers), of the slivers, and of the curved strips."""
     parent = np.arange(len(f))
 
     def find(i: int) -> int:
@@ -40,28 +34,43 @@ def compute_planar_faces(manifold: m3d.Manifold, body_id: str = "") -> List[Plan
             if ra != rb:
                 parent[rb] = ra
 
-    groups = {}
+    groups: dict = {}
     for i in range(len(f)):
         groups.setdefault(find(i), []).append(i)
-
-    # Tessellated curved surfaces: thin strips meeting their neighbours at a shallow angle
     curved = _curved_roots(v, f, tm, find, groups, adj, tm.face_adjacency_angles)
-
-    faces: List[PlanarFace] = []
     slivers = _sliver_roots(v, f, tm, groups)
-    for root, tri_ids in groups.items():
-        if root in curved or root in slivers:
-            continue
-        ids = np.array(tri_ids)
-        faces.append(PlanarFace(
-            body_id=body_id,
-            index=len(faces),
-            normal=np.asarray(normals[ids[0]], dtype=np.float64),
-            origin=v[f[ids[0], 0]],
-            area=float(tm.area_faces[ids].sum()),
-            tris=v[f[ids]],
-        ))
-    return faces
+    roots = np.array([find(i) for i in range(len(f))], dtype=np.int64)
+    return roots, groups, {r for r in groups if r not in curved and r not in slivers}, slivers, curved
+
+
+def compute_planar_faces(manifold: m3d.Manifold, body_id: str = "") -> List[PlanarFace]:
+    """Returns every planar facet (>= 2 coplanar adjacent triangles) of the solid."""
+    mesh = manifold.to_mesh()
+    v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
+    f = np.asarray(mesh.tri_verts, dtype=np.int64)
+    if len(f) < 2:
+        return []
+    tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
+    _, groups, planar, _, _ = _face_groups(v, f, tm)
+    return [PlanarFace(body_id=body_id, index=i, normal=np.asarray(tm.face_normals[ids[0]], dtype=np.float64),
+                       origin=v[f[ids[0], 0]], area=float(tm.area_faces[ids].sum()), tris=v[f[ids]])
+            for i, ids in enumerate(np.array(ids) for r, ids in groups.items() if r in planar)]
+
+
+def tangent_edge_mask(v, f, tm, sharp_deg: float, min_deg: float = 0.1) -> np.ndarray:
+    """Mask over `tm.face_adjacency` of the tangent edges: where a flat face runs smoothly (under `sharp_deg`) into a
+    curved surface or into another flat face, like the seam between a straight wall and a tangent arc (Fusion's
+    "Show tangent edges"). Joins inside a curved surface and boolean slivers are left out."""
+    roots, _, planar, slivers, _ = _face_groups(v, f, tm)
+    a, b = roots[tm.face_adjacency[:, 0]], roots[tm.face_adjacency[:, 1]]
+    is_planar = np.isin(roots, list(planar))
+    is_sliver = np.isin(roots, list(slivers))
+    pa, pb = is_planar[tm.face_adjacency[:, 0]], is_planar[tm.face_adjacency[:, 1]]
+    sa, sb = is_sliver[tm.face_adjacency[:, 0]], is_sliver[tm.face_adjacency[:, 1]]
+    angles = tm.face_adjacency_angles
+    return ((a != b) & (pa | pb) & ~sa & ~sb
+            & (angles >= np.radians(min_deg)) & (angles <= np.radians(sharp_deg)))
+
 
 def clear_topology_cache():
     """Clears the global topology analysis cache."""
@@ -109,32 +118,12 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
         return [], []
     tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
 
-    parent = np.arange(len(f))
-
-    def find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
     normals = tm.face_normals
     adj = tm.face_adjacency
-    tol = 1e-6 * max(1.0, float(np.ptp(v, axis=0).max()))
-    areas = tm.area_faces
-    for a_idx, b_idx in adj:
-        if _coplanar(a_idx, b_idx, normals, v, f, areas, tol):
-            ra, rb = find(int(a_idx)), find(int(b_idx))
-            if ra != rb:
-                parent[rb] = ra
-
-    groups: dict = {}
-    for i in range(len(f)):
-        groups.setdefault(find(i), []).append(i)
-
     angles = tm.face_adjacency_angles
-    curved = _curved_roots(v, f, tm, find, groups, adj, angles)
-    slivers = _sliver_roots(v, f, tm, groups)
-    planar = {r for r in groups if r not in curved and r not in slivers}
+    roots, groups, planar, _, curved = _face_groups(v, f, tm)
+    tol = 1e-6 * max(1.0, float(np.ptp(v, axis=0).max()))
+    find = lambda i: int(roots[i])
 
     faces: List[PlanarFace] = []
     for root in planar:

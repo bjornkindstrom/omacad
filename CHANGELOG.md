@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.31 - 2026-10-25
+
+### Added
+- Settings > Sketch & View > *Show tangent edges*: draws a line where a flat face runs smoothly into a curved one (a straight wall meeting a tangent arc or fillet), like Fusion's setting. Off by default.
+
 ## 0.9.9.80.30 - 2026-10-25
 
 ### Fixed

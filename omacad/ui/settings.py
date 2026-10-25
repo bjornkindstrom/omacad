@@ -38,7 +38,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "selected_line_color": None,        # colour of selected sketch lines; None = the highlight colour
     "arrow_gap": 2.0,                   # mm the arrow is drawn off the surface, in its direction
     "view_projection": "perspective",    # perspective or orthographic
-    "view_fov": 30.0,                   # perspective field of view in degrees; lower = flatter, less distortion
+    "view_fov": 30.0,
+    "show_tangent_edges": False,        # draw a line where a flat face runs smoothly into a curved one (like Fusion)                   # perspective field of view in degrees; lower = flatter, less distortion
     "rfc_name": "",                     # your name on requests for change (Help > Request a change)
     "ai_agent": "omarchy",              # AI agent to fix problems: "omarchy", "agy", "claude", "codex", "gemini", etc.
     "button_scale": 1.0,                # size of the ribbon buttons (0.75 = compact, 1.0 = standard, 1.25 = large)

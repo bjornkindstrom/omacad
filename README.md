@@ -15,6 +15,7 @@ Primitiver: dra kroppen i förhandsvisningen med vänster musknapp för att plac
 **Omacad** är ett native parametriskt 3D CAD-program för **Omarchy Linux** (Arch + Hyprland/Wayland), inspirerat av **Autodesk Fusion 360**.
 Byggt med **Python 3.14**, **PySide6 (Qt6) + OpenGL**, **manifold3d** (vattentäta booleans), **shapely** och **SolveSpace** (skiss-villkor).
 Fönstret följer Omarchys aktiva tema och typsnitt, eller ett eget tema: **Inställningar › Theme editor** låter dig ställa alla färger, se dem live och spara dem under ett namn.
+Vill du se sömmarna där en rak vägg går över i en båge eller fillet (som i Fusion) slår du på **Inställningar › Sketch & View › Show tangent edges**.
 
 ![Omacad](screenshots/10_overview.png)
 

@@ -350,6 +350,8 @@ class RenderGLMixin:
             for k in list(gpu_cache.keys()):
                 if k[0] not in live_bids:
                     self._delete_gpu_cache_entry(gpu_cache.pop(k))
+        from omacad.ui.settings import get_settings
+        tangent = bool(get_settings().get("show_tangent_edges", False))
 
         for body in self.doc.bodies.values():
             if not body.visible or not body.render_mesh:
@@ -365,10 +367,11 @@ class RenderGLMixin:
                 continue
 
             is_selected = body.selected
+            edge_lines = np.vstack([mesh.sharp_lines, mesh.tangent_lines()]) if tangent else mesh.sharp_lines
 
             # Fetch or build GPU VAO/VBO for this body mesh
             cache_entry = None
-            mesh_key = (body.body_id, id(mesh), len(mesh.vertices), len(mesh.sharp_lines))
+            mesh_key = (body.body_id, id(mesh), len(mesh.vertices), len(edge_lines))
             if gpu_cache is not None:
                 cache_entry = gpu_cache.get(mesh_key)
                 if cache_entry is None:
@@ -405,11 +408,11 @@ class RenderGLMixin:
                     vao_lines = None
                     vbo_lines = None
                     line_count = 0
-                    if len(mesh.sharp_lines) > 0 and self.prog_flat:
+                    if len(edge_lines) > 0 and self.prog_flat:
                         vao_lines = GL.glGenVertexArrays(1)
                         vbo_lines = GL.glGenBuffers(1)
                         GL.glBindVertexArray(vao_lines)
-                        lines_data = np.ascontiguousarray(mesh.sharp_lines, dtype=np.float32)
+                        lines_data = np.ascontiguousarray(edge_lines, dtype=np.float32)
                         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_lines)
                         GL.glBufferData(GL.GL_ARRAY_BUFFER, lines_data.nbytes, lines_data, GL.GL_STATIC_DRAW)
                         loc_pos_flat = GL.glGetAttribLocation(self.prog_flat, "in_pos")
@@ -462,7 +465,7 @@ class RenderGLMixin:
                 GL.glUseProgram(0)
 
             # 2. Crisp Sharp Feature Edges
-            if (self.show_edges or self.wireframe_only) and len(mesh.sharp_lines) > 0:
+            if (self.show_edges or self.wireframe_only) and len(edge_lines) > 0:
                 GL.glUseProgram(self.prog_flat)
                 loc_mvp = GL.glGetUniformLocation(self.prog_flat, "u_mvp")
                 loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
@@ -482,7 +485,7 @@ class RenderGLMixin:
                     GL.glBindVertexArray(0)
                 else:
                     loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
-                    self.draw_buffer_arrays(GL.GL_LINES, loc_pos, mesh.sharp_lines)
+                    self.draw_buffer_arrays(GL.GL_LINES, loc_pos, edge_lines)
                 GL.glUseProgram(0)
 
     def dash_segments(self, flat_segments, dash_px: float = 9.0, gap_px: Optional[float] = None):
