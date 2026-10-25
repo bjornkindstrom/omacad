@@ -45,7 +45,8 @@ def _face_groups(v, f, tm):
 
 def compute_planar_faces(manifold: m3d.Manifold, body_id: str = "") -> List[PlanarFace]:
     """Returns every planar facet (>= 2 coplanar adjacent triangles) of the solid."""
-    mesh = manifold.to_mesh()
+    # Edge coordinates feed boolean tools: float32 rounding leaves slivers against the original solid.
+    mesh = manifold.to_mesh64()
     v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
     f = np.asarray(mesh.tri_verts, dtype=np.int64)
     if len(f) < 2:
@@ -144,7 +145,8 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
         ]
         return faces, cached_edges
 
-    mesh = manifold.to_mesh()
+    # Edge coordinates feed boolean tools: float32 rounding leaves slivers against the original solid.
+    mesh = manifold.to_mesh64()
     v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
     f = np.asarray(mesh.tri_verts, dtype=np.int64)
     if len(f) < 2:

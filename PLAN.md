@@ -1,5 +1,7 @@
 # Omacad – färdplan
 
+Genomfört 0.9.9.80.33: fasning av rundade konturer utan falska kantlinjer; dubbel precision genom ytanalys och fasverktyg.
+
 Genomfört 0.9.0: cirkulära featuregrupper för t.ex. Japandi-ribbor med fillet; val av features i tidslinjen samt cirkel-/cylinderyta som rotationsaxel.
 
 Genomfört 2026-10-17 (0.8.0): Rotate i skiss med valbar pivot (figurens areacentrum, markeringens mitt, kroppsytans centrum, origo eller egen punkt), förhandsvisning och ångra/gör om.

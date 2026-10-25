@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.33 - 2026-10-25
+
+### Fixed
+- Chamfering a curved outline no longer draws false crease lines across the bevel and down the rounded walls. Face analysis and the outline tool now preserve double precision instead of leaving thin boolean slivers through coordinate rounding.
+
 ## 0.9.9.80.32 - 2026-10-25
 
 ### Fixed

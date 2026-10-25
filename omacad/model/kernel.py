@@ -427,7 +427,8 @@ class CadKernel:
         vol = np.einsum("ij,ij->i", verts[tr[:, 0]], np.cross(verts[tr[:, 1]], verts[tr[:, 2]])).sum() / 6.0
         if vol < 0:
             tr = tr[:, ::-1]
-        mesh = m3d.Mesh(vert_properties=verts.astype(np.float32), tri_verts=np.ascontiguousarray(tr))
+        # Keep the original outline coordinates through the cut, especially where the tool meets the wall.
+        mesh = m3d.Mesh64(vert_properties=verts, tri_verts=np.ascontiguousarray(tr, dtype=np.uint64))
         solid = m3d.Manifold(mesh)
         if solid.is_empty():
             raise ValueError("Could not build the rounding for this outline.")

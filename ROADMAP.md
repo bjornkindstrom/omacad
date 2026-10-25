@@ -1,5 +1,7 @@
 # Omacad – progress and roadmap
 
+- Fixed false crease lines after chamfering curved outlines by retaining double precision in topology and outline tools (0.9.9.80.33).
+
 - Circular Feature Pattern: selected rib + fillet groups, picked/world axes, partial/full circles and timeline selection/editing (0.9.0).
 
 Current version: **0.8.0** (see `CHANGELOG.md`). Goal: behave like Fusion 360 wherever it makes sense; 1.0 = a complete, dependable CAD.
