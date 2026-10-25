@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.61 - 2026-10-25
+
+### Changed
+- Things follow their moved object (Björn): every Move step remembers where it put the body, so what belongs to an earlier step of the same object is shown where the body is now: a finished sketch (also when flashed from the timeline or lit by a dimension picked in the browser), what a step added or removed when it is clicked, the edges a Fillet/Chamfer rounds, and Find in Window on a sketch. Stepping the history back shows them where they were then.
+
 ## 0.9.9.80.60 - 2026-10-25
 
 ### Fixed

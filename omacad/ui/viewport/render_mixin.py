@@ -607,6 +607,13 @@ class RenderGLMixin:
                     w2 = plane.uv_to_world(p2[0], p2[1])
                     dest.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
 
+            # a finished sketch of an object that was moved since is drawn where the object is now
+            placed = None if is_active else self.doc.sketch_placement(sketch.sketch_id)
+            if placed is not None:
+                normal_lines, construction_lines, projected_lines, selected_lines, hover_lines = (
+                    placed_lines(lines, placed) for lines in
+                    (normal_lines, construction_lines, projected_lines, selected_lines, hover_lines))
+
             from omacad.ui.settings import get_settings, hex_to_rgb01, sketch_line_widths
             line_w, sel_w = sketch_line_widths()     # Björn #74: set in Settings, thinner than before
             halo_px = 0.4 + 0.8 * line_w             # a thin dark rim, not a second line
@@ -731,3 +738,11 @@ class RenderGLMixin:
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glUseProgram(0)
 
+
+
+def placed_lines(flat, m):
+    """A flat [x, y, z, x, y, z, ...] list of line ends moved by the 4x4 matrix `m`."""
+    if not flat:
+        return flat
+    pts = np.asarray(flat, dtype=float).reshape(-1, 3)
+    return (pts @ m[:3, :3].T + m[:3, 3]).ravel().tolist()

@@ -99,6 +99,17 @@ class MoveFeature(Feature):
         """Where the same move takes a single point (e.g. the gizmo at the pivot)."""
         return cls._rotate_point(p, r, pivot_xyz) + cls._shift(d, r, pivot_xyz, from_xyz, to_xyz)
 
+    @classmethod
+    def matrix(cls, d, r, pivot_xyz, from_xyz=None, to_xyz=None) -> np.ndarray:
+        """The 4x4 matrix of `transform` (rotate about the pivot, then shift)."""
+        from omacad.model.geometry import euler_xyz_matrix
+        rot = euler_xyz_matrix(*r) if any(abs(a) > 1e-4 for a in r) else np.eye(3)
+        pivot_xyz = np.asarray(pivot_xyz, dtype=float)
+        m = np.eye(4)
+        m[:3, :3] = rot
+        m[:3, 3] = pivot_xyz - rot @ pivot_xyz + cls._shift(d, r, pivot_xyz, from_xyz, to_xyz)
+        return m
+
     def pivot_xyz(self, doc: Any, body: Body, from_xyz=None) -> np.ndarray:
         if self.pivot == "origin":
             return np.zeros(3)
@@ -107,13 +118,18 @@ class MoveFeature(Feature):
         return self.body_center(body)
 
     def execute(self, doc: Any) -> None:
+        self.applied = None
         target = doc.bodies.get(self.target_body_id)
         if not target:
             return
         from_xyz = self.resolve_point(doc, self.from_point)
         to_xyz = self.resolve_point(doc, self.to_point)
-        moved = self.transform(target.manifold, (self.dx, self.dy, self.dz), (self.rx, self.ry, self.rz),
-                               self.pivot_xyz(doc, target, from_xyz), from_xyz, to_xyz)
+        d, r = (self.dx, self.dy, self.dz), (self.rx, self.ry, self.rz)
+        pivot = self.pivot_xyz(doc, target, from_xyz)
+        moved = self.transform(target.manifold, d, r, pivot, from_xyz, to_xyz)
+        # where this step put the body, as a 4x4 matrix: what was drawn on it before (its sketches, the edges a
+        # Fillet rounds) is shown moved along (Document.placement_after)
+        self.applied = self.matrix(d, r, pivot, from_xyz, to_xyz)
         if self.copy_body:
             body = Body(f"body_{self.feature_id}", f"{target.name} Copy", moved)
             body.update_render_mesh()

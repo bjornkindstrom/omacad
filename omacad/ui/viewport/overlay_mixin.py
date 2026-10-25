@@ -479,7 +479,11 @@ class OverlayMixin:
                 if p is not None:
                     uv.append(tuple(p))
         if uv:
-            self.zoom_to_points([sk.plane.uv_to_world(u, v) for u, v in uv])
+            pts = np.array([sk.plane.uv_to_world(u, v) for u, v in uv], dtype=float)
+            placed = None if sk is self.doc.active_sketch else self.doc.sketch_placement(sketch_id)
+            if placed is not None:              # where its object has been moved to since
+                pts = pts @ placed[:3, :3].T + placed[:3, 3]
+            self.zoom_to_points(list(pts))
 
     def zoom_fit(self):
         """Centers and fits camera to visible bodies or origin."""

@@ -4,6 +4,7 @@ Horizontal history timeline at the bottom with playback controls and feature nod
 """
 
 from typing import Optional
+import numpy as np
 from PySide6.QtCore import Qt, Signal, QSize, QTimer
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QPushButton, QScrollArea, QFrame, QLabel, QSizePolicy, QMenu, QInputDialog
@@ -345,7 +346,11 @@ class TimelineBar(QWidget):
                 if self.busy_reason():
                     return None, None                       # no rebuild under an open tool
                 self.doc.timeline.recompute(self.doc)       # steps just added have no recorded states yet
-            self._changes_cache[step_index] = self.doc.step_changes(step_index - 1)
+            changes = self.doc.step_changes(step_index - 1)
+            placed = self.doc.placement_after(self.doc.timeline.features[step_index - 1].feature_id)
+            if placed is not None:          # the object was moved since: show it where the body is now
+                changes = tuple(m.transform(placed[:3, :].tolist()) if m is not None else None for m in changes)
+            self._changes_cache[step_index] = changes
         return self._changes_cache[step_index]
 
     def _edges(self, step_index: int) -> list:
@@ -353,8 +358,9 @@ class TimelineBar(QWidget):
         if step_index not in self._edges_cache:
             feat = self.doc.timeline.features[step_index - 1]
             before = self.doc.step_states.get(step_index - 1)
-            self._edges_cache[step_index] = (feat.edges_in(before) if feat.feature_type == "fillet" and before
-                                             else [])
+            edges = feat.edges_in(before) if feat.feature_type == "fillet" and before else []
+            placed = self.doc.placement_after(feat.feature_id) if edges else None
+            self._edges_cache[step_index] = [PlacedEdge(e, placed) for e in edges] if placed is not None else edges
         return self._edges_cache[step_index]
 
     def _show(self, step_index: Optional[int]):
@@ -475,3 +481,13 @@ class TimelineBar(QWidget):
             return
         self.doc.timeline.fast_forward(self.doc)
         self.doc.notify_changed()
+
+
+class PlacedEdge:
+    """An edge shown where its object has been moved to since (only its polyline is drawn)."""
+    def __init__(self, edge, m):
+        self.edge, self.m = edge, m
+
+    def polyline(self, *args):
+        pts = np.asarray(self.edge.polyline(*args), dtype=float)
+        return pts @ self.m[:3, :3].T + self.m[:3, 3]

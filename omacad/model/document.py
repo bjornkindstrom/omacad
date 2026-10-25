@@ -254,6 +254,29 @@ class Document:
             return sketch.name
         return None
 
+    def placement_after(self, feature_id: str) -> Optional[np.ndarray]:
+        """Where the object of a step has been moved since that step: the 4x4 matrix of the later Move steps of the
+        same object (up to the replay marker), or None when it has not moved. A sketch, the edges a Fillet rounds
+        or what a step added are shown with it, where the body is now, not where it was then."""
+        history = self.object_history
+        index = history.index(self, feature_id)
+        owner = history.owners.get(feature_id)
+        if index is None or owner is None:
+            return None
+        m = np.eye(4)
+        for f in self.timeline.features[index + 1:self.timeline.marker_index]:
+            applied = getattr(f, "applied", None)
+            if (f.feature_type == "move" and not f.copy_body and not f.suppressed and not f.error
+                    and applied is not None and history.owners.get(f.feature_id) == owner):
+                m = applied @ m
+        return None if np.allclose(m, np.eye(4), atol=1e-9) else m
+
+    def sketch_placement(self, sketch_id: str) -> Optional[np.ndarray]:
+        """`placement_after` the step of a finished sketch."""
+        fid = next((f.feature_id for f in self.timeline.features
+                    if f.feature_type == "sketch" and f.sketch.sketch_id == sketch_id), None)
+        return self.placement_after(fid) if fid else None
+
     def step_changes(self, index: int):
         """(added, removed) material of timeline step `index` as manifolds (None where nothing), from the body
         states recorded before and after it. Steps beyond the replay marker have no states and give (None, None)."""
