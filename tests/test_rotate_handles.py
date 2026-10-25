@@ -1,5 +1,5 @@
-"""Björn #107: curved arrows beside the selected body (X red, Y green, Z blue) turn it about its centre, in 15° steps,
-and the release is one Move step."""
+"""Björn #107/#111: curved arrows beside the selected body (X red, Y green, Z blue) turn it about its centre in 15°
+steps, straight arrows slide it along an axis in whole millimetres; the release is one Move step."""
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
@@ -15,6 +15,7 @@ def win():
     QApplication.instance() or QApplication([])
     w = MainWindow()
     w.resize(1400, 900)
+    w.viewport.resize(900, 700)
     w.doc.add_box(40, 20, 10)
     return w
 
@@ -23,7 +24,7 @@ def test_handles_only_on_one_selected_body_outside_a_sketch(win):
     rh = win.viewport.rotate_handles
     assert rh.handles() == {}
     win.doc.selected_body_ids = list(win.doc.bodies)
-    assert set(rh.handles()) == {"X", "Y", "Z"}
+    assert set(rh.handles()) == {"X", "Y", "Z", "MX", "MY", "MZ"}
     win.doc.start_sketch_on_plane(SketchPlane.create_named("XY"))
     assert rh.handles() == {}
 
@@ -62,3 +63,32 @@ def test_escape_cancels_a_turn(win):
     assert rh.cancel() and not vp.display_override
     assert not rh.release()
     assert [f.feature_type for f in doc.timeline.features] == ["box"]
+
+
+@pytest.mark.parametrize("handle, axis", [("MX", 0), ("MY", 1), ("MZ", 2)])
+def test_dragging_a_straight_arrow_slides_the_body_along_its_axis(win, handle, axis):
+    doc, vp = win.doc, win.viewport
+    bid = next(iter(doc.bodies))
+    doc.selected_body_ids = [bid]
+    before = np.array(doc.bodies[bid].manifold.bounding_box())
+    rh = vp.rotate_handles
+    pos, along, _ = rh.handles()[handle]
+    centre = before.reshape(2, 3).mean(axis=0)
+    ends = vp.project_points(np.array([centre, centre + np.eye(3)[axis]]))[0]
+    outwards = np.sign(np.dot(ends[1] - ends[0], along))                 # dragging along the arrow: + or - axis
+    assert rh.press(*pos)
+    rh.move(*(pos + along * 80))
+    dist = rh.drag["dist"]
+    assert dist != 0 and np.sign(dist) == outwards and dist == int(dist)   # whole millimetres
+    assert vp.display_override and bid in vp.display_override
+    assert rh.release()
+    move = doc.timeline.features[-1]
+    shift = [move.dx, move.dy, move.dz]
+    assert shift[axis] == dist and sum(abs(v) for v in shift) == abs(dist)
+    assert (move.rx, move.ry, move.rz) == (0, 0, 0)
+    after = np.array(doc.bodies[bid].manifold.bounding_box())
+    expected = before.copy()
+    expected[[axis, axis + 3]] += dist
+    assert after == pytest.approx(expected, abs=1e-6)
+    doc.undo()
+    assert np.array(doc.bodies[bid].manifold.bounding_box()) == pytest.approx(before)

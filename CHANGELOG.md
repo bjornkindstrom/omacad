@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.58 - 2026-10-25
+
+### Added
+- Move arrows on the selected body (#111): beside the rotate arrows, a straight double arrow per axis (X red, Y green off the front sides, Z blue above) slides the body along that axis in whole millimetres (Shift: 0.1 mm). The distance shows while dragging, Esc cancels, and letting go makes one Move step.
+
 ## 0.9.9.80.57 - 2026-10-25
 
 ### Added

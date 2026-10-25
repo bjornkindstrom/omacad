@@ -1,6 +1,6 @@
-"""Rotate handles on the selected body, like Layerling (Björn #107): a small curved arrow per axis (X red, Y green,
-Z blue) beside the body. Dragging one turns the body about its centre around that axis, in 15° steps (Shift: free),
-and the release makes it one Move step."""
+"""Rotate and move handles on the selected body, like Layerling. A small curved arrow per axis (X red, Y green,
+Z blue) beside the body turns it about its centre in 15° steps (Björn #107); a straight double arrow per axis off a
+side of the body slides it along that axis in whole millimetres (#111). Shift: free. The release makes one Move step."""
 import math
 from typing import Optional
 
@@ -19,6 +19,8 @@ OUT = 26.0          # px from the box edge out to the handle
 HALF = 20.0         # px, half the arrow's chord
 HIT = 20.0          # px pick radius
 SNAP_DEG = 15.0
+SNAP_MM = 1.0
+MOVES = {"MX": "X", "MY": "Y", "MZ": "Z"}   # move handle -> its axis
 
 
 class RotateHandles:
@@ -83,6 +85,36 @@ class RotateHandles:
             if not ok.all() or np.linalg.norm(tangent) < 1e-6:
                 tangent = np.array([-outward[1], outward[0]])
             out[name] = (mid_s + outward * OUT, tangent / np.linalg.norm(tangent), outward)
+        out.update(self._move_handles(lo, hi, centre_w, centre_s, screen))
+        return out
+
+    def _move_handles(self, lo, hi, centre_w, centre_s, screen):
+        """{"MX"/"MY"/"MZ": (position, arrow direction, same)}: a straight arrow along each axis, just off the side of
+        the box it points out of: the front sides (lowest on screen) for X and Y, the top (highest) for Z. Left out
+        when the axis points at the viewer and the arrow would be a dot."""
+        from shapely.geometry import MultiPoint, Point
+        outline = MultiPoint([tuple(p) for p in screen]).convex_hull
+        out = {}
+        for name, axis_name in MOVES.items():
+            axis = AXES[axis_name]
+            half = (hi - lo) / 2.0 * axis
+            faces = [centre_w + half, centre_w - half]
+            pts, ok = self.vp.project_points(np.array([*faces, faces[0] + axis, faces[1] - axis]))
+            if not ok.all():
+                continue
+            pick = (min if axis_name == "Z" else max)((0, 1), key=lambda i: pts[i][1])
+            face_s = pts[pick]
+            along = pts[2 + pick] - face_s                      # the axis on screen, pointing out of that side
+            if np.linalg.norm(along) < 1e-6 or np.linalg.norm(face_s - centre_s) < 1e-6:
+                continue
+            along /= np.linalg.norm(along)
+            if np.linalg.norm(pts[0] - pts[1]) < 2 * HALF:       # seen end-on: no room to drag along it
+                continue
+            # from the side's centre out along the arrow until clear of the body's outline on screen
+            t = 0.0
+            while t < 4000 and outline.contains(Point(*(face_s + along * t))):
+                t += 4.0
+            out[name] = (face_s + along * (t + OUT + 10 + HALF), along, along)   # past the size labels too
         return out
 
     def hit(self, x: float, y: float) -> Optional[str]:
@@ -112,6 +144,19 @@ class RotateHandles:
         v = np.cross(axis, u)
         return math.degrees(math.atan2(float(p @ v), float(p @ u)))
 
+    def _along(self, x, y, axis, through) -> Optional[float]:
+        """Where the mouse ray passes the axis line through `through`, as a distance along the axis (mm)."""
+        proj, view, _ = self.vp.get_matrices()
+        r0, rd = ray_from_screen(x, y, self.vp.width(), self.vp.height(), view, proj)
+        r0, rd = np.asarray(r0, float), np.asarray(rd, float)
+        rd /= np.linalg.norm(rd)
+        w = through - r0
+        b, d1, e = float(axis @ rd), float(axis @ w), float(rd @ w)
+        denom = 1.0 - b * b
+        if abs(denom) < 1e-6:
+            return None
+        return (b * e - d1) / denom
+
     def press(self, x: float, y: float) -> bool:
         name = self.hit(x, y)
         if name is None:
@@ -121,7 +166,11 @@ class RotateHandles:
         pos, tangent, _o = self.handles()[name]
         centre = (lo + hi) / 2.0
         self.drag = {"axis": name, "body_id": body.body_id, "centre": centre, "start": (x, y), "tangent": tangent,
-                     "start_angle": self._plane_angle(x, y, AXES[name], centre), "angle": 0.0, "pos": pos}
+                     "angle": 0.0, "dist": 0.0, "pos": pos}
+        if name in MOVES:
+            self.drag["start_along"] = self._along(x, y, AXES[MOVES[name]], centre)
+        else:
+            self.drag["start_angle"] = self._plane_angle(x, y, AXES[name], centre)
         self.vp.setCursor(Qt.CursorShape.ClosedHandCursor)
         return True
 
@@ -138,6 +187,15 @@ class RotateHandles:
             a = round(a / SNAP_DEG) * SNAP_DEG
         return a
 
+    def dist_at(self, x: float, y: float) -> float:
+        d = self.drag
+        now = self._along(x, y, AXES[MOVES[d["axis"]]], d["centre"])
+        if now is None or d["start_along"] is None:
+            return d["dist"]
+        dist = now - d["start_along"]
+        step = 0.1 if QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier else SNAP_MM
+        return round(dist / step) * step + 0.0
+
     def move(self, x: float, y: float) -> bool:
         if self.drag is None:
             name = self.hit(x, y)
@@ -147,13 +205,17 @@ class RotateHandles:
                 self.vp.update()
             return False
         d = self.drag
-        angle = self.angle_at(x, y)
-        if angle != d["angle"]:
-            d["angle"] = angle
+        key, value = ("dist", self.dist_at(x, y)) if d["axis"] in MOVES else ("angle", self.angle_at(x, y))
+        if value != d[key]:
+            d[key] = value
             body = self.vp.doc.bodies.get(d["body_id"])
             if body is not None:
                 self.vp.set_display_override({d["body_id"]: self._turned(body.manifold, d)})
         return True
+
+    def shift(self, d):
+        """(dx, dy, dz) of a move drag."""
+        return tuple(d["dist"] if a == MOVES.get(d["axis"]) else 0.0 for a in AXES)
 
     @staticmethod
     def rotation(axis: str, angle: float):
@@ -161,6 +223,8 @@ class RotateHandles:
 
     def _turned(self, manifold, d):
         from omacad.model.features.transform import MoveFeature
+        if d["axis"] in MOVES:
+            return manifold.translate(list(self.shift(d)))
         return MoveFeature.transform(manifold, (0.0, 0.0, 0.0), self.rotation(d["axis"], d["angle"]), d["centre"])
 
     def release(self) -> bool:
@@ -170,6 +234,15 @@ class RotateHandles:
         self.vp.set_display_override(None)
         self.vp.setCursor(Qt.CursorShape.OpenHandCursor if self.hover else Qt.CursorShape.ArrowCursor)
         doc = self.vp.doc
+        if d["axis"] in MOVES:
+            if abs(d["dist"]) > 1e-9 and d["body_id"] in doc.bodies:
+                name = doc.bodies[d["body_id"]].name
+                dx, dy, dz = self.shift(d)
+                doc.move_body(d["body_id"], dx=dx, dy=dy, dz=dz)
+                doc.selected_body_ids = [d["body_id"]] if d["body_id"] in doc.bodies else []
+                self.vp.status_message.emit(f"Moved {name} {d['dist']:g} mm along {MOVES[d['axis']]} "
+                                            "(one Move step; Ctrl+Z undoes).")
+            return True
         if abs(d["angle"]) > 1e-9 and d["body_id"] in doc.bodies:
             name = doc.bodies[d["body_id"]].name
             rx, ry, rz = self.rotation(d["axis"], d["angle"])
@@ -197,11 +270,14 @@ class RotateHandles:
             if active and name != active:
                 continue
             lit = name in (active, self.hover)
-            r, g, b = COLOURS[name]
+            r, g, b = COLOURS[MOVES.get(name, name)]
             colour = theme.qcolor(r, g, b, 255 if lit else 200)
-            _curved_arrow(painter, pos, tangent, outward, colour, 4.0 if lit else 3.0)
+            if name in MOVES:
+                _straight_arrow(painter, pos, tangent, colour, 4.0 if lit else 3.0)
+            else:
+                _curved_arrow(painter, pos, tangent, outward, colour, 4.0 if lit else 3.0)
         if self.drag:
-            label = f"{self.drag['angle']:g}°"
+            label = f"{self.drag['dist']:g} mm" if self.drag["axis"] in MOVES else f"{self.drag['angle']:g}°"
             font = QFont(painter.font())
             font.setPixelSize(13)
             painter.setFont(font)
@@ -236,6 +312,21 @@ def _curved_arrow(painter: QPainter, pos, tangent, outward, colour, width: float
         d = tip - back
         d /= max(np.linalg.norm(d), 1e-9)
         n = np.array([-d[1], d[0]])
+        tip = tip + d * 4.0
+        base = tip - d * 9.0
+        painter.drawPolygon(QPolygonF([QPointF(*tip), QPointF(*(base + n * 6.0)), QPointF(*(base - n * 6.0))]))
+
+
+def _straight_arrow(painter: QPainter, pos, along, colour, width: float) -> None:
+    """A short straight line along `along` with an arrow head at both ends."""
+    a, b = pos - along * HALF, pos + along * HALF
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(QPen(colour, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    painter.drawLine(QPointF(*a), QPointF(*b))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(colour)
+    n = np.array([-along[1], along[0]])
+    for tip, d in ((b, along), (a, -along)):
         tip = tip + d * 4.0
         base = tip - d * 9.0
         painter.drawPolygon(QPolygonF([QPointF(*tip), QPointF(*(base + n * 6.0)), QPointF(*(base - n * 6.0))]))
