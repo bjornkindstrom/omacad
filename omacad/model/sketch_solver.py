@@ -34,6 +34,7 @@ def solve_sketch(sketch: Sketch, fixed_ids: Iterable[str] = (), pinned: Iterable
     pinned: (entity_id, point_name) pairs held in place, e.g. the start of a line whose length
     dimension is being edited, so the line grows from that end.
     """
+    _measure_from_walls(sketch)
     ents = {e.entity_id: e for e in sketch.entities if isinstance(e, SUPPORTED)}
     if not sketch.constraints and not any(d.dim_type in SOLVER_DIM_TYPES for d in sketch.dimensions):
         sketch.dof = None
@@ -65,6 +66,17 @@ def solve_sketch(sketch: Sketch, fixed_ids: Iterable[str] = (), pinned: Iterable
     sketch.refit_fillets()
     sketch.solve_profiles()
     return SolveResult(True, dof, "")
+
+
+def _measure_from_walls(sketch) -> None:
+    """A distance measured from a rounded corner's guide line is moved over to the wall the guide carries on (#100):
+    the guide is free in the solver and re-seated afterwards, so the solver moved the guide instead of the point."""
+    walls = sketch.corner_guide_walls()
+    if not walls:
+        return
+    for d in sketch.dimensions:
+        if d.dim_type == "PT_LINE_DIST" and d.refs and d.refs[0] in walls:
+            d.refs = [walls[d.refs[0]], *d.refs[1:]]
 
 
 def _sharp_corners(sketch, ents) -> list:

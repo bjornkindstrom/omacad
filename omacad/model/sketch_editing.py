@@ -472,6 +472,17 @@ class SketchEditingMixin:
         self.solve_profiles()
         return guides
 
+    def corner_guide_walls(self) -> Dict[str, str]:
+        """{guide line id: the wall line it carries on}. A guide is re-seated from its wall after every solve, so
+        anything measured from a guide must be measured from the wall (same line) or it does not follow."""
+        walls = {}
+        for arc in self.entities:
+            info = getattr(arc, "fillet_info", None) or {}
+            for gid, side_key in zip(info.get("guides", ()), ("line_a", "line_b")):
+                if info.get(side_key):
+                    walls[gid] = info[side_key]
+        return walls
+
     def _seat_corner_guides(self, arc: "SketchArc") -> None:
         info = arc.fillet_info
         corner = (float(info["corner"][0]), float(info["corner"][1]))

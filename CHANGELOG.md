@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.46 - 2026-10-25
+
+### Fixed
+- A Smart Circle measured from a rounded rectangle's wall follows the wall when the size changes (#100). The distance had been tied to the rounded corner's guide line, which the solver moved instead of the circle; such distances (also in saved files) now measure from the wall itself.
+
 ## 0.9.9.80.45 - 2026-10-25
 
 ### Fixed

@@ -449,8 +449,9 @@ class SketchToolsMixin:
         """Straight lines a circle can be measured from: the sketch's own lines and the edges of the faces."""
         sk = self.doc.active_sketch
         segs = []
+        guides = sk.corner_guide_walls()   # a rounded corner's guide lies on its wall: measure from the wall
         for e in sk.entities:
-            if isinstance(e, SketchLine):
+            if isinstance(e, SketchLine) and e.entity_id not in guides:
                 segs.append((tuple(e.p1), tuple(e.p2), e.entity_id))
         for a, b in self._reference_segments():
             a, b = (float(a[0]), float(a[1])), (float(b[0]), float(b[1]))
