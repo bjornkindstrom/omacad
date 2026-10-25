@@ -227,3 +227,31 @@ def test_text_in_box_fills_and_centres_and_refits_on_a_new_font(win):
     data = Exporter.document_to_dict(win.doc)
     again = next(e for s in data["sketches"] for e in s["entities"] if e["entity_type"] == "text")
     assert again["box"] == [60.0, 20.0] or tuple(again["box"]) == (60.0, 20.0)
+
+
+def test_text_in_box_margin_keeps_room_on_every_side(win):
+    """Björn #109: a margin inside the box makes the text a little smaller, still centred."""
+    import pytest as _pytest
+    win.prompt_text()
+    dlg = win._text_session.dlg
+    assert not dlg.spn_margin.isVisibleTo(dlg)
+    dlg.cmb_type.setCurrentIndex(dlg.cmb_type.findData("box"))
+    assert dlg.spn_margin.isVisibleTo(dlg)
+    dlg.edt_text.setPlainText("OMACAD")
+    vp = win.viewport
+    vp.set_sketch_tool("TEXT")
+    for uv in ((10.0, 0.0), (70.0, 20.0)):
+        vp.sketch_current_uv = uv
+        vp._text_press(_LeftClick(), 0, 0)
+    t = _texts(win)[0]
+    h_full = t.fitted_height()
+    dlg.spn_margin.setValue(2.0)
+    assert t.margin == 2.0
+    x0, y0, x1, y1 = t.bbox()
+    assert x0 >= 12 - 1e-6 and x1 <= 68 + 1e-6 and y0 >= 2 - 1e-6 and y1 <= 18 + 1e-6
+    assert max(x1 - x0 - 56, y1 - y0 - 16) == _pytest.approx(0.0, abs=1e-6)                   # touches the margin
+    assert ((x0 + x1) / 2, (y0 + y1) / 2) == _pytest.approx((40.0, 10.0))
+    assert t.fitted_height() < h_full and dlg.spn_height.value() == _pytest.approx(t.fitted_height(), abs=0.01)
+    dlg.accept()
+    again = SketchText.from_dict(t.to_dict())
+    assert again.margin == 2.0 and again.bbox() == _pytest.approx(t.bbox())

@@ -6,7 +6,7 @@ from omacad.ui.dialogs import EmbossDialog, TextDialog
 from omacad.ui.controllers.prompt_guards import leaves_sketch
 
 PARAM_KEYS = ("text", "font", "height", "bold", "italic", "spacing", "h_align", "v_align", "flip_h", "flip_v", "angle",
-              "placement", "fit")
+              "placement", "fit", "margin")
 
 
 class _TextSession:

@@ -96,6 +96,13 @@ class TextDialog(BaseFeatureDialog):
         self.spn_height.setToolTip("The height of a capital letter.")
         form.addRow("Height:", self.spn_height)
 
+        self.spn_margin = ExprDoubleSpinBox()
+        self.spn_margin.setRange(0.0, 1000.0)
+        self.spn_margin.setDecimals(2)
+        self.spn_margin.setSuffix(" mm")
+        self.spn_margin.setToolTip("Text In Box: room kept free between the text and each side of the box.")
+        form.addRow("Margin:", self.spn_margin)
+
         self.spn_spacing = ExprDoubleSpinBox()
         self.spn_spacing.setRange(-50.0, 500.0)
         self.spn_spacing.setDecimals(0)
@@ -141,6 +148,7 @@ class TextDialog(BaseFeatureDialog):
         self.add_buttons()
         self._path_rows = (self.lbl_path, self.cmb_place, self.chk_fit)
         self._frame_rows = (self.cmb_v, self.spn_angle, self.flip_box)
+        self._box_rows = (self.spn_margin,)
         self._box_hidden = (self.cmb_v,)        # a box centres the text: its height and vertical place are set by it
         self.cmb_type.currentIndexChanged.connect(self._type_changed)
         self.edt_text.textChanged.connect(self.changed)
@@ -148,7 +156,7 @@ class TextDialog(BaseFeatureDialog):
             w.currentIndexChanged.connect(lambda *_: self.changed.emit())
         for w in (self.chk_bold, self.chk_italic, self.chk_flip_h, self.chk_flip_v, self.chk_fit):
             w.toggled.connect(lambda *_: self.changed.emit())
-        for w in (self.spn_height, self.spn_spacing, self.spn_angle):
+        for w in (self.spn_height, self.spn_margin, self.spn_spacing, self.spn_angle):
             w.valueChanged.connect(lambda *_: self.changed.emit())
         self._type_changed()
 
@@ -179,6 +187,11 @@ class TextDialog(BaseFeatureDialog):
             lab = self.layout_label(w)
             if lab is not None:
                 lab.setVisible(show)
+        for w in self._box_rows:
+            w.setVisible(box)
+            lab = self.layout_label(w)
+            if lab is not None:
+                lab.setVisible(box)
         self.spn_height.setReadOnly(box)
         self.spn_height.setToolTip("Set by the box: the text fills it." if box else "The height of a capital letter.")
         self.changed.emit()
@@ -209,13 +222,14 @@ class TextDialog(BaseFeatureDialog):
             "angle": self.spn_angle.value(),
             "placement": self.cmb_place.currentData(),
             "fit": self.chk_fit.isChecked(),
+            "margin": self.spn_margin.value(),
         }
 
     def set_params(self, ent) -> None:
         """Fills the fields from an existing SketchText (editing it)."""
         for w in (self.cmb_type, self.edt_text, self.cmb_font, self.cmb_h, self.cmb_v, self.cmb_place, self.chk_bold,
                   self.chk_italic, self.chk_flip_h, self.chk_flip_v, self.chk_fit, self.spn_height, self.spn_spacing,
-                  self.spn_angle):
+                  self.spn_angle, self.spn_margin):
             w.blockSignals(True)
         try:
             self.cmb_type.setCurrentIndex(1 if ent.path_id else (2 if getattr(ent, "box", None) else 0))
@@ -232,9 +246,10 @@ class TextDialog(BaseFeatureDialog):
             self.spn_height.setValue(ent.height)
             self.spn_spacing.setValue(ent.spacing)
             self.spn_angle.setValue(ent.angle)
+            self.spn_margin.setValue(getattr(ent, "margin", 0.0))
         finally:
             for w in (self.cmb_type, self.edt_text, self.cmb_font, self.cmb_h, self.cmb_v, self.cmb_place, self.chk_bold,
                       self.chk_italic, self.chk_flip_h, self.chk_flip_v, self.chk_fit, self.spn_height, self.spn_spacing,
-                      self.spn_angle):
+                      self.spn_angle, self.spn_margin):
                 w.blockSignals(False)
         self._type_changed()

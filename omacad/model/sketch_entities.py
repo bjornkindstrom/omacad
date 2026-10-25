@@ -485,13 +485,13 @@ class SketchText(SketchEntity):
     embossed; counters (the hole of an O) are holes in the letter's profile."""
 
     PARAMS = ("text", "font", "height", "bold", "italic", "spacing", "h_align", "v_align", "flip_h", "flip_v", "angle",
-              "anchor", "path_id", "placement", "fit", "box")
+              "anchor", "path_id", "placement", "fit", "box", "margin")
 
     def __init__(self, entity_id: str, text: str, anchor: Tuple[float, float] = (0.0, 0.0), height: float = 10.0,
                  font: str = "Sans Serif", bold: bool = False, italic: bool = False, spacing: float = 0.0,
                  h_align: str = "left", v_align: str = "bottom", flip_h: bool = False, flip_v: bool = False,
                  angle: float = 0.0, path_id: Optional[str] = None, placement: str = "above", fit: bool = False,
-                 box=None, is_construction: bool = False):
+                 box=None, margin: float = 0.0, is_construction: bool = False):
         super().__init__(entity_id=entity_id, entity_type="text", is_construction=is_construction)
         self.text = str(text)
         self.anchor = (float(anchor[0]), float(anchor[1]))
@@ -507,6 +507,7 @@ class SketchText(SketchEntity):
         self.fit = bool(fit)                               # on a path: spread the text over its whole length
         # Text In Box: (width, height) of a box centred on the anchor that the text fills as far as it can
         self.box = (float(box[0]), float(box[1])) if box else None
+        self.margin = float(margin)                        # Text In Box: room kept free inside each side of the box
         self.sketch: Optional["Sketch"] = None             # set by the sketch that owns this text (to find its path)
         self._geom = None
         self._key = None
@@ -537,7 +538,7 @@ class SketchText(SketchEntity):
                 text=self.text, font=self.font, height=self.height, bold=self.bold, italic=self.italic,
                 spacing=self.spacing, h_align=self.h_align, v_align=self.v_align, flip_h=self.flip_h,
                 flip_v=self.flip_v, angle=self.angle, anchor=self.anchor, path=path, placement=self.placement,
-                fit=self.fit, box=self.box)
+                fit=self.fit, box=self.box, margin=self.margin)
             self._key = key
         return self._geom
 
@@ -549,7 +550,7 @@ class SketchText(SketchEntity):
         text_layout._ensure_app()
         geom = text_layout._frame(dict(text=self.text, font=self.font, height=1.0, bold=self.bold, italic=self.italic,
                                        spacing=self.spacing, h_align=self.h_align, v_align="middle"))
-        return text_layout.fit_in_box(geom, self.box)[1]
+        return text_layout.fit_in_box(geom, self.box, self.margin)[1]
 
     def box_corners(self):
         """The box's four corners in sketch coordinates (turned with the text), or None."""

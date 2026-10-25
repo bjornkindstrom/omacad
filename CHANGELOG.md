@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.54 - 2026-10-25
+
+### Added
+- Margin for Text In Box (#109): a Margin field in the Text panel (only for Text In Box) keeps room free between the text and each side of the box, so the text gets a little smaller and stays centred. Saved with the sketch.
+
 ## 0.9.9.80.53 - 2026-10-25
 
 ### Added

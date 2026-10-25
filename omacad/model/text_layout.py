@@ -137,13 +137,15 @@ def _frame(p) -> Optional[object]:
     return unary_union(placed)
 
 
-def fit_in_box(geom, box):
-    """(geometry, scale): `geom` scaled as large as fits in a box of (width, height) and centred on (0, 0). The
+def fit_in_box(geom, box, margin: float = 0.0):
+    """(geometry, scale): `geom` scaled as large as fits in a box of (width, height) less `margin` on every side,
+    centred on (0, 0). The
     letters' own outline is measured, not the font's line box, so the text really fills the box and stays centred
     when the font changes. With `geom` laid out at height 1 the scale is the capital height it gets."""
     if geom is None or geom.is_empty:
         return None, 0.0
-    w, h = float(box[0]), float(box[1])
+    m = max(0.0, float(margin))
+    w, h = max(float(box[0]) - 2 * m, 1e-3), max(float(box[1]) - 2 * m, 1e-3)
     x0, y0, x1, y1 = geom.bounds
     bw, bh = max(x1 - x0, 1e-9), max(y1 - y0, 1e-9)
     s = min(w / bw, h / bh)
@@ -202,7 +204,7 @@ def _on_path(p) -> Optional[object]:
 def layout(*, text: str, font: str = "Sans Serif", height: float = 10.0, bold: bool = False, italic: bool = False,
            spacing: float = 0.0, h_align: str = "left", v_align: str = "bottom", flip_h: bool = False,
            flip_v: bool = False, angle: float = 0.0, anchor=(0.0, 0.0), path: Optional[Dict] = None,
-           placement: str = "above", fit: bool = False, box=None):
+           placement: str = "above", fit: bool = False, box=None, margin: float = 0.0):
     """The text as polygons in sketch units, or an empty MultiPolygon. With `box` (width, height) the text fills
     that box as far as it can, centred on `anchor` (the box's centre), whatever the font: see `fit_in_box`."""
     _ensure_app()
@@ -213,7 +215,7 @@ def layout(*, text: str, font: str = "Sans Serif", height: float = 10.0, bold: b
     if path is not None:
         geom = _on_path(p)                      # follows the path where it is: no frame placement
     elif box is not None:
-        geom = fit_in_box(_frame(dict(p, height=1.0, v_align="middle")), box)[0]
+        geom = fit_in_box(_frame(dict(p, height=1.0, v_align="middle")), box, margin)[0]
         if geom is not None:
             geom = _transform(geom, anchor, angle, flip_h, flip_v)
     else:
