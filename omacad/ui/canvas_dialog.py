@@ -317,6 +317,7 @@ class CanvasEditorDialog(QDialog):
         initial_image_path: Optional[str] = None,
         preselected_plane_id: Optional[str] = None,
         existing_canvas_id: Optional[str] = None,
+        preselected_face=None,
     ):
         super().__init__(parent)
         self.doc = doc
@@ -539,6 +540,18 @@ class CanvasEditorDialog(QDialog):
         # Add construction planes
         for pid, cp in doc.construction_planes.items():
             self.cmb_plane.addItem(f"📐 {cp['name']}", pid)
+        from omacad.model.canvas import face_plane_data
+        for body in doc.bodies.values():
+            if not body.visible:
+                continue
+            for face in body.faces:
+                if face.index < 0:
+                    continue
+                self.cmb_plane.addItem(f"{body.name} — Face {face.index + 1}", face_plane_data(face))
+        if preselected_face is not None:
+            data = face_plane_data(preselected_face)
+            self.cmb_plane.addItem("Selected face", data)
+            self.cmb_plane.setCurrentIndex(self.cmb_plane.count() - 1)
         if preselected_plane_id:
             idx = self.cmb_plane.findData(preselected_plane_id)
             if idx >= 0:
@@ -600,6 +613,9 @@ class CanvasEditorDialog(QDialog):
                     self.px_per_mm = img.width() / w_mm
 
                 plane_id = c.get("plane_id", "XY")
+                if c.get("face_plane"):
+                    self.cmb_plane.addItem("Canvas face", c["face_plane"])
+                    plane_id = c["face_plane"]
                 idx = self.cmb_plane.findData(plane_id)
                 if idx >= 0:
                     self.cmb_plane.setCurrentIndex(idx)
@@ -875,8 +891,9 @@ class CanvasEditorDialog(QDialog):
         b64 = ba.toBase64().data().decode("ascii")
 
         return {
-            "name": f"Canvas ({plane_id})",
-            "plane_id": plane_id,
+            "name": "Canvas (Face)" if isinstance(plane_id, dict) else f"Canvas ({plane_id})",
+            "plane_id": "FACE" if isinstance(plane_id, dict) else plane_id,
+            "face_plane": plane_id if isinstance(plane_id, dict) else None,
             "image_data": b64,
             "width_mm": float(w_mm),
             "height_mm": float(h_mm),

@@ -59,7 +59,7 @@ _ALL = [
        "and round faces", signal="honeycomb_clicked"),
     _c("offset_plane", "Offset Plane", "📐", "A new plane at a distance from a plane or face, or touching any surface",
        signal="offset_plane_clicked"),
-    _c("canvas", "Canvas (Image)", "🖼️", "A reference image on a plane: calibrate it and trace over it",
+    _c("canvas", "Canvas (Image)", "🖼️", "A reference image on a plane or flat body face: calibrate it and trace over it",
        signal="canvas_clicked"),
     _c("import_3mf", "Import 3MF", "📥", "Bring in the bodies of a 3MF file", signal="import_3mf_clicked"),
     # --- SOLID: MODIFY -------------------------------------------------------------------------------------------

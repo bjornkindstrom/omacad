@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.64 - 2026-10-25
+
+### Added
+- Insert Canvas on a planar body face from its context menu or the Canvas placement list. Face placement is centered on the face and preserved through editing, save/load and undo/redo; images blend over the body surface.
+
 ## 0.9.9.80.63 - 2026-10-25
 
 ### Fixed

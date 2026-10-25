@@ -1539,13 +1539,14 @@ class Document:
     @undoable("Insert Canvas")
     def add_canvas(self, name: str, plane_id: str, image_data: str, width_mm: float, height_mm: float,
                    origin_uv: Tuple[float, float] = (0.0, 0.0), rotation_deg: float = 0.0,
-                   opacity: float = 0.5, visible: bool = True) -> str:
+                   opacity: float = 0.5, visible: bool = True, face_plane=None) -> str:
         cid = f"canvas_{len(self.canvases) + 1}"
         while cid in self.canvases:
             cid += "_"
         self.canvases[cid] = {
             "name": name or f"Canvas {len(self.canvases) + 1}",
             "plane_id": plane_id,
+            "face_plane": face_plane,
             "image_data": image_data,
             "width_mm": float(width_mm),
             "height_mm": float(height_mm),

@@ -153,6 +153,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.create_sketch_clicked.connect(self.prompt_create_sketch)
         self.viewport.plane_picked.connect(self.on_plane_picked)
         self.viewport.face_extrude_requested.connect(self.on_extrude_face)
+        self.viewport.canvas_face_requested.connect(self.prompt_canvas_on_face)
         self.viewport.move_body_requested.connect(self.prompt_move_body)
         self.ribbon.constraint_clicked.connect(self.viewport.apply_constraint)
         self.viewport.status_message.connect(self.status_label.setText)

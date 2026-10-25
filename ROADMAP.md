@@ -1,5 +1,7 @@
 # Omacad – progress and roadmap
 
+- Canvas placement on planar body faces through the face context menu and placement list (0.9.9.80.64).
+
 - Linear Pattern preserves hollow bodies and fillets in preview and committed copies (0.9.9.80.63).
 
 - Hollow Loft profiles and an editable profile list with add/remove/reorder (0.9.9.80.62).

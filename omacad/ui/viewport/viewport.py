@@ -81,6 +81,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
     profile_picked = Signal()
     sketch_curve_picked = Signal(str, str)   # (sketch id, entity id) clicked while a path is being picked
     plane_picked = Signal(object)       # SketchPlane chosen for a new sketch
+    canvas_face_requested = Signal(object)
     plane_pick_cancelled = Signal()
     section_base_picked = Signal(object)   # plane a section view is cut along
     offset_base_picked = Signal(object)   # plane an offset plane is measured from
@@ -503,11 +504,10 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
 
         self.render_origin_axes(mvp)
 
-        # 2. Draw Canvases / Reference Images
-        self.render_canvases(mvp)
-
         # 3. Draw 3D Solid Bodies
         self.render_bodies(mvp)
+        # Transparent references blend over face shading, with depth testing against bodies.
+        self.render_canvases(mvp)
 
         # 3. Draw Active or Visible Sketches
         self.render_sketches(mvp)

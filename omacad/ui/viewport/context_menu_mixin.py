@@ -249,6 +249,7 @@ class ContextMenuMixin:
         self.update()
         menu = QMenu(self)
         act_sketch = theme.action_with_icon(menu, "✏️ Create Sketch on this Face")
+        act_canvas = theme.action_with_icon(menu, "🖼️ Insert Canvas on this Face…")
         act_extrude = theme.action_with_icon(menu, "⬆️ Extrude this Face…")
         act_extrude.setToolTip("Pull the face into the body to cut it away, or out to add material.")
         menu.setToolTipsVisible(True)
@@ -274,6 +275,8 @@ class ContextMenuMixin:
             self.lay_face_requested.emit(face, acts[chosen][1])
         elif chosen in acts:
             self._run_general(*acts[chosen])
+        elif chosen is act_canvas:
+            self.canvas_face_requested.emit(face)
         elif chosen is act_sketch:
             self.plane_picked.emit(self.plane_from_target(("face", face)))
         elif chosen is act_extrude:

@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+Canvas kan nu infogas på en plan kroppsyta: högerklicka på ytan → Insert Canvas on this Face, eller välj ytan i Canvas-dialogens planlista (0.9.9.80.64).
+
 Linjärt Pattern kopierar nu hela ihåliga kroppar, med hål och avrundningar, både i förhandsvisningen och efter OK (0.9.9.80.63).
 
 Loft bevarar nu hål i väggprofiler. Lägg till, ta bort och ordna profiler i listan, även via Edit på ett befintligt Loft (0.9.9.80.62).

@@ -20,9 +20,13 @@ from omacad.ui.canvas_dialog import CanvasEditorDialog
 class CanvasPromptsMixin:
     """Canvas prompt workflows for MainWindow."""
 
-    def prompt_insert_canvas(self, preselected_plane_id: str = ""):
+    def prompt_canvas_on_face(self, face):
+        self.prompt_insert_canvas(preselected_face=face)
+
+    def prompt_insert_canvas(self, preselected_plane_id: str = "", preselected_face=None):
         """Insert reference image onto a plane, edit/crop/calibrate with tape measure."""
-        dlg = CanvasEditorDialog(self.doc, self, preselected_plane_id=preselected_plane_id or None)
+        dlg = CanvasEditorDialog(self.doc, self, preselected_plane_id=preselected_plane_id or None,
+                                 preselected_face=preselected_face)
         if dlg.exec():
             data = dlg.get_canvas_data()
             if data and data.get("image_data"):

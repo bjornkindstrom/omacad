@@ -149,12 +149,8 @@ class RenderGLMixin:
             if not c.get("visible", True) or not c.get("image_data"):
                 continue
 
-            plane_id = c.get("plane_id", "XY")
-            plane = None
-            if plane_id in self.doc.origin_planes:
-                plane = self.doc.origin_planes[plane_id]
-            elif plane_id in self.doc.construction_planes:
-                plane = self.doc.construction_plane(plane_id)
+            from omacad.model.canvas import canvas_plane
+            plane = canvas_plane(self.doc, c)
             if plane is None:
                 continue
 
@@ -183,7 +179,9 @@ class RenderGLMixin:
                 rot_pt(ox + w_mm, oy + h_mm),
                 rot_pt(ox, oy + h_mm),
             ]
-            w_pts = [plane.uv_to_world(u, v) for u, v in uv_corners]
+            # Lift face images slightly to avoid depth fighting with the body's triangles.
+            lift = plane.normal * (0.01 if c.get("face_plane") else 0.0)
+            w_pts = [plane.uv_to_world(u, v) + lift for u, v in uv_corners]
 
             quad_pos = np.array([
                 w_pts[0], w_pts[1], w_pts[2],
