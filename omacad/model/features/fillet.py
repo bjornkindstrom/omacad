@@ -9,6 +9,7 @@ import numpy as np
 import manifold3d as m3d
 from omacad.model.kernel import CadKernel
 from omacad.model.faces import edge_from_ref, fuzzy_edge_from_ref, compute_planar_edges
+from omacad.model.faces_edges import loop_contains
 from omacad.model.features.base import Feature, feature_bodies
 
 
@@ -664,11 +665,11 @@ class FilletFeature(Feature):
             else:
                 take(*best)
 
-        # A whole outline includes its circular pieces. Cutting those again with independently fitted
-        # circles makes nearly coincident bevels, splitting one surface into many narrow strips.
+        # A whole outline includes its straight and circular pieces. Cutting those again with independently fitted
+        # tools makes nearly coincident bevels, splitting one surface into many narrow strips.
         loops = [(body, edge) for body, edge in seen if edge.kind == "loop"]
         seen = [(body, edge) for body, edge in seen
-                if not any(body is owner and loop.contains_arc(edge) for owner, loop in loops)]
+                if not any(body is owner and loop_contains(loop, edge) for owner, loop in loops)]
 
         for body, edge in seen:
             ext = self._free_ends(body, edge) if edge.convex and getattr(edge, "kind", "") == "line" else 1e-3 if edge.convex else 0.0

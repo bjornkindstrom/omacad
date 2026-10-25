@@ -3,6 +3,7 @@ import os
 
 from omacad.io.exporter import Exporter
 from omacad.model.faces import tangent_chain
+from omacad.model.faces_edges import loop_contains
 
 DOC = os.path.join(os.path.dirname(__file__), "data", "plate_rounded_chain.omacad")
 
@@ -13,10 +14,12 @@ def _body():
 
 def test_chain_follows_tangent_arcs_and_stops_at_knicks():
     body = _body()
-    # straight sides + rounded corners come as one loop; the float64 mesh leaves no stray lines on the fillet
+    # straight sides + rounded corners come as one loop; its straight sides are also edges of their own (#104),
+    # and the float64 mesh leaves no stray lines on the fillet
     loops = [e for e in body.edges if e.kind == "loop"]
     assert len(loops) == 1
-    assert not any(e.kind == "line" for e in body.edges)
+    lines = [e for e in body.edges if e.kind == "line"]
+    assert lines and all(loop_contains(loops[0], e) for e in lines)
     arcs = [e for e in body.edges if e.kind == "circle" and e.is_arc]
     assert arcs
     for arc in arcs:

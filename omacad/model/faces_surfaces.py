@@ -6,7 +6,7 @@ import manifold3d as m3d
 import trimesh
 from omacad.model.faces_types import PlanarFace, PlanarEdge
 from omacad.model.faces_topology import _coplanar, _curved_roots, _sliver_roots
-from omacad.model.faces_edges import _edge_from, _loop_edges, _circular_edges, _circles_for_round_loops
+from omacad.model.faces_edges import _edge_from, _loop_edges, _circular_edges, _circles_for_round_loops, drop_round_loop_chords
 
 _TOPOLOGY_CACHE: dict = {}
 _TOPOLOGY_CACHE_MAX = 512
@@ -210,22 +210,8 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
             edges.append(_edge_from(cur, t))
     lines = [e for e in edges if e is not None and e.length > 1e-6]
     loops = _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar)
-    if loops:
-        def on_loop(e):
-            for lp in loops:
-                poly = lp.polyline()
-                if abs(float(lp.n @ (e.p0 - poly[0]))) > 1e-4 or abs(float(lp.n @ (e.p1 - poly[0]))) > 1e-4:
-                    continue
-                seg = poly[1:] - poly[:-1]
-                for q in (e.p0, (e.p0 + e.p1) / 2.0, e.p1):
-                    w = q - poly[:-1]
-                    tt = np.clip(np.einsum("ij,ij->i", w, seg) / np.maximum(np.einsum("ij,ij->i", seg, seg), 1e-18), 0, 1)
-                    if np.linalg.norm(w - tt[:, None] * seg, axis=1).min() > 1e-4:
-                        break
-                else:
-                    return True
-            return False
-        lines = [e for e in lines if not on_loop(e)]
+    # straight pieces of a loop stay edges of their own (Björn #104, see faces_edges)
+    lines = drop_round_loop_chords(lines, loops)
     all_edges = lines + _circles_for_round_loops(loops, _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals))
     from omacad.model.wrapped_edges import cylindrical_contours
     all_edges += cylindrical_contours(v, f, tm)

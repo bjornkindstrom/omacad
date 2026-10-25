@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.48 - 2026-10-25
+
+### Changed
+- Fillet/Chamfer on an outline of straight pieces and arcs (#104): a click takes just the piece under the mouse, so you can bevel a couple of edges and leave the rest; Ctrl+click removes a piece; double-click still takes the whole outline. With Tangent chain on, smoothly joined pieces come along.
+
 ## 0.9.9.80.47 - 2026-10-25
 
 ### Added

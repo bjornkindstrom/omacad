@@ -12,6 +12,7 @@ from omacad.model.hover_info import describe_edge
 from omacad.ui import theme
 from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
 from omacad.model.faces import ray_hit_face, ray_hit_faces, tangent_chain
+from omacad.model.faces_edges import loop_contains
 
 
 class PickerMixin:
@@ -110,10 +111,13 @@ class PickerMixin:
                     for bd in self.doc.bodies.values() if bd.visible and len(bd.faces)
                 )
                 if not blocked:
-                    loop_beats_circ = getattr(e, "kind", "") == "loop" and getattr(best, "kind", "") == "circle"
-                    circ_beats_loop = getattr(best, "kind", "") == "loop" and getattr(e, "kind", "") == "circle"
-                    if d < best_d - 1.0 or (d <= best_d + 1.0 and (loop_beats_circ or (not circ_beats_loop and dist < best_eye))):
-                        best, best_d, best_eye = e, min(d, best_d), dist   # near-ties: prefer composite loop, otherwise closer
+                    # near-ties: a single piece (line or arc) beats the whole outline it belongs to, so a click
+                    # takes one piece and a double-click the outline (Björn #104); otherwise the closer edge
+                    piece = lambda a: getattr(a, "kind", "") in ("line", "circle")
+                    piece_beats_loop = piece(e) and getattr(best, "kind", "") == "loop"
+                    loop_loses = getattr(e, "kind", "") == "loop" and piece(best)
+                    if d < best_d - 1.0 or (d <= best_d + 1.0 and (piece_beats_loop or (not loop_loses and dist < best_eye))):
+                        best, best_d, best_eye = e, min(d, best_d), dist
         return best
 
     def _hidden_edge_at(self, x: float, y: float):
@@ -171,6 +175,9 @@ class PickerMixin:
     def _edge_loop(self, e, other_face: bool = False):
         """Double-click: the edges joined end to end around one flat face (e.g. the whole top of a box).
         Of the two faces an edge borders, the one facing the camera is used."""
+        outline = next((c for c in self._visible_edges() if c.kind == "loop" and loop_contains(c, e)), None)
+        if outline is not None and not other_face:     # a piece of a rounded outline: the whole outline (Björn #104)
+            return [outline]
         if e.kind in ("circle", "loop", "wrapped", "curve"):
             return [e]
         proj, view, _ = self.get_matrices()
@@ -253,7 +260,8 @@ class PickerMixin:
                 ok = False
             if ok and _on_face_outline(e, face):   # not an edge of another face in the same plane
                 res.append(e)
-        return res
+        loops = [e for e in res if e.kind == "loop"]   # an outline already holds its pieces
+        return [e for e in res if not any(loop_contains(lp, e) for lp in loops)]
 
     def _idle_hover_ok(self) -> bool:
         """Nothing is being edited: edges and faces under the cursor light up so a right-click can fillet them."""

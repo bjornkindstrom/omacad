@@ -115,6 +115,38 @@ def _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar) -> list:
             out.append(LoopEdge(pts.copy(), n_pl.copy(), kinds == {1}, walls))
     return out
 
+def loop_contains(lp, e) -> bool:
+    """Whether the straight edge or arc `e` is a piece of the outline `lp` (all of it lies on the outline)."""
+    if getattr(lp, "kind", "") != "loop" or e.kind not in ("line", "circle"):
+        return False
+    if e.kind == "circle":
+        # the outline's chords sag inside the true arc: allow for that
+        return lp.contains_arc(e) or _on_polyline(lp, e.polyline(8), 0.02 * float(e.radius) + 1e-4)
+    return _on_polyline(lp, [e.p0, (e.p0 + e.p1) / 2.0, e.p1], 1e-4)
+
+
+def _on_polyline(lp, points, tol: float) -> bool:
+    poly = lp.polyline()
+    if any(abs(float(lp.n @ (q - poly[0]))) > 1e-4 for q in points):
+        return False
+    seg = poly[1:] - poly[:-1]
+    for q in points:
+        w = q - poly[:-1]
+        tt = np.clip(np.einsum("ij,ij->i", w, seg) / np.maximum(np.einsum("ij,ij->i", seg, seg), 1e-18), 0, 1)
+        if np.linalg.norm(w - tt[:, None] * seg, axis=1).min() > tol:
+            return False
+    return True
+
+
+def drop_round_loop_chords(lines, loops) -> list:
+    """The flat strips of a round wall (a loop whose points all lie on one circle) are no pieces to pick: that loop
+    is one circle (_circles_for_round_loops)."""
+    round_loops = [lp for lp in loops if lp.walls is None and _concyclic(lp.pts)]
+    if not round_loops:
+        return lines
+    return [e for e in lines if not any(loop_contains(lp, e) for lp in round_loops)]
+
+
 def _circles_for_round_loops(loops, circles) -> list:
     """A square-walled outline whose points all lie on one circle is that circle: a wall split into narrow flat strips
     by a boolean makes it come out both as a loop and as an arc with a gap. Give back the whole circle instead."""
@@ -208,22 +240,9 @@ def _planar_edges_from(mesh, manifold) -> list:
             edges.append(_edge_from(cur, t))
     lines = [e for e in edges if e is not None and e.length > 1e-6]
     loops = _loop_edges(v, f, normals, find, adj, adj_edges, angles, planar)
-    if loops:   # a straight piece that is part of such an outline is rounded together with it
-        def on_loop(e):
-            for lp in loops:
-                poly = lp.polyline()
-                if abs(float(lp.n @ (e.p0 - poly[0]))) > 1e-4 or abs(float(lp.n @ (e.p1 - poly[0]))) > 1e-4:
-                    continue
-                seg = poly[1:] - poly[:-1]
-                for q in (e.p0, (e.p0 + e.p1) / 2.0, e.p1):
-                    w = q - poly[:-1]
-                    tt = np.clip(np.einsum("ij,ij->i", w, seg) / np.maximum(np.einsum("ij,ij->i", seg, seg), 1e-18), 0, 1)
-                    if np.linalg.norm(w - tt[:, None] * seg, axis=1).min() > 1e-4:
-                        break
-                else:
-                    return True
-            return False
-        lines = [e for e in lines if not on_loop(e)]
+    # the straight pieces of such an outline stay edges of their own: a click takes one piece, a double-click the
+    # whole outline (Björn #104)
+    lines = drop_round_loop_chords(lines, loops)
     return lines + _circles_for_round_loops(loops, _circular_edges(v, f, tm, find, groups, adj, adj_edges, angles, curved, planar, normals))
 
 def _edge_from(c, t):
