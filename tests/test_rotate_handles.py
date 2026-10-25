@@ -92,3 +92,27 @@ def test_dragging_a_straight_arrow_slides_the_body_along_its_axis(win, handle, a
     assert after == pytest.approx(expected, abs=1e-6)
     doc.undo()
     assert np.array(doc.bodies[bid].manifold.bounding_box()) == pytest.approx(before)
+
+
+def test_sliding_onto_a_face_of_another_body_lines_them_up(win):
+    """Björn: start moving, point at a face of another body, and they line up along that axis."""
+    doc, vp = win.doc, win.viewport
+    bid = next(iter(doc.bodies))                       # 40 x 20 x 10
+    doc.add_box(20, 20, 30)
+    other = next(b for b in doc.bodies if b != bid)
+    doc.move_body(other, dx=60)
+    doc.selected_body_ids = [bid]
+    rh = vp.rotate_handles
+    pos, along, _ = rh.handles()["MZ"]
+    assert rh.press(*pos)
+    top = vp.world_to_screen(np.array([70.0, 10.0, 30.0]))      # on the tall box's top face
+    rh.move(*top)
+    assert rh.drag["snap"] is not None and rh.drag["dist"] in (20.0, 30.0)   # top or bottom flush with z = 30
+    side = vp.world_to_screen(np.array([60.0, 10.0, 15.0]))      # a side face: along the drag, so no lining up
+    rh.move(*side)
+    assert rh.drag["snap"] is None and rh.drag["dist"] == int(rh.drag["dist"])
+    rh.move(*top)
+    dist = rh.drag["dist"]
+    rh.release()
+    lo, hi = np.array(doc.bodies[bid].manifold.bounding_box()).reshape(2, 3)
+    assert 30.0 in (pytest.approx(lo[2]), pytest.approx(hi[2])) and lo[2] == pytest.approx(dist)

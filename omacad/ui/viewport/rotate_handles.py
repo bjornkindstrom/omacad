@@ -1,6 +1,8 @@
 """Rotate and move handles on the selected body, like Layerling. A small curved arrow per axis (X red, Y green,
 Z blue) beside the body turns it about its centre in 15° steps (Björn #107); a straight double arrow per axis off a
-side of the body slides it along that axis in whole millimetres (#111). Shift: free. The release makes one Move step."""
+side of the body slides it along that axis in whole millimetres (#111); pointing at a flat face of another body
+across that axis while sliding lines the body up with it, flush on either side. Shift: free. The release makes one
+Move step."""
 import math
 from typing import Optional
 
@@ -94,6 +96,8 @@ class RotateHandles:
         when the axis points at the viewer and the arrow would be a dot."""
         from shapely.geometry import MultiPoint, Point
         outline = MultiPoint([tuple(p) for p in screen]).convex_hull
+        ends, _ok = self.vp.project_points(np.array([centre_w, *(centre_w + a for a in AXES.values())]))
+        per_mm = {name: float(np.linalg.norm(ends[1 + i] - ends[0])) for i, name in enumerate(AXES)}
         out = {}
         for name, axis_name in MOVES.items():
             axis = AXES[axis_name]
@@ -108,7 +112,7 @@ class RotateHandles:
             if np.linalg.norm(along) < 1e-6 or np.linalg.norm(face_s - centre_s) < 1e-6:
                 continue
             along /= np.linalg.norm(along)
-            if np.linalg.norm(pts[0] - pts[1]) < 2 * HALF:       # seen end-on: no room to drag along it
+            if per_mm[axis_name] < 0.3 * max(per_mm.values()):  # the axis points at the viewer: nothing to drag along
                 continue
             # from the side's centre out along the arrow until clear of the body's outline on screen
             t = 0.0
@@ -166,7 +170,7 @@ class RotateHandles:
         pos, tangent, _o = self.handles()[name]
         centre = (lo + hi) / 2.0
         self.drag = {"axis": name, "body_id": body.body_id, "centre": centre, "start": (x, y), "tangent": tangent,
-                     "angle": 0.0, "dist": 0.0, "pos": pos}
+                     "angle": 0.0, "dist": 0.0, "pos": pos, "lo": lo, "hi": hi, "snap": None}
         if name in MOVES:
             self.drag["start_along"] = self._along(x, y, AXES[MOVES[name]], centre)
         else:
@@ -193,8 +197,34 @@ class RotateHandles:
         if now is None or d["start_along"] is None:
             return d["dist"]
         dist = now - d["start_along"]
+        snap = self._face_snap(x, y, d, dist)
+        d["snap"] = snap[1] if snap else None
+        if snap:
+            return snap[0]
         step = 0.1 if QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier else SNAP_MM
         return round(dist / step) * step + 0.0
+
+    def _face_snap(self, x, y, d, free):
+        """(shift, face) when the mouse is on a flat face of another body that lies across the drag axis: the shift
+        that puts the body's near or far side in that face's plane (whichever is closer to where the mouse took it)."""
+        from omacad.model.faces import ray_hit_faces
+        k = "XYZ".index(MOVES[d["axis"]])
+        axis = AXES[MOVES[d["axis"]]]
+        proj, view, _ = self.vp.get_matrices()
+        r0, rd = ray_from_screen(x, y, self.vp.width(), self.vp.height(), view, proj)
+        best, best_t = None, float("inf")
+        for body in self.vp.doc.bodies.values():
+            if body.body_id == d["body_id"] or not body.visible or not len(body.faces):
+                continue
+            hits = ray_hit_faces(body.faces, r0, rd, bary_tol=2e-4)
+            for i in np.flatnonzero(np.isfinite(hits)):
+                if hits[i] < best_t:
+                    best, best_t = body.faces[i], float(hits[i])
+        if best is None or abs(float(np.asarray(best.normal, float) @ axis)) < 0.999:
+            return None
+        plane = float(np.asarray(best.origin, float) @ axis)
+        shift = min((plane - d["lo"][k], plane - d["hi"][k]), key=lambda s: abs(s - free))
+        return shift, best
 
     def move(self, x: float, y: float) -> bool:
         if self.drag is None:
@@ -276,8 +306,19 @@ class RotateHandles:
                 _straight_arrow(painter, pos, tangent, colour, 4.0 if lit else 3.0)
             else:
                 _curved_arrow(painter, pos, tangent, outward, colour, 4.0 if lit else 3.0)
+        snap = self.drag.get("snap") if self.drag else None
+        if snap is not None:                         # the face it lines up with
+            r, g, b = COLOURS[MOVES[self.drag["axis"]]]
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.qcolor(r, g, b, 90))
+            tris = np.asarray(snap.tris, float)
+            pts, ok = self.vp.project_points(tris.reshape(-1, 3))
+            for tri in pts.reshape(-1, 3, 2)[ok.reshape(-1, 3).all(axis=1)]:
+                painter.drawPolygon(QPolygonF([QPointF(*p) for p in tri]))
         if self.drag:
             label = f"{self.drag['dist']:g} mm" if self.drag["axis"] in MOVES else f"{self.drag['angle']:g}°"
+            if snap is not None:
+                label += " · flush"
             font = QFont(painter.font())
             font.setPixelSize(13)
             painter.setFont(font)

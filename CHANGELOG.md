@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.9.80.59 - 2026-10-25
+
+### Added
+- Line up with a face while moving (Björn): while sliding a body with a move arrow, point at a flat face of another body that lies across the arrow's axis; the body jumps so its near or far side is flush with that face (the face lights up and the value says "flush"). Let go to keep it.
+
+### Fixed
+- The up/down move arrow was missing on flat bodies: it was left out when the body was thin on screen instead of only when the axis points at the viewer.
+
 ## 0.9.9.80.58 - 2026-10-25
 
 ### Added
