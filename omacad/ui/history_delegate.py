@@ -1,7 +1,17 @@
-"""Edit expressions in the browser row; never open a floating input dialog."""
-from PySide6.QtCore import Qt, QTimer
+"""Edit expressions in the browser row; never open a floating input dialog.
+
+The editor starts after the row's label ("Height: "), so the name of the value stays in sight while it is typed,
+and it suggests parameter names and shows what a formula evaluates to (ExprLineEdit)."""
+from PySide6.QtCore import Qt, QTimer, QEvent
 from PySide6.QtWidgets import QStyledItemDelegate
 from omacad.model import expr
+from omacad.ui.expr_spin import ExprLineEdit
+
+
+def label_prefix(text: str) -> str:
+    """The part of a value row before the value: 'Height: ' of 'Height: 10 mm'."""
+    head, sep, _rest = text.partition(': ')
+    return head + sep if sep else ''
 
 
 class HistoryDelegate(QStyledItemDelegate):
@@ -46,7 +56,17 @@ class HistoryDelegate(QStyledItemDelegate):
             if reason:
                 self.browser.status_message.emit(reason)
                 return None
+            expr.set_variables(self.browser.doc.parameter_values())
+            editor = ExprLineEdit(parent)
+            editor.setFrame(False)
+            return editor
         return super().createEditor(parent, option, index)
+
+    def eventFilter(self, editor, event):
+        # Qt's delegate filter sees Enter/Tab/Esc before the editor: an open name list takes them first.
+        if isinstance(editor, ExprLineEdit) and event.type() == QEvent.Type.KeyPress and editor.suggestion_key(event):
+            return True
+        return super().eventFilter(editor, event)
 
     def updateEditorGeometry(self, editor, option, index):
         # Qt places the editor inside the item padding of the stylesheet, which left 17 px: the text was cut off.
@@ -58,6 +78,12 @@ class HistoryDelegate(QStyledItemDelegate):
         rect.setTop(option.rect.center().y() - height // 2)
         rect.setHeight(height)
         rect.setRight(right)
+        if isinstance(editor, ExprLineEdit):
+            prefix = label_prefix(index.data(Qt.ItemDataRole.DisplayRole) or '')
+            if prefix:
+                shift = option.fontMetrics.horizontalAdvance(prefix)
+                rect.setLeft(rect.left() + shift)
+                rect.setRight(max(rect.right(), rect.left() + 60))
         editor.setGeometry(rect)
 
     def setEditorData(self, editor, index):
@@ -81,7 +107,7 @@ class HistoryDelegate(QStyledItemDelegate):
                 value = dim.expr or str(dim.value)
             editor.setText(value)
             editor.selectAll()
-            editor.textChanged.connect(lambda text: self.browser.grow_for_editor(text, index))
+            editor.textChanged.connect(lambda text: self.browser.grow_for_editor(label_prefix(index.data() or '') + text, index))
             def schedule(text):
                 self.preview_value = (kind, ids, text)
                 self.preview_timer.start()

@@ -8,7 +8,7 @@ import re
 
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QValidator
-from PySide6.QtWidgets import QDoubleSpinBox, QListWidget, QAbstractItemView
+from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit, QListWidget, QAbstractItemView
 
 from omacad.model import expr
 from omacad.ui.theme import style
@@ -55,10 +55,6 @@ class ParameterList(QListWidget):
         """)
         self.hide()
 
-    def show_names(self, field, names_values, hint: str = ""):
-        edit = field.lineEdit()
-        self.show_at(edit.mapTo(self.parentWidget(), QPoint(0, edit.height() + 2)), edit.width(), names_values, hint)
-
     def show_at(self, top_left: QPoint, width: int, names_values, hint: str = ""):
         """List `names_values` ((name, value) pairs) with its top-left corner at `top_left` in the parent, and a grey
         help line under them (it cannot be chosen; with no names the list is only that line)."""
@@ -96,21 +92,33 @@ class ParameterList(QListWidget):
         return item.data(Qt.ItemDataRole.UserRole) if item is not None and self.currentRow() < self.choices else None
 
 
-class ExprDoubleSpinBox(QDoubleSpinBox):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setKeyboardTracking(True)  # live preview once the formula is complete
-        self._expr = None  # the formula behind the current value, when it is not a plain number
-        self._list = None   # ParameterList, made when first needed (it lives in the window, above the panels)
-        self.lineEdit().textEdited.connect(lambda _t: self.suggest())
-        self.valueChanged.connect(lambda _v: self._mark_formula())
+class ParameterSuggestions:
+    """Lists the parameters matching the name typed at the cursor, under the field. Shared by the number fields
+    (ExprDoubleSpinBox) and the browser's row editor (ExprLineEdit); `_edit()` is the QLineEdit typed into."""
 
-    # --- the parameter list -------------------------------------------------------------------------------------
+    _list = None          # ParameterList, made when first needed (it lives in the window, above the panels)
+    show_result = False   # also show what a formula evaluates to while it is typed
+
+    def _edit(self):
+        return self
+
+    def _suggestion_taken(self):
+        """Called after a name was put into the field."""
+
     def _name_at_cursor(self):
-        edit = self.lineEdit()
+        edit = self._edit()
         text, cur = edit.text(), edit.cursorPosition()
         m = _NAME_BEFORE_CURSOR.search(text[:cur])
         return (m.group(0), m.start(), cur) if m else (None, cur, cur)
+
+    def _result_hint(self):
+        text = self._edit().text().strip()
+        if not self.show_result or expr.is_plain_number(text) or not expr.is_expression_text(text):
+            return ""
+        try:
+            return f"= {expr.evaluate(text):g}"
+        except ValueError:
+            return ""
 
     def suggest(self):
         """Show the parameters starting with the name being typed (case-insensitive), or hide the list."""
@@ -120,13 +128,20 @@ class ExprDoubleSpinBox(QDoubleSpinBox):
             hint, pairs = formula_hint(names[0]), [(n, values[n]) for n in names]
         elif token in values:           # a whole name typed: its value, and that it can be part of a formula
             hint, pairs = f"{token} = {values[token]:g} · {formula_hint(token)}", []
+            result = self._result_hint()
+            if result and self._edit().text().strip() != token:
+                hint = result
+        elif self._result_hint():
+            hint, pairs = self._result_hint(), []
         else:
             self.hide_suggestions()
             return
-        if self._list is None or self._list.parentWidget() is not self.window():
-            self._list = ParameterList(self.window())
+        window = self._edit().window()
+        if self._list is None or self._list.parentWidget() is not window:
+            self._list = ParameterList(window)
             self._list.itemClicked.connect(lambda _item: self._take_suggestion())
-        self._list.show_names(self, pairs, hint)
+        edit = self._edit()
+        self._list.show_at(edit.mapTo(window, QPoint(0, edit.height() + 2)), edit.width(), pairs, hint)
 
     def suggestions_visible(self) -> bool:
         """Names are listed to pick from (the help line alone does not take Enter or the arrows)."""
@@ -142,27 +157,63 @@ class ExprDoubleSpinBox(QDoubleSpinBox):
         if not name:
             return
         token, start, cur = self._name_at_cursor()
-        edit = self.lineEdit()
+        edit = self._edit()
         text = edit.text()
         edit.setText(text[:start] + name + text[cur:])
         edit.setCursorPosition(start + len(name))
+        self._suggestion_taken()
+
+    def suggestion_key(self, event) -> bool:
+        """Up/Down/Enter/Tab/Esc steer an open list; True when the key was used for it."""
+        key = event.key()
+        if self.suggestions_visible():
+            if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+                self._list.step(-1 if key == Qt.Key.Key_Up else 1)
+                return True
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
+                self._take_suggestion()      # choose the name; the panel's OK waits for the next Enter
+                return True
+        if key == Qt.Key.Key_Escape and self._list is not None and self._list.isVisible():
+            self.hide_suggestions()         # Esc closes the list first
+            return True
+        return False
+
+
+class ExprLineEdit(ParameterSuggestions, QLineEdit):
+    """The browser's in-row value editor: parameter names are suggested and a formula shows its result."""
+
+    show_result = True
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.textEdited.connect(lambda _t: self.suggest())
+
+    def focusOutEvent(self, event):
+        self.hide_suggestions()
+        super().focusOutEvent(event)
+
+    def hideEvent(self, event):
+        self.hide_suggestions()
+        super().hideEvent(event)
+
+
+class ExprDoubleSpinBox(ParameterSuggestions, QDoubleSpinBox):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setKeyboardTracking(True)  # live preview once the formula is complete
+        self._expr = None  # the formula behind the current value, when it is not a plain number
+        self.lineEdit().textEdited.connect(lambda _t: self.suggest())
+        self.valueChanged.connect(lambda _v: self._mark_formula())
+
+    def _edit(self):
+        return self.lineEdit()
+
+    def _suggestion_taken(self):
         self.interpretText()
         self.setFocus()
 
     def keyPressEvent(self, event):
-        if self.suggestions_visible():
-            key = event.key()
-            if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
-                self._list.step(-1 if key == Qt.Key.Key_Up else 1)
-                return
-            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
-                self._take_suggestion()      # choose the name; the panel's OK waits for the next Enter
-                return
-            if key == Qt.Key.Key_Escape:
-                self.hide_suggestions()
-                return
-        elif self._list is not None and self._list.isVisible() and event.key() == Qt.Key.Key_Escape:
-            self.hide_suggestions()         # only the help line: Esc closes it first
+        if self.suggestion_key(event):
             return
         super().keyPressEvent(event)
 

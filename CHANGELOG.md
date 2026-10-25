@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.27 - 2026-10-25
+
+### Added
+- Browser: editing a value in the tree suggests parameter names as you type (Up/Down + Enter/Tab picks one, Esc closes the list) and shows what a formula evaluates to (e.g. "= 10" for width/2). The value's label ("Height: ") stays visible next to the field while you type.
+
 ## 0.9.9.80.26 - 2026-10-25
 
 ### Fixed

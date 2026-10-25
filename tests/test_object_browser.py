@@ -110,3 +110,31 @@ def test_jar_tool_objects_hang_under_their_combine_in_the_tree():
     neck = next(item for item, _ in widget._walk() if item.data(0, Qt.ItemDataRole.UserRole) == ('object', 'object_cylinder_2'))
     assert neck.parent().data(0, Qt.ItemDataRole.UserRole) == ('feature', 'combine_3')
     widget.deleteLater()
+
+
+def test_row_editor_keeps_label_in_sight_and_suggests_parameters(browser):
+    """Björn: parameters can be typed in the browser, and the value's name stays visible next to the number."""
+    from omacad.model.document import Parameter
+    from omacad.ui.expr_spin import ExprLineEdit
+    browser.doc.set_parameters([Parameter('wall', '3'), Parameter('width', '20')])
+    browser.refresh_tree()
+    browser.tree.expandAll()
+    QApplication.processEvents()
+    item = row(browser, 'height')
+    browser.on_item_double_clicked(item, 0)
+    QApplication.processEvents()
+    editor = next(e for e in browser.tree.findChildren(ExprLineEdit) if e.isVisible())
+    label = browser.tree.fontMetrics().horizontalAdvance('Height: ')
+    assert editor.geometry().left() >= browser.tree.visualItemRect(item).left() + label - 2
+    editor.selectAll()
+    QTest.keyClicks(editor, 'w')
+    assert editor.suggestions_visible() and editor._list.choices == 2      # wall, width
+    QTest.keyClick(editor, Qt.Key.Key_Down)
+    QTest.keyClick(editor, Qt.Key.Key_Return)                            # picks the name, does not commit
+    assert editor.isVisible() and editor.text() == 'width'
+    QTest.keyClicks(editor, '/2')
+    assert editor._list.isVisible() and editor._list.item(0).text() == '= 10'
+    QTest.keyClick(editor, Qt.Key.Key_Return)
+    QTest.qWait(20)
+    feature = browser.doc.timeline.features[0]
+    assert feature.height == 10 and feature.exprs['height'] == 'width/2'
