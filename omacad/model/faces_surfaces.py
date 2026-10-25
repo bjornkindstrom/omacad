@@ -1,5 +1,6 @@
 """Faces surfaces for CAD mesh geometry."""
 
+import hashlib
 from typing import List, Tuple
 import numpy as np
 import manifold3d as m3d
@@ -112,25 +113,18 @@ def clear_topology_cache():
 
 def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") -> Tuple[List[PlanarFace], list]:
     """Computes both planar faces and edges in a single shared topological pass (2x faster than separate calls).
-    Cached by manifold geometric fingerprint to avoid redundant trimesh topology analysis."""
+    Cached by a hash of the mesh to avoid redundant trimesh topology analysis."""
     if manifold.is_empty():
         return [], []
 
-    # Fast fingerprint from manifold geometric invariants (avoids full mesh hashing)
-    try:
-        cache_key = (
-            manifold.num_vert(),
-            manifold.num_edge(),
-            manifold.num_tri(),
-            manifold.genus(),
-            round(manifold.volume(), 5),
-            round(manifold.surface_area(), 5),
-            tuple(round(x, 5) for x in manifold.bounding_box())
-        )
-    except Exception:
-        cache_key = None
+    # Keyed by the mesh itself: counts, volume and outer box stay the same when a hole moves inside a plate, and a
+    # Chamfer on the moved hole then got the old hole's edges and cut where it used to be (Björn #105).
+    mesh = manifold.to_mesh64()
+    v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
+    f = np.asarray(mesh.tri_verts, dtype=np.int64)
+    cache_key = (len(v), len(f), hashlib.blake2b(v.tobytes() + f.tobytes(), digest_size=16).digest())
 
-    if cache_key is not None and cache_key in _TOPOLOGY_CACHE:
+    if cache_key in _TOPOLOGY_CACHE:
         cached_faces, cached_edges = _TOPOLOGY_CACHE[cache_key]
         # Fast rebinding of body_id on cached faces without deep copy
         faces = [
@@ -145,10 +139,7 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
         ]
         return faces, cached_edges
 
-    # Edge coordinates feed boolean tools: float32 rounding leaves slivers against the original solid.
-    mesh = manifold.to_mesh64()
-    v = np.asarray(mesh.vert_properties[:, :3], dtype=np.float64)
-    f = np.asarray(mesh.tri_verts, dtype=np.int64)
+    # Edge coordinates feed boolean tools (to_mesh64): float32 rounding leaves slivers against the original solid.
     if len(f) < 2:
         return [], []
     tm = trimesh.Trimesh(vertices=v, faces=f, process=False)
@@ -218,9 +209,8 @@ def compute_planar_faces_and_edges(manifold: m3d.Manifold, body_id: str = "") ->
     from omacad.model.curve_edges import curve_edges
     all_edges += curve_edges(v, f, tm, find, planar)
 
-    if cache_key is not None:
-        if len(_TOPOLOGY_CACHE) >= _TOPOLOGY_CACHE_MAX:
-            _TOPOLOGY_CACHE.clear()
-        _TOPOLOGY_CACHE[cache_key] = (faces, all_edges)
+    if len(_TOPOLOGY_CACHE) >= _TOPOLOGY_CACHE_MAX:
+        _TOPOLOGY_CACHE.clear()
+    _TOPOLOGY_CACHE[cache_key] = (faces, all_edges)
 
     return faces, all_edges

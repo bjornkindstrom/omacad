@@ -18,8 +18,9 @@ def test_fillet_face_click_selects_all_boundary_loops():
     doc = Exporter.load_project(doc_path)
     b = doc.bodies["body_extrude_2"]
 
-    # Face 44 is the bottom planar face at z=0 with normal (0, 0, -1)
-    face44 = next(f for f in b.faces if np.allclose(f.normal, [0, 0, -1], atol=1e-3) and abs(f.origin[2]) < 1e-4)
+    # The patterned face with the 13 loops. Move (ry -180 about the centre) turns it to the top, z=10, normal +z; the old
+    # edge cache handed back the edges from before the move, so this test used to look at z=0 (#105).
+    face44 = next(f for f in b.faces if np.allclose(f.normal, [0, 0, 1], atol=1e-3) and abs(f.origin[2] - 10.0) < 1e-4)
 
     class MockDoc:
         bodies = doc.bodies
@@ -34,7 +35,7 @@ def test_fillet_face_click_selects_all_boundary_loops():
             self.selected_edges = []
             self._w, self._h = 2036 - 360, 1114
             self.cam_az = 170.87696587004527
-            self.cam_el = -17.911718750000006       # from below: the bottom face is in sight, not behind the fillets
+            self.cam_el = 17.911718750000006        # from above: the patterned face is in sight, not behind the fillets
             self.cam_dist = 99.63236863613498
             self.cam_target = np.array([-4.469699859619141, 11.18025016784668, 5.0])
 
@@ -69,7 +70,8 @@ def test_fillet_face_click_selects_all_boundary_loops():
     assert sum(e.kind == "line" for e in face_edges) == 338
 
     # Pick point inside the face interior (away from edge boundary)
-    interior_pt = np.array([-6.57015991, 11.38846048, 0.0])    # far from every loop
+    interior_pt = np.array([-7.68197464, -26.07341804, 10.0])  # the face's most inner point, 2.9 mm from its edges
+    vp.cam_target, vp.cam_dist = interior_pt, 40.0             # close enough that 2.9 mm is well past the pick radius
     scr = vp.world_to_screen(interior_pt)
     assert scr is not None
     sx, sy = scr

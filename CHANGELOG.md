@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.55 - 2026-10-25
+
+### Fixed
+- A chamfer or fillet follows a hole that is moved (#105): moving a hole by its sketch dimension left the chamfer cutting a cone where the hole used to be. The edges of a body were remembered by its size and volume, which do not change when a hole moves inside a plate, so the chamfer got the old hole's edges. They are now remembered by the exact shape.
+
 ## 0.9.9.80.54 - 2026-10-25
 
 ### Added

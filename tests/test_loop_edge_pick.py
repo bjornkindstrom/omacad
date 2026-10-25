@@ -15,7 +15,7 @@ def test_pick_edge_prefers_loop_over_overlapping_arc():
     doc_path = str(Path(__file__).parent / "data" / "fillet_face_pick.omacad")
     doc = Exporter.load_project(doc_path)
     b = doc.bodies["body_extrude_2"]
-    outer_loop = next(e for e in b.edges if getattr(e, "kind", "") == "loop" and np.allclose(np.asarray(e.polyline())[:, 2], 0.0, atol=1e-3) and len(e.polyline()) > 50)
+    outer_loop = next(e for e in b.edges if getattr(e, "kind", "") == "loop" and np.allclose(np.asarray(e.polyline())[:, 2], 10.0, atol=1e-3) and len(e.polyline()) > 50)
 
     class MockDoc:
         bodies = doc.bodies
@@ -54,7 +54,7 @@ def test_pick_edge_prefers_loop_over_overlapping_arc():
     vp = MockViewport()
 
     # Test an unblocked segment on the corner arc where both LoopEdge and CircularEdge overlap
-    # In outer_loop.pts, segment 24 is on the rounded corner arc at z=0
+    # In outer_loop.pts, segment 24 is on a rounded corner arc (z=10: the Move turns the outline to the top)
     s0 = vp.world_to_screen(outer_loop.pts[24])
     s1 = vp.world_to_screen(outer_loop.pts[25])
     assert s0 is not None and s1 is not None
