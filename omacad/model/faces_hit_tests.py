@@ -65,8 +65,40 @@ def in_plane_edges(bodies, plane, tol_rel: float = 1e-3):
         pts = np.asarray(mesh.sharp_lines, dtype=np.float64).reshape(-1, 2, 3) - o
         tol = tol_rel * max(1.0, float(np.ptp(mesh.bounds_max - mesh.bounds_min)))
         on_plane = (np.abs(pts @ n) < tol).all(axis=1)
-        for a, b in pts[on_plane]:
-            out.append(((float(a @ ua), float(a @ va)), (float(b @ ua), float(b @ va))))
+        uv = np.stack([pts[on_plane] @ ua, pts[on_plane] @ va], axis=-1)     # (k, 2 ends, 2)
+        # a sketch on a body face: that face's outline from its triangles (origin planes keep the sharp lines only,
+        # whose exact chords other steps' profiles were built on)
+        faces = _coplanar_face_outlines(body, o, n, ua, va, tol) if getattr(plane, "name", "") == "FACE" else []
+        if faces and len(uv):   # a line on a face outline is that outline again (another tessellation): drop it
+            import shapely
+            from shapely.geometry import MultiLineString
+            mids = shapely.points(uv.mean(axis=1))
+            uv = uv[shapely.distance(mids, MultiLineString(faces)) > 10 * tol]
+        out += [((float(a[0]), float(a[1])), (float(b[0]), float(b[1]))) for a, b in uv] + faces
+    return out
+
+
+def _coplanar_face_outlines(body, o, n, ua, va, tol) -> list:
+    """The outlines of the body's flat faces in the plane, read from their triangles. The sharp lines of the render
+    mesh can miss short pieces where two tessellations meet (0.1-0.3 mm gaps), so a face's inner outline and holes
+    never closed and Project dropped them (Björn #103); the union of the face's triangles is always closed."""
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    out = []
+    for face in getattr(body, "faces", ()):
+        if getattr(face, "index", -1) < 0 or abs(float(np.asarray(face.normal) @ n)) < 1.0 - 1e-6 \
+                or abs(float((np.asarray(face.origin, dtype=np.float64) - o) @ n)) > tol:
+            continue
+        tris = np.asarray(face.tris, dtype=np.float64) - o
+        uv = np.stack([tris @ ua, tris @ va], axis=-1)
+        polys = [Polygon(t) for t in uv]
+        region = unary_union([p for p in polys if p.area > 1e-12])
+        for poly in getattr(region, "geoms", [region]):
+            if poly.is_empty or poly.geom_type != "Polygon":
+                continue
+            for ring in (poly.exterior, *poly.interiors):
+                c = list(ring.coords)
+                out += [((float(a[0]), float(a[1])), (float(b[0]), float(b[1]))) for a, b in zip(c[:-1], c[1:])]
     return out
 
 def ray_mesh_hit(mesh, ray_origin, ray_dir):

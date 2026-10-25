@@ -16,13 +16,40 @@ from omacad.model.sketch_fillet_curves import corner_point, end_tangent, fillet_
 from omacad.model.sketch_fillet_curves import ends as fillet_ends
 
 
+def _snap_ends(segs, tol: float):
+    """End points closer than `tol` become one point. Edges read from two tessellations of the same outline stop a
+    hair (~1e-3 mm) apart, so the outline never closed and was dropped as mesh seams (Björn #103)."""
+    pts = np.array([p for ab in segs for p in ab], dtype=float)
+    parent = list(range(len(pts)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    grid: Dict[tuple, list] = {}
+    for i, (x, y) in enumerate(pts):
+        gx, gy = int(math.floor(x / tol)), int(math.floor(y / tol))
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for j in grid.get((gx + dx, gy + dy), ()):
+                    if abs(pts[j][0] - x) <= tol and abs(pts[j][1] - y) <= tol:
+                        ri, rj = find(i), find(j)
+                        if ri != rj:
+                            parent[ri] = rj
+        grid.setdefault((gx, gy), []).append(i)
+    rep = [tuple(pts[find(i)]) for i in range(len(pts))]
+    return [(rep[2 * k], rep[2 * k + 1]) for k in range(len(segs)) if rep[2 * k] != rep[2 * k + 1]]
+
+
 def _outline_rings(segs, tol: float = 5e-3):
     """Splits reference segments into the closed rings of the region they enclose (outer outlines and holes, as
     simplified point lists) and the segments that are not part of such an outline (returned as they are)."""
     if not segs:
         return [], segs
     try:
-        noded = unary_union([LineString([a, b]) for a, b in segs])
+        noded = unary_union([LineString([a, b]) for a, b in _snap_ends(segs, 0.5 * tol)])
         cells = [c.buffer(0) for c in polygonize(noded)]
     except Exception:
         return [], segs

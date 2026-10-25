@@ -10,7 +10,7 @@ import numpy as np
 from omacad import applog
 from omacad.model import quality
 import shapely
-from shapely.geometry import LineString, Polygon, Point, MultiPoint
+from shapely.geometry import LineString, MultiLineString, Polygon, Point, MultiPoint
 from shapely.geometry.polygon import orient
 from shapely.ops import polygonize, unary_union, snap
 from omacad.model.sketch_types import SketchProfile, SketchConstraint, SketchDimension, EDGE_PTS, SOLVER_DIM_TYPES, REF_PREFIX
@@ -363,9 +363,17 @@ class Sketch(SketchEditingMixin):
 
         try:
             sketch_union = unary_union(shapely.set_precision(shapely_lines, 1e-4))
-            if self.reference_segments:
-                ref_union = unary_union([LineString([a, b]) for a, b in self.reference_segments
-                                         if abs(a[0] - b[0]) > 1e-9 or abs(a[1] - b[1]) > 1e-9])
+            refs = [(a, b) for a, b in self.reference_segments if abs(a[0] - b[0]) > 1e-9 or abs(a[1] - b[1]) > 1e-9]
+            projected = [seg for ent in self.entities if getattr(ent, "projected", False) and not ent.is_construction
+                         for seg in ent.to_lines()]
+            if refs and projected:
+                # a face edge that was projected is in the sketch already, as fitted lines and arcs; its chords
+                # beside them only cut slivers between the two (Björn #103)
+                mids = shapely.points([((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0) for a, b in refs])
+                near = shapely.distance(mids, MultiLineString(projected)) < 2e-2
+                refs = [ab for ab, drop in zip(refs, near) if not drop]
+            if refs:
+                ref_union = unary_union([LineString([a, b]) for a, b in refs])
                 # Sketch end points that sit on a face edge are inserted into that edge (a tiny float
                 # gap would otherwise leave the loop open), so the regions close.
                 sketch_points = MultiPoint([c for g in getattr(sketch_union, "geoms", [sketch_union])

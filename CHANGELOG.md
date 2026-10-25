@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.50 - 2026-10-25
+
+### Fixed
+- Project on a face made by Shell or Extrude takes the whole face (#103): on the rim of a shelled box it now brings in the inner outline and the screw holes as well, not only the outer outline. The outline is read from the face itself, and no hair-thin extra profiles are left beside the projected lines.
+
 ## 0.9.9.80.49 - 2026-10-25
 
 ### Added
