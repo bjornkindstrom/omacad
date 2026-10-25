@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.53 - 2026-10-25
+
+### Added
+- Size of the selected body (#106): a selected body shows its length, width and height as dimension arrows beside it (two floor edges nearest the viewer and one upright edge). With several bodies selected it shows the box around all of them.
+
 ## 0.9.9.80.52 - 2026-10-25
 
 ### Changed

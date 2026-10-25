@@ -9,6 +9,7 @@ from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QFon
 from omacad.ui import theme, theme_icons
 from omacad.ui.theme import qcolor
 from omacad.ui import dyn_input
+from omacad.ui.viewport.body_dims import draw_body_dimensions
 from omacad.ui.expr_spin import ExprDoubleSpinBox
 from omacad.model.dim_layout import pt_line_base_shift, PT_LINE_DEFAULT_OFFSET, lines_are_parallel, line_distance
 from omacad.model.sketch import (
@@ -55,6 +56,7 @@ class OverlayMixin:
         self._draw_plane_labels(painter)
         # 1. ViewCube
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
+        draw_body_dimensions(self, painter)
         self._draw_measure(painter)
         self._draw_handle_value(painter)
         self._draw_point_pick(painter)
