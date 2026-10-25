@@ -396,3 +396,78 @@ QStatusBar {
     padding: 2px 10px;
 }
 """
+
+# Studio (theme files with window/surface/field/border): extra rules after the themed sheets, see theme.studio_sheet.
+# White panels on a grey-blue window, calm borderless buttons, blue only for focus, the active tool, selection
+# and the primary action; disabled = muted text on the window colour, so state never rests on colour alone.
+_STUDIO_CSS = """
+QMainWindow { background-color: @window; }
+QWidget { font-size: 13px; }
+QMenuBar { background-color: @surface; color: @text; border-bottom: 1px solid @border; padding: 3px 8px; }
+QMenuBar::item { padding: 5px 10px; border-radius: 6px; }
+QMenuBar::item:selected { background-color: @selection; color: @accent; }
+QMenu { background-color: @surface; border: 1px solid @border; border-radius: 8px; padding: 6px 0px; }
+QMenu::item:selected { background-color: @selection; color: @accent; }
+QMenu::separator { background: @border; }
+QToolButton { border: 1px solid transparent; border-radius: 6px; color: @text; }
+QToolButton:hover { background-color: @field; border: 1px solid transparent; color: @text; }
+QToolButton:pressed, QToolButton:checked { background-color: @selection; border: 1px solid transparent; color: @accent; }
+QToolButton:disabled { color: @muted; }
+QTabBar::tab { color: @muted; font-size: 11px; font-weight: 600; padding: 4px 10px; }
+QTabBar::tab:selected { color: @accent; border-bottom: 2px solid @accent; }
+QTabBar::tab:hover:!selected { color: @text; }
+QTreeView::item:hover { background-color: @field; }
+QTreeView::item:selected { background-color: @selection; color: @accent; }
+QGroupBox { background-color: @surface; border: 1px solid @border; border-radius: 8px; }
+QGroupBox::title { color: @text; }
+QPushButton {
+    background-color: @field; color: @text; border: 1px solid @border; border-radius: 6px;
+    padding: 7px 18px; font-weight: 500; min-height: 18px;
+}
+QPushButton:hover { background-color: @border; border-color: @border; color: @text; }
+QPushButton:pressed { background-color: @selection; border: 1px solid @accent; color: @accent; padding-top: 7px; }
+QPushButton:focus { border: 1px solid @accent; }
+QPushButton:disabled { background-color: @window; color: @muted; border: 1px dashed @border; }
+QPushButton#PrimaryButton, QPushButton:default {
+    background-color: @accent; color: @on_accent; border: 1px solid @accent; font-weight: 600; padding: 7px 22px;
+}
+QPushButton#PrimaryButton:hover, QPushButton:default:hover { background-color: @accent_hover; border-color: @accent_hover; color: @on_accent; }
+QPushButton#PrimaryButton:pressed, QPushButton:default:pressed { background-color: @accent_pressed; border: 1px solid @accent_pressed; padding-top: 7px; }
+QPushButton#PrimaryButton:disabled, QPushButton:default:disabled { background-color: @border; border-color: @border; color: @muted; }
+QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
+    background-color: @field; color: @text; border: 1px solid @border; border-radius: 6px;
+    padding: 6px 10px; min-height: 20px; selection-background-color: @accent; selection-color: @on_accent;
+}
+QSpinBox, QDoubleSpinBox { padding-right: 24px; }
+QComboBox { padding-right: 28px; font-weight: 400; }
+QLineEdit:hover, QDoubleSpinBox:hover, QSpinBox:hover, QComboBox:hover { border-color: @border_strong; background-color: @field; color: @text; }
+QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus, QComboBox:on {
+    border: 1px solid @accent; background-color: @surface;
+}
+QLineEdit:disabled, QDoubleSpinBox:disabled, QSpinBox:disabled, QComboBox:disabled {
+    background-color: @window; color: @muted; border: 1px dashed @border;
+}
+QLineEdit[error="true"], QDoubleSpinBox[error="true"] { border: 2px solid #C62828; }
+QSpinBox::up-button, QDoubleSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::down-button {
+    background-color: transparent; border: none; border-left: 1px solid @border; width: 20px;
+}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background-color: @border; }
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background-color: @selection; }
+QComboBox::drop-down { background-color: transparent; border: none; width: 24px; }
+QComboBox QAbstractItemView {
+    background-color: @surface; color: @text; border: 1px solid @border; border-radius: 6px;
+    selection-background-color: @selection; selection-color: @accent;
+}
+QSlider::groove:horizontal { background: @border; border: none; height: 4px; }
+QSlider::sub-page:horizontal { background: @accent; }
+QSlider::handle:horizontal { background: @surface; border: 2px solid @accent; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal { background: @border; border-radius: 3px; min-height: 24px; min-width: 24px; }
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background: @border_strong; }
+QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page { background: transparent; border: none; width: 0; height: 0; }
+QStatusBar { background-color: @surface; color: @muted; border-top: 1px solid @border; }
+QToolTip { background-color: @text; color: @surface; border: none; border-radius: 6px; padding: 6px 10px; }
+"""

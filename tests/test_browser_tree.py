@@ -105,3 +105,16 @@ def test_right_click_on_a_sketch_line_offers_edit_sketch():
     assert v._sketch_line_at(*away) is None
     sk.visible = False
     assert v._sketch_line_at(*on_line) is None            # hidden sketches are not picked
+
+
+def test_browser_is_only_as_tall_as_its_rows_and_grows_when_a_branch_opens(win):
+    """The browser leaves the drawing area below it free; it fills the height (and scrolls) only when it must."""
+    b = win.browser
+    root = b.tree.topLevelItem(0)
+    for i in range(root.childCount()):
+        root.child(i).setExpanded(False)
+    short = b.preferred_height(2000)
+    assert short < 2000
+    root.child(0).setExpanded(True)                     # Document Settings opens: two more rows
+    assert b.preferred_height(2000) > short
+    assert b.preferred_height(150) == 150               # no more room: the tree scrolls inside the cap

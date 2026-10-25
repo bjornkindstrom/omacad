@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
     QFrame, QToolButton, QSpinBox, QDoubleSpinBox
 )
+from omacad.ui import theme
 from omacad.ui.theme import style
 
 
@@ -23,8 +24,9 @@ class SketchPalette(QFrame):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setFixedWidth(200)
+        # `SketchPalette`, not `QFrame`: every QLabel is a QFrame and got its own box (Björn #89)
         style(self, """
-            QFrame {
+            SketchPalette {
                 background-color: rgba(30, 34, 40, 240);
                 border: 1px solid #3E4550;
                 border-radius: 6px;
@@ -49,6 +51,11 @@ class SketchPalette(QFrame):
                 background-color: #E26D28;
                 border-color: #E26D28;
             }
+        """, """
+            SketchPalette { background-color: @surface; border: none; }
+            QLabel, QCheckBox { color: @text; font-size: 12px; }
+            QGroupBox { background: transparent; border: none; margin-top: 18px; padding: 0; }
+            QGroupBox::title { color: @text; font-size: 14px; font-weight: 600; }
         """)
 
         layout = QVBoxLayout(self)
@@ -61,7 +68,8 @@ class SketchPalette(QFrame):
         self.lbl_title = lbl_title = QLabel("SKETCH PALETTE  ⠿")
         lbl_title.setToolTip("Drag to move")
         lbl_title.setCursor(Qt.CursorShape.SizeAllCursor)
-        style(lbl_title, "font-weight: bold; font-size: 10px; color: #9AA0A6; letter-spacing: 0.5px;")
+        style(lbl_title, "font-weight: bold; font-size: 10px; color: #9AA0A6; letter-spacing: 0.5px;",
+              "QLabel { color: @muted; font-size: 11px; font-weight: 600; letter-spacing: 1px; border: none; }")
         header.addWidget(lbl_title)
         header.addStretch()
 
@@ -168,7 +176,8 @@ class SketchPalette(QFrame):
         content_layout.addWidget(self.btn_edit_text)
 
         # Look At Button
-        btn_look_at = QPushButton("🎯  Look at Plane")
+        btn_look_at = QPushButton()
+        theme.set_button_text(btn_look_at, "🎯  Look at Plane")
         style(btn_look_at, """
             QPushButton {
                 background-color: #2D333B;
@@ -189,7 +198,8 @@ class SketchPalette(QFrame):
         content_layout.addSpacing(6)
 
         # Finish Sketch Button
-        btn_finish = QPushButton("✅  Finish Sketch")
+        btn_finish = QPushButton()
+        theme.set_button_text(btn_finish, "✅  Finish Sketch", colour="#FFFFFF")
         style(btn_finish, """
             QPushButton {
                 background-color: #2E7D32;

@@ -46,3 +46,16 @@ def test_primitive_precision_save_reload_and_reset(monkeypatch):
     dlg.reset_all()
     assert dlg.cmb_primitive_decimals.currentData() == 0
     dlg.close()
+
+
+def test_category_navigation_and_camera_controls():
+    QApplication.instance() or QApplication([])
+    dlg = SettingsDialog()
+    for index in range(dlg.navigation.count()):
+        dlg.navigation.setCurrentRow(index)
+        assert dlg.tabs.currentIndex() == index
+    dlg.cmb_projection.setCurrentIndex(dlg.cmb_projection.findData("orthographic"))
+    assert not dlg.spn_fov.isEnabled()
+    dlg.cmb_projection.setCurrentIndex(dlg.cmb_projection.findData("perspective"))
+    assert dlg.spn_fov.isEnabled()
+    dlg.close()

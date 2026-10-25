@@ -9,21 +9,25 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QLineEdit, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QLabel,
     QPushButton, QComboBox, QCheckBox, QDoubleSpinBox, QColorDialog,
-    QFrame, QGridLayout, QScrollArea
+    QFrame, QGridLayout, QScrollArea, QListWidget, QSizePolicy
 )
 
 from omacad.ui import theme
-from omacad.ui.settings import get_settings, rgb01_to_hex
+from omacad.ui.settings import finished_sketch_grey, get_settings, rgb01_to_hex
+
+
+ROLE_THEMES = theme.ROLE_THEMES   # Studio, Graphite, Atelier: they come with the Studio line icons
 
 
 class ColorRow(QWidget):
     changed = Signal()
 
     def __init__(self, label: str, current_hex: Optional[str], default_hex: Optional[str] = None,
-                 parent: Optional[QWidget] = None):
+                 parent: Optional[QWidget] = None, theme_colour=None):
         super().__init__(parent)
         self.current_hex = current_hex
         self.default_hex = default_hex
+        self.theme_colour = theme_colour or (lambda: theme.palette().highlight01())   # rgb01 shown for "Theme"
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 2, 0, 2)
@@ -34,14 +38,11 @@ class ColorRow(QWidget):
         lay.addWidget(self.lbl)
 
         self.btn_swatch = QPushButton()
-        self.btn_swatch.setFixedSize(50, 24)
+        self.btn_swatch.setFixedSize(90, 30)
+        self.btn_swatch.setAccessibleName(f"Choose {label.rstrip(chr(58))} colour")
         self.btn_swatch.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_swatch.clicked.connect(self.choose_color)
         lay.addWidget(self.btn_swatch)
-
-        self.btn_pick = QPushButton("Choose colour…")
-        self.btn_pick.clicked.connect(self.choose_color)
-        lay.addWidget(self.btn_pick)
 
         self.btn_reset = QPushButton("Follow theme" if default_hex is None else "Reset")
         self.btn_reset.clicked.connect(self.reset_color)
@@ -59,21 +60,26 @@ class ColorRow(QWidget):
                     border-radius: 4px;
                 }}
             """)
-            self.btn_swatch.setText("")
+            self.btn_swatch.setText(self.current_hex)
+            color = QColor(self.current_hex)
+            ink = "#17191C" if color.lightnessF() > 0.55 else "#FFFFFF"
+            self.btn_swatch.setStyleSheet(self.btn_swatch.styleSheet() +
+                                         f"QPushButton {{ color: {ink}; padding: 0; font-size: 11px; }}")
         else:
             # Theme default highlight
-            th_col = theme.palette().highlight01()
-            hex_th = rgb01_to_hex(*th_col)
+            hex_th = rgb01_to_hex(*self.theme_colour())
+            ink = "#17191C" if QColor(hex_th).lightnessF() > 0.55 else "#FFFFFF"   # readable on light colours too
             self.btn_swatch.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {hex_th};
                     border: 1px dashed #7A8290;
                     border-radius: 4px;
-                    color: #FFFFFF;
+                    color: {ink};
                     font-size: 10px;
                 }}
             """)
             self.btn_swatch.setText("Theme")
+            self.btn_swatch.setStyleSheet(self.btn_swatch.styleSheet() + "QPushButton { padding: 0; }")
 
     def choose_color(self):
         initial = QColor(self.current_hex) if self.current_hex else QColor(*[int(c * 255) for c in theme.palette().highlight01()])
@@ -93,8 +99,36 @@ class SettingsDialog(QDialog):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setMinimumWidth(560)
-        theme.style(self, theme._BASE_CSS)
+        self.setMinimumWidth(550)
+        theme.style(self, theme._BASE_CSS + """
+            QDialog { background: #202226; }
+            QTabWidget::pane { border: none; }
+            QListWidget#SettingsNavigation { background: #24262B; border: none;
+                border-radius: 10px; padding: 8px; outline: none; }
+            QListWidget#SettingsNavigation::item { padding: 13px 10px;
+                margin-bottom: 4px; border-radius: 6px; }
+            QListWidget#SettingsNavigation::item:selected { background: #3A4050;
+                color: #FFFFFF; border-left: 3px solid #FFA63C; }
+            QFrame#SettingsCard { background: #292B30; border: 1px solid #414550;
+                border-radius: 10px; }
+            QLabel#SettingsTitle { font-size: 24px; font-weight: 600; }
+            QLabel#SettingsSection { font-size: 14px; font-weight: 600; }
+            QLabel#SettingsDescription { color: #9AA0A6; }
+            QPushButton#SettingsSave { background: #FFA63C; color: #202226;
+                border: none; font-weight: 600; padding: 9px 24px; }
+        """, theme._STUDIO_CSS + """
+            QDialog { background: @window; }
+            QListWidget#SettingsNavigation { background: @surface; border: 1px solid @border; border-radius: 8px; }
+            QListWidget#SettingsNavigation::item { color: @text; border-left: 3px solid transparent; }
+            QListWidget#SettingsNavigation::item:hover { background: @field; }
+            QListWidget#SettingsNavigation::item:selected { background: @selection; color: @accent; border-left: 3px solid @accent; }
+            QFrame#SettingsCard { background: @surface; border: 1px solid @border; border-radius: 8px; }
+            QLabel#SettingsTitle { color: @text; font-size: 26px; font-weight: 500; }
+            QLabel#SettingsSection { color: @text; font-size: 17px; font-weight: 500; }
+            QLabel#SettingsDescription { color: @muted; }
+            QPushButton#SettingsSave { background: @accent; color: @on_accent; border: 1px solid @accent; }
+            QPushButton#SettingsSave:hover { background: @accent_hover; }
+        """)
 
         self.settings = get_settings()
         self._just_saved = ""
@@ -103,8 +137,28 @@ class SettingsDialog(QDialog):
         main_lay.setContentsMargins(16, 16, 16, 16)
         main_lay.setSpacing(14)
 
+        heading = QLabel("Settings")
+        heading.setObjectName("SettingsTitle")
+        main_lay.addWidget(heading)
+        subtitle = QLabel("Make Omacad feel right for the way you work.")
+        subtitle.setObjectName("SettingsDescription")
+        main_lay.addWidget(subtitle)
+
+        body = QHBoxLayout()
+        body.setSpacing(18)
+        self.navigation = QListWidget()
+        self.navigation.setObjectName("SettingsNavigation")
+        self.navigation.setAccessibleName("Settings categories")
+        self.navigation.setFixedWidth(160)
+        self.navigation.addItems(["Appearance", "Interface", "Sketch & View", "General"])
+        body.addWidget(self.navigation)
         self.tabs = QTabWidget()
-        main_lay.addWidget(self.tabs)
+        self.tabs.tabBar().hide()
+        body.addWidget(self.tabs, 1)
+        main_lay.addLayout(body, 1)
+        self.navigation.currentRowChanged.connect(self.tabs.setCurrentIndex)
+        self.tabs.currentChanged.connect(self.navigation.setCurrentRow)
+        self.navigation.setCurrentRow(0)
 
         # ----------------------------------------------------
         # Tab 1: Appearance & Colours (🎨 Appearance)
@@ -119,37 +173,17 @@ class SettingsDialog(QDialog):
         lbl_theme = QLabel("Theme Mode:")
         lbl_theme.setMinimumWidth(200)
         self.cmb_theme_mode = QComboBox()
-        self.cmb_theme_mode.addItem("Fusion 360 (fuskion420)", "fuskion420")
-        self.cmb_theme_mode.addItem("Follow Omarchy (live desktop sync)", "omarchy")
-        self.cmb_theme_mode.addItem("Light Theme (Clean Studio Latte)", "light")
-        self.cmb_theme_mode.addItem("Dark Theme (Tokyo Slate)", "dark_tokyo")
-        self.cmb_theme_mode.addItem("Dark Theme (Nord Frost)", "dark_nord")
-        for cname in theme.custom_themes():
-            self.cmb_theme_mode.addItem(f"Custom: {cname}", f"user:{cname}")
+        self._fill_theme_choices()
 
-        cur_mode = self.settings.get("theme_mode", "omarchy")
-        cur_dark = self.settings.get("dark_theme_name", "tokyo-night")
-        cur_tname = self.settings.get("theme_name", "tokyo-night")
-
-        if (cur_mode == "fixed" and str(cur_tname).startswith("user:")):
-            select_key = cur_tname
-        elif (cur_mode == "fixed" and cur_tname == "fuskion420") or cur_mode == "fuskion420":
-            select_key = "fuskion420"
-        elif cur_mode == "omarchy":
-            select_key = "omarchy"
-        elif cur_mode == "light":
-            select_key = "light"
-        elif cur_dark == "nord" or cur_tname == "nord":
-            select_key = "dark_nord"
-        else:
-            select_key = "dark_tokyo"
+        chosen = theme.chosen_theme(self.settings.get("theme_mode", "omarchy"), self.settings.get("theme_name"))
+        select_key = chosen or "omarchy"
 
         idx = self.cmb_theme_mode.findData(select_key)
         self.cmb_theme_mode.setCurrentIndex(max(0, idx))
-        self.cmb_theme_mode.setToolTip("Fusion 360: fuskion420 exact styling.\n"
-                                       "Follow Omarchy: syncs live with Omarchy.\n"
-                                       "Light Theme: Clean Studio Latte.\n"
-                                       "Dark Theme: Tokyo Slate or Nord Frost.")
+        self.cmb_theme_mode.setToolTip("Studio: light and calm, white panels and a blue accent.\n"
+                                       "Graphite: dark and compact, amber for the active choice.\n"
+                                       "Atelier: warm grey, forest green accent, soft corners.\n"
+                                       "Follow Omarchy: syncs live with the Omarchy theme.")
         theme_row.addWidget(lbl_theme)
         theme_row.addWidget(self.cmb_theme_mode)
         theme_row.addStretch()
@@ -160,13 +194,18 @@ class SettingsDialog(QDialog):
         lbl_icon = QLabel("Icon Theme:")
         lbl_icon.setMinimumWidth(200)
         self.cmb_icon_theme = QComboBox()
-        self.cmb_icon_theme.addItem("Modern Solid Fill (High-contrast silhouette)", "solid")
-        self.cmb_icon_theme.addItem("Technical Blueprint (Precision CAD outline)", "blueprint")
-        self.cmb_icon_theme.addItem("Semantic Color-Coded CAD (Color by tool type)", "semantic")
+        self.cmb_icon_theme.addItem("Solid", "solid")
+        self.cmb_icon_theme.addItem("Blueprint", "blueprint")
+        self.cmb_icon_theme.addItem("Colour-coded", "semantic")
+        self.cmb_icon_theme.addItem("Studio (line, accent colour when active)", "studio")
         cur_icon = self.settings.get("icon_theme", "solid")
         idx_icon = self.cmb_icon_theme.findData(cur_icon)
         self.cmb_icon_theme.setCurrentIndex(max(0, idx_icon))
         self.cmb_icon_theme.setToolTip("Choose the icon style for ribbon and sketch toolbar buttons.")
+        # picking the Studio theme suggests its icons too (shown here, saved only with Save)
+        self.cmb_theme_mode.activated.connect(
+            lambda _i: self.cmb_theme_mode.currentData() in ROLE_THEMES
+            and self.cmb_icon_theme.setCurrentIndex(self.cmb_icon_theme.findData("studio")))
         icon_row.addWidget(lbl_icon)
         icon_row.addWidget(self.cmb_icon_theme)
         icon_row.addStretch()
@@ -187,6 +226,9 @@ class SettingsDialog(QDialog):
 
         self.row_construct = ColorRow("Construction lines:", self.settings.get("sketch_construction_color"), default_hex="#FFCC4D")
         lay_appearance.addWidget(self.row_construct)
+        self.row_finished = ColorRow("Finished sketches:", self.settings.get("sketch_finished_color"),
+                                     theme_colour=finished_sketch_grey)
+        lay_appearance.addWidget(self.row_finished)
 
         self.row_hover = ColorRow("Line under the cursor:", self.settings.get("hover_line_color"), default_hex="#FFFFFF")
         lay_appearance.addWidget(self.row_hover)
@@ -205,7 +247,7 @@ class SettingsDialog(QDialog):
 
         # Button to open Theme Editor dialog
         btn_editor_row = QHBoxLayout()
-        self.btn_open_theme_editor = QPushButton("🖌 Open Theme Editor…")
+        self.btn_open_theme_editor = QPushButton("Edit theme…")
         self.btn_open_theme_editor.setToolTip("Customise every single colour in the interface and save custom theme palettes.")
         self.btn_open_theme_editor.clicked.connect(self._open_theme_editor)
         btn_editor_row.addWidget(self.btn_open_theme_editor)
@@ -509,6 +551,26 @@ class SettingsDialog(QDialog):
         # ----------------------------------------------------
         # Bottom buttons
         # ----------------------------------------------------
+        self._group_page(lay_appearance, [
+            (theme_row, "Theme & icons"),
+            (info_lbl, "Colours & line weights"),
+            (btn_editor_row, "Custom theme")])
+        self._group_page(lay_ui, [
+            (btn_size_row, "Toolbar size & labels"),
+            (pos_row, "Sketch palette"),
+            (grp_lbl, "Toolbar organisation")])
+        self._group_page(lay_sketch, [
+            (self.chk_invert_zoom, "Navigation & edges"),
+            (grid_row, "Sketch & precision"),
+            (arrow_row, "Extrude handles"),
+            (q_row, "Rendering & camera")])
+        self._group_page(lay_general, [
+            (rfc_row, "Change requests"),
+            (agent_row, "Problem reporting & updates")])
+        self.spn_fov.setEnabled(self.cmb_projection.currentData() == "perspective")
+        self.cmb_projection.currentIndexChanged.connect(
+            lambda: self.spn_fov.setEnabled(self.cmb_projection.currentData() == "perspective"))
+
         btn_row = QHBoxLayout()
         btn_reset_all = QPushButton("Reset to defaults")
         btn_reset_all.clicked.connect(self.reset_all)
@@ -520,6 +582,7 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(btn_cancel)
 
         btn_save = QPushButton("Save")
+        btn_save.setObjectName("SettingsSave")
         btn_save.setDefault(True)
         btn_save.clicked.connect(self.save_and_close)
         btn_row.addWidget(btn_save)
@@ -529,7 +592,64 @@ class SettingsDialog(QDialog):
         add_numeric_sliders(self)
 
         # Ensure dialog fits comfortably within screen boundaries (e.g. on Windows laptops)
-        self.resize(620, 580)
+        self.resize(960, 740)
+        screen = self.screen().availableGeometry()
+        self.resize(min(self.width(), screen.width() - 40),
+                    min(self.height(), screen.height() - 80))
+
+    @staticmethod
+    def _group_page(layout, sections):
+        """Group existing controls without changing their values or save bindings."""
+        items = []
+        while layout.count():
+            items.append(layout.takeAt(0))
+        layout.setContentsMargins(0, 0, 8, 0)
+        layout.setSpacing(14)
+        current = None
+        for item in items:
+            content = item.widget() or item.layout()
+            if content is None:
+                continue
+            title = next((title for first, title in sections if first is content), None)
+            if title:
+                card = QFrame()
+                card.setObjectName("SettingsCard")
+                current = QVBoxLayout(card)
+                current.setContentsMargins(18, 16, 18, 18)
+                current.setSpacing(14)
+                heading = QLabel(title)
+                heading.setObjectName("SettingsSection")
+                current.addWidget(heading)
+                layout.addWidget(card)
+            if item.widget():
+                current.addWidget(item.widget())
+            else:
+                current.addLayout(item.layout())
+        layout.addStretch()
+        for label in layout.parentWidget().findChildren(QLabel):
+            label.setWordWrap(True)
+            label.setMinimumWidth(0)
+            if label.parentWidget().__class__ is ColorRow:
+                label.setMinimumWidth(165)
+            if label.styleSheet():
+                label.setStyleSheet("")
+                label.setObjectName("SettingsDescription")
+        for field in layout.parentWidget().findChildren(QComboBox):
+            field.setMinimumWidth(150)
+            field.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            field.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        for field in layout.parentWidget().findChildren(QDoubleSpinBox):
+            field.setMinimumWidth(120)
+        for check in layout.parentWidget().findChildren(QCheckBox):
+            text = check.text()
+            if " (" in text:
+                short, detail = text.split(" (", 1)
+                check.setText(short)
+                description = QLabel(detail.rstrip(")"))
+                description.setWordWrap(True)
+                description.setObjectName("SettingsDescription")
+                parent_layout = check.parentWidget().layout()
+                parent_layout.insertWidget(parent_layout.indexOf(check) + 1, description)
 
     @staticmethod
     def _make_scrollable(widget: QWidget) -> QScrollArea:
@@ -538,7 +658,18 @@ class SettingsDialog(QDialog):
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         scroll.setWidget(widget)
+        widget.setAutoFillBackground(False)
+        scroll.viewport().setAutoFillBackground(False)
         return scroll
+
+    def _fill_theme_choices(self):
+        self.cmb_theme_mode.clear()
+        self.cmb_theme_mode.addItem("Studio (light, blue accent)", "studio")
+        self.cmb_theme_mode.addItem("Graphite (dark, amber accent)", "graphite")
+        self.cmb_theme_mode.addItem("Atelier (warm, green accent)", "atelier")
+        self.cmb_theme_mode.addItem("Follow Omarchy", "omarchy")
+        for name in theme.custom_themes():
+            self.cmb_theme_mode.addItem(f"Custom: {name}", f"user:{name}")
 
     def _open_theme_editor(self):
         from omacad.ui.theme_editor import ThemeEditorDialog
@@ -551,14 +682,7 @@ class SettingsDialog(QDialog):
         self._just_saved = key
         # Refresh theme mode combo box so custom themes show up
         cur_data = self.cmb_theme_mode.currentData()
-        self.cmb_theme_mode.clear()
-        self.cmb_theme_mode.addItem("Fusion 360 (fuskion420)", "fuskion420")
-        self.cmb_theme_mode.addItem("Follow Omarchy (live desktop sync)", "omarchy")
-        self.cmb_theme_mode.addItem("Light Theme (Clean Studio Latte)", "light")
-        self.cmb_theme_mode.addItem("Dark Theme (Tokyo Slate)", "dark_tokyo")
-        self.cmb_theme_mode.addItem("Dark Theme (Nord Frost)", "dark_nord")
-        for name in theme.custom_themes():
-            self.cmb_theme_mode.addItem(f"Custom: {name}", f"user:{name}")
+        self._fill_theme_choices()
         idx = self.cmb_theme_mode.findData(key if key else cur_data)
         if idx >= 0:
             self.cmb_theme_mode.setCurrentIndex(idx)
@@ -572,6 +696,7 @@ class SettingsDialog(QDialog):
         self.row_measure.reset_color()
         self.row_sketch.reset_color()
         self.row_construct.reset_color()
+        self.row_finished.reset_color()
         self.row_highlight.reset_color()
         self.row_hover.reset_color()
         self.spn_hover_w.setValue(3.5)
@@ -589,7 +714,7 @@ class SettingsDialog(QDialog):
         self.spn_grid.setValue(5.0)
         self.spn_fillet.setValue(2.0)
         self.chk_auto_restart.setChecked(True)
-        self.cmb_theme_mode.setCurrentIndex(0)
+        self.cmb_theme_mode.setCurrentIndex(max(0, self.cmb_theme_mode.findData("omarchy")))   # the default
         self.cmb_icon_theme.setCurrentIndex(0)
         self.cmb_curves.setCurrentIndex(max(0, self.cmb_curves.findData(96)))
         self.spn_arrow_size.setValue(1.0)
@@ -631,6 +756,7 @@ class SettingsDialog(QDialog):
             "measure_color": self.row_measure.current_hex,
             "sketch_line_color": self.row_sketch.current_hex,
             "sketch_construction_color": self.row_construct.current_hex,
+            "sketch_finished_color": self.row_finished.current_hex,
             "highlight_color": self.row_highlight.current_hex,
             "hover_line_color": self.row_hover.current_hex,
             "hover_line_width": self.spn_hover_w.value(),
@@ -665,31 +791,13 @@ class SettingsDialog(QDialog):
 
         # Resolve theme mode choice
         mode_val = str(self.cmb_theme_mode.currentData() or "")
-        if mode_val.startswith("user:"):
+        if mode_val == "omarchy":
+            new_data["theme_mode"] = "omarchy"
+            fixed_name = None
+        else:   # Studio, Graphite, Atelier or a theme made in the editor ("user:<name>")
             new_data["theme_mode"] = "fixed"
             new_data["theme_name"] = mode_val
             fixed_name = mode_val
-        elif mode_val == "fuskion420":
-            new_data["theme_mode"] = "fixed"
-            new_data["theme_name"] = "fuskion420"
-            fixed_name = "fuskion420"
-        elif mode_val == "omarchy":
-            new_data["theme_mode"] = "omarchy"
-            fixed_name = None
-        elif mode_val == "light":
-            new_data["theme_mode"] = "light"
-            new_data["theme_name"] = "catppuccin-latte"
-            fixed_name = "catppuccin-latte"
-        elif mode_val == "dark_nord":
-            new_data["theme_mode"] = "dark"
-            new_data["dark_theme_name"] = "nord"
-            new_data["theme_name"] = "nord"
-            fixed_name = "nord"
-        else:  # dark_tokyo
-            new_data["theme_mode"] = "dark"
-            new_data["dark_theme_name"] = "tokyo-night"
-            new_data["theme_name"] = "tokyo-night"
-            fixed_name = "tokyo-night"
 
         theme.PREVIEW = None
         self.settings.update(new_data)

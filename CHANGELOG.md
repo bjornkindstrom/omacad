@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.9.9.80.43 - 2026-10-25
+
+### Fixed
+- Text in the sketch palette is readable: every label there got its own small box (QLabel is a QFrame) and 11 px text; the Smart Circle hint and the checkboxes now read as normal text in Studio, Graphite and Atelier (Björn #89).
+- The theme editor no longer drops the look of Studio/Graphite/Atelier while it previews (the whole app fell back to the old style and a monospace font); its starting points are now the three themes.
+- Inspector status text (fully defined, selection) uses the theme's colours instead of light green/blue that was hard to read on white. "Theme" colour swatches pick dark or light text by their colour.
+
+### Changed
+- Finished sketches are grey (a theme grey, lighter on dark views) without the dark rim, and their helper lines are quiet grey dashes; Settings > Appearance > "Finished sketches" picks another colour (Björn #90).
+
+## 0.9.9.80.42 - 2026-10-25
+
+### Changed
+- Settings > Appearance offers Studio, Graphite, Atelier and Follow Omarchy (plus themes made in the theme editor). The older choices (Fusion 360, Light, Tokyo, Nord) are gone; a saved older choice opens as Studio. Reset to defaults goes back to Follow Omarchy.
+
+## 0.9.9.80.41 - 2026-10-25
+
+### Changed
+- Each rectangle kind (2-Point, Center, Rounded, Center Rounded) has its own icon in every icon set: the ribbon button shows the kind it draws by default, and the rectangle menus (button dropdown, "Button default", right-click Rectangle) show the same pictures.
+
+## 0.9.9.80.40 - 2026-10-25
+
+### Added
+- Graphite (dark, amber accent, compact 3 px corners) and Atelier (warm grey, forest green accent, soft 14 px corners) from the appearance proposal, next to Studio in Settings > Appearance. They share Studio's layout, panels and line icons; each theme brings its own colours, corner radius and readable text on its accent colour.
+
+## 0.9.9.80.39 - 2026-10-25
+
+### Fixed
+- Editing values in the browser is reliable: every editable value row has a pencil that opens the editor with one click, a double-click on an already selected row opens it too, and the tree no longer rebuilds (closing the editor) while a value is being typed.
+
+## 0.9.9.80.38 - 2026-10-25
+
+### Changed
+- The browser is only as tall as its visible rows and grows when a branch is opened, leaving more of the drawing area free; it fills the height and scrolls only when the rows need it.
+
+## 0.9.9.80.37 - 2026-10-25
+
+### Changed
+- Studio icon set covers every function: each ribbon command, dropdown, constraint, menu entry, right-click entry, browser row, step in the history, inspector heading and the view's Orbit/Pan/Fit/Grid bar now has a one-colour line icon instead of an emoji. Commands that shared an emoji get their own picture (Line, Smart Circle, Linear/Circular/Fill Pattern, Offset Face, Section View, Finish Sketch), and history steps are drawn by kind (Chamfer vs Fillet, pattern kinds, Move). The Blueprint icons from the design proposal are kept; other icon sets are unchanged.
+
+## 0.9.9.80.36 - 2026-10-25
+
+### Added
+- Studio theme (Settings > Appearance > Theme Mode): light grey-blue window, white panels with 8 px corners, Noto Sans, blue accent only for focus, the active tool, selection and the primary action. The ribbon, browser, inspector, tool panels, menus and Settings share the look; tool panels get a heading and labels above their fields. Other themes and Follow Omarchy are unchanged, and a saved theme choice is never replaced.
+- Studio icon set (Settings > Appearance > Icon Theme): the Blueprint line icons in one colour, blue while a tool is active, plus new line icons for Sweep, Loft, Pipe, Cone, Jar, Honeycomb, Import, Statistics, sketch Rotate/Pattern/Construction/Fix and each rectangle kind. Choosing the Studio theme suggests it.
+
+## 0.9.9.80.35 - 2026-10-25
+
+### Changed
+- Redesigned Settings with category navigation, themed section cards, compact colour controls and persistent save/cancel actions. Perspective controls now follow the camera mode.
+
 ## 0.9.9.80.34 - 2026-10-25
 
 ### Fixed

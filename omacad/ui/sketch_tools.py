@@ -9,6 +9,12 @@ RECT_TOOLS = {
     "CENTER_ROUNDED_RECT": ("Center\nRounded", "▣"),
 }
 
+def rect_icon(tool: str, px: int = 24):
+    """Each rectangle kind has its own picture in every icon set (assets/icons/<set>/<tool in lower case>.svg)."""
+    from omacad.ui import theme
+    return theme.tool_icon(tool.lower(), px)
+
+
 def _entry(tool: str, cid: str, group: str):
     from omacad.ui import commands
     return (tool, commands.menu_text(cid), group, None)

@@ -64,3 +64,24 @@ def test_editor_tab_collects_every_role_and_saves():
     tab._save()
     assert got == ["user:Mine"]
     assert theme.load_theme_data("user:Mine")["canvas"] == "#112233"
+
+
+def test_editor_preview_keeps_a_role_theme_look():
+    """Opening the editor previews the current colours; with Studio/Graphite/Atelier that preview must keep the
+    panels, fields, font and corners (it used to drop them, and the whole app fell back to the old look)."""
+    from PySide6.QtWidgets import QApplication
+    from omacad.ui import theme
+    from omacad.ui.theme_editor import ThemeEditorTab
+    QApplication.instance() or QApplication([])
+    theme.set_fixed_theme("graphite")
+    try:
+        tab = ThemeEditorTab()
+        tab._load_base()
+        assert theme.PREVIEW is not None and theme.palette().studio
+        assert theme.palette().radius == 3 and theme.current_font() == "Noto Sans"
+        tab.rows["background"].current_hex = "#223344"           # Background = the panels
+        tab._preview()
+        assert theme.palette().map_hex("#25282C") == "#223344"
+    finally:
+        theme.set_preview(None)
+        theme.set_fixed_theme(None)

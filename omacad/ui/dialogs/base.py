@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QDoubleSpinBox, QSpinBox
 )
 from omacad.ui.theme import style
+from omacad.ui.theme_styles import _STUDIO_CSS
 
 # The main window's right-hand panel; every tool dialog is docked there so none covers the model.
 SIDE_HOST = None
@@ -20,6 +21,35 @@ def run_docked(dlg) -> int:
     dlg.finished.connect(loop.quit)
     loop.exec()
     return dlg.result()
+
+
+# Studio tool panels (Chamfer in the design proposal): a heading, labels in muted text above their fields,
+# grouped buttons at the bottom; the same rules for every tool built on this class.
+_STUDIO_PANEL = _STUDIO_CSS + """
+    QDialog { background-color: @surface; border: none; border-radius: 8px; }
+    QLabel { color: @muted; font-size: 12px; }
+    QLabel#StudioHeading { color: @text; font-size: 18px; font-weight: 500; }
+    QCheckBox, QRadioButton { color: @text; }
+    QFrame[frameShape="4"] { color: @border; }
+"""
+
+
+def studio_layout(dlg) -> None:
+    """With a Studio theme: the panel gets its title as a heading and every form puts its labels above the fields.
+    Only the layout changes; the fields, their order and their bindings stay as each tool built them."""
+    from PySide6.QtWidgets import QFormLayout, QLabel
+    from omacad.ui import theme
+    if not theme.palette().studio:
+        return
+    for form in dlg.findChildren(QFormLayout):
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        form.setVerticalSpacing(6)
+    layout = dlg.layout()
+    title = dlg.windowTitle().strip()
+    if layout is not None and title and not dlg.findChild(QLabel, "StudioHeading"):
+        heading = QLabel(title)
+        heading.setObjectName("StudioHeading")
+        layout.insertWidget(0, heading)
 
 
 class BaseFeatureDialog(QDialog):
@@ -81,7 +111,7 @@ class BaseFeatureDialog(QDialog):
                 color: #FFFFFF;
                 padding-top: 8px;
             }
-        """)
+        """, studio=_STUDIO_PANEL)
 
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(14, 14, 14, 14)
@@ -89,6 +119,12 @@ class BaseFeatureDialog(QDialog):
 
     def exec(self):
         return run_docked(self)
+
+    def showEvent(self, event):
+        if not getattr(self, "_studio_done", False):
+            self._studio_done = True
+            studio_layout(self)
+        super().showEvent(event)
 
     def place(self, parent_size=None, left: bool = False):
         """Docks the dialog in the right-hand side panel."""

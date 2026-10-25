@@ -37,6 +37,7 @@ def test_value_edited_inside_tree_enter_commits_and_escape_cancels(browser, monk
     QApplication.processEvents()
     QTest.mouseClick(browser.tree.viewport(), Qt.MouseButton.LeftButton, pos=browser.tree.visualItemRect(item).center())
     QTest.mouseDClick(browser.tree.viewport(), Qt.MouseButton.LeftButton, pos=browser.tree.visualItemRect(item).center())
+    QTest.qWait(20)                                   # the editor opens once the double-click has finished
     editor = browser.tree.findChild(QLineEdit)
     assert editor is not None and editor.isVisible()
     editor.setText('2*8')
@@ -45,6 +46,7 @@ def test_value_edited_inside_tree_enter_commits_and_escape_cancels(browser, monk
     assert browser.doc.timeline.features[0].height == 16
     assert browser.doc.timeline.features[0].exprs['height'] == '2*8'
     browser.on_item_double_clicked(row(browser, 'height'), 0)
+    QTest.qWait(20)
     editor = next(e for e in browser.tree.findChildren(QLineEdit) if e.isVisible())
     editor.setText('99')
     QTest.keyClick(editor, Qt.Key.Key_Escape)
@@ -52,6 +54,21 @@ def test_value_edited_inside_tree_enter_commits_and_escape_cancels(browser, monk
     assert browser.doc.timeline.features[0].height == 16
     browser.doc.undo()
     assert browser.doc.timeline.features[0].height == 10
+
+
+def test_pencil_opens_the_value_editor_with_one_click_and_a_rebuild_does_not_close_it(browser):
+    item = row(browser, 'height')
+    assert not item.icon(1).isNull()                  # the pencil
+    browser.on_item_clicked(item, 1)
+    QTest.qWait(20)
+    editor = next(e for e in browser.tree.findChildren(QLineEdit) if e.isVisible())
+    browser.refresh_tree()                            # a document change while typing waits for the editor
+    assert editor.isVisible()
+    editor.setText('12')
+    QTest.keyClick(editor, Qt.Key.Key_Return)
+    QTest.qWait(300)
+    assert browser.doc.timeline.features[0].height == 12
+    assert 'Height: 12' in row(browser, 'height').text(0)
 
 
 def test_invalid_expression_is_reported_in_browser_without_changing_model(browser):

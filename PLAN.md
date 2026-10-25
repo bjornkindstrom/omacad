@@ -1,5 +1,14 @@
 # Omacad – färdplan
 
+Genomfört 0.9.9.80.43: #89 läsbar palett/inspektör, #90 grå färdiga skisser.
+Genomfört 0.9.9.80.42: bara Studio, Graphite, Atelier och Följ Omarchy i temavalet.
+Genomfört 0.9.9.80.41: egen ikon per rektangeltyp.
+Genomfört 0.9.9.80.40: Graphite och Atelier. 0.9.9.80.39: penna för värden i browsern.
+Genomfört 0.9.9.80.38: browsern tar bara den höjd raderna behöver.
+Genomfört 0.9.9.80.37: Studio-ikoner för alla funktioner, menyer, trädrader och historiksteg.
+Genomfört 0.9.9.80.36: Studio-tema och Studio-ikoner (förslag 1 i design/appearance-proposals), valbara i inställningarna.
+Genomfört 0.9.9.80.35: omdesignade inställningar med sidomeny och tydliga sektionskort.
+
 Genomfört 0.9.9.80.34: rutnätet döljs bakom kroppen även underifrån (#87); dubbla kantval ger inga uppdelade fasytor, och plana fasremsor har kompletta ändsömmar.
 
 Genomfört 0.9.9.80.33: fasning av rundade konturer utan falska kantlinjer; dubbel precision genom ytanalys och fasverktyg.

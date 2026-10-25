@@ -1,5 +1,13 @@
 # Omacad ⚡
 
+Temavalet är nu Studio, Graphite, Atelier eller Följ Omarchy; de äldre temana är borttagna och ett sparat äldre val öppnas som Studio (0.9.9.80.42).
+
+Tre nya utseenden från designförslaget: **Studio**, **Graphite** (mörkt, bärnsten) och **Atelier** (varmt, skogsgrönt) (0.9.9.80.40). Värden i browsern redigeras med pennan till höger på raden (0.9.9.80.39).
+
+Nytt utseende **Studio** (0.9.9.80.36): ljust, vita paneler och blå accent, med egna linjeikoner för alla funktioner (0.9.9.80.37). Välj det i Settings > Appearance (Theme Mode: Studio, Icon Theme: Studio).
+
+Inställningarna har fått sidomeny, temaanpassade sektionskort och kompaktare färgval (0.9.9.80.35).
+
 Rutnätet skymmer inte kroppen underifrån. Fasade konturer har sammanhängande ytor och kompletta kantlinjer även när samma båge ingår i flera val (0.9.9.80.34).
 
 Fasning av rundade konturer behåller dubbel precision och ger inga falska kantlinjer över fasen eller väggen (0.9.9.80.33).

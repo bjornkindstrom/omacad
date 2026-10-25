@@ -19,6 +19,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "measure_color": "#FFAA3C",         # Accent orange
     "sketch_line_color": "#4CE0FF",     # Vibrant cyan
     "sketch_construction_color": "#FFCC4D", # Amber / gold
+    "sketch_finished_color": None,      # lines of sketches that are not being edited; None = a grey that suits the theme
     "highlight_color": None,            # None = follow theme highlight
     # Palette & UI options
     "palette_position": "bottom_right", # "bottom_right", "top_left", "bottom_left", "top_right"
@@ -49,9 +50,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "group_modify": False,              # group Combine/Split/Shell/Move into Modify dropdown
     "group_inspect": True,              # group Measure/Section/Params into Inspect dropdown
     "group_constraints": True,          # compact 2-row grid or dropdown for sketch constraints
-    "theme_mode": "omarchy",            # "omarchy" = follow the Omarchy theme live, "dark" = dark theme, "light" = light theme
-    "dark_theme_name": "tokyo-night",   # "tokyo-night" or "nord"
-    "theme_name": "tokyo-night",        # bundled theme used when theme_mode is "fixed" / "dark"
+    "theme_mode": "omarchy",            # "omarchy" = follow the Omarchy theme live, "fixed" = theme_name
+    "theme_name": "studio",             # "studio", "graphite", "atelier" or "user:<name>" when theme_mode is "fixed"
     "icon_theme": "solid",              # "solid", "blueprint", "semantic"
     "auto_restart": True,               # restart the app (work saved and restored) when a new version is committed
 }
@@ -101,6 +101,13 @@ def sketch_line_widths() -> Tuple[float, float]:
     """(normal, selected) px thickness of the active sketch's lines, from the settings."""
     s = get_settings()
     return _width(s, "sketch_line_width", 1.6), _width(s, "selected_line_width", 2.4)
+
+
+def finished_sketch_grey() -> Tuple[float, float, float]:
+    """The theme's colour for finished sketches: a quiet grey that reads on the view's background."""
+    from omacad.ui import theme
+    dark_view = sum(theme.palette().canvas_rgb01()) / 3 < 0.5
+    return (0.62, 0.65, 0.70) if dark_view else (0.47, 0.50, 0.55)
 
 
 class SettingsManager(QObject):
@@ -175,6 +182,11 @@ class SettingsManager(QObject):
     def sketch_construction_color_rgb01(self) -> Tuple[float, float, float]:
         rgb = hex_to_rgb01(self.get("sketch_construction_color"))
         return rgb if rgb is not None else (1.0, 0.80, 0.30)
+
+    def sketch_finished_color_rgb01(self) -> Tuple[float, float, float]:
+        """Finished (not active) sketches: the chosen colour, else a quiet grey between the view and its text
+        (Björn #90: the orange with a dark rim read as heavy black lines)."""
+        return hex_to_rgb01(self.get("sketch_finished_color")) or finished_sketch_grey()
 
     def highlight_color_rgb01(self) -> Optional[Tuple[float, float, float]]:
         return hex_to_rgb01(self.get("highlight_color"))

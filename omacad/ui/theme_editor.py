@@ -56,9 +56,9 @@ class ThemeEditorTab(QWidget):
         top.addWidget(QLabel("Start from:"))
         self.cmb_base = QComboBox()
         self.cmb_base.addItem("Current look", "@current")
-        self.cmb_base.addItem("Clean Studio Latte (Light)", "catppuccin-latte")
-        self.cmb_base.addItem("Tokyo Slate (Dark)", "tokyo-night")
-        self.cmb_base.addItem("Nord Frost (Dark)", "nord")
+        self.cmb_base.addItem("Studio (light, blue)", "studio")
+        self.cmb_base.addItem("Graphite (dark, amber)", "graphite")
+        self.cmb_base.addItem("Atelier (warm, green)", "atelier")
         self._fill_custom()
         self.cmb_base.activated.connect(self._load_base)
         top.addWidget(self.cmb_base, 1)
@@ -123,11 +123,13 @@ class ThemeEditorTab(QWidget):
 
     def _load_base(self, *_):
         key = self.cmb_base.currentData()
-        pal = theme.palette() if key == "@current" else theme.Palette(theme.load_theme_data(key))
-        data = {} if key == "@current" else (theme.load_theme_data(key) or {})
+        data = (theme.current_theme_data() if key == "@current" else theme.load_theme_data(key)) or {}
+        pal = theme.palette() if key == "@current" else theme.Palette(data)
         hexv = lambda c: theme._hex(c)
+        # a role theme (Studio, Graphite, Atelier) keeps its surfaces: Background = the panels, Dark background = the window
+        back, dark = (pal.surfaces["surface"], pal.surfaces["window"]) if pal.studio else (pal.background, pal.darker)
         values = {
-            "background": hexv(pal.background), "darker_background": hexv(pal.darker),
+            "background": hexv(back), "darker_background": hexv(dark),
             "foreground": hexv(pal.foreground), "muted": hexv(pal.muted), "accent": hexv(pal.accent),
             "highlight": hexv(pal.highlight),
             "canvas": _hex01(pal.canvas_rgb01()), "grid": _hex01(pal.grid_rgb01()),
@@ -159,6 +161,8 @@ class ThemeEditorTab(QWidget):
         for key, _s, _l in TOOL_ROLES:
             if self.rows[key].current_hex:
                 d[key] = self.rows[key].current_hex
+        if "surface" in d:     # role theme: the edited backgrounds are its panels and window
+            d["surface"], d["window"] = d["background"], d["darker_background"]
         return d
 
     def _preview(self):

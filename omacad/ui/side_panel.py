@@ -35,11 +35,13 @@ class InspectorPanel(QWidget):
 
         # Header Bar (subtle floating card-style header)
         self.header = QWidget()
-        style(self.header, "background-color: rgba(32, 34, 37, 0.85); border: 1px solid #33373D; border-radius: 6px; margin: 4px; padding: 4px 8px;")
+        style(self.header, "background-color: rgba(32, 34, 37, 0.85); border: 1px solid #33373D; border-radius: 6px; margin: 4px; padding: 4px 8px;",
+              "QWidget { background: transparent; border: none; margin: 4px 4px 0 4px; padding: 6px 8px 0 8px; }")
         h_layout = QHBoxLayout(self.header)
         h_layout.setContentsMargins(8, 4, 8, 4)
         self.lbl_title = QLabel("INSPECTOR")
-        style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.5px; background: transparent;")
+        style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.5px; background: transparent;",
+              "QLabel { color: @muted; font-size: 11px; font-weight: 600; letter-spacing: 1px; margin: 0; padding: 0; }")
         h_layout.addWidget(self.lbl_title)
         h_layout.addStretch()
         main_layout.addWidget(self.header)
@@ -61,7 +63,9 @@ class InspectorPanel(QWidget):
         self.content_layout.setSpacing(8)
 
         self.setObjectName("InspectorPanel")
-        style(self, "QWidget#InspectorPanel { background: transparent; }")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        style(self, "QWidget#InspectorPanel { background: transparent; }",
+              "QWidget#InspectorPanel { background-color: @surface; border: 1px solid @border; border-radius: 8px; }")
 
         # 1. Tool Dock Container (when a tool/dialog is active)
         self.tool_container = QWidget()
@@ -154,7 +158,7 @@ class InspectorPanel(QWidget):
 
         self.tool_layout.addWidget(dlg)
         self.tool_container.show()
-        self.lbl_title.setText(f"🛠️ {dlg.windowTitle().upper()}")
+        self.lbl_title.setText(dlg.windowTitle().upper() if theme.palette().studio else f"🛠️ {dlg.windowTitle().upper()}")
         dlg.show()
 
         # Hide background info when tool is active for clean focused UI
@@ -185,18 +189,31 @@ class InspectorPanel(QWidget):
 
     def _make_card(self, title: str, layout) -> QFrame:
         card = QFrame()
-        style(card, "QFrame { background-color: rgba(30, 33, 38, 0.88); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; }")
+        style(card, "QFrame { background-color: rgba(30, 33, 38, 0.88); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; }",
+              "QFrame { background-color: @surface; border: none; border-radius: 0; }")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(10, 8, 10, 10)
         card_layout.setSpacing(6)
 
-        lbl_header = QLabel(title.upper())
-        style(lbl_header, "font-size: 11px; font-weight: bold; color: #E26D28; letter-spacing: 0.5px; border: none; background: transparent;")
-        card_layout.addWidget(lbl_header)
+        icon_name, title = theme.studio_symbol(title)   # Studio icons: the heading's emoji becomes a line icon
+        lbl_header = QLabel(title if theme.palette().studio else title.upper())   # Studio: calm sentence-case headings
+        style(lbl_header, "font-size: 11px; font-weight: bold; color: #E26D28; letter-spacing: 0.5px; border: none; background: transparent;",
+              "QLabel { color: @text; font-size: 16px; font-weight: 500; letter-spacing: 0; }")
+        if icon_name:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            pic = QLabel()
+            pic.setPixmap(theme.tool_icon(icon_name, 20).pixmap(20, 20))
+            style(pic, "border: none; background: transparent;")
+            row.addWidget(pic)
+            row.addWidget(lbl_header, 1)
+            card_layout.addLayout(row)
+        else:
+            card_layout.addWidget(lbl_header)
 
         div = QFrame()
         div.setFrameShape(QFrame.Shape.HLine)
-        style(div, "background-color: #2D323B; height: 1px; border: none;")
+        style(div, "background-color: #2D323B; height: 1px; border: none;", "QFrame { background-color: @border; }")
         card_layout.addWidget(div)
 
         card_layout.addLayout(layout)
@@ -252,7 +269,8 @@ class InspectorPanel(QWidget):
             status_str = self.doc.sketch_status(sk)
             lbl_status = QLabel(status_str or "Under defined")
             if "Fully" in status_str:
-                style(lbl_status, "color: #66BB6A; font-weight: bold; border: none; background: transparent;")
+                style(lbl_status, "color: #66BB6A; font-weight: bold; border: none; background: transparent;",
+                      "QLabel { color: @ok; font-weight: bold; }")   # the theme's own green: light green was unreadable on white
             else:
                 style(lbl_status, "color: #FFA726; border: none; background: transparent;")
             form.addRow("Status:", lbl_status)
@@ -265,7 +283,8 @@ class InspectorPanel(QWidget):
             if selected_entities:
                 n_sel = len(selected_entities)
                 lbl_sel = QLabel(f"{n_sel} element(s) selected")
-                style(lbl_sel, "color: #42A5F5; font-weight: bold; border: none; background: transparent;")
+                style(lbl_sel, "color: #42A5F5; font-weight: bold; border: none; background: transparent;",
+                      "QLabel { color: @accent; font-weight: bold; }")
                 form.addRow("Selection:", lbl_sel)
 
             self.info_layout.addWidget(self._make_card(f"✏️ Sketch: {sk.name}", form))

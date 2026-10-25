@@ -4,7 +4,7 @@ import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMenu
 from omacad.ui import commands, theme
-from omacad.ui.sketch_tools import SKETCH_TOOLS
+from omacad.ui.sketch_tools import RECT_TOOLS, SKETCH_TOOLS, rect_icon
 from omacad.ui.viewport.shaders import SKETCH_GROUP_ICONS
 from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
 from omacad.model.faces import tangent_chain
@@ -206,7 +206,8 @@ class ContextMenuMixin:
                     if sub not in subs:
                         subs[sub] = parent.addMenu(sub)
                     parent = subs[sub]
-                acts[parent.addAction(label)] = ("tool", tool)
+                act = parent.addAction(rect_icon(tool, 22), label) if tool in RECT_TOOLS else parent.addAction(label)
+                acts[act] = ("tool", tool)
             parent = groups.get("Create", (menu,))[0]
             acts[parent.addAction(commands.menu_text("project"))] = ("project", None)
             c = menu.addAction(commands.menu_text("construction"))

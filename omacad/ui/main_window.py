@@ -73,7 +73,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             self.setWindowIcon(QIcon(icon_path))
 
         # Apply Fusion 360 Dark Theme
-        style(self, theme._BASE_CSS)
+        style(self, theme._BASE_CSS, theme._STUDIO_CSS)
         self.apply_theme_font()
         self.theme_watcher = theme.ThemeWatcher(self)
         self.theme_watcher.changed.connect(self.on_theme_changed)
@@ -124,7 +124,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             self.workspace_bar.move(10, 4)
             browser_top = max(top_pad, 4 + self.workspace_bar.sizeHint().height() + 2)
             h = max(100, size.height() - browser_top - bottom_pad)
-            self.browser.setGeometry(10, browser_top, self.browser.preferred_width(size.width()), h)
+            self.browser.setGeometry(10, browser_top, self.browser.preferred_width(size.width()),
+                                     self.browser.preferred_height(h))      # only as tall as its rows: more drawing area
             self.inspector.move(self.inspector.x(), top_pad)
             self.inspector.set_max_height(h)          # the panel fits its content and anchors to the right edge
 

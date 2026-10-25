@@ -4,7 +4,7 @@ Hierarchy tree for Document Settings, Origin geometry, Bodies, and Sketches.
 """
 
 from typing import Optional, Dict
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QMenu, QHeaderView, QLabel, QHBoxLayout,
     QAbstractItemView, QToolButton
@@ -59,11 +59,14 @@ class BrowserTree(QWidget):
 
         # Header Bar (Fusion 360 floating card-style header)
         self.header = QWidget()
-        style(self.header, "background-color: rgba(32, 34, 37, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 3px 6px;")
+        style(self.header, "background-color: rgba(32, 34, 37, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 3px 6px;",
+              "QWidget { background: transparent; border: none; border-bottom: 1px solid @border; border-radius: 0; }"
+              "QToolButton { border: none; color: @muted; } QToolButton:hover { background-color: @field; color: @text; }")
         h_layout = QHBoxLayout(self.header)
         h_layout.setContentsMargins(6, 2, 4, 2)
         self.lbl_title = QLabel("BROWSER")
-        style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.8px; background: transparent;")
+        style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.8px; background: transparent;",
+              "QLabel { color: @muted; font-size: 11px; font-weight: 600; letter-spacing: 1px; border: none; }")
         h_layout.addWidget(self.lbl_title)
         h_layout.addStretch()
         for label, action, tip in (
@@ -73,7 +76,7 @@ class BrowserTree(QWidget):
             ('⏭', 'end', 'Show the complete active object'),
         ):
             button = QToolButton(self.header)
-            button.setText(label)
+            theme.set_button_text(button, label, 16)
             button.setToolTip(tip)
             button.clicked.connect(lambda checked=False, a=action: self.navigate_history(a))
             h_layout.addWidget(button)
@@ -110,6 +113,11 @@ class BrowserTree(QWidget):
                 background-color: rgba(6, 150, 215, 0.45);
                 color: #FFFFFF;
             }
+        """, """
+            QTreeWidget { color: @text; font-size: 13px; }
+            QTreeWidget::item { padding: 4px 6px; border-radius: 0; }
+            QTreeWidget::item:hover { background-color: @field; }
+            QTreeWidget::item:selected { background-color: @selection; color: @accent; }
         """)
         # Column 0 = name, column 1 = clickable visibility eye
         self.tree.setColumnCount(2)
@@ -133,11 +141,19 @@ class BrowserTree(QWidget):
         sc.activated.connect(self.toggle_selected_visibility)
 
         self.setObjectName("BrowserWidget")
-        style(self, "QWidget#BrowserWidget { background: transparent; border: none; }")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        style(self, "QWidget#BrowserWidget { background: transparent; border: none; }",
+              "QWidget#BrowserWidget { background-color: @surface; border: 1px solid @border; border-radius: 8px; }")
         self.refresh_tree()
 
     def refresh_tree(self):
-        """Rebuilds the tree nodes based on the Document model."""
+        """Rebuilds the tree nodes based on the Document model. Not while a value is being typed: the rebuild would
+        close the editor; it runs as soon as the editor is closed."""
+        if self.tree.state() == self.tree.State.EditingState:
+            if not getattr(self, "_refresh_pending", False):
+                self._refresh_pending = True
+                QTimer.singleShot(120, self._refresh_when_done)
+            return
         self.tree.blockSignals(True)  # rebuilding must not look like a rename
         expanded = self._expanded_keys()
         selected = {self._item_key(item) for item in self.tree.selectedItems()}
@@ -183,6 +199,29 @@ class BrowserTree(QWidget):
         width = min(max(260, content + 70), cap)
         self.tree.header().resizeSection(0, max(content, width - 70))
         return width
+
+    def _refresh_when_done(self):
+        if self.tree.state() == self.tree.State.EditingState:
+            QTimer.singleShot(120, self._refresh_when_done)
+            return
+        self._refresh_pending = False
+        self.refresh_tree()
+
+    def preferred_height(self, available_height: int) -> int:
+        """Just tall enough for the visible rows (header and margins included), so the drawing area below stays
+        free; capped at the room available, where the tree scrolls as before."""
+        tree = self.tree
+        rows = 0
+        index = tree.model().index(0, 0)
+        while index.isValid():
+            rows += max(tree.sizeHintForIndex(index).height(), 1)
+            index = tree.indexBelow(index)
+        m = self.layout().contentsMargins()
+        chrome = (m.top() + m.bottom() + self.layout().spacing() + self.header.sizeHint().height()
+                  + tree.frameWidth() * 2 + 2 * 4 + 16)      # tree padding + a little air under the last row
+        if tree.horizontalScrollBar().isVisible():
+            chrome += tree.horizontalScrollBar().height()
+        return max(120, min(available_height, rows + chrome))
 
     def navigate_history(self, action):
         reason = getattr(self, 'busy_reason', lambda: '')()
@@ -408,6 +447,10 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
+        if column == 1 and item_type in ("parameter", "dimension"):       # the pencil
+            from omacad.ui.object_browser import edit_parameter
+            edit_parameter(self, item_type, item_id)
+            return
         from omacad.ui.object_browser import FEATURE_ROLE
         fid = item.data(0, FEATURE_ROLE)
         pick = getattr(self, 'pick_feature', None)

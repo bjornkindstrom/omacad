@@ -6,7 +6,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QPoint, QRectF, QPointF, QTimer
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QFontMetrics
-from omacad.ui import theme
+from omacad.ui import theme, theme_icons
 from omacad.ui.theme import qcolor
 from omacad.ui import dyn_input
 from omacad.ui.expr_spin import ExprDoubleSpinBox
@@ -313,10 +313,15 @@ class OverlayMixin:
         painter.setFont(font_hud)
 
         labels = [("🔄 Orbit", 0), ("✋ Pan", 65), ("🔲 Fit", 130), ("📐 Grid", 195)]
-        for text, x_off in labels:
+        studio = theme_icons._studio_icons()
+        for (text, x_off), name in zip(labels, ("orbit", "pan", "fit", "grid")):
             btn_rect = QRectF(hud_rect.x() + x_off + 4, hud_rect.y() + 4, 60, 28)
             painter.setPen(QPen(qcolor(200, 205, 215)))
-            painter.drawText(btn_rect, Qt.AlignmentFlag.AlignCenter, text)
+            if studio:      # Studio line icon + the word, instead of an emoji in the text
+                theme_icons.tool_icon(name, 14).paint(painter, int(btn_rect.x()) + 2, int(btn_rect.y()) + 7, 14, 14)
+                painter.drawText(btn_rect.adjusted(18, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, text.split(" ", 1)[1])
+            else:
+                painter.drawText(btn_rect, Qt.AlignmentFlag.AlignCenter, text)
 
         # 7. Viewport Details (lower left)
         painter.setPen(QPen(qcolor(140, 145, 155)))

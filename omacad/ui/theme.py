@@ -34,7 +34,9 @@ BUILTIN = "builtin"          # the original Omacad dark palette
 CUSTOM_DIR = Path.home() / ".config" / "omacad" / "themes"   # themes made in the Settings theme editor
 CUSTOM_PREFIX = "user:"      # FIXED_THEME / theme_name of a custom theme: "user:<name>"
 PREVIEW: Optional[dict] = None   # unsaved colours from the theme editor, shown live
-FIXED_THEME: Optional[str] = None   # None = follow the Omarchy theme live; otherwise the name of a bundled theme (or BUILTIN)
+FIXED_THEME: Optional[str] = None
+ROLE_THEMES = ("studio", "graphite", "atelier")   # the themes offered in Settings, next to Follow Omarchy
+DEFAULT_ROLE_THEME = "studio"   # None = follow the Omarchy theme live; otherwise the name of a bundled theme (or BUILTIN)
 
 RGB = Tuple[float, float, float]
 
@@ -100,11 +102,44 @@ class Palette:
         self.grid = _rgb(d["grid"]) if "grid" in d else None
         if "highlight" in d:
             self.highlight = _rgb(d["highlight"])
+        # Studio-style themes name their surfaces outright (white panels on a grey-blue window, own fields and
+        # dividers) instead of letting the dark greys slide along one line; other themes leave these out.
+        self.surfaces = {k: _rgb(d[k]) for k in ("window", "surface", "field", "border") if k in d}
+        self.studio = len(self.surfaces) == 4
+        self.font = d.get("font") or ""
+        self.selection = _rgb(d["selection"]) if "selection" in d else None
+        self.on_accent = _rgb(d["on_accent"]) if "on_accent" in d else None
+        self.ok = col("green", "#2E7D32")         # "done / fully defined" text in the role themes
+        self.radius = float(d.get("radius", 8))
 
     # -- mapping -----------------------------------------------------------
     def _neutral(self, c: RGB) -> RGB:
+        if self.studio:
+            return self._studio_neutral(c)
         t = max(0.0, min(1.0, (_lum(c) - 0.10) / 0.80))
         return _mix(self.darker, self.foreground, t)
+
+    def _studio_neutral(self, c: RGB) -> RGB:
+        """The dark stylesheets use their greys by role: the darkest for fields and the status bar, the window a step
+        up, panels and menus above that, then buttons, dividers, muted text and text. Each band gets its Studio
+        surface, so panels come out white while fields and the window stay grey-blue."""
+        s = self.surfaces
+        stops = [(_lum(_rgb(h)), role) for h, role in (
+            ("#1A1C1E", s["field"]), ("#1E2022", s["window"]), ("#25282C", s["surface"]), ("#2D3136", s["field"]),
+            ("#3D424A", s["border"]), ("#555C68", s["border"]), ("#8E95A0", self.muted), ("#E0E3E7", self.foreground))]
+        lum = _lum(c)
+        if lum <= stops[0][0]:
+            return stops[0][1]
+        for (l0, c0), (l1, c1) in zip(stops, stops[1:]):
+            if lum <= l1:
+                return _mix(c0, c1, (lum - l0) / (l1 - l0))
+        return self.foreground
+
+    def map_alpha(self, c: RGB, a: float) -> float:
+        """Studio panels are solid white cards; the dark themes' see-through panels (alpha >= 0.7) become opaque."""
+        if self.studio and a >= 0.7 and _chroma(c) < NEUTRAL_MAX_CHROMA:
+            return 1.0
+        return a
 
     def _accentish(self, c: RGB, target: RGB) -> RGB:
         ratio = max(c) / max(ORANGE_BASE)
@@ -193,6 +228,17 @@ def delete_custom_theme(name: str) -> None:
         pass
 
 
+def current_theme_data() -> Optional[dict]:
+    """Raw colours of the theme in use (a picked theme, or Omarchy's current one), e.g. for the theme editor."""
+    if FIXED_THEME:
+        return load_theme_data(FIXED_THEME)
+    try:
+        with open(COLORS_FILE, "rb") as f:
+            return tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
 def set_preview(data: Optional[dict]) -> None:
     """Show unsaved editor colours live (None = back to the chosen theme)."""
     global PREVIEW
@@ -207,27 +253,27 @@ def set_fixed_theme(name: Optional[str]) -> None:
     refresh()
 
 
+def chosen_theme(mode: str, name: Optional[str]) -> Optional[str]:
+    """The theme a saved choice stands for: None = follow Omarchy, a proposal theme, or a theme made in the editor.
+    The older picks (Fusion 360, light, Tokyo, Nord ...) are no longer offered and open as Studio."""
+    if mode == "omarchy":
+        return None
+    if mode == "fixed" and name and (name in ROLE_THEMES or name.startswith(CUSTOM_PREFIX)):
+        return name
+    return DEFAULT_ROLE_THEME
+
+
 def apply_saved_choice() -> None:
     """Read the theme choice from the settings; called at start-up before any widget is built."""
-    global FIXED_THEME, _palette
+    global FIXED_THEME, _palette, _font
     try:
         from omacad.ui.settings import get_settings
         st = get_settings()
-        mode = st.get("theme_mode", "omarchy")
-        if mode == "omarchy":
-            FIXED_THEME = None
-        elif mode == "light":
-            FIXED_THEME = "catppuccin-latte"
-        elif mode == "dark":
-            dark_name = st.get("dark_theme_name", "tokyo-night")
-            FIXED_THEME = dark_name if dark_name in ("tokyo-night", "nord") else "tokyo-night"
-        elif mode == "fixed":
-            FIXED_THEME = st.get("theme_name") or "tokyo-night"
-        else:
-            FIXED_THEME = None
+        FIXED_THEME = chosen_theme(st.get("theme_mode", "omarchy"), st.get("theme_name"))
     except Exception:
         FIXED_THEME = None
     _palette = load_palette()
+    _font = current_font()
 
 
 def load_palette() -> Palette:
@@ -245,7 +291,9 @@ def load_palette() -> Palette:
 
 
 def current_font() -> str:
-    """The Omarchy UI font (monospace by default in Omarchy)."""
+    """The theme's own font (Studio: Noto Sans), else the Omarchy UI font (monospace by default in Omarchy)."""
+    if _palette.font:
+        return _palette.font
     try:
         out = subprocess.run(["omarchy-font-current"], capture_output=True, text=True, timeout=2).stdout.strip()
         if out:
@@ -287,7 +335,7 @@ def font_family() -> str:
 
 def style_menu(menu) -> None:
     """A context menu in the app's colours (the default one came out black on the transparent overlays)."""
-    style(menu, _MENU_CSS)
+    style(menu, _MENU_CSS, _STUDIO_CSS)
 
 
 def action_with_icon(menu, text: str, px: int = 22):
@@ -337,17 +385,48 @@ def themeify(css: str) -> str:
     def rgba(m):
         r, g, b = _palette.map_rgb((int(m.group(1)), int(m.group(2)), int(m.group(3))))
         a = m.group(4)
+        if a is not None:
+            a = f"{_palette.map_alpha((r, g, b), float(a)):g}"
         return f"rgba({round(r)}, {round(g)}, {round(b)}, {a})" if a is not None else f"rgb({round(r)}, {round(g)}, {round(b)})"
     css = _RGBA.sub(rgba, css)
     if _font:
-        css = _FONT.sub(f'font-family: "{_font}", monospace;', css)
+        fallback = "sans-serif" if _palette.font else "monospace"
+        css = _FONT.sub(f'font-family: "{_font}", {fallback};', css)
     return css
 
 
-def style(widget, css: str) -> None:
-    """setStyleSheet that follows the theme, including later theme switches."""
-    widget.setStyleSheet(themeify(css))
-    _styled.append((weakref.ref(widget), css))
+def _sheet(css: str, studio_css: str) -> str:
+    """The widget's stylesheet; with a Studio theme its extra rules come last so they win. A sheet of bare
+    declarations (no selector) cannot be followed by rules, so there the Studio rules replace it."""
+    if not (studio_css and _palette.studio):
+        return themeify(css)
+    return (themeify(css) if "{" in css else "") + studio_sheet(studio_css)
+
+
+def studio_sheet(css: str) -> str:
+    """Rules written for the role themes (Studio, Graphite, Atelier): @window/@surface/@field/@border/@text/@muted/
+    @accent/@selection name their roles, plus derived ones (@on_accent = text on the accent, hover/pressed shades,
+    a stronger border). Corner radii follow the theme's `radius` (8 px = Studio; 6 px rules scale with it)."""
+    p = _palette
+    dark = p.mode == "dark"
+    shade = (0, 0, 0) if not dark else (255, 255, 255)
+    roles = dict(p.surfaces, text=p.foreground, muted=p.muted, accent=p.accent,
+                 selection=p.selection or _mix(p.accent, p.surfaces["surface"], 0.85),
+                 on_accent=p.on_accent or ((255, 255, 255) if _lum(p.accent) < 0.55 else (20, 24, 30)),
+                 accent_hover=_mix(p.accent, shade, 0.12), accent_pressed=_mix(p.accent, shade, 0.25),
+                 border_strong=_mix(p.surfaces["border"], p.foreground, 0.22), ok=p.ok)
+    for name in sorted(roles, key=len, reverse=True):
+        css = css.replace(f"@{name}", _hex(roles[name]))
+    if p.radius != 8:
+        css = re.sub(r"border-radius: (8|6)px", lambda m: f"border-radius: {round(p.radius * int(m.group(1)) / 8)}px", css)
+    return css
+
+
+def style(widget, css: str, studio: str = "") -> None:
+    """setStyleSheet that follows the theme, including later theme switches. `studio` = extra rules used only
+    while a Studio theme is active (calm, borderless buttons, light blue for the active state)."""
+    widget.setStyleSheet(_sheet(css, studio))
+    _styled.append((weakref.ref(widget), css, studio))
 
 
 def qcolor(r: int, g: int, b: int, a: int = 255) -> QColor:
@@ -373,7 +452,8 @@ def apply_qt_palette() -> None:
                     (QPalette.ColorRole.ToolTipText, "#E0E3E7")):
         pal.setColor(role, m(h))
     pal.setColor(QPalette.ColorRole.Highlight, QColor(*(round(v) for v in _palette.accent)))
-    pal.setColor(QPalette.ColorRole.HighlightedText, QColor(*(round(v) for v in _palette.darker)))
+    pal.setColor(QPalette.ColorRole.HighlightedText,
+                 QColor("#FFFFFF") if _palette.studio else QColor(*(round(v) for v in _palette.darker)))
     app.setPalette(pal)
     QToolTip.setPalette(pal)
 
@@ -388,12 +468,12 @@ def refresh() -> None:
     if app is not None:
         app.setStyleSheet(indicator_stylesheet())
     alive = []
-    for ref, css in _styled:
+    for ref, css, studio in _styled:
         w = ref()
         if w is not None:
             try:
-                w.setStyleSheet(themeify(css))
-                alive.append((ref, css))
+                w.setStyleSheet(_sheet(css, studio))
+                alive.append((ref, css, studio))
             except RuntimeError:
                 pass  # widget already deleted
     _styled[:] = alive
@@ -460,8 +540,8 @@ def base_stylesheet() -> str:
 
 
 # Icon helpers remain re-exported here for existing UI imports.
-from omacad.ui.theme_styles import _MENU_CSS, _BASE_CSS
+from omacad.ui.theme_styles import _MENU_CSS, _BASE_CSS, _STUDIO_CSS
 from omacad.ui.theme_icons import (
-    ICONS_DIR, EMOJI_TO_TOOL, clear_icon_cache, tool_icon, emoji_icon, split_emoji,
+    ICONS_DIR, EMOJI_TO_TOOL, STUDIO_ICONS, COMMAND_ICONS, named_icon, command_icon, studio_symbol, set_button_text, clear_icon_cache, tool_icon, emoji_icon, split_emoji,
     BigIconStyle, ensure_big_icon_style
 )

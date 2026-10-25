@@ -1,5 +1,14 @@
 # Omacad – progress and roadmap
 
+- Readable sketch palette, grey finished sketches (0.9.9.80.43, #89 #90).
+- Theme choice trimmed to Studio, Graphite, Atelier and Follow Omarchy (0.9.9.80.42).
+- Own icon per rectangle kind, shown on the ribbon button for the default (0.9.9.80.41).
+- Graphite and Atelier themes (0.9.9.80.40); pencil to edit browser values (0.9.9.80.39).
+- Browser fits its rows instead of filling the window height (0.9.9.80.38).
+- Studio line icons for every command, menu, tree row and history step (0.9.9.80.37).
+- Studio theme and Studio line icons from the appearance proposal, selectable in Settings (0.9.9.80.36).
+- Redesigned settings navigation and section cards with theme-aware styling (0.9.9.80.35).
+
 - Ground grid remains behind bodies from below; chamfer outlines keep continuous rims and whole planar/curved faces even with overlapping edge selections (0.9.9.80.34).
 
 - Fixed false crease lines after chamfering curved outlines by retaining double precision in topology and outline tools (0.9.9.80.33).

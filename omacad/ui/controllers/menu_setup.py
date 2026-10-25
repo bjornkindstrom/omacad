@@ -89,7 +89,8 @@ class MenuSetupMixin:
                     menu.addSeparator()
                     continue
                 c = commands.get(cid)
-                act = QAction(theme.emoji_icon(c.icon, 24) if c.icon != "dimension" else theme.tool_icon(c.icon, 24),
+                act = QAction(theme.named_icon(theme.COMMAND_ICONS[cid], c.icon, 24) if cid in theme.COMMAND_ICONS
+                              else theme.emoji_icon(c.icon, 24) if c.icon != "dimension" else theme.tool_icon(c.icon, 24),
                               c.label, menu)
                 keys = [k for k in (c.shortcut, *c.extra_shortcuts) if k]
                 if keys:
@@ -149,13 +150,14 @@ class MenuSetupMixin:
             "Import 3MF": "📥", "Exit": "🚪", "Undo": "↩️", "Redo": "↪️", "Fit View": "🔲", "Toggle Ground Grid": "📐",
             "Toggle Feature Edges": "🔳", "About": "ℹ️", "Settings": "⚙️",
         }
+        studio_names = {"Fit View": "fit", "Toggle Ground Grid": "grid"}   # their emoji means something else in Studio
         for menu in menubar.findChildren(QMenu):
             for act in menu.actions():
                 if not act.icon().isNull():
                     continue
                 for label, emoji in icons.items():
                     if act.text().startswith(label):
-                        act.setIcon(theme.emoji_icon(emoji, 24))
+                        act.setIcon(theme.named_icon(studio_names.get(label, ""), emoji, 24))
                         break
 
         # Document / File Name display at the top (Fusion style)

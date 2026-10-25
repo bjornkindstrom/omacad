@@ -3,12 +3,29 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTreeWidgetItem
 from PySide6.QtGui import QColor
 from omacad.ui.timeline_bar import FeatureNodeWidget
+from omacad.ui import theme
 from omacad.model.feature_parameters import parameter_unit
 
 
 ROLE = Qt.ItemDataRole.UserRole
 FEATURE_ROLE = ROLE + 1
 
+
+# Studio icons tell apart steps that share one emoji in the other icon sets (a chamfer is not a fillet)
+_STUDIO_KINDS = {("fillet", "chamfer"): "chamfer", ("pattern", "linear"): "pattern_linear",
+                 ("pattern", "circular"): "pattern_circular", ("pattern", "fill"): "pattern_fill",
+                 ("pattern", "mirror"): "mirror"}
+_STUDIO_TYPES = {"move": "move", "delete_body": "delete", "import_mesh": "import"}
+
+
+def _feature_studio_icon(feat) -> str:
+    """The Studio icon name of a step (by its type and kind), or "" when the Studio icons are not chosen."""
+    from omacad.ui.settings import get_settings
+    if get_settings().get("icon_theme") != theme.STUDIO_ICONS:
+        return ""
+    symbol = FeatureNodeWidget.FEATURE_ICONS.get(feat.feature_type, '⚙️')
+    return (_STUDIO_KINDS.get((feat.feature_type, getattr(feat, "kind", "")))
+            or _STUDIO_TYPES.get(feat.feature_type) or theme.EMOJI_TO_TOOL.get(symbol, ""))
 
 def add_histories(browser, root):
     doc = browser.doc
@@ -30,6 +47,14 @@ def add_histories(browser, root):
         _add_sketch_rows(node, sk)
 
 
+def _pencil(row):
+    """A pencil in the eye column of an editable value row: one click edits it (a double-click on a row that is
+    already selected was easy to miss)."""
+    row.setIcon(1, theme.named_icon('sketch', '✏️', 18))
+    row.setTextAlignment(1, Qt.AlignmentFlag.AlignCenter)
+    row.setToolTip(1, 'Click to edit the value')
+
+
 def _add_sketch_rows(node, sketch):
     """A sketch's dimensions (editable) and texts (double-click edits the text)."""
     for dim in sketch.dimensions:
@@ -37,7 +62,8 @@ def _add_sketch_rows(node, sketch):
         row = QTreeWidgetItem(node, [f'{dim.name or dim.dim_type}: {dim.expr or f"{dim.value:g}"} {unit}', ''])
         row.setData(0, ROLE, ('dimension', (sketch.sketch_id, dim.dim_id)))
         row.setFlags(row.flags() | Qt.ItemFlag.ItemIsEditable)
-        row.setToolTip(0, f'{dim.value:g} — double-click to edit')
+        row.setToolTip(0, f'{dim.value:g} — double-click or click the pencil to edit')
+        _pencil(row)
     from omacad.model.sketch import SketchText
     for entity in sketch.entities:
         if isinstance(entity, SketchText):
@@ -66,8 +92,13 @@ def _add_object(browser, group, oid, features, excluded):
         link.setData(0, ROLE, ("feature_link", obj.origin_feature_id))
     for fid in obj.feature_ids:
         feat = features[fid]
-        icon = FeatureNodeWidget.FEATURE_ICONS.get(feat.feature_type, '⚙️')
-        node = QTreeWidgetItem(parent, [icon + ' ' + feat.name, ''])
+        studio_icon = _feature_studio_icon(feat)
+        if studio_icon:
+            node = QTreeWidgetItem(parent, [feat.name, ''])
+            node.setIcon(0, theme.named_icon(studio_icon, '⚙️', 22))
+        else:
+            icon = FeatureNodeWidget.FEATURE_ICONS.get(feat.feature_type, '⚙️')
+            node = QTreeWidgetItem(parent, [icon + ' ' + feat.name, ''])
         node.setData(0, ROLE, ('feature', fid))
         node.setData(0, FEATURE_ROLE, fid)
         if feat.feature_type == 'sketch':
@@ -85,7 +116,8 @@ def _add_object(browser, group, oid, features, excluded):
                 row = QTreeWidgetItem(node, [f'{key.replace("_", " ").capitalize()}: {shown} {parameter_unit(key)}'.rstrip(), ''])
                 row.setData(0, ROLE, ('parameter', (fid, key)))
                 row.setFlags(row.flags() | Qt.ItemFlag.ItemIsEditable)
-                row.setToolTip(0, 'Double-click to edit this parameter or expression')
+                row.setToolTip(0, 'Double-click or click the pencil to edit this parameter or expression')
+                _pencil(row)
         if feat.error:
             node.setForeground(0, QColor('#e06c75'))
             node.setToolTip(0, feat.error)
@@ -130,7 +162,19 @@ def find_feature(browser, feature_id):
 
 
 def edit_parameter(browser, kind, item_id):
-    for item, _ in browser._walk():
-        if item.data(0, ROLE) == (kind, item_id):
-            browser.tree.editItem(item, 0)
+    """Open the value editor of a parameter/dimension row. Done on the next event-loop turn and looked up again by
+    its id: the click that asked for it may still be finishing (or have rebuilt the tree), which closed an editor
+    opened straight away."""
+    from PySide6.QtCore import QTimer
+
+    def open_editor():
+        tree = browser.tree
+        if tree.state() == tree.State.EditingState:
             return
+        for item, _ in browser._walk():
+            if item.data(0, ROLE) == (kind, item_id):
+                tree.setCurrentItem(item)
+                tree.scrollToItem(item)
+                tree.editItem(item, 0)
+                return
+    QTimer.singleShot(0, open_editor)

@@ -613,7 +613,8 @@ class RenderGLMixin:
                     scol = get_settings().sketch_line_color_rgb01()
                     self.draw_thick_lines(mvp, normal_lines, (*scol, 1.0), line_w, halo_px=halo_px)
                 else:
-                    self.draw_thick_lines(mvp, normal_lines, (1.0, 0.65, 0.20, 1.0), 2.0)  # Orange sketch
+                    fcol = get_settings().sketch_finished_color_rgb01()    # grey by default (Björn #90)
+                    self.draw_thick_lines(mvp, normal_lines, (*fcol, 1.0), line_w, halo=False)   # no dark rim
 
             if projected_lines:   # edges included from the body: a distinct colour, like Fusion's projected curves
                 self.draw_thick_lines(mvp, projected_lines, (0.80, 0.45, 1.0, 1.0), 2.2)
@@ -626,10 +627,13 @@ class RenderGLMixin:
                           or get_settings().highlight_color_rgb01() or theme.palette().highlight01())
                 self.draw_thick_lines(mvp, selected_lines, (*hl_col, 1.0), sel_w, halo_px=halo_px)
 
-            if construction_lines:
+            if construction_lines and is_active:
                 ccol = get_settings().sketch_construction_color_rgb01()
                 self.draw_thick_lines(mvp, self.dash_segments(construction_lines), (*ccol, 1.0), line_w,
                                       halo_px=halo_px)
+            elif construction_lines:    # a finished sketch's helper lines: quiet, dashed, in its grey
+                fcol = get_settings().sketch_finished_color_rgb01()
+                self.draw_thick_lines(mvp, self.dash_segments(construction_lines), (*fcol, 0.6), 1.0, halo=False)
 
         GL.glEnable(GL.GL_DEPTH_TEST)
 

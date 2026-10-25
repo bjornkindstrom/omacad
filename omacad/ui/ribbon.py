@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabBar, QTabWidget, QToolButton, QLabel, QFrame, QSizePolicy, QScrollArea
 )
 from PySide6.QtGui import QFont, QFontMetrics
-from omacad.ui.sketch_tools import RECT_TOOLS
+from omacad.ui.sketch_tools import RECT_TOOLS, rect_icon
 from omacad.ui import commands
 
 CIRCLE_TOOLS = ('CIRCLE', 'SMART_CIRCLE')
@@ -40,13 +40,25 @@ def ribbon_height(scale: float) -> int:
     return max(50, int(round(66 * scale)))
 
 
+# Studio: buttons without frames; a light blue fill marks the active tool, a blue outline a suggested one.
+_STUDIO_BUTTON = """
+    QToolButton { background-color: transparent; border: 1px solid transparent; border-radius: 6px; color: @text; }
+    QToolButton:hover { background-color: @field; border: 1px solid @border; color: @text; }
+    QToolButton:pressed, QToolButton:checked { background-color: @selection; border: 1px solid @selection; color: @accent; }
+    QToolButton:disabled { color: @muted; }
+    QToolButton[suggested="true"] { background-color: @selection; border: 1px solid @accent; }
+    QToolButton::menu-indicator { image: none; width: 0; }
+"""
+
+
 class RibbonButton(QToolButton):
     """Large Fusion 360 style ribbon tool button with vertical icon and label."""
 
-    def __init__(self, text: str, icon_symbol: str, parent: Optional[QWidget] = None):
+    def __init__(self, text: str, icon_symbol: str, parent: Optional[QWidget] = None, command: str = ""):
         super().__init__(parent)
         self.raw_text = text
         self.icon_symbol = icon_symbol
+        self.icon_command = command         # a command id: lets the Studio icons give it its own icon
         self.setText(text)
         self.apply_scale()
         self.setToolTip("")
@@ -66,7 +78,7 @@ class RibbonButton(QToolButton):
                                 else Qt.ToolButtonStyle.ToolButtonIconOnly)
         if not labels:
             min_h = icon_px + max(6, int(round(8 * scale)))
-        self.setIcon(theme.tool_icon(self.icon_symbol, icon_px))
+        self.setIcon(theme.command_icon(self.icon_command, self.icon_symbol, icon_px))
         self.setIconSize(QSize(icon_px, icon_px))
         self.setMinimumHeight(min_h)
         style(self, f"""
@@ -94,7 +106,7 @@ class RibbonButton(QToolButton):
                 border: 1px solid #E26D28;
                 background-color: rgba(226, 109, 40, 0.16);
             }}
-        """)
+        """, studio=_STUDIO_BUTTON)
         self.ensurePolished()
         if not labels:
             self.setMinimumWidth(icon_px + max(8, int(round(10 * scale))))
@@ -162,6 +174,10 @@ class Ribbon(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        self.setObjectName("Ribbon")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        style(self, "QWidget#Ribbon { background: transparent; }",
+              "QWidget#Ribbon { background-color: @surface; border-bottom: 1px solid @border; }")
 
         # Tab Widget
         self.tabs = QTabWidget()
@@ -254,7 +270,7 @@ class Ribbon(QWidget):
             QScrollBar:horizontal { height: 6px; background: transparent; margin: 0; }
             QScrollBar::handle:horizontal { background: #484F5A; border-radius: 3px; min-width: 30px; }
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-        """)
+        """, "QScrollArea, QScrollArea > QWidget, QScrollArea > QWidget > QWidget { background: transparent; }")
         return area
 
     def rebuild_ribbon(self):
@@ -292,7 +308,7 @@ class Ribbon(QWidget):
 
     def _command_button(self, cid: str, checkable: bool = False) -> "RibbonButton":
         c = commands.get(cid)
-        btn = RibbonButton(commands.button_text(cid), c.icon)
+        btn = RibbonButton(commands.button_text(cid), c.icon, command=cid)
         btn.setCheckable(checkable)
         btn.setToolTip(commands.tooltip(cid))
         btn.setProperty("command", cid)
@@ -306,7 +322,7 @@ class Ribbon(QWidget):
         theme.style_menu(menu)
         for cid in cids:
             c = commands.get(cid)
-            act = menu.addAction(theme.tool_icon(c.icon, 18), commands.menu_text(cid))
+            act = menu.addAction(theme.command_icon(cid, c.icon, 18), commands.menu_text(cid))
             act.setToolTip(c.tip)
             act.triggered.connect(lambda _=False, cid=cid: self._emit_command(cid))
         return menu
@@ -318,7 +334,7 @@ class Ribbon(QWidget):
             for cid in cids:
                 row.addWidget(self._command_button(cid))
             return
-        btn = RibbonButton(f"{text}\n▾", icon)
+        btn = RibbonButton(f"{text}\n▾", icon, command=did)
         btn.setToolTip(tip)
         btn.setProperty("command", did)
         btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -331,7 +347,7 @@ class Ribbon(QWidget):
         if not first:
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.VLine)
-            style(sep, "color: #353940;")
+            style(sep, "color: #353940;", "QFrame { color: @border; }")
             h_layout.addWidget(sep)
         box = QWidget()
         col = QVBoxLayout(box)
@@ -343,7 +359,8 @@ class Ribbon(QWidget):
         col.addLayout(row)
         caption = QLabel(title)
         caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        style(caption, "color: #8A919C; font-size: 9px; font-weight: bold; letter-spacing: 1px; background: transparent;")
+        style(caption, "color: #8A919C; font-size: 9px; font-weight: bold; letter-spacing: 1px; background: transparent;",
+              "QLabel { color: @muted; font-size: 10px; font-weight: 600; }")
         col.addWidget(caption)
         box.setObjectName(f"RibbonGroup_{title}")
         h_layout.addWidget(box)
@@ -413,7 +430,8 @@ class Ribbon(QWidget):
 
         # Big Green Finish Sketch Button (Fusion 360 hallmark)
         self.btn_finish = QToolButton()
-        self.btn_finish.setText("✅  " + commands.label("finish_sketch"))
+        theme.set_button_text(self.btn_finish, "✅  " + commands.label("finish_sketch"), 20, colour="#FFFFFF")
+        self.btn_finish.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_finish.setToolTip(commands.tooltip("finish_sketch"))
         self.btn_finish.setMinimumSize(max(100, int(round(140 * scale))), max(34, int(round(48 * scale))))
         style(self.btn_finish, """
@@ -490,7 +508,7 @@ class Ribbon(QWidget):
                     border: 1px solid #FF7E36;
                     color: #FFFFFF;
                 }}
-            """)
+            """, studio=_STUDIO_BUTTON)
             c_btn.clicked.connect(lambda _=False, c=ctype: self.constraint_clicked.emit(c))
             grid_layout.addWidget(c_btn, i % 2, i // 2)
         row.addWidget(grid_widget)
@@ -507,7 +525,7 @@ class Ribbon(QWidget):
         menu = QMenu(self.btn_rect)
         theme.style_menu(menu)
         for tool, (label, _icon) in RECT_TOOLS.items():
-            act = menu.addAction(label.replace("\n", " "))
+            act = menu.addAction(rect_icon(tool, 22), label.replace("\n", " "))
             act.triggered.connect(lambda _=False, t=tool: self.select_sketch_tool(t))
         menu.addSeparator()
         default_menu = menu.addMenu("Button default")
@@ -515,7 +533,7 @@ class Ribbon(QWidget):
         group = QActionGroup(default_menu)
         self._rect_default_actions = {}
         for tool, (label, _icon) in RECT_TOOLS.items():
-            act = default_menu.addAction(label.replace("\n", " "))
+            act = default_menu.addAction(rect_icon(tool, 22), label.replace("\n", " "))
             act.setCheckable(True)
             act.setActionGroup(group)
             act.triggered.connect(lambda _=False, t=tool: self.set_rect_default(t))
@@ -530,9 +548,10 @@ class Ribbon(QWidget):
         if tool not in RECT_TOOLS:
             tool = "RECT"
         self.rect_default = tool
-        label, icon = RECT_TOOLS[tool]
+        label, _icon = RECT_TOOLS[tool]
         self.btn_rect.setText(label)
-        self.btn_rect.setIcon(theme.emoji_icon(icon, 30))
+        self.btn_rect.icon_symbol = tool.lower()       # its own picture; kept when the buttons are restyled
+        self.btn_rect.setIcon(rect_icon(tool, 30))     # the default kind's own picture shows on the button
         self._rect_default_actions[tool].setChecked(True)
         if save:
             get_settings().set("rect_default_tool", tool)
