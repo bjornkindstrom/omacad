@@ -1,5 +1,7 @@
 # Omacad – färdplan
 
+Genomfört 0.9.9.80.62: ihåligt loft och redigerbar lista med flera profiler.
+
 Genomfört 0.9.9.80.45: fillet vid lutande ribba, hela skulderkanter, emboss bakom fillet, parallella tester (xdist).
 Genomfört 0.9.9.80.44: #91–#99 läsbara värderutor, linjer mot cirkel ger yta, mått i browsern markeras, Construction-meny, 45°/90°-fäste, dolda kroppar orörda.
 Genomfört 0.9.9.80.43: #89 läsbar palett/inspektör, #90 grå färdiga skisser.

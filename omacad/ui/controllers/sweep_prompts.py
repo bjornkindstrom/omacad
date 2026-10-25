@@ -106,6 +106,13 @@ class SweepPromptsMixin:
             return LoftFeature("preview", title, [LoftFeature.section_ref(self.doc, s, i) for s, i in dlg.profiles],
                                dlg.operation(), dlg.spn_twist.value())
 
+        def sync_profiles():
+            self.doc.selected_profile = dlg.profiles[0] if dlg.profiles else None
+            self.doc.selected_extra = list(dlg.profiles[1:])
+
+        if mode == "loft":
+            dlg.changed.connect(sync_profiles)
+
         def preview():
             solid = None
             try:

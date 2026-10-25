@@ -1,5 +1,7 @@
 # Omacad – progress and roadmap
 
+- Hollow Loft profiles and an editable profile list with add/remove/reorder (0.9.9.80.62).
+
 - Leaning-rib fillet whole, shoulder circles whole, emboss wall behind a fillet, parallel tests (0.9.9.80.45).
 - Readable value boxes, faces closed by lines on a circle, browser dimension highlight, Construction menu, 45°/90° snaps, hidden bodies untouched (0.9.9.80.44, #91–#99).
 - Readable sketch palette, grey finished sketches (0.9.9.80.43, #89 #90).

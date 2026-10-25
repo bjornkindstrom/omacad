@@ -21,7 +21,7 @@ OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as t
 
 def can_edit(feature) -> bool:
     return feature.feature_type in (
-        "box", "cylinder", "prism", "sphere", "extrude", "emboss", "revolve",
+        "box", "cylinder", "prism", "sphere", "extrude", "emboss", "revolve", "loft",
         "sketch", "fillet", "pattern", "move", "thread", "offset_face", "honeycomb", "shell", "combine", "split_body"
     )
 
@@ -159,6 +159,59 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
     t = feat.feature_type
     vp = getattr(win, "viewport", None)
     state_before = states.get(index, {})
+
+    if t == "loft":
+        from omacad.model.features.sweep import LoftFeature
+        from omacad.model.features.base import find_profile
+        from omacad.ui.dialogs.sweep_dlg import SweepLoftDialog, OPERATIONS as LOFT_OPS
+        dlg = SweepLoftDialog(doc, "loft", win)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        profiles = []
+        for sid, idx, sig in feat.sections:
+            j = find_profile(doc.sketches[sid], idx, sig)
+            if j is not None:
+                profiles.append((sid, j))
+        dlg.set_profiles(profiles)
+        dlg.spn_twist.setValue(feat.twist)
+        if feat.exprs.get("twist"):
+            dlg.spn_twist.set_expression(feat.exprs["twist"])
+        dlg.cmb_op.setCurrentIndex([k for k, _ in LOFT_OPS].index(feat.operation))
+
+        def sections():
+            return [LoftFeature.section_ref(doc, s, i) for s, i in dlg.profiles]
+
+        def preview_loft():
+            solid = LoftFeature("preview", feat.name, sections(), dlg.operation(), dlg.spn_twist.value()).build_solid(doc)
+            vp.set_preview(solid, dlg.operation())
+
+        shown = {sid: sk.visible for sid, sk in doc.sketches.items()}
+        selected = doc.selected_profile, list(doc.selected_extra)
+        chain = getattr(vp, "profile_chain_mode", False)
+
+        def sync_profiles():
+            doc.selected_profile = dlg.profiles[0] if dlg.profiles else None
+            doc.selected_extra = list(dlg.profiles[1:])
+
+        def picked():
+            dlg.set_profiles(([doc.selected_profile] if doc.selected_profile else []) + list(doc.selected_extra))
+
+        dlg.changed.connect(sync_profiles)
+        try:
+            for sk in doc.sketches.values():
+                sk.visible = True
+            vp.profile_chain_mode = True
+            sync_profiles()
+            accepted = _exec_with_preview(win, doc, dlg, preview_loft,
+                                          wiring=((vp.profile_picked, picked),))
+        finally:
+            vp.profile_chain_mode = chain
+            doc.selected_profile, doc.selected_extra = selected
+            for sid, visible in shown.items():
+                doc.sketches[sid].visible = visible
+        if not accepted:
+            return False
+        return commit(sections=sections(), operation=dlg.operation(), twist=dlg.spn_twist.value(),
+                      exprs=dlg.get_expressions())
 
     if t == "extrude":
         from omacad.model.timeline import ExtrudeFeature

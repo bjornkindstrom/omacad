@@ -39,8 +39,8 @@ MORE = {
     "sweep": ("Click the profile in the view, then the path: body edges as in Fillet, or a sketch's line, arc or circle "
               "(everything joined to it comes along). The profile may sit anywhere on the path and must cross it; Twist turns it over the length.",
               "path rail follow spring"),
-    "loft": ("Click the first profile, then Shift+click the next ones in order (each on its own plane). The skin "
-             "passes through them; holes are not lofted.", "blend transition skin"),
+    "loft": ("Click profiles in order (each on its own plane), or add them from the profile list. The skin "
+             "passes through them and preserves holes (all profiles need the same number). Use Edit on the Loft step to add, remove or reorder profiles.", "blend transition skin"),
     "pipe": ("Click the path in the view - body edges as in Fillet, or a sketch's line, arc or circle - and set the "
              "diameter; a wall thickness makes it a tube. Bends and corners follow the path.", "tube hose wire rod path edge"),
     "cone": ("Bottom radius, top radius (0 = a point) and height, placed like a cylinder; Shell Wall hollows it.",

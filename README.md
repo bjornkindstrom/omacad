@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+Loft bevarar nu hål i väggprofiler. Lägg till, ta bort och ordna profiler i listan, även via Edit på ett befintligt Loft (0.9.9.80.62).
+
 Fillet vid foten av en lutande ribba blir hel, hela cirklar på burkens skuldra kan väljas igen, emboss hittar väggen bakom en fillet och testerna körs parallellt på 2,5 min (0.9.9.80.45).
 
 Temavalet är nu Studio, Graphite, Atelier eller Följ Omarchy; de äldre temana är borttagna och ett sparat äldre val öppnas som Studio (0.9.9.80.42).

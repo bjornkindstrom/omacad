@@ -1,7 +1,7 @@
 """Panel for Sweep, Loft and Pipe (Björn #46): profiles and the path are clicked in the 3D view, as in Fusion."""
 
 from PySide6.QtCore import Signal, QTimer
-from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QPushButton, QListWidget, QHBoxLayout
 
 from omacad.ui.dialogs.base import BaseFeatureDialog
 from omacad.ui.expr_spin import ExprDoubleSpinBox
@@ -13,7 +13,7 @@ HELP = {
              "see-through) or a sketch's line, arc or circle (everything joined to it comes along). Profile / Path "
              "below says which one the next click picks.",
     "loft": "Click the profiles in the order the loft passes through them (two or more, on different planes). "
-            "Click a profile again to drop it.",
+            "Click a profile again to drop it, or use the list below to add, remove and reorder profiles.",
     "pipe": "Click the path in the 3D view - body edges (as in Fillet) or a sketch's line, arc or circle; joined "
             "pieces come along - and set the diameter; a wall thickness makes it a tube.",
 }
@@ -83,6 +83,23 @@ class SweepLoftDialog(BaseFeatureDialog):
         self.lbl_problem = QLabel("")
         self.lbl_problem.setWordWrap(True)
         self.main_layout.addLayout(form)
+        if mode == "loft":
+            self.profile_list = QListWidget()
+            self.profile_list.setMaximumHeight(130)
+            self.main_layout.addWidget(self.profile_list)
+            self.profile_choice = QComboBox()
+            for sid, sketch in doc.sketches.items():
+                for i, profile in enumerate(sketch.profiles):
+                    self.profile_choice.addItem(f"{sketch.name}: profile {i + 1} ({profile.area:.1f} mm²)", (sid, i))
+            self.main_layout.addWidget(self.profile_choice)
+            buttons = QHBoxLayout()
+            for label, slot in (("Add", self.add_profile), ("Remove", self.remove_profile),
+                                ("↑", lambda: self.move_profile(-1)), ("↓", lambda: self.move_profile(1))):
+                button = QPushButton(label)
+                button.setAutoDefault(False)
+                button.clicked.connect(slot)
+                buttons.addWidget(button)
+            self.main_layout.addLayout(buttons)
         self.main_layout.addWidget(self.lbl_problem)
         self.add_buttons()
         self.profiles = []                  # [(sketch id, profile index)] in pick order
@@ -109,7 +126,33 @@ class SweepLoftDialog(BaseFeatureDialog):
                                       if names else "click a profile")
         else:
             self.lbl_profiles.setText(" → ".join(names) if names else "click the first profile")
+        if self.mode == "loft":
+            row = self.profile_list.currentRow()
+            self.profile_list.clear()
+            self.profile_list.addItems([f"{n + 1}. {self.doc.sketches[s].name}: profile {i + 1}"
+                                       for n, (s, i) in enumerate(self.profiles)])
+            self.profile_list.setCurrentRow(min(max(row, 0), len(self.profiles) - 1))
         self.changed.emit()
+
+    def add_profile(self):
+        ref = self.profile_choice.currentData()
+        if ref is not None and ref not in self.profiles:
+            self.set_profiles([*self.profiles, ref])
+            self.profile_list.setCurrentRow(len(self.profiles) - 1)
+
+    def remove_profile(self):
+        row = self.profile_list.currentRow()
+        if row >= 0:
+            self.set_profiles(self.profiles[:row] + self.profiles[row + 1:])
+
+    def move_profile(self, delta):
+        row = self.profile_list.currentRow()
+        dest = row + delta
+        if 0 <= row < len(self.profiles) and 0 <= dest < len(self.profiles):
+            profiles = list(self.profiles)
+            profiles[row], profiles[dest] = profiles[dest], profiles[row]
+            self.set_profiles(profiles)
+            self.profile_list.setCurrentRow(dest)
 
     def set_active(self, target: str):
         """Which selection the next click in the view goes to: "profile" or "path"."""

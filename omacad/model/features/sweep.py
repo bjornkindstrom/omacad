@@ -200,7 +200,7 @@ class PipeFeature(Feature):
 
 class LoftFeature(Feature):
     """Fusion's Loft: a skin through two or more profiles, in the order they were picked. Each profile is
-    remembered as (sketch id, index, signature) and found again when the sketch changes. Holes are not lofted."""
+    remembered as (sketch id, index, signature) and found again when the sketch changes. Inner contours are lofted and subtracted to preserve hollow profiles."""
 
     def __init__(self, feature_id: str, name: str, sections, operation: str = "new_body", twist: float = 0.0):
         super().__init__(feature_id, "loft", name)
@@ -213,17 +213,26 @@ class LoftFeature(Feature):
         return (sketch_id, idx, profile_signature(doc.sketches[sketch_id].profiles[idx]))
 
     def build_solid(self, doc: Any) -> Optional[m3d.Manifold]:
-        rings, caps = [], []
+        rings, caps, holes, hole_caps = [], [], [], []
         for sid, idx, sig in self.sections:
             sketch = doc.sketches.get(sid)
             j = find_profile(sketch, idx, sig) if sketch is not None else None
             if j is None:
                 raise ValueError("A profile of the loft is gone.")
             prof = sketch.profiles[j]
-            outer, _holes = _profile_world(sketch, prof)
+            outer, inner = _profile_world(sketch, prof)
+            holes.append(inner)
+            hole_caps.append(prof.interior_holes)
             rings.append(outer)
             caps.append(np.asarray(prof.exterior_pts, dtype=float))
+        if len({len(h) for h in holes}) != 1:
+            raise ValueError("All loft profiles must have the same number of holes.")
         solid = loft_solid(rings, [caps[0], caps[-1]], twist_deg=self.twist)
+        for i in range(len(holes[0])):
+            cavity = loft_solid([h[i] for h in holes],
+                                [np.asarray(hole_caps[0][i]), np.asarray(hole_caps[-1][i])],
+                                twist_deg=self.twist)
+            solid = solid - cavity
         return solid if not solid.is_empty() else None
 
     def execute(self, doc: Any) -> None:

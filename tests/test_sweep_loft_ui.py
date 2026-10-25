@@ -177,3 +177,42 @@ def test_sweep_panel_keeps_shift_clicked_profiles_of_one_sketch(win):
     feat = doc.timeline.features[-1]
     assert feat.feature_type == "sweep" and feat.extra_profiles == [1]
     assert abs(doc.bodies[f"body_{feat.feature_id}"].manifold.volume() - 480) < 1.0
+
+
+def test_loft_profile_list_and_edit_add_third_section(win, monkeypatch):
+    from omacad.ui import feature_edit
+    from omacad.ui.dialogs.sweep_dlg import SweepLoftDialog
+    doc = win.doc
+    profiles = []
+    for z in (0, 10, 20):
+        plane = doc.construction_plane(doc.add_construction_plane(doc.origin_planes['XY'], z, origin=(0, 0, 0)))
+        sketch = doc.start_sketch_on_plane(plane)
+        sketch.add_rect((-10, -10), (10, 10))
+        doc.finish_sketch()
+        profiles.append((sketch.sketch_id, 0))
+    feat = doc.add_loft(profiles[:2])
+    assert feature_edit.can_edit(feat)
+    before = next(iter(doc.bodies.values())).manifold.volume()
+
+    def edit(dlg):
+        assert dlg.profiles == profiles[:2]
+        choices = [dlg.profile_choice.itemData(i) for i in range(dlg.profile_choice.count())]
+        assert profiles[2] in choices, choices
+        dlg.profile_choice.setCurrentIndex(choices.index(profiles[2]))
+        dlg.add_profile()
+        assert dlg.profiles == profiles
+        dlg.move_profile(-1)
+        assert dlg.profiles == [profiles[0], profiles[2], profiles[1]]
+        dlg.move_profile(1)
+        return 1
+
+    monkeypatch.setattr(SweepLoftDialog, 'exec', edit)
+    index = doc.timeline.features.index(feat)
+    assert feature_edit.edit_feature(win, doc, index)
+    assert len(doc.timeline.features[index].sections) == 3
+    assert next(iter(doc.bodies.values())).manifold.volume() == pytest.approx(8000)
+    doc.undo()
+    assert next(iter(doc.bodies.values())).manifold.volume() == pytest.approx(before)
+    monkeypatch.setattr(SweepLoftDialog, 'exec', lambda dlg: (dlg.remove_profile(), 0)[1])
+    assert not feature_edit.edit_feature(win, doc, index)
+    assert next(iter(doc.bodies.values())).manifold.volume() == pytest.approx(before)

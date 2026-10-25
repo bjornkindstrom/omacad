@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.9.80.62 - 2026-10-25
+
+### Fixed
+- Loft preserves inner contours instead of filling hollow profiles (report 20261025-210210). Mismatched hole counts report an error.
+
+### Added
+- Loft profile list with Add, Remove and reorder controls, also available through Edit on an existing Loft step.
+
 ## 0.9.9.80.61 - 2026-10-25
 
 ### Changed
