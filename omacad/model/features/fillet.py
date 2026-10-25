@@ -9,7 +9,7 @@ import numpy as np
 import manifold3d as m3d
 from omacad.model.kernel import CadKernel
 from omacad.model.faces import edge_from_ref, fuzzy_edge_from_ref, compute_planar_edges
-from omacad.model.features.base import Feature
+from omacad.model.features.base import Feature, feature_bodies
 
 
 class FilletFeature(Feature):
@@ -639,7 +639,7 @@ class FilletFeature(Feature):
         missing = []
         for ref in self.edges:
             hit = None
-            for body in doc.bodies.values():
+            for body in feature_bodies(doc, self):
                 edge = edge_from_ref(ref, body.edges)
                 if edge is not None:
                     hit = (body, edge)
@@ -652,7 +652,7 @@ class FilletFeature(Feature):
         # nearest edge of the same kind instead of leaving the sharp corner behind.
         for ref in missing:
             best = None
-            for body in doc.bodies.values():
+            for body in feature_bodies(doc, self):
                 bb = np.array(body.manifold.bounding_box())
                 reach = 0.75 * float(np.linalg.norm(bb[3:] - bb[:3]))
                 edge = fuzzy_edge_from_ref(ref, body.edges, used=[e for b, e in seen if b is body], reach=reach)

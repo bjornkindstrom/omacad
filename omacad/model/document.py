@@ -33,10 +33,17 @@ def undoable(label: str):
                 return fn(self, *args, **kwargs)
             self._undo_depth += 1
             before = self.snapshot()
+            feature_ids_before = {f.feature_id for f in self.timeline.features}
+            bodies_before = {bid: b.manifold for bid, b in self.bodies.items()}
             was_interactive = quality.is_interactive_mode()
             quality.set_interactive_mode(False)     # a real change is built at full quality (coarse is for previews)
             try:
-                return fn(self, *args, **kwargs)
+                result = fn(self, *args, **kwargs)
+                self._finish_object_operation(feature_ids_before, bodies_before)
+                return result
+            except Exception:
+                self.restore(before)
+                raise
             finally:
                 quality.set_interactive_mode(was_interactive)
                 self._undo_depth -= 1
@@ -73,6 +80,8 @@ class Document:
         self.bodies: Dict[str, Body] = {}
         self.sketches: Dict[str, Sketch] = {}
         self.timeline: Timeline = Timeline()
+        from omacad.model.object_history import ObjectHistory
+        self.object_history = ObjectHistory()
         self.auto_include_edges: bool = True   # sketching on a face includes its outline as sketch lines
 
         # Origin reference planes
@@ -121,11 +130,50 @@ class Document:
             self.change_listeners.append(listener)
 
     def notify_changed(self) -> None:
+        self.object_history.sync(self)
         for listener in self.change_listeners:
             try:
                 listener()
             except Exception as e:
                 print(f"Error in document change listener: {e}")
+
+    def _finish_object_operation(self, previous_ids, previous_bodies):
+        """Capture real outputs even for tools which execute before entering replay."""
+        new = [f for f in self.timeline.features if f.feature_id not in previous_ids]
+        if not new:
+            return
+        history = self.object_history
+        if len(new) == 1:
+            feat = new[0]
+            touched = list(getattr(feat, '_last_body_outputs', []))
+            if touched:
+                history.outputs[feat.feature_id] = touched
+            if feat.feature_type in ('extrude', 'revolve', 'sweep', 'pipe', 'loft', 'hole', 'fillet'):
+                feat.target_body_ids = [bid for bid in touched if bid in getattr(feat, '_last_body_inputs', previous_bodies)]
+            history.owners.pop(feat.feature_id, None)
+        pending = history.insert_after
+        if pending:
+            oid, anchor = pending
+            history.insert_after = None
+            anchor_index = history.index(self, anchor)
+            available = self.step_states.get(anchor_index + 1, {}) if anchor_index is not None else {}
+            for feature in new:
+                if any(bid not in available for bid in history.body_inputs(feature)):
+                    raise ValueError('This operation needs a body created after the insertion point')
+            self.timeline.features = [f for f in self.timeline.features if f.feature_id not in {n.feature_id for n in new}]
+            index = history.index(self, anchor)
+            if index is None:
+                raise ValueError('Insertion source no longer exists')
+            self.timeline.features[index + 1:index + 1] = new
+            history.markers.pop(oid, None)
+            self.timeline.marker_index = len(self.timeline.features)
+            self.timeline.clear_cache()
+            self.timeline.recompute(self)
+        history.sync(self)
+        history.active_id = history.owners[new[-1].feature_id]
+        if history.target_object_id is not None:
+            history.target_object_id = history.active_id
+        self.notify_changed()
 
     # ---- Undo / redo ------------------------------------------------------------
     UNDO_LIMIT = 200       # edits inside sketches
@@ -809,6 +857,87 @@ class Document:
         return True
 
     # ---- Editing the history (timeline) ----------------------------------------------
+    def object_step_to(self, object_id: str, feature_id=None):
+        """Inspect one object's history without rolling back unrelated objects."""
+        history = self.object_history
+        history.sync(self)
+        obj = history.objects[object_id]
+        if feature_id is not None and feature_id not in obj.feature_ids:
+            raise ValueError("The step does not belong to this object")
+        history.active_id = object_id
+        history.markers[object_id] = feature_id
+        self.timeline.recompute(self)
+        self.notify_changed()
+
+    def object_fast_forward(self, object_id: str):
+        self.object_history.markers.pop(object_id, None)
+        self.timeline.recompute(self)
+        self.notify_changed()
+
+    def object_insert_after(self, object_id: str, feature_id: str):
+        self.object_step_to(object_id, feature_id)
+        self.object_history.insert_after = (object_id, feature_id)
+
+    @undoable("Branch object")
+    def branch_object(self, feature_id: str, body_id: str, linked=True):
+        from omacad.model.features.branch import BranchFeature
+        index = self.object_history.index(self, feature_id)
+        if index is None:
+            raise ValueError("The source step no longer exists")
+        self.timeline.recompute(self)
+        source = self.step_states.get(index + 1, {}).get(body_id)
+        if source is None:
+            raise ValueError("The source step has no body result")
+        name = self.timeline.features[index].name + (" Branch" if linked else " Copy")
+        fid = self._feature_id("branch" if linked else "copy")
+        self.object_history.insert_after = None
+        if linked:
+            feature = BranchFeature(fid, name, feature_id, body_id)
+        else:
+            mesh = source.to_mesh()
+            feature = ImportMeshFeature(fid, name, mesh.vert_properties[:, :3].tolist(), mesh.tri_verts.tolist())
+        self.timeline.marker_index = len(self.timeline.features)
+        self.timeline.add_feature(feature)
+        self.timeline.recompute(self)
+        self.object_history.active_id = self.object_history.owners[fid]
+        self.notify_changed()
+        return self.bodies.get('body_' + fid)
+
+    @undoable("Rename object")
+    def rename_object(self, object_id: str, name: str):
+        if object_id not in self.object_history.objects or not name.strip():
+            return False
+        self.object_history.names[object_id] = name.strip()
+        self.notify_changed()
+        return True
+
+    @undoable("Edit feature dimension")
+    def edit_feature_dimension(self, feature_id: str, key: str, text: str):
+        from omacad.model.feature_parameters import normalize_parameter_text
+        text = normalize_parameter_text(key, text)
+        index = self.object_history.index(self, feature_id)
+        if index is None:
+            raise ValueError("The feature no longer exists")
+        feature = self.timeline.features[index]
+        if key not in self.EDITABLE.get(feature.feature_type, ()):
+            raise ValueError("This parameter is read-only")
+        old = getattr(feature, key)
+        if isinstance(old, bool) or not isinstance(old, (float, int)):
+            raise ValueError("Use the feature editor for this parameter")
+        value = exprlib.evaluate(text, self.parameter_values())
+        if not math.isfinite(value):
+            raise ValueError("Enter a finite value")
+        if key in ('length', 'width', 'height', 'radius', 'diameter', 'pitch', 'across_flats') and value <= 0:
+            raise ValueError('This dimension must be greater than zero')
+        if isinstance(old, int) and value != int(value):
+            raise ValueError("Enter a whole number")
+        formulas = dict(feature.exprs)
+        if exprlib.is_plain_number(text):
+            formulas.pop(key, None)
+        else:
+            formulas[key] = text
+        return self.edit_feature(index, **{key: int(value) if isinstance(old, int) else value}, exprs=formulas)
+
     EDITABLE = {
         "box": ("length", "width", "height", "center", "plane_origin", "plane_normal", "plane_u", "plane_v",
                 "wall_thickness", "outer_round", "outer_round_kind", "inner_round", "inner_round_kind", "taper_angle"),
@@ -845,6 +974,10 @@ class Document:
             return False
         feat = self.timeline.features[index]
         allowed = self.EDITABLE.get(feat.feature_type, ())
+        retarget = ('operation' in allowed and 'operation' in params and params['operation'] != getattr(feat, 'operation', None)
+                    and hasattr(feat, 'target_body_ids'))
+        if retarget:
+            del feat.target_body_ids
         changed = False
         if "exprs" in params:  # formulas for fields; fields without one go back to plain numbers
             new = {k: v for k, v in (params.pop("exprs") or {}).items() if k in allowed and v}
@@ -859,6 +992,15 @@ class Document:
                 changed = True
         if changed:
             self.timeline.recompute(self)
+            if retarget and feat.operation != 'new_body':
+                feat.target_body_ids = [bid for bid in getattr(feat, '_last_body_outputs', [])
+                                        if bid in getattr(feat, '_last_body_inputs', [])]
+                for oid, obj in self.object_history.objects.items():
+                    if any(bid in obj.body_ids for bid in feat.target_body_ids):
+                        self.object_history.owners[feat.feature_id] = oid
+                        break
+            elif retarget:
+                self.object_history.owners[feat.feature_id] = 'object_' + feat.feature_id
             self.notify_changed()
         return changed
 
@@ -890,7 +1032,9 @@ class Document:
         """Indices of later steps that need step `index` (extrudes of a sketch, combines/modifies of its bodies)."""
         feats = self.timeline.features
         feat = feats[index]
-        out = []
+        self.object_history.sync(self)
+        out = [j for j in range(index + 1, len(feats))
+               if feat.feature_id in self.object_history.dependencies.get(feats[j].feature_id, [])]
         body_ids = {f"body_{feat.feature_id}"}
         for j in range(index + 1, len(feats)):
             other = feats[j]
@@ -907,7 +1051,7 @@ class Document:
             )
             if uses_sketch or uses_body:
                 out.append(j)
-        return out
+        return sorted(set(out))
 
     @undoable("Delete Feature")
     def delete_feature(self, index: int, with_dependents: bool = True) -> list:

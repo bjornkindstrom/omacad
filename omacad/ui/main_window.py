@@ -99,7 +99,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         from omacad.ui import dialogs as _dialogs
         # Left Browser overlay floating on viewport
         self.browser = BrowserTree(self.doc, self.viewport)
-        self.browser.setFixedWidth(260)
+        self.browser.setMinimumWidth(160)
 
         # Right Inspector overlay floating on viewport
         self.inspector = InspectorPanel(self.doc, self.viewport)
@@ -124,16 +124,17 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             self.workspace_bar.move(10, 4)
             browser_top = max(top_pad, 4 + self.workspace_bar.sizeHint().height() + 2)
             h = max(100, size.height() - browser_top - bottom_pad)
-            self.browser.setGeometry(10, browser_top, 260, h)
+            self.browser.setGeometry(10, browser_top, self.browser.preferred_width(size.width()), h)
             self.inspector.move(self.inspector.x(), top_pad)
             self.inspector.set_max_height(h)          # the panel fits its content and anchors to the right edge
 
+        self.browser.content_width_changed.connect(_update_overlays)
         self.viewport._on_viewport_resized = _update_overlays
         _update_overlays()
 
         # 3. Bottom Timeline
         self.timeline_bar = TimelineBar(self.doc, self)
-        central_layout.addWidget(self.timeline_bar)
+        self.timeline_bar.hide()  # Browser owns object history navigation; retain the shared editing/highlight controller.
 
         self.setCentralWidget(central_container)
 
@@ -225,6 +226,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.browser.edit_section_requested.connect(self.edit_section)
         self.timeline_bar.edit_sketch_requested.connect(self.on_edit_sketch)
         self.timeline_bar.busy_reason = self._busy_reason
+        self.browser.busy_reason = self._busy_reason
         self.timeline_bar.status_message.connect(self.status_label.setText)
         self.timeline_bar.highlight_changed.connect(
             lambda added, removed: self.viewport.set_preview(added, "join", extra=removed, extra_op="cut"))
@@ -244,6 +246,12 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.browser.offset_plane_requested.connect(self.on_browser_offset_plane)
         self.browser.find_in_window_requested.connect(self.find_in_window)
         self.browser.find_in_timeline_requested.connect(self.find_in_timeline)
+        self.browser.preview_changed.connect(self.viewport.set_display_override)
+        self.browser.status_message.connect(self.status_label.setText)
+        self.browser.feature_selected.connect(self.on_browser_feature_selected)
+        self.browser.feature_edit_requested.connect(self.on_browser_feature_edit)
+        self.browser.pick_feature = self.pick_browser_feature
+        self.browser.feature_delete_requested.connect(self.on_browser_feature_delete)
         self.browser.delete_sketch_requested.connect(self.on_delete_sketch)
 
 
@@ -490,12 +498,38 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         elif kind == "sketch":
             self.viewport.zoom_to_sketch(item_id)
 
+    def on_browser_feature_delete(self, feature_id):
+        if self.timeline_bar._blocked():
+            return
+        from omacad.ui import feature_edit
+        index = self.doc.object_history.index(self.doc, feature_id)
+        if index is not None and feature_edit.confirm_delete(self, self.doc, index):
+            self.doc.delete_feature(index)
+
+    def pick_browser_feature(self, feature_id):
+        handler = self.timeline_bar.feature_pick_handler
+        if handler is None:
+            return False
+        handler(feature_id)
+        return True
+
+    def on_browser_feature_selected(self, feature_id):
+        index = self.doc.object_history.index(self.doc, feature_id)
+        if index is not None:
+            self.timeline_bar.on_node_clicked(index + 1)
+
+    def on_browser_feature_edit(self, feature_id):
+        index = self.doc.object_history.index(self.doc, feature_id)
+        if index is not None:
+            self.timeline_bar.on_node_edit(index + 1)
+
     def find_in_timeline(self, kind: str, item_id: str):
         idx = self.doc.feature_index_for(kind, item_id)
         if idx is None:
             self.status_label.setText("That item has no step in the timeline.")
             return
-        self.timeline_bar.find_step(idx)
+        from omacad.ui.object_browser import find_feature
+        find_feature(self.browser, self.doc.timeline.features[idx].feature_id)
 
     def on_fix_sketch(self):
         """Fix Sketch: close the open sketch's drawing into faces (see model/sketch_fix.py), as one undo step."""

@@ -6,6 +6,7 @@ Common data structures, mixins and boolean combination helpers used by all param
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple
 import math
+import functools
 import numpy as np
 import manifold3d as m3d
 from shapely.geometry import Polygon
@@ -73,6 +74,27 @@ def _triangle_count(solid: m3d.Manifold) -> int:
     return len(solid.to_mesh().tri_verts)
 
 
+def feature_bodies(doc, feature):
+    """Stored targets constrain new operations; absent metadata keeps legacy replay."""
+    ids = getattr(feature, 'target_body_ids', None)
+    if ids is None:
+        return list(doc.bodies.values())
+    missing = [bid for bid in ids if bid not in doc.bodies]
+    if missing:
+        raise ValueError('Missing target body: ' + ', '.join(missing))
+    return [doc.bodies[bid] for bid in ids]
+
+
+def referenced_bodies(doc, feature):
+    """Bodies a feature names itself: picked edges/faces/points and the bodies its sketches sit on."""
+    from omacad.model.object_history import ObjectHistory
+    refs = ObjectHistory.body_inputs(feature)
+    for sketch_id in ObjectHistory.sketch_inputs(feature):
+        sketch = getattr(doc, 'sketches', {}).get(sketch_id)
+        refs.append(getattr(sketch, 'parent_body_id', None))
+    return [bid for bid in dict.fromkeys(refs) if bid in doc.bodies]
+
+
 def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, tool: m3d.Manifold) -> None:
     """Shared by Extrude and Revolve: add `tool` as a new body, or join/cut/intersect it with every body it touches."""
     def new_body():
@@ -85,8 +107,9 @@ def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, to
         return
 
     # Combine operations act on every body the tool actually touches
+    feature = next((f for f in getattr(getattr(doc, "timeline", None), "features", []) if f.feature_id == feature_id), None)
     targets = [
-        b for b in doc.bodies.values()
+        b for b in feature_bodies(doc, feature)
         if _bbox_overlap(b.manifold, tool)
         and (operation == "join" or not (b.manifold ^ tool).is_empty())
     ]
@@ -137,6 +160,39 @@ def combine_with_bodies(doc: Any, feature_id: str, name: str, operation: str, to
 
 class Feature:
     """Base class for parametric history features."""
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        execute = cls.__dict__.get('execute')
+        if execute is None:
+            return
+
+        @functools.wraps(execute)
+        def tracked(self, doc):
+            if (self.feature_type in ('extrude', 'revolve', 'sweep', 'loft', 'pipe', 'hole', 'fillet')
+                    and getattr(self, 'operation', None) != 'new_body'
+                    and not hasattr(self, 'target_body_ids')
+                    and not getattr(getattr(doc, 'timeline', None), '_replaying', False)
+                    and not getattr(doc, '_restoring', False)):
+                selected = [bid for bid in getattr(doc, 'selected_body_ids', []) if bid in doc.bodies]
+                history = getattr(doc, 'object_history', None)
+                obj = history.objects.get(history.target_object_id) if history is not None else None
+                owned = [bid for bid in obj.body_ids if bid in doc.bodies] if obj else []
+                # The browser's active object only narrows an operation that refers to it: a cut sketched on
+                # another body's face must not be aimed at the active object, miss it and be stored cutting nothing.
+                refs = referenced_bodies(doc, self)
+                if refs and not set(refs) & set(owned):
+                    owned = []
+                targets = selected or owned
+                if targets:
+                    self.target_body_ids = targets
+            before = {bid: b.manifold for bid, b in doc.bodies.items()}
+            result = execute(self, doc)
+            self._last_body_outputs = [bid for bid in dict.fromkeys([*before, *doc.bodies])
+                                       if before.get(bid) is not getattr(doc.bodies.get(bid), 'manifold', None)]
+            self._last_body_inputs = list(before)
+            return result
+        cls.execute = tracked
+
     def __init__(self, feature_id: str, feature_type: str, name: str):
         self.feature_id = feature_id
         self.feature_type = feature_type

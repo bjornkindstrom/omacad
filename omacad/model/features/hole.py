@@ -80,7 +80,8 @@ class HoleFeature(Feature):
         if not tools:
             return
         cutter = m3d.Manifold.batch_boolean(tools, m3d.OpType.Add) if len(tools) > 1 else tools[0]
-        for body in list(doc.bodies.values()):
+        from omacad.model.features.base import feature_bodies
+        for body in feature_bodies(doc, self):
             if not _bbox_overlap(body.manifold, cutter):
                 continue
             result = body.manifold - cutter

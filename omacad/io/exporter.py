@@ -326,10 +326,12 @@ class Exporter:
         """The whole document as plain data (what a project file holds, plus the replay marker and the sketch being
         edited). Bodies are not part of it: they are rebuilt from the timeline."""
         return {
+            "format_version": 2,
+            "object_history": doc.object_history.to_dict(),
             "name": doc.name,
             "units": doc.units,
             "parameters": [{"name": q.name, "expr": q.expr, "comment": q.comment} for q in doc.parameters],
-            "timeline": [dict(f.to_dict(), exprs=dict(f.exprs)) for f in doc.timeline.features],
+            "timeline": [dict(f.to_dict(), exprs=dict(f.exprs), target_body_ids=getattr(f, "target_body_ids", None)) for f in doc.timeline.features],
             "marker_index": doc.timeline.marker_index,
             "sketches": [s.to_dict() for s in doc.sketches.values()],
             "active_sketch": doc.active_sketch.sketch_id if doc.active_sketch is not None else None,
@@ -346,6 +348,7 @@ class Exporter:
         data = Exporter.document_to_dict(doc)
         data.pop("marker_index", None)      # replay position and sketch mode are session state, not file content
         data.pop("active_sketch", None)
+        data["object_history"]["markers"] = {}
         # write to a temp file first so an interrupted save never leaves a half-written project
         tmp = f"{filepath}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
@@ -390,6 +393,16 @@ class Exporter:
     def apply_dict(doc: Document, data: dict) -> None:
         """Replaces the content of `doc` with `data` (a project file or a snapshot), keeping the Document object and its
         listeners, then rebuilds every body."""
+        if data.get("format_version", 1) > 2:
+            raise ValueError("This project requires a newer version of Omacad")
+        positions = {f.get("feature_id"): i for i, f in enumerate(data.get("timeline", []))}
+        if len(positions) != len(data.get("timeline", [])):
+            raise ValueError("Duplicate feature identifiers in project")
+        for fid, dependencies in data.get("object_history", {}).get("dependencies", {}).items():
+            for dependency in dependencies:
+                if fid not in positions or dependency not in positions or positions[dependency] >= positions[fid]:
+                    raise ValueError("Invalid or circular object history dependency")
+        doc.object_history.load(data.get("object_history", {}))
         doc.timeline.features.clear()
         doc.timeline.clear_cache()      # new step objects: results a step stores while it runs must be computed again
         doc.timeline.marker_index = 0
@@ -422,7 +435,11 @@ class Exporter:
             ft = f_data.get("feature_type")
             fid = f_data.get("feature_id")
             fname = f_data.get("name")
-            if ft == "box":
+            if ft == "branch":
+                from omacad.model.features.branch import BranchFeature
+                feat = BranchFeature(fid, fname, f_data["source_feature_id"], f_data["source_body_id"])
+                doc.timeline.add_feature(feat)
+            elif ft == "box":
                 feat = BoxFeature(
                     fid, fname, f_data["length"], f_data["width"], f_data["height"], f_data["center"],
                     plane_origin=f_data.get("plane_origin"), plane_normal=f_data.get("plane_normal"),
@@ -589,6 +606,8 @@ class Exporter:
                 continue
             feat.suppressed = f_data.get("suppressed", False)
             feat.exprs = dict(f_data.get("exprs", {}))
+            if f_data.get("target_body_ids") is not None:
+                feat.target_body_ids = list(f_data["target_body_ids"])
 
         Exporter._seed_profile_refs(doc, int(data.get("curve_segments", 48)))   # files from before this was saved used 48
         if "marker_index" in data:

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.9.80.23 - 2026-10-25
+
+### Changed
+- Browser objects: a body that a Combine uses up (the tool, not kept) is no longer its own object on the main trunk; its history hangs as a branch under that Combine in the target object. Jar with Lid now shows two objects, Jar and Lid, with the neck, bore and chamfer cylinders under their Combines.
+
+## 0.9.9.80.22 - 2026-10-25
+
+### Fixed
+- A cut sketched on one body's face, made while another object was active in the browser, was aimed at the active object, missed it and was saved cutting nothing (it then showed up as its own object). The active object now only narrows operations that refer to it; the cut belongs to the body it is sketched on.
+- Editing a value in the browser: the in-row editor was only 17 px tall and cut the text off. It now takes the whole row, at least its own height.
+
 ## 0.9.9.80.21 - 2026-10-24
 
 ### Changed

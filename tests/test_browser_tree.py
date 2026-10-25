@@ -33,23 +33,27 @@ def find(w, kind, name=""):
 
 def test_structure_follows_fusion(win):
     assert win.browser.tree.topLevelItem(0).text(0).endswith("(Unsaved)")
-    assert top_labels(win) == ["Document Settings", "Named Views", "Origin", "Analysis", "Bodies", "Sketches"]
+    assert top_labels(win) == ["Document Settings", "Named Views", "Origin", "Analysis", "Objects"]
     views = find(win, "view", "HOME").parent()
     assert [views.child(i).text(0) for i in range(views.childCount())] == ["Home", "Top", "Front", "Right", "Back", "Left", "Bottom"]
 
 
-def test_all_sketches_sit_under_sketches_even_on_a_body(win):
-    sketches = find(win, "group", "sketches")
-    assert sketches.childCount() == len(win.doc.sketches) >= 1
-    assert find(win, "body", next(iter(win.doc.bodies))).parent() is find(win, "group", "bodies")
+def test_sketches_and_bodies_have_object_parents(win):
+    sid = next(iter(win.doc.sketches))
+    bid = next(iter(win.doc.bodies))
+    sketch = find(win, "sketch", sid)
+    body = find(win, "body", bid)
+    assert sketch.parent().data(0, Qt.ItemDataRole.UserRole)[0] == "object"
+    assert body.parent().data(0, Qt.ItemDataRole.UserRole)[0] == "object"
+    assert sketch.parent() is not body.parent()
 
 
 def test_group_eye_hides_and_shows_everything_in_it(win):
     win.doc.add_cylinder(2, 5)
     assert all(b.visible for b in win.doc.bodies.values())
-    win.browser.on_item_clicked(find(win, "group", "bodies"), 1)
+    win.browser.on_item_clicked(find(win, "group", "objects"), 1)
     assert not any(b.visible for b in win.doc.bodies.values())
-    win.browser.on_item_clicked(find(win, "group", "bodies"), 1)
+    win.browser.on_item_clicked(find(win, "group", "objects"), 1)
     assert all(b.visible for b in win.doc.bodies.values())
 
 

@@ -7,7 +7,7 @@ from typing import Optional, Dict
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QMenu, QHeaderView, QLabel, QHBoxLayout,
-    QAbstractItemView
+    QAbstractItemView, QToolButton
 )
 from PySide6.QtGui import QIcon, QAction, QBrush, QColor, QFont, QKeySequence, QShortcut
 from omacad.ui import theme
@@ -19,6 +19,12 @@ from omacad.ui.theme import qcolor
 class BrowserTree(QWidget):
     """Fusion 360 style left hierarchy browser."""
 
+    preview_changed = Signal(object)
+    content_width_changed = Signal()
+    status_message = Signal(str)
+    feature_selected = Signal(str)
+    feature_edit_requested = Signal(str)
+    feature_delete_requested = Signal(str)
     body_selected = Signal(str)
     sketch_selected = Signal(str)
     start_sketch_on_plane = Signal(str)
@@ -43,6 +49,8 @@ class BrowserTree(QWidget):
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.doc = document
+        self.parameter_error = None
+        self._editor_width = 0
         self.doc.add_change_listener(self.refresh_tree)
 
         layout = QVBoxLayout(self)
@@ -58,11 +66,26 @@ class BrowserTree(QWidget):
         style(self.lbl_title, "font-weight: bold; font-size: 11px; color: #8E95A0; letter-spacing: 0.8px; background: transparent;")
         h_layout.addWidget(self.lbl_title)
         h_layout.addStretch()
+        for label, action, tip in (
+            ('⏮', 'start', 'Show the active object before its first step'),
+            ('‹', 'back', 'Previous step of the active object'),
+            ('›', 'next', 'Next step of the active object'),
+            ('⏭', 'end', 'Show the complete active object'),
+        ):
+            button = QToolButton(self.header)
+            button.setText(label)
+            button.setToolTip(tip)
+            button.clicked.connect(lambda checked=False, a=action: self.navigate_history(a))
+            h_layout.addWidget(button)
 
         layout.addWidget(self.header)
 
         # Tree Widget
         self.tree = QTreeWidget()
+        from omacad.ui.history_delegate import HistoryDelegate
+        self.tree.setItemDelegate(HistoryDelegate(self))
+        self.tree.itemExpanded.connect(lambda item: self.content_width_changed.emit())
+        self.tree.itemCollapsed.connect(lambda item: self.content_width_changed.emit())
         self.tree.setHeaderHidden(True)
         self.tree.setIconSize(QSize(22, 22))
         self.tree.setIndentation(18)
@@ -92,7 +115,7 @@ class BrowserTree(QWidget):
         self.tree.setColumnCount(2)
         hdr = self.tree.header()
         hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         hdr.resizeSection(1, 40)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -117,13 +140,86 @@ class BrowserTree(QWidget):
         """Rebuilds the tree nodes based on the Document model."""
         self.tree.blockSignals(True)  # rebuilding must not look like a rename
         expanded = self._expanded_keys()
+        selected = {self._item_key(item) for item in self.tree.selectedItems()}
         scroll = self.tree.verticalScrollBar().value()
         try:
             self._rebuild_tree()
             self._restore_expanded(expanded)
+            for item, _ in self._walk():
+                if self._item_key(item) in selected:
+                    item.setSelected(True)
             self.tree.verticalScrollBar().setValue(scroll)
         finally:
             self.tree.blockSignals(False)
+        if self.parameter_error:
+            kind, ids, message = self.parameter_error
+            for item, _ in self._walk():
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data and data[0] == kind and tuple(data[1]) == ids:
+                    item.setText(0, item.text(0) + " — " + message)
+                    item.setForeground(0, QColor("#e06c75"))
+                    item.setToolTip(0, message)
+                    break
+        self._editor_width = 0
+        self.content_width_changed.emit()
+
+    def preferred_width(self, available_width):
+        """Fit visible rows while keeping usable space for the model on small windows."""
+        content = 200
+        metrics = self.tree.fontMetrics()
+        for item, _ in self._walk():
+            depth = 0
+            parent = item.parent()
+            visible = True
+            while parent:
+                depth += 1
+                visible = visible and parent.isExpanded()
+                parent = parent.parent()
+            if visible:
+                content = max(content, metrics.horizontalAdvance(item.text(0)) +
+                              (depth + 1) * self.tree.indentation() + 48)
+        content = max(content, self._editor_width)
+        cap = max(160, min(int(available_width * 0.48), available_width - 220))
+        width = min(max(260, content + 70), cap)
+        self.tree.header().resizeSection(0, max(content, width - 70))
+        return width
+
+    def navigate_history(self, action):
+        reason = getattr(self, 'busy_reason', lambda: '')()
+        if reason:
+            self.status_message.emit(reason)
+            return
+        history = self.doc.object_history
+        obj = history.objects.get(history.active_id)
+        if obj is None:
+            return
+        if action == 'end':
+            self.doc.object_fast_forward(obj.object_id)
+            return
+        marker = history.markers.get(obj.object_id, obj.feature_ids[-1] if obj.feature_ids else None)
+        position = obj.feature_ids.index(marker) + 1 if marker in obj.feature_ids else 0
+        position = 0 if action == 'start' else max(0, min(len(obj.feature_ids), position + (1 if action == 'next' else -1)))
+        self.doc.object_step_to(obj.object_id, obj.feature_ids[position - 1] if position else None)
+
+    def activate_object(self, object_id):
+        self.doc.object_history.active_id = object_id
+        self.doc.object_history.target_object_id = object_id
+        for item, _ in self._walk():
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data and data[0] == 'object':
+                font = item.font(0)
+                font.setBold(data[1] == object_id)
+                item.setFont(0, font)
+
+    def grow_for_editor(self, text, index):
+        depth = 1
+        parent = index.parent()
+        while parent.isValid():
+            depth += 1
+            parent = parent.parent()
+        self._editor_width = max(self._editor_width,
+            self.tree.fontMetrics().horizontalAdvance(text) + depth * self.tree.indentation() + 70)
+        self.content_width_changed.emit()
 
     @staticmethod
     def _item_key(item: QTreeWidgetItem):
@@ -223,15 +319,8 @@ class BrowserTree(QWidget):
             self._style_eye(g, visible)
             return g
 
-        # Bodies
-        bodies_group = group("🧊 Bodies", "bodies", any(b.visible for b in self.doc.bodies.values()) or not self.doc.bodies)
-        for b_id, body in self.doc.bodies.items():
-            b_item = QTreeWidgetItem(bodies_group, [body.name, ""])
-            b_item.setData(0, Qt.ItemDataRole.UserRole, ("body", b_id))
-            b_item.setFlags(b_item.flags() | Qt.ItemFlag.ItemIsEditable)
-            self._style_eye(b_item, body.visible)
-            if body.selected:
-                b_item.setSelected(True)
+        from omacad.ui.object_browser import add_histories
+        add_histories(self, root)
 
         # Canvases
         if getattr(self.doc, "canvases", None):
@@ -242,30 +331,6 @@ class BrowserTree(QWidget):
                 it.setFlags(it.flags() | Qt.ItemFlag.ItemIsEditable)
                 self._style_eye(it, bool(c.get("visible", True)))
                 it.setToolTip(1, "Click to hide canvas" if c.get("visible", True) else "Click to show canvas")
-
-        # Sketches (all of them, also those drawn on a body face)
-        from omacad.model.sketch import SketchText
-        sketches_group = group("✏️ Sketches", "sketches", any(sk.visible for sk in self.doc.sketches.values()) or not self.doc.sketches)
-        for s_id, sketch in self.doc.sketches.items():
-            s_item = QTreeWidgetItem(sketches_group, ["✏️ " + sketch.name, ""])
-            s_item.setData(0, Qt.ItemDataRole.UserRole, ("sketch", s_id))
-            s_item.setFlags(s_item.flags() | Qt.ItemFlag.ItemIsEditable)
-            if sketch == self.doc.active_sketch:
-                font = QFont(s_item.font(0))
-                font.setBold(True)
-                s_item.setFont(0, font)
-                s_item.setToolTip(0, "Active sketch")
-            self._style_eye(s_item, sketch.visible)
-            texts = [e for e in sketch.entities if isinstance(e, SketchText)]
-            for t_ent in texts:
-                preview = t_ent.text.replace("\n", " ↵ ")
-                if len(preview) > 24:
-                    preview = preview[:23] + "…"
-                t_item = QTreeWidgetItem(s_item, [f'🔤 "{preview}"', ""])
-                t_item.setData(0, Qt.ItemDataRole.UserRole, ("sketch_text", f"{s_id}:{t_ent.entity_id}"))
-                t_item.setToolTip(0, "Double-click to edit text")
-            if texts and sketch == self.doc.active_sketch:
-                s_item.setExpanded(True)
 
     @staticmethod
     def _style_eye(item: QTreeWidgetItem, visible: bool):
@@ -279,6 +344,14 @@ class BrowserTree(QWidget):
 
     def on_item_renamed(self, item: QTreeWidgetItem, column: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
+        if column == 0 and data and data[0] == "object":
+            self.doc.rename_object(data[1], item.text(0))
+            return
+        if column == 0 and data and data[0] == "feature":
+            index = self.doc.object_history.index(self.doc, data[1])
+            if index is not None:
+                self.doc.rename_feature(index, item.text(0))
+            return
         if column != 0 or not data or data[0] not in ("sketch", "body", "section", "canvas", "cplane"):
             return
         kind, item_id = data
@@ -305,6 +378,9 @@ class BrowserTree(QWidget):
         elif item_type in ("origin", "axis", "plane"):
             kind, name = ("all", "") if item_type == "origin" else (item_type, item_id)
             doc.set_origin_visibility(kind, name, not doc.origin_visible(kind, name))
+        elif item_type == "group" and item_id == "objects":
+            shown = any(b.visible for b in doc.bodies.values())
+            doc.set_group_visibility("bodies", not shown)
         elif item_type == "group":
             shown = {"bodies": any(b.visible for b in doc.bodies.values()),
                      "sketches": any(sk.visible for sk in doc.sketches.values()),
@@ -326,6 +402,18 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
+        from omacad.ui.object_browser import FEATURE_ROLE
+        fid = item.data(0, FEATURE_ROLE)
+        pick = getattr(self, 'pick_feature', None)
+        if fid and pick and pick(fid):
+            return
+        if item_type == "object":
+            self.activate_object(item_id)
+            return
+        if item_type in ("feature", "feature_link"):
+            self.activate_object(self.doc.object_history.owners.get(item_id))
+            self.feature_selected.emit(item_id)
+            return
         if item_type == "view":
             self.named_view_requested.emit(item_id)
             return
@@ -333,9 +421,16 @@ class BrowserTree(QWidget):
             self.toggle_visibility(item_type, item_id)
             return
         if item_type == "body":
+            owner = next((oid for oid, obj in self.doc.object_history.objects.items() if item_id in obj.body_ids), None)
+            if owner:
+                self.activate_object(owner)
             self.doc.select_body(item_id)
             self.body_selected.emit(item_id)
         elif item_type == "sketch":
+            from omacad.ui.object_browser import FEATURE_ROLE
+            fid = item.data(0, FEATURE_ROLE)
+            if fid:
+                self.activate_object(self.doc.object_history.owners.get(fid))
             self.sketch_selected.emit(item_id)
 
     def on_item_double_clicked(self, item: QTreeWidgetItem, column: int):
@@ -344,7 +439,17 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
-        if item_type == "plane":
+        if item_type in ("parameter", "dimension"):
+            from omacad.ui.object_browser import edit_parameter
+            edit_parameter(self, item_type, item_id)
+        elif item_type == "feature":
+            self.feature_edit_requested.emit(item_id)
+        elif item_type == "feature_link":
+            from omacad.ui.object_browser import find_feature
+            find_feature(self, item_id)
+        elif item_type == "history_end":
+            self.doc.object_fast_forward(item_id)
+        elif item_type == "plane":
             self.start_sketch_on_plane.emit(item_id)
         elif item_type == "cplane":
             self.start_sketch_on_cplane.emit(item_id)
@@ -361,6 +466,10 @@ class BrowserTree(QWidget):
             self.doc.set_section_active(item_id, not self.doc.sections[item_id].get("active"))
 
     def show_context_menu(self, pos):
+        reason = getattr(self, 'busy_reason', lambda: '')()
+        if reason:
+            self.status_message.emit(reason)
+            return
         item = self.tree.itemAt(pos)
         if not item:
             return
@@ -379,7 +488,32 @@ class BrowserTree(QWidget):
                              add("🔎 Find in Window", lambda: self.find_in_window_requested.emit(kind, item_id)),
                              add("🧭 Find in Timeline", lambda: self.find_in_timeline_requested.emit(kind, item_id)))
 
-        if item_type == "plane":
+        from omacad.ui.object_browser import FEATURE_ROLE
+        fid = item.data(0, FEATURE_ROLE)
+        if fid:
+            index = self.doc.object_history.index(self.doc, fid)
+            if index is not None:
+                feat = self.doc.timeline.features[index]
+                oid = self.doc.object_history.owners[fid]
+                add("Edit feature…", lambda: self.feature_edit_requested.emit(fid))
+                add("Delete feature…", lambda: self.feature_delete_requested.emit(fid))
+                add("Unsuppress" if feat.suppressed else "Suppress", lambda: self.doc.toggle_suppress(index))
+                add("Insert next operation after this step", lambda: self.doc.object_insert_after(oid, fid))
+                add("Show object after this step", lambda: self.doc.object_step_to(oid, fid))
+                add("Show complete object", lambda: self.doc.object_fast_forward(oid))
+                for bid in self.doc.object_history.outputs.get(fid, []):
+                    if bid not in self.doc.step_states.get(index + 1, {}):
+                        continue
+                    add("New linked object from " + bid, lambda checked=False, b=bid: self.doc.branch_object(fid, b))
+                    add("Independent copy of " + bid, lambda checked=False, b=bid: self.doc.branch_object(fid, b, linked=False))
+                menu.addSeparator()
+        if item_type == "object":
+            rename()
+            add("Show complete object", lambda: self.doc.object_fast_forward(item_id))
+        elif item_type in ("parameter", "dimension"):
+            from omacad.ui.object_browser import edit_parameter
+            add("Edit value…", lambda: edit_parameter(self, item_type, item_id))
+        elif item_type == "plane":
             add(f"✏️ Create Sketch on {item_id} Plane", lambda: self.start_sketch_on_plane.emit(item_id))
             add("📐 Offset Plane…", lambda: self.offset_plane_requested.emit("plane", item_id))
             add(f"🖼️ Insert Canvas on {item_id} Plane…", lambda: self.insert_canvas_requested.emit(item_id))

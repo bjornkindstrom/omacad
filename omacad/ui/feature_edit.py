@@ -125,27 +125,32 @@ def edit_feature(win, doc, index: int) -> bool:
     if index not in doc.step_states or index + 1 not in doc.step_states:
         doc.timeline.recompute(doc)     # steps just added have no recorded states yet: previews start from them
     states = dict(doc.step_states)
-    marker = doc.timeline.marker_index
-    rolled = marker != index
-    if rolled:
-        doc.timeline.step_to(index, doc)
-        doc.notify_changed()
+    history = doc.object_history
+    history.sync(doc)
+    feature = doc.timeline.features[index]
+    owner = history.owners[feature.feature_id]
+    local_steps = history.objects[owner].feature_ids
+    local_index = local_steps.index(feature.feature_id)
+    saved_markers = dict(history.markers)
+    previous = local_steps[local_index - 1] if local_index else None
+    doc.object_step_to(owner, previous)
     committed = [False]
 
     def commit(**params) -> bool:
         committed[0] = True
-        doc.timeline.marker_index = marker          # the undo step keeps the marker where the user had it
+        history.markers = dict(saved_markers)
         changed = doc.edit_feature(index, **params)
-        if rolled and not changed:
-            doc.timeline.step_to(marker, doc)
+        if not changed:
+            doc.timeline.recompute(doc)
             doc.notify_changed()
         return changed
 
     try:
         return _edit_feature(win, doc, index, states, commit)
     finally:
-        if rolled and not committed[0]:
-            doc.timeline.step_to(marker, doc)
+        if not committed[0]:
+            history.markers = dict(saved_markers)
+            doc.timeline.recompute(doc)
             doc.notify_changed()
 
 

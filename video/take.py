@@ -52,6 +52,7 @@ class Take:
             return self.vp.grabFramebuffer()
         # win.grab() leaves out what the 3D view paints itself (dimension badges, tool tips, ViewCube, the
         # Orbit/Pan/Fit bar), so the view is grabbed on its own and drawn over its place in the window picture
+        self._keep_fullscreen()
         img = self.win.grab().toImage()
         fb = self.vp.grabFramebuffer()
         off = self.vp.mapTo(self.win, QPoint(0, 0))
@@ -59,6 +60,19 @@ class Take:
         p.drawImage(QRect(off.x(), off.y(), self.vp.width(), self.vp.height()), fb)   # fb is in device pixels (1.25x here)
         p.end()
         return img
+
+    def _keep_fullscreen(self):
+        """The compositor can take fullscreen away mid-take (another window, a workspace switch); the window then
+        shrinks and every frame after it is small. Ask for fullscreen again and stop if the size still changes."""
+        size = self.win.size()
+        self._size = getattr(self, "_size", size)
+        for _ in range(40):
+            if self.win.size() == self._size:
+                return
+            self.win.showFullScreen()
+            for _ in range(5):
+                self.app.processEvents()
+        raise RuntimeError(f"window is {self.win.width()}x{self.win.height()}, was {self._size.width()}x{self._size.height()}: fullscreen was lost")
 
     def _render(self):
         self._finish(self._grab())
@@ -174,12 +188,12 @@ class Take:
         json.dump({"fps": FPS, "frames": self.frame, "marks": self.marks}, open(os.path.join(self.outdir, "marks.json"), "w"), indent=1)
         print("Saved", out)
 
-    def encode_scaled(self, out):
-        """Encode full-window frames (any 16:9 size) to 1080p."""
+    def encode_scaled(self, out, size="1920:1080"):
+        """Encode full-window frames (any 16:9 size) to `size` (1080p by default)."""
         out = os.path.abspath(os.path.expanduser(out))
         os.makedirs(os.path.dirname(out), exist_ok=True)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS), "-i", os.path.join(self.outdir, "f%05d.png"),
-                        "-vf", "scale=1920:1080:flags=lanczos", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "17", out], check=True)
+                        "-vf", f"scale={size}:flags=lanczos", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "17", out], check=True)
         import json
         json.dump({"fps": FPS, "frames": self.frame, "marks": self.marks}, open(os.path.join(self.outdir, "marks.json"), "w"), indent=1)
         print("Saved", out)

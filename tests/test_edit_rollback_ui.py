@@ -32,6 +32,7 @@ def test_shell_edit_picks_another_open_face(win):
 
     def during():
         seen["marker"] = w.doc.timeline.marker_index
+        seen["bodies"] = len(w.doc.bodies)
         seen["volume"] = w.doc.bodies[bid].manifold.volume()            # the box before Shell
         side = max(w.doc.bodies[bid].faces, key=lambda f: f.normal[0])
         w.viewport.shell_face_picked.emit(_face_plane(side))
@@ -39,7 +40,7 @@ def test_shell_edit_picks_another_open_face(win):
         w.inspector.current_tool_dlg.accept()
     QTimer.singleShot(150, during)
     assert feature_edit.edit_feature(w, w.doc, 1)
-    assert seen == {"marker": 1, "volume": pytest.approx(8000.0), "open": 2}
+    assert seen == {"marker": 3, "bodies": 2, "volume": pytest.approx(8000.0), "open": 2}
     assert len(w.doc.timeline.features[1].open_faces) == 2
     assert w.doc.timeline.marker_index == 3 and len(w.doc.bodies) == 2
     w.doc.undo()
