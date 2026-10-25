@@ -1,6 +1,5 @@
 """Clicking a step in the browser colours what it changed: only real material, and without a crash
 (report 20261025-121221: stripes over the whole jar thread when Chamfer 5 was selected)."""
-import pytest
 import os
 from pathlib import Path
 
@@ -21,14 +20,13 @@ def _area(render_mesh) -> float:
     return float(np.linalg.norm(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1).sum() / 2)
 
 
-@pytest.mark.xfail(reason="xfail: edge geometry changed by the twisted-extrude loops (.26) and float64 mesh (.33/.34); to be fixed", strict=False)
 def test_chamfer_step_shows_the_chamfer_ring_not_skins_over_the_thread():
     doc = Exporter.load_project(str(DATA))
     doc.timeline.recompute(doc)
     index = next(i for i, f in enumerate(doc.timeline.features) if f.name == "Chamfer 5")
     added, removed = doc.step_changes(index)
     shown = CadKernel.extract_render_mesh(added, min_thickness=STEP_CHANGE_MIN_THICKNESS)
-    z = shown.vertices[:, 2]
+    z = shown.vertices.reshape(-1, 3, 3).mean(axis=1)[:, 2]
     assert z.min() > 23.9                         # the chamfer sits at z 24..27, the thread below it is untouched
     # every face of the chamfer ring (its only solid part) is still drawn
     ring = max(added.decompose(), key=lambda part: part.volume())

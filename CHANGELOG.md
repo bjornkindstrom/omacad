@@ -8,6 +8,7 @@
 - Emboss finds the cylinder wall behind a fillet again: sliver triangles are ignored and the wall axis is chosen by area.
 
 ### Changed
+- The last three edge tests that checked float32 mesh artefacts are rewritten to check the real result; no known failures remain.
 - Tests run in parallel (pytest-xdist): the whole suite takes about 2.5 min instead of 25.
 
 ## 0.9.9.80.44 - 2026-10-25
