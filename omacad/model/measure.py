@@ -96,8 +96,66 @@ def measure_2d(ents) -> Tuple[List[str], list]:
     return ["Pick lines or circles to measure"], []
 
 
+def is_face(x) -> bool:
+    return getattr(x, "tris", None) is not None and getattr(x, "normal", None) is not None
+
+
+def face_centroid(face) -> np.ndarray:
+    tris = np.asarray(face.tris, dtype=float)
+    area = 0.5 * np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+    centres = tris.mean(axis=1)
+    return (centres * area[:, None]).sum(axis=0) / max(float(area.sum()), 1e-18)
+
+
+def face_outline(face) -> list:
+    """Boundary segments of a face (triangle sides used by one triangle only), for drawing it."""
+    tris = np.asarray(face.tris, dtype=float)
+    count, seg = {}, {}
+    for t in tris:
+        for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+            k = tuple(sorted((tuple(np.round(a, 6)), tuple(np.round(b, 6)))))
+            count[k] = count.get(k, 0) + 1
+            seg[k] = (a, b)
+    return [seg[k] for k, c in count.items() if c == 1]
+
+
+def _face_and(face, other) -> Tuple[List[str], list]:
+    """A flat face and an edge or another flat face (Björn #102)."""
+    n = np.asarray(face.normal, dtype=float)
+    o = np.asarray(face.origin, dtype=float)
+    to_plane = lambda p: float(n @ (np.asarray(p, dtype=float) - o))
+    foot = lambda p: np.asarray(p, dtype=float) - to_plane(p) * n
+    if is_face(other):
+        m = np.asarray(other.normal, dtype=float)
+        c = face_centroid(other)
+        cos = float(np.clip(n @ m, -1.0, 1.0))
+        if abs(cos) > 1.0 - 1e-6:
+            d = abs(to_plane(c))
+            return [f"Distance between the faces {d:.3f} mm"], [(foot(c), c)]
+        ang = math.degrees(math.acos(abs(cos)))
+        ca = face_centroid(face)
+        return [f"Angle between the faces {ang:.2f}°", f"Centre to centre {float(np.linalg.norm(c - ca)):.3f} mm"], [(ca, c)]
+    if other.kind == "line":
+        t = other.p1 - other.p0
+        t = t / max(float(np.linalg.norm(t)), 1e-12)
+        s = abs(float(n @ t))
+        if s < 1e-6:
+            mid = (other.p0 + other.p1) / 2.0
+            return [f"Edge to face {abs(to_plane(mid)):.3f} mm"], [(foot(mid), mid)]
+        near = min((other.p0, other.p1), key=lambda p: abs(to_plane(p)))
+        return [f"Angle edge to face {math.degrees(math.asin(min(1.0, s))):.2f}°",
+                f"Nearest end to face {abs(to_plane(near)):.3f} mm"], [(foot(near), near)]
+    c = other.center if other.kind == "circle" else other.centroid
+    return [f"Centre to face {abs(to_plane(c)):.3f} mm"], [(foot(c), np.asarray(c, dtype=float))]
+
+
 def measure_3d(edges) -> Tuple[List[str], list]:
-    """Body edges (PlanarEdge / CircularEdge / LoopEdge), one or two."""
+    """Body edges (PlanarEdge / CircularEdge / LoopEdge) and flat faces (PlanarFace), one or two."""
+    if len(edges) == 1 and is_face(edges[0]):
+        return [f"Area {float(edges[0].area):.3f} mm²"], []
+    if len(edges) == 2 and (is_face(edges[0]) or is_face(edges[1])):
+        face, other = edges if is_face(edges[0]) else edges[::-1]
+        return _face_and(face, other)
     if len(edges) == 1:
         e = edges[0]
         if e.kind == "line":

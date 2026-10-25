@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.49 - 2026-10-25
+
+### Added
+- Measure works on flat faces (#102): one face gives its area; two parallel faces the distance between them, two faces at an angle the angle; a face and an edge give the distance (parallel edge) or the angle, a face and a circle the centre-to-face distance. D (set distance) also works between faces of two bodies.
+
 ## 0.9.9.80.48 - 2026-10-25
 
 ### Changed

@@ -3,6 +3,7 @@
 import numpy as np
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QPainter, QPen, QFont
+from omacad.model.measure import face_outline, is_face
 from omacad.ui import theme
 
 
@@ -18,7 +19,7 @@ class MeasureMixin:
         from omacad.ui.settings import get_settings
         if self.sketch_palette and get_settings().get("autohide_palette_on_measure", True):
             self.sketch_palette.hide()
-        self.status_message.emit("Measure: click a line, circle or edge; click a second one to measure between them. Esc ends.")
+        self.status_message.emit("Measure: click a line, circle, edge or face; click a second one to measure between them. Esc ends.")
         self.setFocus()
         self.update()
     def end_measure(self):
@@ -32,12 +33,18 @@ class MeasureMixin:
     def _measure_click(self, x: float, y: float):
         from omacad.model.measure import measure_2d, measure_3d
         m = self.measure
-        pick = self._pick_entity(x, y) if m["mode"] == "sketch" else self._pick_edge(x, y)
+        if m["mode"] == "sketch":
+            pick = self._pick_entity(x, y)
+        else:   # an edge, else the flat face under the cursor (#102)
+            pick = self._pick_edge(x, y)
+            if pick is None:
+                hit = self._pick_face(x, y)
+                pick = hit[1] if hit is not None and hit[1].index >= 0 else None
         if pick is None:
             m["picks"], m["text"], m["segs"] = [], [], []
             self.update()
             return
-        same = lambda a, b: (a.entity_id == b.entity_id) if m["mode"] == "sketch" else self._same_edge(a, b)
+        same = lambda a, b: (a.entity_id == b.entity_id) if m["mode"] == "sketch" else self._same_pick(a, b)
         if any(same(pick, p) for p in m["picks"]):
             m["picks"] = [p for p in m["picks"] if not same(pick, p)]
         else:
@@ -51,7 +58,18 @@ class MeasureMixin:
             self.status_message.emit("Measure: " + "  |  ".join(m["text"]) +
                                      ("  |  Press D to set this distance" if m["set_distance"] else ""))
         self.update()
+    @staticmethod
+    def _face_key(p):
+        return (p.body_id, p.index) if is_face(p) else None
+
+    def _same_pick(self, a, b) -> bool:
+        if is_face(a) or is_face(b):
+            return self._face_key(a) == self._face_key(b)
+        return self._same_edge(a, b)
+
     def _body_of_edge(self, edge):
+        if is_face(edge):
+            return self.doc.bodies.get(edge.body_id)
         return next((b for b in self.doc.bodies.values() if any(e is edge for e in b.edges)), None)
     def _measure_set_distance_plan(self):
         """Two edges on different bodies: (moving body, unit direction away from the first body, current gap)."""
@@ -70,7 +88,7 @@ class MeasureMixin:
         """Measure tool, key D: type the wanted distance and the second body moves along the measured line."""
         plan = self._measure_set_distance_plan()
         if plan is None:
-            self.status_message.emit("Set distance: measure between edges on two different bodies that are not touching.")
+            self.status_message.emit("Set distance: measure between edges or faces on two different bodies that are not touching.")
             return
         body, direction, gap = plan
         res = self.prompt_dimension_value("Set distance", f"Distance (mm); {body.name} moves along the measured line:",
@@ -100,6 +118,8 @@ class MeasureMixin:
             if m["mode"] == "sketch":
                 for a, b in p.to_lines():
                     pts.append((a, b))
+            elif is_face(p):
+                pts = face_outline(p)
             else:
                 poly = p.polyline()
                 pts = [(poly[i], poly[i + 1]) for i in range(len(poly) - 1)]
@@ -119,7 +139,7 @@ class MeasureMixin:
                     painter.drawEllipse(QPointF(*sb), 3.5, 3.5)
                     painter.setBrush(Qt.BrushStyle.NoBrush)
         # result panel
-        lines = m["text"] or ["Measure: click a line, circle or edge"]
+        lines = m["text"] or ["Measure: click a line, circle, edge or face"]
         if m.get("set_distance"):
             lines = lines + [f"D: set the distance (moves {m['set_distance'][0].name})"]
         font = QFont(theme.font_family(), 11)
