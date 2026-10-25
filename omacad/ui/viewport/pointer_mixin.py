@@ -22,6 +22,9 @@ class PointerMixin:
                 and self.primitive_handles.press(x, y)):
             self.update()
             return
+        if event.button() == Qt.MouseButton.LeftButton and self.rotate_handles.press(x, y):
+            self.update()
+            return
 
         # Check ViewCube click first
         if (event.button() == Qt.MouseButton.LeftButton
@@ -310,6 +313,9 @@ class PointerMixin:
         y = event.position().y()
         if (self.primitive_handles and not self.is_orbiting and not self.is_panning
                 and self.primitive_handles.move(x, y)):
+            self.update()
+            return
+        if not self.is_orbiting and not self.is_panning and self.rotate_handles.move(x, y):
             self.update()
             return
         if self._rubber is not None:

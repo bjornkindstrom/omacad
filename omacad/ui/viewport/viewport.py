@@ -233,6 +233,8 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self.step_edges: list = []         # edges of the Fillet/Chamfer step picked in the timeline or being edited
 
         self.primitive_handles = None
+        from omacad.ui.viewport.rotate_handles import RotateHandles
+        self.rotate_handles = RotateHandles(self)   # curved arrows on the selected body that turn it (#107)
 
         # ViewCube overlay
         self.viewcube = ViewCube(size=110, on_face_clicked=self.set_view,

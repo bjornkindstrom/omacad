@@ -56,7 +56,9 @@ class OverlayMixin:
         self._draw_plane_labels(painter)
         # 1. ViewCube
         self.viewcube.draw(painter, w, h, self.azimuth, self.elevation)
-        draw_body_dimensions(self, painter)
+        if self.rotate_handles.drag is None:
+            draw_body_dimensions(self, painter)
+        self.rotate_handles.draw(painter)
         self._draw_measure(painter)
         self._draw_handle_value(painter)
         self._draw_point_pick(painter)

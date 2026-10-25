@@ -274,6 +274,9 @@ class ViewportEventsMixin:
             else:
                 self.end_plane_pick(cancelled=True)
             return
+        if event.key() == Qt.Key.Key_Escape and self.rotate_handles.cancel():
+            self.update()
+            return
         if event.key() == Qt.Key.Key_Escape and self.primitive_handles:
             handles = self.primitive_handles
             if handles.drag:
@@ -306,6 +309,9 @@ class ViewportEventsMixin:
     def mouseReleaseEvent(self, event):
         if (event.button() == Qt.MouseButton.LeftButton and self.primitive_handles
                 and self.primitive_handles.release()):
+            self.update()
+            return
+        if event.button() == Qt.MouseButton.LeftButton and self.rotate_handles.release():
             self.update()
             return
         if event.button() == Qt.MouseButton.LeftButton and self.viewcube.handle_mouse_release():

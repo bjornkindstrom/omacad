@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.56 - 2026-10-25
+
+### Added
+- Rotate handles on the selected body (#107), like Layerling: a curved arrow per axis (X red, Y green on top edges, Z blue on the left upright edge). Drag one to turn the body about its centre in 15° steps (hold Shift for free angles); the angle shows while dragging, Esc cancels, and letting go makes one Move step (Ctrl+Z undoes).
+
 ## 0.9.9.80.55 - 2026-10-25
 
 ### Fixed
