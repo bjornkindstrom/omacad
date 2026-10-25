@@ -1,5 +1,6 @@
 # Omacad – progress and roadmap
 
+- Readable value boxes, faces closed by lines on a circle, browser dimension highlight, Construction menu, 45°/90° snaps, hidden bodies untouched (0.9.9.80.44, #91–#99).
 - Readable sketch palette, grey finished sketches (0.9.9.80.43, #89 #90).
 - Theme choice trimmed to Studio, Graphite, Atelier and Follow Omarchy (0.9.9.80.42).
 - Own icon per rectangle kind, shown on the ribbon button for the default (0.9.9.80.41).

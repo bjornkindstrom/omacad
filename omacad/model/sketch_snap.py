@@ -30,6 +30,7 @@ class SnapResult:
     snap_type: str  # "NONE", "ORIGIN", "ENDPOINT", "MIDPOINT", "EDGE", "ORTHO_H", "ORTHO_V", "GRID", "TANGENT"
     target_uv: Optional[Tuple[float, float]] = None
     guide_line: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
+    label: str = ""   # ANGLE snaps: the angle shown next to the cursor ("45°", "90°")
 
 
 class SketchSnapper:
@@ -166,6 +167,29 @@ class SketchSnapper:
                 guide = ((su, sv - 500.0), (su, sv + 500.0))
                 v_coord = round(rv / grid_step) * grid_step if enable_grid_snap else rv
                 return SnapResult(uv=(su, v_coord), snap_type="ORTHO_V", target_uv=(su, sv), guide_line=guide)
+
+            # 45° diagonals, and 90°/45° to the line that ends where this one starts (Björn #98)
+            dirs = [((1.0, 1.0), "45°"), ((1.0, -1.0), "45°")]
+            prev = next((e for e in reversed(sketch.entities) if getattr(e, "entity_type", "") == "line"
+                         and math.hypot(e.p2[0] - su, e.p2[1] - sv) < 1e-6), None) if sketch else None
+            if prev is not None:
+                pu, pv = prev.p2[0] - prev.p1[0], prev.p2[1] - prev.p1[1]
+                dirs += [((-pv, pu), "90°"), ((pu - pv, pv + pu), "45°"), ((pu + pv, pv - pu), "45°")]
+            best = None
+            for (du, dv), label in dirs:
+                n = math.hypot(du, dv)
+                if n < 1e-9:
+                    continue
+                du, dv = du / n, dv / n
+                t = (ru - su) * du + (rv - sv) * dv
+                d = abs((ru - su) * dv - (rv - sv) * du)
+                if d <= snap_distance and abs(t) > snap_distance and (best is None or d < best[0]):
+                    best = (d, du, dv, t, label)
+            if best is not None:
+                _, du, dv, t, label = best
+                guide = ((su - 500.0 * du, sv - 500.0 * dv), (su + 500.0 * du, sv + 500.0 * dv))
+                return SnapResult(uv=(su + t * du, sv + t * dv), snap_type="ANGLE", target_uv=(su, sv),
+                                  guide_line=guide, label=label)
 
         # 4. Grid Snapping
         if enable_grid_snap and grid_step > 0:

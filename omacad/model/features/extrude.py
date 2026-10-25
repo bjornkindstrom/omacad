@@ -208,7 +208,7 @@ class ExtrudeFeature(ProfileRefs, Feature):
         if tool is None:
             return "new_body"
         for body in doc.bodies.values():
-            if not self._bbox_overlap(body.manifold, tool):
+            if not body.visible or not self._bbox_overlap(body.manifold, tool):
                 continue
             inter = body.manifold ^ tool
             if not inter.is_empty() and inter.volume() > 1e-6:
@@ -224,6 +224,8 @@ class ExtrudeFeature(ProfileRefs, Feature):
             region = unary_union([Polygon(sketch.profiles[i].exterior_pts, sketch.profiles[i].interior_holes)
                                   for i in [self.profile_idx] + [j for j in self.extra_profiles if j < len(sketch.profiles)]])
             for body in doc.bodies.values():
+                if not body.visible:
+                    continue
                 for face in body.faces:
                     if abs(float(np.dot(face.normal, n0))) < 0.999 or abs(float(np.dot(face.origin - o0, n0))) > 1e-3:
                         continue  # not a face in the extrusion start plane

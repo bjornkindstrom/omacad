@@ -131,7 +131,7 @@ class MeasureMixin:
         painter.setPen(QPen(accent, 1.5))
         painter.setBrush(theme.qcolor(30, 34, 40, 235))
         painter.drawRoundedRect(rect, 8, 8)
-        painter.setPen(theme.qcolor(240, 240, 240))
+        painter.setPen(theme.qcolor(224, 227, 231))
         for i, t in enumerate(lines):
             painter.drawText(QPointF(rect.x() + 14, rect.y() + 9 + fm.ascent() + i * fm.height()), t)
         painter.setBrush(Qt.BrushStyle.NoBrush)

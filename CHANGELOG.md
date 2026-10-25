@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.9.80.44 - 2026-10-25
+
+### Fixed
+- Value boxes in the view (Smart Circle, line length/angle, measure, constraint badges) show their text in every theme; it was white on a white box in Studio (#91, #95, #96).
+- Lines that end on a circle or arc close the region between them into a face (#93).
+- Hidden bodies are left alone: an Extrude/Revolve cut or join no longer touches a body you have hidden (#99).
+
+### Changed
+- A finished sketch no longer draws the face edges it included in purple; they only show while editing (#92).
+- Clicking a dimension in the browser lights up the sketch elements it measures in the view (#94).
+- Construction has a dropdown: Construction Line or Construction Circle starts that tool straight away (#97).
+- Lines snap to 45°, and to 90°/45° against the line they continue from, with a small angle label at the cursor (#98).
+
 ## 0.9.9.80.43 - 2026-10-25
 
 ### Fixed

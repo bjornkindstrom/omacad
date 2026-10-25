@@ -185,15 +185,16 @@ class OverlayMixin:
                     painter.setBrush(Qt.BrushStyle.NoBrush)
                     painter.drawEllipse(QPointF(sx, sy), 6, 6)
                     painter.drawLine(QPointF(sx - 10, sy - 6), QPointF(sx + 10, sy - 6))
-                elif snap.snap_type in ("ORTHO_H", "ORTHO_V"):
+                elif snap.snap_type in ("ORTHO_H", "ORTHO_V", "ANGLE"):
                     painter.setPen(QPen(qcolor(56, 189, 248), 1.5))
                     painter.setBrush(QBrush(qcolor(24, 28, 34, 220)))
-                    badge_rect = QRectF(sx + 10, sy - 20, 20, 16)
+                    badge_rect = QRectF(sx + 10, sy - 20, 30 if snap.label else 20, 16)
                     painter.drawRoundedRect(badge_rect, 3, 3)
-                    painter.setPen(QPen(qcolor(255, 255, 255)))
+                    painter.setPen(QPen(qcolor(224, 227, 231)))
                     font_ortho = QFont(theme.font_family(), 8, QFont.Weight.Bold)
                     painter.setFont(font_ortho)
-                    painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, "H" if snap.snap_type == "ORTHO_H" else "V")
+                    painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter,
+                                     snap.label or ("H" if snap.snap_type == "ORTHO_H" else "V"))
 
         # 4. Floating Real-time Dimension Badge (the Tab entry boxes already show these values for
         #    line/rect/circle/move, so showing both only made them cover each other)

@@ -166,7 +166,7 @@ class SketchDimensionsMixin:
             painter.setBrush(QBrush(qcolor(30, 34, 40, 235)))
             painter.setPen(QPen(qcolor(56, 189, 248), 1.2))
             painter.drawRoundedRect(rect, 3, 3)
-            painter.setPen(qcolor(230, 240, 250))
+            painter.setPen(qcolor(224, 227, 231))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.CONSTRAINT_GLYPHS.get(c.ctype, "?"))
             self.constraint_badges.append((rect, c.cid))
 

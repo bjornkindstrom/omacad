@@ -162,6 +162,7 @@ class Ribbon(QWidget):
     finish_sketch_clicked = Signal()
     fix_sketch_clicked = Signal()
     toggle_construction_clicked = Signal()
+    construction_tool_requested = Signal(str)     # draw this tool as construction geometry (LINE, CIRCLE)
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -419,6 +420,18 @@ class Ribbon(QWidget):
                     self.btn_circle.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
                     self.btn_circle.setMenu(self._command_menu(self.btn_circle, ["circle", "smart_circle"]))
                     row.addWidget(self.btn_circle)
+                elif item == "construction":
+                    # the arrow picks what to draw as a helper line straight away (Björn #97)
+                    self.btn_construct = self._command_button("construction", checkable=True)
+                    self.btn_construct.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+                    from PySide6.QtWidgets import QMenu
+                    menu = QMenu(self.btn_construct)
+                    theme.style_menu(menu)
+                    for tool, label in (("LINE", "Construction Line"), ("CIRCLE", "Construction Circle")):
+                        act = menu.addAction(label)
+                        act.triggered.connect(lambda _=False, t=tool: self.construction_tool_requested.emit(t))
+                    self.btn_construct.setMenu(menu)
+                    row.addWidget(self.btn_construct)
                 elif item == "constraints":
                     self._build_constraints(row, group_constraints, scale)
                 else:

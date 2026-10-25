@@ -325,6 +325,32 @@ class Sketch(SketchEditingMixin):
         except Exception:
             cache_key = None
 
+        # A line that ends on a circle or arc ends on the true curve, just outside its chords: that end
+        # becomes a corner of the drawn curve, so the line meets it and the region between them closes (Björn #93)
+        rounds = [ent for ent in self.entities if not ent.is_construction and getattr(ent, "radius", 0) > 1e-4
+                  and getattr(ent, "center", None) is not None]
+        if rounds:
+            ends = [q for ent in self.entities if not ent.is_construction and ent not in rounds
+                    for seg in ent.to_lines() for q in seg]
+            all_lines = []
+            for ent in self.entities:
+                if ent.is_construction:
+                    continue
+                segs = ent.to_lines()
+                if ent in rounds:
+                    (cx, cy), r = ent.center, ent.radius
+                    on = [q for q in ends if abs(math.hypot(q[0] - cx, q[1] - cy) - r) < 1e-3 * max(1.0, r)]
+                    for q in on:
+                        for i, (a, b) in enumerate(segs):
+                            d = LineString([a, b]).distance(Point(q))
+                            if d < 2e-2 * r and Point(a).distance(Point(q)) > 1e-6 and Point(b).distance(Point(q)) > 1e-6:
+                                ab = (b[0] - a[0], b[1] - a[1])
+                                t = ((q[0] - a[0]) * ab[0] + (q[1] - a[1]) * ab[1]) / max(ab[0] ** 2 + ab[1] ** 2, 1e-18)
+                                if 0.0 <= t <= 1.0:
+                                    segs[i:i + 1] = [(a, tuple(q)), (tuple(q), b)]
+                                    break
+                all_lines.extend(segs)
+
         shapely_lines = []
         for p1, p2 in all_lines:
             # Avoid zero length lines

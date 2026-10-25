@@ -527,7 +527,7 @@ class SketchToolsMixin:
             painter.setBrush(QBrush(qcolor(37, 40, 44, 240)))
             painter.setPen(QPen(colour, 1.5))
             painter.drawRoundedRect(rect, 4, 4)
-            painter.setPen(qcolor(255, 255, 255))
+            painter.setPen(qcolor(224, 227, 231))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
         def line(a: QPointF, b: QPointF, text: str):
@@ -606,7 +606,7 @@ class SketchToolsMixin:
         painter.setBrush(QBrush(qcolor(37, 40, 44, 235)))
         painter.setPen(QPen(orange, 2))
         painter.drawRoundedRect(rect, 4, 4)
-        painter.setPen(qcolor(255, 255, 255))
+        painter.setPen(qcolor(224, 227, 231))
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, txt)
     def event(self, e):
         if e.type() == QEvent.Type.ShortcutOverride and self._owns_key(e):
@@ -700,5 +700,5 @@ class SketchToolsMixin:
                 painter.setBrush(QBrush(qcolor(226, 109, 40, 200)))
                 painter.setPen(QPen(qcolor(226, 109, 40), 2))
                 painter.drawRoundedRect(rect, 4, 4)
-            painter.setPen(qcolor(255, 255, 255) if locked or focused else qcolor(170, 178, 188))
+            painter.setPen(qcolor(224, 227, 231) if locked or focused else qcolor(142, 149, 160))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, txt)

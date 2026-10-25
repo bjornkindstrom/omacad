@@ -27,6 +27,7 @@ class BrowserTree(QWidget):
     feature_delete_requested = Signal(str)
     body_selected = Signal(str)
     sketch_selected = Signal(str)
+    dimension_selected = Signal(str, str)              # sketch_id, dim_id; ("", "") = nothing
     start_sketch_on_plane = Signal(str)
     start_sketch_on_cplane = Signal(str)
     edit_section_requested = Signal(str)
@@ -447,9 +448,13 @@ class BrowserTree(QWidget):
             return
 
         item_type, item_id = data
+        # a dimension row lights up what it measures in the view (Björn #94); any other row clears that
+        self.dimension_selected.emit(*(item_id if item_type == "dimension" else ("", "")))
         if column == 1 and item_type in ("parameter", "dimension"):       # the pencil
             from omacad.ui.object_browser import edit_parameter
             edit_parameter(self, item_type, item_id)
+            return
+        if item_type == "dimension":
             return
         from omacad.ui.object_browser import FEATURE_ROLE
         fid = item.data(0, FEATURE_ROLE)

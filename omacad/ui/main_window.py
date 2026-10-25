@@ -199,6 +199,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.ribbon.sketch_tool_selected.connect(self.on_sketch_tool_selected)
         self.viewport.sketch_tool_changed.connect(self.sync_sketch_tool_from_viewport)
         self.ribbon.toggle_construction_clicked.connect(self.viewport.toggle_construction_mode)
+        self.ribbon.construction_tool_requested.connect(self.start_construction_tool)
         self.viewport.construction_mode_changed.connect(
             lambda val: getattr(self.ribbon, "btn_construct", None) and self.ribbon.btn_construct.setChecked(val)
         )
@@ -253,6 +254,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.browser.feature_selected.connect(self.on_browser_feature_selected)
         self.browser.feature_edit_requested.connect(self.on_browser_feature_edit)
         self.browser.pick_feature = self.pick_browser_feature
+        self.browser.dimension_selected.connect(self.viewport.show_dimension_entities)
         self.browser.feature_delete_requested.connect(self.on_browser_feature_delete)
         self.browser.delete_sketch_requested.connect(self.on_delete_sketch)
 
@@ -507,6 +509,12 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         index = self.doc.object_history.index(self.doc, feature_id)
         if index is not None and feature_edit.confirm_delete(self, self.doc, index):
             self.doc.delete_feature(index)
+
+    def start_construction_tool(self, tool: str):
+        """Construction ▾ Line/Circle: helper geometry on, and that tool picked, in one step."""
+        if not self.viewport.construction_mode:
+            self.viewport.toggle_construction_mode()
+        self.ribbon.select_sketch_tool(tool)
 
     def pick_browser_feature(self, feature_id):
         handler = self.timeline_bar.feature_pick_handler

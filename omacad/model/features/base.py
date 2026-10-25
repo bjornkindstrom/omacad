@@ -185,6 +185,9 @@ class Feature:
                 targets = selected or owned
                 if targets:
                     self.target_body_ids = targets
+                elif any(not b.visible for b in doc.bodies.values()):
+                    # a hidden body is out of play: nothing is cut from or joined to it (Björn #99)
+                    self.target_body_ids = [bid for bid, b in doc.bodies.items() if b.visible]
             before = {bid: b.manifold for bid, b in doc.bodies.items()}
             result = execute(self, doc)
             self._last_body_outputs = [bid for bid in dict.fromkeys([*before, *doc.bodies])

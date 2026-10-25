@@ -381,6 +381,13 @@ class DimensionOverlayMixin:
                 self.status_message.emit(self.doc.last_message)
             self.update()
 
+    def show_dimension_entities(self, sketch_id: str, dim_id: str):
+        """Lights up the entities a dimension measures (picked in the browser); empty ids clear it."""
+        sk = self.doc.sketches.get(sketch_id) if sketch_id else None
+        dim = next((d for d in sk.dimensions if d.dim_id == dim_id), None) if sk else None
+        self.picked_dim_entities = (sketch_id, {dim.target_entity_id, *dim.refs}) if dim else (None, set())
+        self.update()
+
     def _dim_highlight_ids(self) -> set:
         ids = {p[1].entity_id for p in self._dim_pending if p[0] in ("ent", "pt")}  # "ref" picks are edges, not entities
         if self._dim_place:

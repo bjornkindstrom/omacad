@@ -1,5 +1,6 @@
 # Omacad – färdplan
 
+Genomfört 0.9.9.80.44: #91–#99 läsbara värderutor, linjer mot cirkel ger yta, mått i browsern markeras, Construction-meny, 45°/90°-fäste, dolda kroppar orörda.
 Genomfört 0.9.9.80.43: #89 läsbar palett/inspektör, #90 grå färdiga skisser.
 Genomfört 0.9.9.80.42: bara Studio, Graphite, Atelier och Följ Omarchy i temavalet.
 Genomfört 0.9.9.80.41: egen ikon per rektangeltyp.

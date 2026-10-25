@@ -564,7 +564,9 @@ class RenderGLMixin:
         # Draw all visible sketches
         for sketch in self.doc.sketches.values():
             flash = sketch.sketch_id == getattr(self, "flash_sketch_id", None)
-            if not sketch.visible and not flash:
+            picked_sid, picked = getattr(self, "picked_dim_entities", (None, set()))
+            picked = picked if sketch.sketch_id == picked_sid else set()
+            if not sketch.visible and not flash and not picked:
                 continue
 
             is_active = (sketch == self.doc.active_sketch)
@@ -592,7 +594,7 @@ class RenderGLMixin:
                         w2 = plane.uv_to_world(p2[0], p2[1])
                         dest.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
             for ent in sketch.entities:
-                if flash:
+                if flash or ent.entity_id in picked:
                     dest = selected_lines          # lit up in the highlight colour
                 elif is_active and (ent.entity_id in self.selected_entities or ent.entity_id in self._dim_highlight_ids()):
                     dest = selected_lines
@@ -616,7 +618,9 @@ class RenderGLMixin:
                     fcol = get_settings().sketch_finished_color_rgb01()    # grey by default (Björn #90)
                     self.draw_thick_lines(mvp, normal_lines, (*fcol, 1.0), line_w, halo=False)   # no dark rim
 
-            if projected_lines:   # edges included from the body: a distinct colour, like Fusion's projected curves
+            # edges included from the body: a distinct colour while editing, like Fusion's projected curves;
+            # a finished sketch leaves them out, the body's own edges already show there (Björn #92)
+            if projected_lines and is_active:
                 self.draw_thick_lines(mvp, projected_lines, (0.80, 0.45, 1.0, 1.0), 2.2)
             if hover_lines:
                 from omacad.ui.settings import hover_line_style
