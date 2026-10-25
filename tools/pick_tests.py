@@ -84,7 +84,13 @@ def main(argv):
     print("Tests:", " ".join(chosen))
     if only_list:
         return 0
-    return subprocess.run([sys.executable, "-m", "pytest", *chosen, "-q", "--tb=short", "-p", "no:cacheprovider"], cwd=ROOT).returncode
+    try:
+        import xdist  # noqa: F401
+        spread = ["-n", "auto", "--dist", "loadfile"] if len(chosen) > 2 else []
+    except ImportError:
+        spread = []
+    return subprocess.run([sys.executable, "-m", "pytest", *chosen, "-q", "--tb=short", "-p", "no:cacheprovider", *spread],
+                          cwd=ROOT).returncode
 
 
 if __name__ == "__main__":

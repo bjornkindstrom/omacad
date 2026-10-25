@@ -40,7 +40,7 @@ Ett native parametriskt 3D-CAD för Omarchy Linux (Python 3.14, PySide6/Qt6 + Op
 .venv/bin/python -m pytest tests/test_<feature>.py -q --tb=short  # under arbetet: testet du skriver
 .venv/bin/python tools/pick_tests.py       # före commit: 3-4 utvalda testfiler för ändringen (sekunder, inte minuter)
 ```
-- **Kör inte helsviten** (118 filer, ~8 min). `tools/pick_tests.py` tar ändrade testfiler + de tester som nämner ändrade funktioner/moduler (`--list` visar bara valet, `<commit>` testar en commit). Helsviten körs av CI vid push; kör den lokalt bara om användaren ber om det.
+- **Helsviten parallellt:** `pytest tests -q -n auto --dist loadfile` (~2,5 min med pytest-xdist, seriellt ~25 min). **Kör den inte i onödan.** `tools/pick_tests.py` tar ändrade testfiler + de tester som nämner ändrade funktioner/moduler (`--list` visar bara valet, `<commit>` testar en commit). Helsviten körs av CI vid push; kör den lokalt bara om användaren ber om det.
 - Kör GUI-tester en i taget; överlappande testfönster kan ge falska renderingsfel (hämta testets egen dialog med `w.window() is win`, inte första i `app.allWidgets()`). Upprepa inte gröna kontroller utan ny ändring eller kvarstående osäkerhet.
 - Version: `omacad/__init__.py`. **Supersmå steg:** varje ändring, rättning som funktion, höjer bara sista siffran; sedan 0.9.9.80 med en femte del (0.9.9.80 → 0.9.9.80.1 → 0.9.9.80.2 …, Björns beslut 2026-10-23). Hoppa aldrig till 0.9.10, 0.10 eller **1.0**; det beslutar bara användaren ("ok"). Skriv i `CHANGELOG.md` och uppdatera `README.md`/`ROADMAP.md`/`PLAN.md`.
 - Push till `main` kör CI: testjobb (`tests/`), sedan Windows-EXE och en release `v<version>` (+ `latest`). Push med `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
