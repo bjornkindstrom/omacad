@@ -30,7 +30,7 @@ def test_fillet_face_click_selects_all_boundary_loops():
             self.edge_pick_mode = True
             self.edge_xray = False
             self.hover_edge = None
-            self.hover_face = None
+            self.hover_face = self.hover_surface = None
             self.selected_edges = []
             self._w, self._h = 2036 - 360, 1114
             self.cam_az = 170.87696587004527

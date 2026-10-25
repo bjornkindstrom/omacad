@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.32 - 2026-10-25
+
+### Fixed
+- Round surfaces (fillets, arcs of an extruded sketch, cylinder walls) light up under the cursor like flat faces. Each arc is its own surface, also where a sketch fillet runs tangent into a larger arc.
+
 ## 0.9.9.80.31 - 2026-10-25
 
 ### Added

@@ -72,6 +72,39 @@ def tangent_edge_mask(v, f, tm, sharp_deg: float, min_deg: float = 0.1) -> np.nd
             & (angles >= np.radians(min_deg)) & (angles <= np.radians(sharp_deg)))
 
 
+def curved_surface_ids(v, f, tm, sharp_deg: float, radius_ratio: float = 1.5) -> np.ndarray:
+    """Per triangle: the id of the curved surface it belongs to (a fillet, a cylinder wall: the tessellated strips
+    joined across smooth seams up to `sharp_deg`), or -1 on a flat face. Two strips of different radius (a sketch
+    fillet running tangent into a larger arc) stay apart: a strip's width over the seam angle is its radius, so the
+    widths must agree within `radius_ratio`. Slivers join a curved surface they touch."""
+    roots, groups, planar, _, curved = _face_groups(v, f, tm)
+    parent = {int(r): int(r) for r in groups if r not in planar}
+
+    def find(r: int) -> int:
+        while parent[r] != r:
+            parent[r] = parent[parent[r]]
+            r = parent[r]
+        return r
+
+    smooth = tm.face_adjacency_angles <= np.radians(sharp_deg)
+    a, b = roots[tm.face_adjacency[smooth, 0]], roots[tm.face_adjacency[smooth, 1]]
+    edges = tm.face_adjacency_edges[smooth]
+    seam: dict = {}
+    for ra, rb, length in zip(a.tolist(), b.tolist(), np.linalg.norm(v[edges[:, 0]] - v[edges[:, 1]], axis=1)):
+        if ra != rb and ra in parent and rb in parent:
+            seam[ra, rb] = seam.get((ra, rb), 0.0) + float(length)
+    area = {r: float(tm.area_faces[ids].sum()) for r, ids in groups.items() if r in parent}
+    for (ra, rb), length in seam.items():
+        wa, wb = area[ra] / length, area[rb] / length
+        if ra in curved and rb in curved and max(wa, wb) > radius_ratio * min(wa, wb):
+            continue
+        if find(ra) != find(rb):
+            parent[find(rb)] = find(ra)
+    with_curve = {find(r) for r in curved}
+    return np.array([find(r) if r in parent and find(r) in with_curve else -1 for r in roots.tolist()],
+                    dtype=np.int64)
+
+
 def clear_topology_cache():
     """Clears the global topology analysis cache."""
     _TOPOLOGY_CACHE.clear()

@@ -390,15 +390,15 @@ class PointerMixin:
                 self._update_entity_hover(x, y)
                 if self._idle_hover_ok():
                     self._update_edge_hover(x, y)
-                    if self.hover_edge is None and self.hover_face is None:
+                    if self.hover_edge is None and self.hover_face is None and self.hover_surface is None:
                         self._update_idle_plane_hover(x, y)
                     elif self.hover_plane is not None:
                         self.hover_plane = None
                         self.update()
-                elif self.hover_edge is not None or self.hover_face is not None:
+                elif self.hover_edge is not None or self.hover_face is not None or self.hover_surface is not None:
                     if self.hover_edge is not None:
                         self.hover_info_changed.emit(None)
-                    self.hover_edge = self.hover_face = None
+                    self.hover_edge = self.hover_face = self.hover_surface = None
                     self.update()
 
         # Check Dimension Badge Hover

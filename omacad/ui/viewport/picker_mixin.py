@@ -60,7 +60,7 @@ class PickerMixin:
         self.edge_pick_mode = True
         self.edge_xray = False
         self.hover_edge = None
-        self.hover_face = None
+        self.hover_face = self.hover_surface = None
         self.selected_edges = []
         self.setFocus()
         self.update()
@@ -68,7 +68,7 @@ class PickerMixin:
     def end_edge_pick(self, cancelled: bool = False):
         self.edge_pick_mode = False
         self.hover_edge = None
-        self.hover_face = None
+        self.hover_face = self.hover_surface = None
         self.selected_edges = []
         if cancelled:
             self.edge_pick_cancelled.emit()
@@ -269,12 +269,38 @@ class PickerMixin:
                 face = hit[1]
         edge_changed = (e is None) != (self.hover_edge is None) or (e is not None and not self._same_edge(e, self.hover_edge))
         face_changed = (face is None) != (self.hover_face is None) or (face is not None and (self.hover_face is None or face.body_id != self.hover_face.body_id or face.index != self.hover_face.index))
-        if edge_changed or face_changed:
+        surface = self._pick_curved_surface(x, y) if e is None and face is None and not self.edge_pick_mode else None
+        old = self.hover_surface
+        surface_changed = (surface is None) != (old is None) or (surface is not None and (
+            surface[0] != old[0] or surface[1].shape != old[1].shape or not np.array_equal(surface[1][0], old[1][0])))
+        if edge_changed or face_changed or surface_changed:
             self.hover_edge = e
             self.hover_face = face
+            self.hover_surface = surface
             if edge_changed:
                 self.hover_info_changed.emit(describe_edge(e) if e is not None else None)
             self.update()
+
+    def _pick_curved_surface(self, x: float, y: float):
+        """(body_id, triangles) of the curved surface (a fillet, a round wall) nearest under the cursor, or None
+        when a flat face or nothing is there. Only for the hover highlight: curved surfaces are not faces."""
+        from omacad.model.faces import ray_mesh_hit
+        proj, view, _ = self.get_matrices()
+        origin, ray_dir = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        best = None
+        for body in self.doc.bodies.values():
+            mesh = self._pick_mesh(body)
+            if not body.visible or mesh is None or not len(mesh.vertices) \
+                    or not self._ray_hits_body_aabb(body, origin, ray_dir, best[0] if best else float("inf")):
+                continue
+            hit = ray_mesh_hit(mesh, origin, ray_dir)
+            if hit is not None and (best is None or hit[0] < best[0]):
+                best = (hit[0], hit[1], mesh, body.body_id)
+        if best is None:
+            return None
+        _, tri, mesh, body_id = best
+        tris = mesh.curved_surface(tri) if hasattr(mesh, "curved_surface") else None
+        return None if tris is None else (body_id, tris)
 
     def _visible_edges(self):
         return [c for b in self.doc.bodies.values() if b.visible for c in b.edges]
@@ -307,6 +333,19 @@ class PickerMixin:
             self.draw_buffer_arrays(GL.GL_TRIANGLES, loc_pos, tris)
             GL.glDepthMask(GL.GL_TRUE)
             GL.glEnable(GL.GL_DEPTH_TEST)
+        if self.hover_surface is not None and self.hover_edge is None and self.prog_flat is not None:
+            # depth-tested (the back of a round wall stays hidden), pulled forward so it is not lost in the body
+            GL.glUseProgram(self.prog_flat)
+            GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
+            GL.glUniform4f(GL.glGetUniformLocation(self.prog_flat, "u_color"), *theme.palette().highlight01(0.1), 0.35)
+            GL.glDepthMask(GL.GL_FALSE)
+            GL.glEnable(GL.GL_DEPTH_TEST)
+            GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
+            GL.glPolygonOffset(-2.0, -2.0)
+            self.draw_buffer_arrays(GL.GL_TRIANGLES, GL.glGetAttribLocation(self.prog_flat, "in_pos"),
+                                    self.hover_surface[1].reshape(-1, 3).astype(np.float32))
+            GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
+            GL.glDepthMask(GL.GL_TRUE)
 
         if self.prog_thick is None:
             return

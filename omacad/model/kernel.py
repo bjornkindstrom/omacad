@@ -23,6 +23,7 @@ class RenderMesh:
     center: np.ndarray        # [cx, cy, cz]
     source: Optional[tuple] = field(default=None, repr=False)   # (vertices, triangles, kept mask) for tangent_lines
     _tangent: Optional[np.ndarray] = field(default=None, repr=False)
+    _surface_ids: Optional[np.ndarray] = field(default=None, repr=False)
 
     def tangent_lines(self) -> np.ndarray:
         """Line pairs (like `sharp_lines`) where a flat face runs smoothly into a curved one (Settings > Show tangent
@@ -38,6 +39,21 @@ class RenderMesh:
                     mask &= keep[tm.face_adjacency[:, 0]] & keep[tm.face_adjacency[:, 1]]
                 self._tangent = v[tm.face_adjacency_edges[mask]].reshape(-1, 3).astype(np.float32)
         return self._tangent
+
+    def curved_surface(self, tri: int) -> Optional[np.ndarray]:
+        """The triangles (k, 3, 3) of the curved surface that drawn triangle `tri` lies on (a fillet, a cylinder
+        wall), for the hover highlight; None on a flat face. Worked out the first time a curve is hovered."""
+        if self.source is None:
+            return None
+        v, f, keep = self.source
+        if self._surface_ids is None:
+            from omacad.model.faces_surfaces import curved_surface_ids
+            ids = curved_surface_ids(v, f, trimesh.Trimesh(vertices=v, faces=f, process=False), CadKernel.SHARP_EDGE_DEG)
+            self._surface_ids = ids if keep is None else ids[keep]
+        sid = int(self._surface_ids[tri])
+        if sid < 0:
+            return None
+        return np.asarray(self.vertices, dtype=np.float64).reshape(-1, 3, 3)[self._surface_ids == sid]
 
 
 class CadKernel:

@@ -209,6 +209,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self.edge_xray: bool = False   # pick edges through the model too (stairs, inside corners)
         self.hover_edge = None            # PlanarEdge under the cursor
         self.hover_face = None            # flat face under the cursor
+        self.hover_surface = None         # (body_id, triangles) of a curved surface under the cursor, only lit up
         self.selected_edges: list = []    # PlanarEdge objects chosen so far
 
         # Right-click menu on a face
