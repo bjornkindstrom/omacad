@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.60 - 2026-10-25
+
+### Fixed
+- A green face was left behind where a body used to be (#112): after moving a body (with the arrows or any other way) the face that was lit under the mouse stayed lit at the old place. The hover now lets go when the document changes, and a face counts as the same only when it is the same geometry, not just the same number.
+
 ## 0.9.9.80.59 - 2026-10-25
 
 ### Added

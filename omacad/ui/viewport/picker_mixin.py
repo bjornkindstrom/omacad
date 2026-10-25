@@ -276,7 +276,10 @@ class PickerMixin:
             if hit is not None:
                 face = hit[1]
         edge_changed = (e is None) != (self.hover_edge is None) or (e is not None and not self._same_edge(e, self.hover_edge))
-        face_changed = (face is None) != (self.hover_face is None) or (face is not None and (self.hover_face is None or face.body_id != self.hover_face.body_id or face.index != self.hover_face.index))
+        # the same triangles, not only the same number: a rebuilt (moved) body numbers its faces the same (Björn #112)
+        old_face = self.hover_face
+        face_changed = (face is None) != (old_face is None) or (face is not None and (
+            face.body_id != old_face.body_id or face.index != old_face.index or face.tris is not old_face.tris))
         surface = self._pick_curved_surface(x, y) if e is None and face is None and not self.edge_pick_mode else None
         old = self.hover_surface
         surface_changed = (surface is None) != (old is None) or (surface is not None and (

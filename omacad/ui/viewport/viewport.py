@@ -330,6 +330,11 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
             alive = {e.entity_id for e in sk.entities}
             self.selected_entities &= alive
         self.hover_entity_id = None
+        # a hovered edge or face holds the coordinates of the body it was picked on: after a move or a rebuild it
+        # would stay lit where the body used to be (Björn #112); the next mouse move picks it again
+        if getattr(self, "hover_edge", None) is not None:
+            self.hover_info_changed.emit(None)
+        self.hover_edge = self.hover_face = self.hover_surface = None
         sel = self.doc.selected_profile
         if sel and (sel[0] not in self.doc.sketches or sel[1] >= len(self.doc.sketches[sel[0]].profiles)):
             self.doc.selected_profile = None
