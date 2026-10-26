@@ -44,6 +44,7 @@ class SketchOperationMixin:
                                      "Minus flips the side. Backspace on an empty field goes back.")
         self.sketch_start_uv = None
         self.sketch_second_uv = None
+        self._spline_points = []
         self.sketch_current_uv = None
         if tool_name == "ROTATE" and not self._rotate_begin():
             self.sketch_tool = tool_name = "NONE"

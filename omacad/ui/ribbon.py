@@ -124,6 +124,7 @@ class Ribbon(QWidget):
     # Action Signals
     create_sketch_clicked = Signal()
     extrude_clicked = Signal()
+    hole_clicked = Signal()
     revolve_clicked = Signal()
     emboss_clicked = Signal()
     fillet_clicked = Signal()
@@ -400,7 +401,7 @@ class Ribbon(QWidget):
         settings = get_settings()
         group_constraints = bool(settings.get("group_constraints", True))
         sketch_buttons = {        # the names the main window and tests use for the sketch buttons
-            "line": "btn_line", "polygon": "btn_polygon", "arc": "btn_arc", "slot": "btn_slot", "text": "btn_text",
+            "line": "btn_line", "polygon": "btn_polygon", "arc": "btn_arc", "spline": "btn_spline", "slot": "btn_slot", "text": "btn_text",
             "offset_sketch": "btn_offset_sk", "mirror_sketch": "btn_mirror_sk", "project": "btn_project_sk",
             "dimension": "btn_dim", "fillet_sketch": "btn_fillet_sk", "trim": "btn_trim_sk", "move_sketch": "btn_move",
             "rotate_sketch": "btn_rotate_sk", "construction": "btn_construct",
@@ -552,6 +553,8 @@ class Ribbon(QWidget):
         self.btn_circle.setChecked(tool_name in CIRCLE_TOOLS)
         self.btn_polygon.setChecked(tool_name == "POLYGON")
         self.btn_arc.setChecked(tool_name == "ARC")
+        if hasattr(self, "btn_spline"):
+            self.btn_spline.setChecked(tool_name == "SPLINE")
         self.btn_slot.setChecked(tool_name == "SLOT")
         self.btn_text.setChecked(tool_name == "TEXT")
         if hasattr(self, "btn_fillet_sk"):

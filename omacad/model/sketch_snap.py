@@ -8,7 +8,7 @@ import math
 from dataclasses import dataclass
 from typing import Tuple, Optional, List
 import numpy as np
-from omacad.model.sketch import Sketch, SketchLine, SketchRect, SketchCircle, SketchArc
+from omacad.model.sketch import Sketch, SketchLine, SketchRect, SketchCircle, SketchArc, SketchSpline
 
 
 Segment = Tuple[Tuple[float, float], Tuple[float, float]]
@@ -90,6 +90,8 @@ class SketchSnapper:
                     endpoints.append(ent.p_start)
                     endpoints.append(ent.p_end)
                     midpoints.append(ent.p_mid)
+                elif isinstance(ent, SketchSpline) and ent.points:
+                    endpoints.extend((ent.points[0], ent.points[-1]))
 
             # Edges of the surrounding geometry (face boundary, other bodies' edges in this plane)
             ref = reference_segments

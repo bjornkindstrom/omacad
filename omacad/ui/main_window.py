@@ -159,6 +159,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.viewport.status_message.connect(self.status_label.setText)
         self.viewport.plane_pick_cancelled.connect(self.on_plane_pick_cancelled)
         self.ribbon.extrude_clicked.connect(self.prompt_extrude)
+        self.ribbon.hole_clicked.connect(self.prompt_hole)
         self.ribbon.pattern_clicked.connect(self.prompt_pattern)
         self.ribbon.pattern_kind_clicked.connect(self.prompt_pattern)
         self.ribbon.offset_plane_clicked.connect(self.prompt_offset_plane)

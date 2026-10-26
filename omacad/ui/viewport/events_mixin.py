@@ -20,6 +20,12 @@ class ViewportEventsMixin:
     def mouseDoubleClickEvent(self, event):
         x = event.position().x()
         y = event.position().y()
+        if (self.doc.active_sketch and self.sketch_tool == "SPLINE"
+                and event.button() == Qt.MouseButton.LeftButton):
+            if self.sketch_current_uv is not None:
+                self._commit_sketch_point(self.sketch_current_uv)
+            self._finish_spline()
+            return
         if self.doc.active_sketch and event.button() == Qt.MouseButton.LeftButton:
             for dim_id, (rect, s_id, d_id, val) in list(self.dim_badges.items()):
                 if rect.contains(x, y):
@@ -148,6 +154,9 @@ class ViewportEventsMixin:
 
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()
+            return
+        if self.hole_place_mode and event.key() == Qt.Key.Key_Escape:
+            self.end_hole_place()
             return
         if self.point_pick and event.key() == Qt.Key.Key_Escape:
             self.end_point_pick()
@@ -301,7 +310,10 @@ class ViewportEventsMixin:
                 if self._move:
                     self._end_move(False)
                 self.sketch_start_uv = None
+                if self.sketch_tool == "SPLINE":
+                    self._spline_points = []
                 self.dyn.reset()
+                self.update()
             elif self.sketch_tool != "NONE":
                 self.set_sketch_tool("NONE")
             elif self.active_tool_title():   # Esc always leaves the current function, also an open tool panel
@@ -473,6 +485,11 @@ class ViewportEventsMixin:
                 hit = self._pick_surface(event.position().x(), event.position().y())
                 if hit is not None:
                     self.end_plane_pick()
+                    self.surface_picked.emit(hit)
+                return
+            if self.plane_pick_purpose == "hole_point":
+                hit = self._pick_surface(event.position().x(), event.position().y())
+                if hit is not None:
                     self.surface_picked.emit(hit)
                 return
             if self.plane_pick_purpose == "offset_face":

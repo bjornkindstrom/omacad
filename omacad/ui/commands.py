@@ -34,6 +34,8 @@ _ALL = [
     _c("create_sketch", "Create Sketch", "✏️", "Start a sketch on a plane or a flat face", signal="create_sketch_clicked"),
     _c("extrude", "Extrude", "⬆️", "Pull closed sketch profiles or faces into bodies, or cut with them", "E",
        "extrude_clicked", extra=("Ctrl+E",)),
+    _c("hole", "Hole", "🕳️", "Create simple, counterbore or countersink holes with optional entrance chamfer",
+       signal="hole_clicked"),
     _c("revolve", "Revolve", "🔄", "Turn a sketch profile around an axis or edge into a solid", signal="revolve_clicked"),
     _c("emboss", "Emboss", "🔖", "Raise or press text (any sketch profile) into a face: positive depth raises it, "
        "negative presses it in", signal="emboss_clicked"),
@@ -92,6 +94,8 @@ _ALL = [
     _c("smart_circle", "Smart Circle", "⭕", "A circle that snaps to what is around it", "Shift+C",
        "sketch_tool_selected", "SMART_CIRCLE", ("sketch",)),
     _c("arc", "3-Point Arc", "⌒", "An arc through three points", "A", "sketch_tool_selected", "ARC", ("sketch",)),
+    _c("spline", "Spline", "〰️", "A smooth curve through a sequence of points; Enter or right-click finishes",
+       signal="sketch_tool_selected", arg="SPLINE", modes=("sketch",)),
     _c("polygon", "Polygon", "⬡", "A regular polygon: centre, then out; Tab types side length and sides", "P",
        "sketch_tool_selected", "POLYGON", ("sketch",)),
     _c("slot", "Slot", "💊", "A slot from centre to centre and its width", "", "sketch_tool_selected", "SLOT",
@@ -140,13 +144,13 @@ INSPECT = ("inspect", "Inspect", "📏", "Measure, Section View, Document Statis
 PATTERNS = ["pattern_linear", "pattern_circular", "mirror", "pattern_fill"]   # the Pattern button's arrow
 
 SOLID_GROUPS: List[Tuple[str, list]] = [
-    ("CREATE", ["create_sketch", "extrude", "revolve", "sweep", "loft", "emboss", PRIMITIVES, "pattern", "honeycomb", "offset_plane",
+    ("CREATE", ["create_sketch", "extrude", "hole", "revolve", "sweep", "loft", "emboss", PRIMITIVES, "pattern", "honeycomb", "offset_plane",
                 INSERT]),
     ("MODIFY", ["fillet", "chamfer", MODIFY_BODY, "parameters", "delete"]),
     ("INSPECT", [INSPECT]),
 ]
 SKETCH_GROUPS: List[Tuple[str, list]] = [
-    ("CREATE", ["line", "rect", "circle", "arc", "polygon", "slot", "text", "offset_sketch", "mirror_sketch", "project",
+    ("CREATE", ["line", "rect", "circle", "arc", "spline", "polygon", "slot", "text", "offset_sketch", "mirror_sketch", "project",
                 "dimension"]),
     ("MODIFY", ["fillet_sketch", "trim", "move_sketch", "rotate_sketch", "pattern_sketch", "construction", "fix_sketch"]),
     ("CONSTRAINTS", ["constraints"]),
@@ -155,7 +159,7 @@ SKETCH_GROUPS: List[Tuple[str, list]] = [
 
 # Menu bar, in the ribbon's order (None = separator). File, Edit, View and Help are built in menu_setup.
 MENUS: List[Tuple[str, list]] = [
-    ("Create", ["create_sketch", "extrude", "revolve", "sweep", "loft", "emboss", None, "box", "cylinder", "cone",
+    ("Create", ["create_sketch", "extrude", "hole", "revolve", "sweep", "loft", "emboss", None, "box", "cylinder", "cone",
                 "hexagon", "pipe", "thread", "jar",
                 None, "pattern_linear", "pattern_circular", "mirror", "pattern_fill", "honeycomb", None,
                 "offset_plane", "canvas"]),
@@ -170,7 +174,7 @@ MENUS: List[Tuple[str, list]] = [
 CONTEXT: Dict[str, List[str]] = {
     "profile": ["extrude", "revolve", "sweep", "loft", "emboss"],
     "edges": ["fillet", "chamfer"],
-    "body": ["move", "shell", "split_body", "offset_face", "fillet", "chamfer"],
+    "body": ["move", "shell", "split_body", "offset_face", "hole", "fillet", "chamfer"],
     "bodies": ["combine", "move"],
 }
 

@@ -95,6 +95,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
     shell_face_picked = Signal(object)   # plane/face chosen for hollow shell open face
     move_body_picked = Signal(object)    # plane/face chosen for move body selection
     point_picked = Signal(object)        # {"body", "kind", "xyz"}: a point picked on a body (or the origin)
+    hole_point_picked = Signal(object)   # world-space point placed on the selected Hole plane
     status_message = Signal(str)
     edit_sketch_requested = Signal(str)     # right-click on a sketch > Edit Sketch
     extrude_sketch_requested = Signal(str)  # right-click on a sketch > Extrude
@@ -258,6 +259,10 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self._mirror_phase = "pick"
         self._move_phase = "pick"
         self.point_pick = False       # picking a point on a body (Move / Rotate), see PointPickMixin
+        self.hole_place_mode = False
+        self.hole_place_plane = None
+        self.hole_place_hover = None
+        self.hole_place_points = []
         self.hover_point = None
         self._near_points = []
         self.fillet_first_line = None

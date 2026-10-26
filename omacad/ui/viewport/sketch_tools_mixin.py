@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, QEvent, QRectF, QPointF
 from PySide6.QtGui import QPainter, QPen, QBrush, QFont, QPolygonF
 from omacad.model.hover_info import describe_entity
 from omacad.model.sketch_solver import solve_sketch
-from omacad.model.sketch import Sketch, SketchLine, ref_id
+from omacad.model.sketch import Sketch, SketchLine, SketchSpline, ref_id
 from omacad.model import expr as expr_lib
 from omacad.ui import dyn_input, smart_circle, theme
 from omacad.ui.viewport.events_mixin import SKETCH_KEYS
@@ -116,10 +116,37 @@ class SketchToolsMixin:
         n = self.doc.delete_sketch_entities(sk.sketch_id, ids)
         self.selection_changed.emit()
         return n
+
+    def _finish_spline(self):
+        sketch = self.doc.active_sketch
+        points = list(getattr(self, "_spline_points", []))
+        if sketch is not None and len(points) >= 2:
+            before = sketch.to_dict()
+            sketch.add_spline(points, is_construction=self.construction_mode)
+            self.doc.record_sketch_change(sketch, before)
+            self.doc.timeline.recompute(self.doc)
+            self.doc.notify_changed()
+            self.status_message.emit(f"Spline: created through {len(points)} points.")
+        elif points:
+            self.status_message.emit("Spline: add another point, or Esc to cancel.")
+        self._spline_points = []
+        self.sketch_start_uv = None
+        self.dyn.reset()
+        self.dyn_live = {}
+        self.update()
+
     def _commit_sketch_point(self, p2: Tuple[float, float]):
         """Second (or later) click of the active tool: create/advance the shape."""
         sketch = self.doc.active_sketch
         p1 = self.sketch_start_uv
+        if self.sketch_tool == "SPLINE":
+            points = getattr(self, "_spline_points", [])
+            if points and math.hypot(p2[0] - points[-1][0], p2[1] - points[-1][1]) > 1e-4:
+                points.append(tuple(p2))
+                self.sketch_start_uv = tuple(p2)
+                self.status_message.emit(f"Spline: {len(points)} points; Enter or right-click finishes.")
+            self.update()
+            return
         if self.sketch_tool == "MOVE":
             if self._move:
                 self._apply_move(p2[0] - p1[0], p2[1] - p1[1])   # Move only translates; Rotate is its own tool
@@ -364,6 +391,9 @@ class SketchToolsMixin:
         if (key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self.doc.active_sketch
                 and self.sketch_start_uv is not None and self.sketch_tool != "NONE"
                 and not dyn_input.supports(self.sketch_tool)):
+            if self.sketch_tool == "SPLINE":
+                self._finish_spline()
+                return True
             if self.sketch_current_uv is not None:  # ARC / SLOT: Enter confirms the current step
                 self._commit_sketch_point(self.sketch_current_uv)
                 self.update()

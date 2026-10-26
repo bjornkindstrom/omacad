@@ -50,6 +50,18 @@ class OverlayMixin:
     def draw_painter_overlays(self, painter: QPainter):
         """Draws ViewCube, sketch status banner, and HUD controls."""
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        if getattr(self, "hole_place_plane", None) is not None:
+            painter.save()
+            painter.setPen(QPen(QColor(40, 170, 255, 210), 1.5))
+            painter.setBrush(QColor(40, 170, 255, 150))
+            marks = [*getattr(self, "hole_place_points", [])]
+            if getattr(self, "hole_place_hover", None) is not None:
+                marks.append(self.hole_place_hover)
+            for point in marks:
+                screen = self.world_to_screen(np.asarray(point, dtype=float))
+                if screen is not None:
+                    painter.drawEllipse(QPointF(float(screen[0]), float(screen[1])), 5.0, 5.0)
+            painter.restore()
         w = self.width()
         h = self.height()
 
@@ -244,6 +256,8 @@ class OverlayMixin:
                         dim_text = f"R: {params[1]:.1f} mm  (Pick Arc Point)"
                     else:
                         dim_text = "Pick Arc Point"
+            elif self.sketch_tool == "SPLINE":
+                dim_text = f"{len(getattr(self, '_spline_points', []))} points  ·  Enter or double-click to finish"
             elif self.sketch_tool == "SLOT":
                 if self.sketch_second_uv is None:
                     length = math.hypot(u2 - u1, v2 - v1)

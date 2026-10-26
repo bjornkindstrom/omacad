@@ -16,10 +16,97 @@ from omacad.ui.dialogs import (
 )
 from omacad.ui.canvas_dialog import CanvasEditorDialog
 from omacad.ui.controllers.prompt_guards import leaves_sketch
+from omacad.model.features.hole import HoleFeature
 
 
 class SolidFeaturePromptsMixin:
     """SolidFeature prompt workflows for MainWindow."""
+
+    @leaves_sketch
+    def prompt_hole(self):
+        if not self.doc.bodies:
+            QMessageBox.information(self, "Hole", "Create or import a solid body first.")
+            return
+        from omacad.ui.dialogs import HoleDialog
+        from omacad.model.features.base import Body
+        dlg = HoleDialog(self.viewport, embedded=True)
+        self.dock(dlg)
+        points = []
+
+        def pick_plane():
+            self.viewport.end_hole_place()
+            self.viewport.clear_hole_place()
+            self.viewport.begin_plane_pick("hole_plane")
+            self.status_label.setText("Hole: select a planar face or origin plane for hole placement.")
+
+        def plane_picked(plane):
+            points.clear()
+            dlg.set_plane(plane)
+            dlg.set_points(points)
+            refresh_preview()
+            self.viewport.begin_hole_place(plane)
+            self.status_label.setText("Hole: click to place points on the selected plane. Esc pauses placement; select Place hole points to continue.")
+
+        def start_placing():
+            if dlg.plane is not None:
+                self.viewport.begin_hole_place(dlg.plane, [p["origin"] for p in points])
+                self.status_label.setText("Hole: click to place hole centers on the selected plane. Esc pauses placement.")
+
+        def point_picked(position):
+            p = np.asarray(position, dtype=float)
+            n = np.asarray(dlg.plane.normal, dtype=float)
+            if not any(np.linalg.norm(p - np.asarray(old["origin"])) < 1e-3 for old in points):
+                points.append({"origin": p.tolist(), "normal": n.tolist()})
+                dlg.set_points(points)
+                self.viewport.hole_place_points = [q["origin"] for q in points]
+                refresh_preview()
+
+        def refresh_preview():
+            if not points:
+                self.viewport.set_display_override(None)
+                return
+            params = dlg.values()
+            params["points"] = points
+            feat = HoleFeature("preview", "preview", **params)
+            preview_bodies = {}
+            for bid, body in self.doc.bodies.items():
+                if not body.visible:
+                    continue
+                clone = Body(bid, body.name, body.manifold)
+                clone.update_render_mesh = lambda: None
+                preview_bodies[bid] = clone
+
+            class PreviewDoc:
+                bodies = preview_bodies
+
+            feat.execute(PreviewDoc)
+            result = {bid: b.manifold for bid, b in preview_bodies.items()}
+            self.viewport.set_display_override(result)
+
+        def finished(result):
+            if self.viewport.plane_pick_mode and self.viewport.plane_pick_purpose == "hole_plane":
+                self.viewport.end_plane_pick()
+            self.viewport.end_hole_place()
+            self.viewport.plane_picked.disconnect(plane_picked)
+            self.viewport.hole_point_picked.disconnect(point_picked)
+            self.viewport.set_display_override(None)
+            self.viewport.clear_hole_place()
+            if result:
+                if not points:
+                    QMessageBox.information(self, "Hole", "Pick at least one point on a body face.")
+                    self.prompt_hole()
+                    return
+                params = dlg.values()
+                params["points"] = points
+                self.doc.add_hole(**params, exprs=dlg.get_expressions())
+            self.status_label.setText("Ready.")
+
+        dlg.pick_requested.connect(pick_plane)
+        dlg.place_requested.connect(start_placing)
+        self._connect_debounced_preview(dlg, refresh_preview, interval_ms=50)
+        self.viewport.plane_picked.connect(plane_picked)
+        self.viewport.hole_point_picked.connect(point_picked)
+        dlg.finished.connect(finished)
 
     @leaves_sketch
     def prompt_extrude(self, default_distance=None):

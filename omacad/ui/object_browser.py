@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QTreeWidgetItem
 from PySide6.QtGui import QColor
 from omacad.ui.timeline_bar import FeatureNodeWidget
 from omacad.ui import theme
-from omacad.model.feature_parameters import parameter_unit
+from omacad.model.feature_parameters import parameter_unit, parameter_label
 
 
 ROLE = Qt.ItemDataRole.UserRole
@@ -113,7 +113,7 @@ def _add_object(browser, group, oid, features, excluded):
                     continue
                 formula = feat.exprs.get(key)
                 shown = f'{formula} = {value:g}' if formula else f'{value:g}'
-                row = QTreeWidgetItem(node, [f'{key.replace("_", " ").capitalize()}: {shown} {parameter_unit(key)}'.rstrip(), ''])
+                row = QTreeWidgetItem(node, [f'{parameter_label(key)}: {shown} {parameter_unit(key)}'.rstrip(), ''])
                 row.setData(0, ROLE, ('parameter', (fid, key)))
                 row.setFlags(row.flags() | Qt.ItemFlag.ItemIsEditable)
                 row.setToolTip(0, 'Double-click or click the pencil to edit this parameter or expression')
@@ -194,7 +194,7 @@ def favorite_row(doc, ref):
             return None
         formula = feat.exprs.get(b)
         shown = f'{formula} = {value:g}' if formula else f'{value:g}'
-        return f'{feat.name} · {b.replace("_", " ").capitalize()}: {shown} {parameter_unit(b)}'.rstrip(), formula or str(value)
+        return f'{feat.name} · {parameter_label(b)}: {shown} {parameter_unit(b)}'.rstrip(), formula or str(value)
     sketch = doc.sketches.get(a)
     if sketch is None:
         return None

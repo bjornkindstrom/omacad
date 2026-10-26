@@ -50,6 +50,7 @@ from omacad.ui.dialogs.transform_dlg import (
 from omacad.ui.dialogs.thread_dlg import (
     ThreadDialog,
 )
+from omacad.ui.dialogs.hole_dlg import HoleDialog
 
 
 class _DialogsModule(ModuleType):
@@ -89,4 +90,5 @@ __all__ = [
     "JarDialog",
     "MoveBodyDialog",
     "ThreadDialog",
+    "HoleDialog",
 ]

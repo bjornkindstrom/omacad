@@ -12,13 +12,52 @@ from PySide6.QtGui import QColor, QPen
 
 from omacad.model.body_points import body_points
 from omacad.model.faces import ray_mesh_hit
-from omacad.ui.math3d import ray_from_screen
+from omacad.ui.math3d import ray_from_screen, ray_plane_intersect
 
 SNAP_PX = 12.0       # the cursor catches a point this close
 SHOW_PX = 90.0       # points (and hidden corners' guide lines) this close are shown
 
 
 class PointPickMixin:
+    def begin_hole_place(self, plane, points=()):
+        self.hole_place_mode = True
+        self.hole_place_plane = plane
+        self.hole_place_points = list(points)
+        self._hole_place_hover(0, 0)
+        self.setFocus()
+        self.update()
+
+    def end_hole_place(self):
+        self.hole_place_mode = False
+        self.hole_place_hover = None
+        self.update()
+
+    def clear_hole_place(self):
+        self.end_hole_place()
+        self.hole_place_plane = None
+        self.hole_place_points = []
+        self.update()
+
+    def _hole_place_at(self, x, y):
+        proj, view, _ = self.get_matrices()
+        origin, direction = ray_from_screen(x, y, self.width(), self.height(), view, proj)
+        p = self.hole_place_plane
+        return ray_plane_intersect(origin, direction, p.origin, p.normal)
+
+    def _hole_place_hover(self, x, y):
+        self.hole_place_hover = self._hole_place_at(x, y) if self.hole_place_plane is not None else None
+        self.update()
+
+    def _hole_place_press(self, x, y):
+        point = self._hole_place_at(x, y)
+        if point is None:
+            return False
+        point = np.asarray(point, dtype=float)
+        self.hole_place_points.append(point.tolist())
+        self.hole_point_picked.emit(point.tolist())
+        self.update()
+        return True
+
     def begin_point_pick(self):
         self.point_pick = True
         self.hover_point = None

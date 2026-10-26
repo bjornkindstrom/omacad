@@ -3,13 +3,18 @@ import re
 
 COUNTS = {'sides', 'count1', 'count2', 'segments', 'profile_idx'}
 ANGLES = {'angle', 'angle2', 'rotation', 'twist', 'taper_angle', 'tip_angle',
-          'cs_angle', 'rx', 'ry', 'rz'}
+          'cs_angle', 'chamfer_angle', 'rx', 'ry', 'rz'}
 
 
 def parameter_unit(key):
     if key in COUNTS or key in {'taper_turns'}:
         return ''
     return '°' if key in ANGLES else 'mm'
+
+
+def parameter_label(key):
+    return {'chamfer': 'Chamfer width', 'chamfer_depth': 'Max chamfer depth'}.get(
+        key, key.replace('_', ' ').capitalize())
 
 
 def normalize_parameter_text(key, text):

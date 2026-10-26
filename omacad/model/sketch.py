@@ -18,7 +18,7 @@ from omacad.model.sketch_editing import SketchEditingMixin
 
 from omacad.model.sketch_entities import (
     _dist_point_segment, SketchPlane, SketchEntity, SketchLine, SketchRect,
-    SketchCenterRect, SketchCircle, SketchArc, SketchSlot, SketchText,
+    SketchCenterRect, SketchCircle, SketchArc, SketchSlot, SketchSpline, SketchText,
     ref_id, ref_segment, point_of, arm_vector, arm_angle_deg, nearest_ends_to_vertex,
     rotate_point, move_entity, rotate_entity, entity_key_points
 )
@@ -480,6 +480,8 @@ class Sketch(SketchEditingMixin):
                 sketch.entities.append(SketchArc.from_dict(ent_data))
             elif t == "slot":
                 sketch.entities.append(SketchSlot.from_dict(ent_data))
+            elif t == "spline":
+                sketch.entities.append(SketchSpline.from_dict(ent_data))
             elif t == "text":
                 sketch.entities.append(SketchText.from_dict(ent_data))
 

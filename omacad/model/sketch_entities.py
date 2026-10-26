@@ -368,6 +368,48 @@ class SketchArc(SketchEntity):
         if "fillet_info" in data:
             arc.fillet_info = data["fillet_info"]
         return arc
+
+
+class SketchSpline(SketchEntity):
+    """Smooth interpolating spline through sketch points, sampled for display and profile operations."""
+
+    def __init__(self, entity_id: str, points, is_construction: bool = False):
+        super().__init__(entity_id=entity_id, entity_type="spline", is_construction=is_construction)
+        self.points = [(float(p[0]), float(p[1])) for p in points]
+
+    def get_points(self, samples_per_span: int = 16):
+        if len(self.points) < 2:
+            return list(self.points)
+        points = self.points
+        out = []
+        for i in range(len(points) - 1):
+            p0 = points[max(0, i - 1)]
+            p1, p2 = points[i], points[i + 1]
+            p3 = points[min(len(points) - 1, i + 2)]
+            for j in range(samples_per_span):
+                t = j / samples_per_span
+                t2, t3 = t * t, t * t * t
+                x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t
+                           + (2*p0[0] - 5*p1[0] + 4*p2[0] - p3[0]) * t2
+                           + (-p0[0] + 3*p1[0] - 3*p2[0] + p3[0]) * t3)
+                y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t
+                           + (2*p0[1] - 5*p1[1] + 4*p2[1] - p3[1]) * t2
+                           + (-p0[1] + 3*p1[1] - 3*p2[1] + p3[1]) * t3)
+                out.append((x, y))
+        out.append(points[-1])
+        return out
+
+    def to_lines(self):
+        pts = self.get_points()
+        return list(zip(pts, pts[1:]))
+
+    def to_dict(self):
+        return {"entity_id": self.entity_id, "entity_type": "spline", "points": [list(p) for p in self.points],
+                "is_construction": self.is_construction}
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(data["entity_id"], data.get("points", []), data.get("is_construction", False))
 class SketchSlot(SketchEntity):
     """Center-to-center elongated slot / pill."""
 
@@ -626,6 +668,8 @@ def move_entity(ent: "SketchEntity", du: float, dv: float) -> None:
         ent.center1, ent.center2 = _shift(ent.center1, du, dv), _shift(ent.center2, du, dv)
     elif isinstance(ent, SketchText):
         ent.anchor = _shift(ent.anchor, du, dv)
+    elif isinstance(ent, SketchSpline):
+        ent.points = [_shift(p, du, dv) for p in ent.points]
 def rotate_entity(ent: "SketchEntity", angle_deg: float, origin: Tuple[float, float]) -> None:
     """Rotates an entity in place around origin by angle_deg degrees."""
     if isinstance(ent, SketchLine):
@@ -650,6 +694,8 @@ def rotate_entity(ent: "SketchEntity", angle_deg: float, origin: Tuple[float, fl
     elif isinstance(ent, SketchText):
         ent.anchor = rotate_point(ent.anchor, angle_deg, origin)
         ent.angle += angle_deg
+    elif isinstance(ent, SketchSpline):
+        ent.points = [rotate_point(p, angle_deg, origin) for p in ent.points]
 def entity_key_points(ent: "SketchEntity") -> List[Tuple[float, float]]:
     """Points on an entity that are worth snapping when it is dragged (ends, corners, centres)."""
     if isinstance(ent, SketchLine):
@@ -667,4 +713,6 @@ def entity_key_points(ent: "SketchEntity") -> List[Tuple[float, float]]:
         return [ent.center1, ent.center2]
     if isinstance(ent, SketchText):
         return [ent.anchor]
+    if isinstance(ent, SketchSpline):
+        return list(ent.points)
     return []

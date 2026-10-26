@@ -9,7 +9,7 @@ from OpenGL import GL
 from omacad.ui import theme
 from omacad.ui.viewport.sketch_rotate_mixin import INFO as ROTATE_INFO
 from omacad.model.timeline import profile_cross_section
-from omacad.model.sketch import Sketch, SketchArc, SketchSlot
+from omacad.model.sketch import Sketch, SketchArc, SketchSlot, SketchSpline
 
 
 
@@ -664,7 +664,17 @@ class RenderGLMixin:
             u2, v2 = self.sketch_current_uv
 
             preview_lines = []
-            if self.sketch_tool == "LINE":
+            if self.sketch_tool == "SPLINE":
+                points = list(getattr(self, "_spline_points", []))
+                if points:
+                    if math.hypot(u2 - points[-1][0], v2 - points[-1][1]) > 1e-4:
+                        points.append((u2, v2))
+                    spline_preview = SketchSpline("preview", points)
+                    for a, b in spline_preview.to_lines():
+                        w1 = plane.uv_to_world(*a)
+                        w2 = plane.uv_to_world(*b)
+                        preview_lines.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])
+            elif self.sketch_tool == "LINE":
                 w1 = plane.uv_to_world(u1, v1)
                 w2 = plane.uv_to_world(u2, v2)
                 preview_lines.extend([w1[0], w1[1], w1[2], w2[0], w2[1], w2[2]])

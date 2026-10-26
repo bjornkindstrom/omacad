@@ -8,7 +8,7 @@ from shapely.geometry import LineString, Polygon, Point, MultiPoint
 from shapely.geometry.polygon import orient
 from shapely.ops import polygonize, unary_union, snap
 from omacad.model.sketch_entities import (
-    SketchEntity, SketchLine, SketchRect, SketchCenterRect, SketchCircle, SketchArc, SketchSlot, SketchText,
+    SketchEntity, SketchLine, SketchRect, SketchCenterRect, SketchCircle, SketchArc, SketchSlot, SketchSpline, SketchText,
     ref_id, ref_segment, point_of, rotate_point, move_entity, rotate_entity, entity_key_points
 )
 from omacad.model.sketch_types import SketchConstraint, SketchDimension
@@ -253,6 +253,8 @@ class SketchEditingMixin:
                 n = SketchCircle(self._new_entity_id("circle"), mp(ent.center), ent.radius, is_construction=c)
             elif isinstance(ent, SketchArc):
                 n = SketchArc(self._new_entity_id("arc"), mp(ent.p_start), mp(ent.p_mid), mp(ent.p_end), is_construction=c)
+            elif isinstance(ent, SketchSpline):
+                n = SketchSpline(self._new_entity_id("spline"), [mp(p) for p in ent.points], is_construction=c)
             elif isinstance(ent, SketchSlot):
                 n = SketchSlot(self._new_entity_id("slot"), mp(ent.center1), mp(ent.center2), ent.radius, is_construction=c)
             elif isinstance(ent, SketchText):
@@ -589,6 +591,14 @@ class SketchEditingMixin:
             self.add_dimension("RADIUS", ent_id, params[1], offset_distance=12.0, name="Radius")
         self.solve_profiles()
         return arc
+
+    def add_spline(self, points, is_construction: bool = False) -> SketchSpline:
+        if len(points) < 2:
+            raise ValueError("A spline needs at least two points.")
+        spline = SketchSpline(self._new_entity_id("spline"), points, is_construction=is_construction)
+        self.entities.append(spline)
+        self.solve_profiles()
+        return spline
 
     def add_slot(self, center1: Tuple[float, float], center2: Tuple[float, float], radius: float, is_construction: bool = False) -> SketchSlot:
         ent_id = self._new_entity_id("slot")

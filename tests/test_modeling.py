@@ -197,6 +197,30 @@ def test_hole_volumes(kw, expected):
     assert v0 - vol(d) == pytest.approx(expected, rel=6e-3)
 
 
+def test_hole_optional_chamfer_adds_a_conical_entrance():
+    d = Document()
+    d.add_box(40, 30, 10)
+    before = vol(d)
+    d.add_hole([{"origin": [20, 15, 10], "normal": [0, 0, 1]}],
+               diameter=6, depth=10, through=True, chamfer_depth=1, chamfer_angle=45)
+    removed = before - vol(d)
+    expected_cylinder = math.pi * 9 * 9
+    expected_frustum = math.pi * (4 ** 2 + 4 * 3 + 3 ** 2) / 3
+    assert removed == pytest.approx(expected_cylinder + expected_frustum, rel=6e-3)
+
+
+def test_hole_chamfer_width_limits_a_larger_max_depth():
+    def removed_volume(max_depth):
+        d = Document()
+        d.add_box(40, 30, 10)
+        before = vol(d)
+        d.add_hole([{"origin": [20, 15, 10], "normal": [0, 0, 1]}],
+                   diameter=6, depth=10, through=True, chamfer=2,
+                   chamfer_depth=max_depth, chamfer_angle=45)
+        return before - vol(d)
+    assert removed_volume(10) == pytest.approx(removed_volume(2), rel=6e-3)
+
+
 def test_mirror_across_a_plane():
     d = Document()
     d.add_box(40, 30, 10)

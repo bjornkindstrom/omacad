@@ -1099,7 +1099,7 @@ class Document:
         "shell": ("thickness", "direction", "thickness2", "open_faces"),
         "offset_face": ("distance",),
         "honeycomb": HoneycombFeature.PARAMS,
-        "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle"),
+        "hole": ("points", "hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth", "cs_diameter", "cs_angle", "tip", "tip_angle", "chamfer", "chamfer_angle", "chamfer_depth"),
         "move": ("target_body_id", "dx", "dy", "dz", "rx", "ry", "rz", "pivot", "from_point", "to_point", "copy_body"),
     }
 

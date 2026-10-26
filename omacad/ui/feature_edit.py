@@ -12,7 +12,7 @@ from omacad import applog
 from omacad.model import quality
 from omacad.ui.dialogs import (
     BoxDialog, CylinderDialog, PrismDialog, SphereDialog, ExtrudeDialog, RoundEdgesDialog, PatternDialog, MoveBodyDialog,
-    ThreadDialog, RevolveDialog, ShellDialog, CombineDialog, SplitBodyDialog
+    ThreadDialog, RevolveDialog, ShellDialog, CombineDialog, SplitBodyDialog, HoleDialog
 )
 
 DIRECTIONS = ["one_side", "symmetric", "two_sides"]
@@ -22,7 +22,7 @@ OPERATIONS = ["auto", "new_body", "join", "cut", "intersect"]  # same order as t
 def can_edit(feature) -> bool:
     return feature.feature_type in (
         "box", "cylinder", "prism", "sphere", "extrude", "emboss", "revolve", "loft",
-        "sketch", "fillet", "pattern", "move", "thread", "offset_face", "honeycomb", "shell", "combine", "split_body"
+        "sketch", "fillet", "hole", "pattern", "move", "thread", "offset_face", "honeycomb", "shell", "combine", "split_body"
     )
 
 
@@ -435,6 +435,86 @@ def _edit_feature(win, doc, index: int, states: dict, commit) -> bool:
         if not _exec_with_preview(win, doc, dlg, _preview_sphere, [f"body_{feat.feature_id}"]):
             return False
         return commit(radius=dlg.get_values(), exprs=dlg.get_expressions())
+
+    if t == "hole":
+        import numpy as np
+        from omacad.model.features.hole import HoleFeature
+        from omacad.model.features.base import Body
+        from omacad.model.sketch_entities import SketchPlane
+        dlg = HoleDialog(win, feat.to_dict(), editing=True)
+        dlg.setWindowTitle(f"Edit {feat.name}")
+        points = list(feat.points)
+        dlg.set_points(points)
+        plane = (SketchPlane.from_face(np.asarray(points[0]["normal"], dtype=float),
+                                       np.asarray(points[0]["origin"], dtype=float)) if points else None)
+        dlg.set_plane(plane)
+        vp.hole_place_plane = plane
+        vp.hole_place_points = [p["origin"] for p in points]
+        for key, field in (("diameter", dlg.spn_diameter), ("depth", dlg.spn_depth),
+                           ("cb_diameter", dlg.spn_cb_diameter), ("cb_depth", dlg.spn_cb_depth),
+                           ("cs_diameter", dlg.spn_cs_diameter), ("cs_angle", dlg.spn_cs_angle),
+                           ("tip_angle", dlg.spn_tip_angle), ("chamfer_depth", dlg.spn_chamfer_depth),
+                           ("chamfer_angle", dlg.spn_chamfer_angle)):
+            if feat.exprs.get(key):
+                field.set_expression(feat.exprs[key])
+        target_ids = list(getattr(feat, "target_body_ids", [])) or list(state_before)
+
+        def pick_hole_plane():
+            vp.end_hole_place()
+            vp.begin_plane_pick("hole_plane")
+
+        def plane_picked(selected_plane):
+            nonlocal plane
+            plane = selected_plane
+            points.clear()
+            dlg.set_plane(plane)
+            dlg.set_points(points)
+            vp.begin_hole_place(plane)
+
+        def place_points():
+            if plane is not None:
+                vp.begin_hole_place(plane, [p["origin"] for p in points])
+
+        def point_picked(hit):
+            p, n = hit, plane.normal
+            if not any(np.linalg.norm(np.asarray(p) - np.asarray(old["origin"])) < 1e-3 for old in points):
+                points.append({"origin": np.asarray(p).tolist(), "normal": np.asarray(n).tolist()})
+                dlg.set_points(points)
+                vp.hole_place_points = [q["origin"] for q in points]
+                preview_hole()
+
+        def preview_hole():
+            params = dlg.values()
+            params["points"] = points
+            tmp = HoleFeature("preview", "preview", **params)
+            bodies = {}
+            for bid in target_ids:
+                if bid not in state_before:
+                    continue
+                b = Body(bid, bid, state_before[bid])
+                b.update_render_mesh = lambda: None
+                bodies[bid] = b
+
+            class PreviewDoc:
+                pass
+            PreviewDoc.bodies = bodies
+            tmp.execute(PreviewDoc)
+            vp.set_display_override({bid: b.manifold for bid, b in bodies.items()})
+
+        accepted = _exec_with_preview(win, doc, dlg, preview_hole, target_ids,
+                                      wiring=((dlg.pick_requested, pick_hole_plane),
+                                              (dlg.place_requested, place_points),
+                                              (vp.plane_picked, plane_picked),
+                                              (vp.hole_point_picked, point_picked)))
+        if vp.plane_pick_mode and vp.plane_pick_purpose == "hole_plane":
+            vp.end_plane_pick()
+        vp.clear_hole_place()
+        vp.set_display_override(None)
+        if not accepted:
+            return False
+        params = dlg.values()
+        params["points"] = points
+        return commit(**params, exprs=dlg.get_expressions())
 
     if t == "fillet":
         from omacad.model.timeline import FilletFeature

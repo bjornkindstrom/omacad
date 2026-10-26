@@ -546,7 +546,8 @@ class Exporter:
             elif ft == "hole":
                 feat = HoleFeature(fid, fname, f_data.get("points", []),
                                    **{k: f_data[k] for k in ("hole_type", "diameter", "depth", "through", "cb_diameter", "cb_depth",
-                                                             "cs_diameter", "cs_angle", "tip", "tip_angle") if k in f_data})
+                                                             "cs_diameter", "cs_angle", "tip", "tip_angle", "chamfer", "chamfer_angle",
+                                                             "chamfer_depth") if k in f_data})
                 doc.timeline.add_feature(feat)
             elif ft == "fillet":
                 feat = FilletFeature(fid, fname, [tuple(e) if e and isinstance(e[0], str) else (e[0], e[1]) for e in f_data["edges"]],
