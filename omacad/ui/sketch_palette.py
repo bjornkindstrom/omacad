@@ -120,6 +120,12 @@ class SketchPalette(QFrame):
         self.chk_show_dims.stateChanged.connect(self.settings_changed)
         content_layout.addWidget(self.chk_show_dims)
 
+        self.chk_show_construction = QCheckBox("Show Construction")
+        self.chk_show_construction.setToolTip("Show or hide dashed construction lines and helper circles")
+        self.chk_show_construction.setChecked(True)
+        self.chk_show_construction.stateChanged.connect(self.settings_changed)
+        content_layout.addWidget(self.chk_show_construction)
+
         self.chk_show_profiles = QCheckBox("Shaded Profiles")
         self.chk_show_profiles.setChecked(True)
         self.chk_show_profiles.stateChanged.connect(self.settings_changed)

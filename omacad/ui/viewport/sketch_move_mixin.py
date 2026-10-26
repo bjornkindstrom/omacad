@@ -32,8 +32,10 @@ class SketchMoveMixin:
             self.status_message.emit(f"Move: {n} element(s) picked. Click more (Ctrl+click = one element, click again removes), "
                                      "then Enter. Esc cancels.")
         else:
+            sk = self.doc.active_sketch
+            u_lbl, v_lbl = sk.plane.axis_names() if sk is not None else ("X", "Y")
             self.status_message.emit("Move: click the base point (it snaps to points), then where it should go. "
-                                     "Type X / Y for exact distances. The elements keep their angle. Esc cancels.")
+                                     f"Type {u_lbl} / {v_lbl} for exact distances. The elements keep their angle. Esc cancels.")
     def _move_next(self):
         """Move: picking done, now the base point."""
         if not self.selected_entities:

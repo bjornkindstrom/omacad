@@ -266,7 +266,7 @@ class RenderGLMixin:
         data = np.array([plane.uv_to_world(u, v) + lift for u, v in pts], dtype=np.float32)
         GL.glUseProgram(self.prog_flat)
         GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
-        GL.glUniform4f(GL.glGetUniformLocation(self.prog_flat, "u_color"), *theme.palette().grid_rgb01(), 0.5)
+        GL.glUniform4f(GL.glGetUniformLocation(self.prog_flat, "u_color"), *theme.palette().grid_rgb01(), 0.72)
         self.set_line_width(1.0)
         self.draw_buffer_arrays(GL.GL_LINES, GL.glGetAttribLocation(self.prog_flat, "in_pos"), data.reshape(-1))
         GL.glUseProgram(0)
@@ -298,7 +298,7 @@ class RenderGLMixin:
 
         grid_data = np.array(grid_lines, dtype=np.float32)
 
-        GL.glUniform4f(loc_col, *theme.palette().grid_rgb01(), 0.5)
+        GL.glUniform4f(loc_col, *theme.palette().grid_rgb01(), 0.72)
         self.set_line_width(1.0)
         # The ground grid is a backdrop. It must not reject body fragments when the camera is below XY.
         GL.glDepthMask(GL.GL_FALSE)
@@ -307,9 +307,9 @@ class RenderGLMixin:
 
         GL.glUseProgram(0)
 
-    ORIGIN_AXES = {"X": ((0.92, 0.25, 0.25), (1.0, 0.0, 0.0)),
-                   "Y": ((0.25, 0.78, 0.35), (0.0, 1.0, 0.0)),
-                   "Z": ((0.25, 0.55, 0.95), (0.0, 0.0, 1.0))}
+    ORIGIN_AXES = {"X": ((0.88, 0.22, 0.22), (1.0, 0.0, 0.0)),
+                   "Y": ((0.20, 0.72, 0.30), (0.0, 1.0, 0.0)),
+                   "Z": ((0.18, 0.50, 0.92), (0.0, 0.0, 1.0))}
 
     def render_origin_axes(self, mvp: np.ndarray):
         """The coloured X/Y/Z axes through the origin; each one can be hidden (Browser > Origin, View > Origin)."""
@@ -322,10 +322,18 @@ class RenderGLMixin:
         GL.glUniformMatrix4fv(GL.glGetUniformLocation(self.prog_flat, "u_mvp"), 1, GL.GL_TRUE, mvp.flatten())
         loc_col = GL.glGetUniformLocation(self.prog_flat, "u_color")
         loc_pos = GL.glGetAttribLocation(self.prog_flat, "in_pos")
-        self.set_line_width(2.0)
+        self.set_line_width(1.0)
         for (r, g, b), d in axes:
-            GL.glUniform4f(loc_col, r, g, b, 0.9)
-            self.draw_buffer_arrays(GL.GL_LINES, loc_pos, np.array([0.0, 0.0, 0.0, *(100.0 * x for x in d)], dtype=np.float32))
+            seg = [0.0, 0.0, 0.0, *(150.0 * x for x in d)]
+            if self.prog_thick is not None and self.vbo_thick is not None:
+                self.draw_thick_lines(mvp, seg, (r, g, b, 0.95), 2.4, halo=False)
+            else:
+                GL.glUniform4f(loc_col, r, g, b, 0.95)
+                self.draw_buffer_arrays(GL.GL_LINES, loc_pos, np.array(seg, dtype=np.float32))
+            GL.glUseProgram(self.prog_flat)
+            GL.glUniform4f(loc_col, r, g, b, 0.38)
+            neg_seg = np.array([0.0, 0.0, 0.0, *(-150.0 * x for x in d)], dtype=np.float32)
+            self.draw_buffer_arrays(GL.GL_LINES, loc_pos, neg_seg)
         GL.glUseProgram(0)
 
     @staticmethod
@@ -563,8 +571,8 @@ class RenderGLMixin:
         for sketch in self.doc.sketches.values():
             flash = sketch.sketch_id == getattr(self, "flash_sketch_id", None)
             picked_sid, picked = getattr(self, "picked_dim_entities", (None, set()))
-            picked = picked if sketch.sketch_id == picked_sid else set()
-            if not sketch.visible and not flash and not picked:
+            picked = picked if (sketch.sketch_id == picked_sid and (sketch.visible or sketch == self.doc.active_sketch)) else set()
+            if not sketch.visible and not flash:
                 continue
 
             is_active = (sketch == self.doc.active_sketch)
@@ -633,14 +641,16 @@ class RenderGLMixin:
                 self.draw_thick_lines(mvp, hover_lines, hv_col, max(1.0, hv_w - 0.5))
             if selected_lines:
                 hl_col = (hex_to_rgb01(get_settings().get("selected_line_color"))
-                          or get_settings().highlight_color_rgb01() or theme.palette().highlight01())
-                self.draw_thick_lines(mvp, selected_lines, (*hl_col, 1.0), sel_w, halo_px=halo_px)
+                          or get_settings().highlight_color_rgb01()
+                          or ((0.96, 0.44, 0.08) if theme.palette().studio else theme.palette().highlight01()))
+                self.draw_thick_lines(mvp, selected_lines, (*hl_col, 1.0), max(sel_w, line_w + 1.4), halo_px=halo_px + 0.8)
 
-            if construction_lines and is_active:
+            show_const = getattr(getattr(self, "sketch_palette", None), "chk_show_construction", None)
+            if construction_lines and is_active and (show_const is None or show_const.isChecked()):
                 ccol = get_settings().sketch_construction_color_rgb01()
                 self.draw_thick_lines(mvp, self.dash_segments(construction_lines), (*ccol, 1.0), line_w,
                                       halo_px=halo_px)
-            elif construction_lines:    # a finished sketch's helper lines: quiet, dashed, in its grey
+            elif construction_lines and not is_active:    # a finished sketch's helper lines: quiet, dashed, in its grey
                 fcol = get_settings().sketch_finished_color_rgb01()
                 self.draw_thick_lines(mvp, self.dash_segments(construction_lines), (*fcol, 0.6), 1.0, halo=False)
 

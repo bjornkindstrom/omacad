@@ -422,18 +422,19 @@ QGroupBox { background-color: @surface; border: 1px solid @border; border-radius
 QGroupBox::title { color: @text; }
 QPushButton {
     background-color: @field; color: @text; border: 1px solid @border; border-radius: 6px;
-    padding: 7px 18px; font-weight: 500; min-height: 18px;
+    padding: 6px 12px; font-weight: 500; min-height: 18px;
 }
 QPushButton:hover { background-color: @border; border-color: @border; color: @text; }
-QPushButton:pressed { background-color: @selection; border: 1px solid @accent; color: @accent; padding-top: 7px; }
+QPushButton:pressed { background-color: @selection; border: 1px solid @accent; color: @accent; padding-top: 6px; }
 QPushButton:focus { border: 1px solid @accent; }
 QPushButton:disabled { background-color: @window; color: @muted; border: 1px dashed @border; }
 QPushButton#PrimaryButton, QPushButton:default {
-    background-color: @accent; color: @on_accent; border: 1px solid @accent; font-weight: 600; padding: 7px 22px;
+    background-color: @accent; color: @on_accent; border: 1px solid @accent; font-weight: 600; padding: 6px 14px;
 }
 QPushButton#PrimaryButton:hover, QPushButton:default:hover { background-color: @accent_hover; border-color: @accent_hover; color: @on_accent; }
-QPushButton#PrimaryButton:pressed, QPushButton:default:pressed { background-color: @accent_pressed; border: 1px solid @accent_pressed; padding-top: 7px; }
+QPushButton#PrimaryButton:pressed, QPushButton:default:pressed { background-color: @accent_pressed; border: 1px solid @accent_pressed; padding-top: 6px; }
 QPushButton#PrimaryButton:disabled, QPushButton:default:disabled { background-color: @border; border-color: @border; color: @muted; }
+QDialogButtonBox QPushButton { min-width: 72px; }
 QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
     background-color: @field; color: @text; border: 1px solid @border; border-radius: 6px;
     padding: 6px 10px; min-height: 20px; selection-background-color: @accent; selection-color: @on_accent;

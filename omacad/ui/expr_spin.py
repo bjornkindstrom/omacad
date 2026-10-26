@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit, QListWidget, QAbstractI
 from omacad.model import expr
 from omacad.ui.theme import style
 
-_NAME_BEFORE_CURSOR = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
+_NAME_BEFORE_CURSOR = re.compile(r"[^\W\d][\w]*$", re.UNICODE)
 
 
 def matching_parameters(token):

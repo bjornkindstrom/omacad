@@ -94,12 +94,12 @@ class ViewCube:
         # 1. Draw Home Button
         home_rect = self.home_rect(viewport_w)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(QPen(qcolor(60, 65, 75), 1))
+        painter.setPen(QPen(qcolor(95, 105, 120), 1.2))
         painter.setBrush(QBrush(qcolor(226, 109, 40) if self.home_hovered else qcolor(45, 50, 58, 220)))
         painter.drawRoundedRect(home_rect, 4, 4)
 
         # Draw home house icon
-        painter.setPen(QPen(qcolor(255, 255, 255), 1.5))
+        painter.setPen(QPen(qcolor(255, 255, 255) if self.home_hovered else qcolor(224, 227, 231), 1.6))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         hx, hy = home_rect.center().x(), home_rect.center().y()
         house_poly = QPolygonF([

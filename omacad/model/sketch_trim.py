@@ -24,7 +24,8 @@ def _circle_of(ent):
 
 
 def _in_sweep(ang, start, sweep):
-    return ((ang - start) % TAU) <= sweep + 1e-9
+    d = (ang - start) % TAU
+    return d <= sweep + 1e-5 or d >= TAU - 1e-5
 
 
 def _line_hits(p, d, L, other) -> List[float]:
@@ -148,7 +149,7 @@ def trim_plan(sketch, u: float, v: float, tol: float):
         return None
     full = isinstance(best, SketchCircle)
     cuts = sorted({round((a - a0) % TAU, 7) for o in others for a in _circle_hits(c, r, o)})
-    cuts = [s for s in cuts if full or EPS < s < sw - EPS]
+    cuts = [s for s in cuts if full or 1e-5 < s < sw - 1e-5]
     ac = (math.atan2(v - c[1], u - c[0]) - a0) % TAU
     if full:
         if len(cuts) == 0:

@@ -301,6 +301,11 @@ class ViewportEventsMixin:
                 self.doc.selected_profile = None
                 self.doc.selected_extra = []
                 self.profile_picked.emit()
+            elif self.selected_entities or self.picked_dim_entities[1]:
+                self.selected_entities.clear()
+                self.picked_dim = None
+                self.picked_dim_entities = (None, set())
+                self.selection_changed.emit()
             self.setCursor(Qt.CursorShape.ArrowCursor)
             self.update()
         elif event.key() == Qt.Key.Key_F:

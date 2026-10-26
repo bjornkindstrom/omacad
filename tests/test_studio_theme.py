@@ -28,7 +28,7 @@ def test_studio_surfaces_by_role():
     assert p.map_hex("#1E2022") == "#E9EDF2"      # window
     assert p.map_hex("#E0E3E7") == "#253247"      # text
     assert p.map_hex("#E26D28") == "#2863D9"      # the accent family becomes the blue
-    assert [round(v * 255) for v in p.canvas_rgb01()] == [0xE5, 0xEA, 0xF1]
+    assert [round(v * 255) for v in p.canvas_rgb01()] == [0xF2, 0xF4, 0xF8]
     assert theme.current_font() == "Noto Sans"
 
 

@@ -15,6 +15,8 @@ class SketchOperationMixin:
         self._dim_pending = []
         self._dim_place = None
         self._dim_side = None
+        self.picked_dim = None
+        self.picked_dim_entities = (None, set())
         self.fillet_first_line = None
         self.fillet_hover_corner = None
         self.fillet_preview = None

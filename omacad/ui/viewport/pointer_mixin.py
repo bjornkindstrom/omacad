@@ -17,6 +17,9 @@ class PointerMixin:
     def mousePressEvent(self, event):
         x = event.position().x()
         y = event.position().y()
+        if event.button() == Qt.MouseButton.LeftButton and self.picked_dim_entities[1]:
+            self.picked_dim = None
+            self.picked_dim_entities = (None, set())
 
         if (event.button() == Qt.MouseButton.LeftButton and self.primitive_handles
                 and self.primitive_handles.press(x, y)):

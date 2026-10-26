@@ -308,6 +308,8 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self.active_snap = None
         self._drag = self._move = self._dim_drag = None
         self._dim_pending, self._dim_place = [], None
+        self.picked_dim = None
+        self.picked_dim_entities = (None, set())
         self.dyn.reset()
         self.dyn_live = {}
         self.preview_mesh = None
@@ -327,9 +329,14 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         sk = self.doc.active_sketch
         if sk is None:
             self.selected_entities.clear()
+            self.picked_dim = None
+            self.picked_dim_entities = (None, set())
         else:
             alive = {e.entity_id for e in sk.entities}
             self.selected_entities &= alive
+            if self.picked_dim_entities[0] and self.picked_dim_entities[0] != sk.sketch_id:
+                self.picked_dim = None
+                self.picked_dim_entities = (None, set())
         self.hover_entity_id = None
         # a hovered edge or face holds the coordinates of the body it was picked on: after a move or a rebuild it
         # would stay lit where the body used to be (Björn #112); the next mouse move picks it again

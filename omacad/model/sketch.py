@@ -60,11 +60,13 @@ class Sketch(SketchEditingMixin):
             n += 1
         return f"{prefix}_{n}"
 
-    def hit_test(self, u: float, v: float, tol: float) -> Optional[SketchEntity]:
+    def hit_test(self, u: float, v: float, tol: float, include_construction: bool = True) -> Optional[SketchEntity]:
         """Nearest entity whose outline passes within `tol` of (u, v)."""
         best, best_d = None, tol
         text_bbox_hit: Optional[SketchEntity] = None
         for ent in self.entities:
+            if not include_construction and ent.is_construction:
+                continue
             box = ent.bbox() if isinstance(ent, SketchText) else None
             if box is not None:
                 if u < box[0] - tol or u > box[2] + tol or v < box[1] - tol or v > box[3] + tol:

@@ -56,7 +56,7 @@ class SketchToolPanel(QGroupBox):
         self.tool: Optional[str] = None
         self.chk_copy: Optional[QCheckBox] = None
 
-    def show_tool(self, tool: str) -> None:
+    def show_tool(self, tool: str, axis_names=("X", "Y")) -> None:
         """Rebuild for `tool`; hidden for tools with their own panel or nothing to show."""
         self.tool = tool
         self.locks = {}
@@ -68,18 +68,24 @@ class SketchToolPanel(QGroupBox):
             self.hide()
             return
         self.setTitle(TITLES[tool])
-        self.hint.setText(HINTS.get(tool, ""))
+        u_lbl, v_lbl = axis_names
+        hint = HINTS.get(tool, "")
+        if tool == "MOVE":
+            hint = f"Click the elements, Enter, then the base point and where it goes. Or type {u_lbl} / {v_lbl} here."
+        self.hint.setText(hint)
+        label_map = {"X": u_lbl, "Y": v_lbl} if tool == "MOVE" else {}
         for name in dyn_input.FIELDS.get(tool, []):
+            lbl = label_map.get(name, name)
             spin = ExprDoubleSpinBox()
             lo, hi = RANGES.get(name, (0.0, 100000.0))
             spin.setRange(lo, hi)
             spin.setDecimals(0 if name == "Sides" else 2)
             spin.setSingleStep(1.0 if name in ("Sides", "Angle") else 0.5)
             spin.setSuffix(UNITS.get(name, " mm"))
-            spin.setToolTip(f"{name}: type or drag to lock it; empty follows the mouse." if name not in DEFAULTS_NOT_LOCKS
-                            else f"{name} for the next shapes.")
+            spin.setToolTip(f"{lbl}: type or drag to lock it; empty follows the mouse." if name not in DEFAULTS_NOT_LOCKS
+                            else f"{lbl} for the next shapes.")
             spin.valueChanged.connect(lambda v, n=name: self._edited(n, v))
-            self.form.addRow(name, spin)
+            self.form.addRow(lbl, spin)
             self.spins[name] = spin
         if tool == "MOVE":
             self.chk_copy = QCheckBox("Copy (keep the originals)")

@@ -27,7 +27,8 @@ class SketchToolsMixin:
         uv = self.get_sketch_plane_uv(x, y)
         if uv is None:
             return None
-        return self.doc.active_sketch.hit_test(uv[0], uv[1], self._entity_tolerance())
+        show_const = self.sketch_palette.chk_show_construction.isChecked()
+        return self.doc.active_sketch.hit_test(uv[0], uv[1], self._entity_tolerance(), include_construction=show_const)
     def _update_entity_hover(self, x: float, y: float):
         active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and (self.sketch_tool in ("DIMENSION", "OFFSET") or self.measure is not None))
         if self.sketch_tool == "TEXT":
@@ -213,7 +214,9 @@ class SketchToolsMixin:
         self.tool_panel.default_changed.connect(self._panel_default)
 
     def _show_tool_panel(self, tool: str):
-        self.tool_panel.show_tool(tool)
+        sk = self.doc.active_sketch
+        axis_names = sk.plane.axis_names() if sk is not None else ("X", "Y")
+        self.tool_panel.show_tool(tool, axis_names=axis_names)
         if self.tool_panel.chk_copy is not None:
             self.tool_panel.chk_copy.toggled.connect(lambda _on: self.update())   # originals shown / hidden
         self.tool_panel.set_values({"Sides": float(self.sketch_palette.spn_sides.value()),
@@ -688,7 +691,9 @@ class SketchToolsMixin:
             if name == "Diameter" and not self.dyn.texts[i] and name in self.dyn_live:
                 txt += f"  (R {self.dyn_live[name] / 2.0:.2f})"
             if tool == "MOVE":
-                txt = f"{name}  {txt}"
+                u_lbl, v_lbl = plane.axis_names()
+                lbl = {"X": u_lbl, "Y": v_lbl}.get(name, name)
+                txt = f"{lbl}  {txt}"
             wbox = max(64, fm.horizontalAdvance(txt) + 18)
             rect = QRectF(pt.x() - wbox / 2, pt.y() - 12, wbox, 24)
             if focused:

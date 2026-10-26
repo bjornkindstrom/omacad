@@ -96,6 +96,18 @@ class SketchPlane:
     def get_transform_matrix_3x4(self) -> np.ndarray:
         """Returns 3x4 transform matrix [u | v | normal | origin] for Manifold3D."""
         return np.column_stack([self.u_axis, self.v_axis, self.normal, self.origin]).astype(float)
+
+    def axis_names(self) -> Tuple[str, str]:
+        """World axis labels ('X', 'Y', 'Z') aligned with this plane's horizontal (u) and vertical (v) axes."""
+        def _axis_label(vec, fallback: str) -> str:
+            v = np.abs(np.asarray(vec, dtype=float))
+            idx = int(np.argmax(v))
+            if v[idx] > 0.99:
+                return ("X", "Y", "Z")[idx]
+            return fallback
+        u_lbl = _axis_label(self.u_axis, "X")
+        v_lbl = _axis_label(self.v_axis, "Y")
+        return (u_lbl, v_lbl) if u_lbl != v_lbl else ("X", "Y")
 class SketchEntity:
     """Base class for 2D sketch elements."""
     def __init__(self, entity_id: str, entity_type: str, is_construction: bool = False):

@@ -139,10 +139,13 @@ class SketchDimensionsMixin:
         stacked: Dict[str, int] = {}
         painter.setFont(QFont(theme.font_family(), 9, QFont.Weight.Bold))
         show_all = self.sketch_palette.chk_show_constraints.isChecked()
+        show_const = self.sketch_palette.chk_show_construction.isChecked()
         focus = self.selected_entities | ({self.hover_entity_id} if self.hover_entity_id else set())
         for c in sk.constraints:
             ent = ents.get(c.refs[0]) if c.refs else None
             if ent is None:
+                continue
+            if not show_const and any(getattr(ents.get(r), "is_construction", False) for r in c.refs):
                 continue
             grp = {getattr(ents.get(r), "group", None) for r in c.refs}
             if len(grp) == 1 and None not in grp and c.ctype in ("POINT_ON_CIRCLE", "EQUAL", "COINCIDENT"):

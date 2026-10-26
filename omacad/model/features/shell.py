@@ -60,10 +60,10 @@ class ShellFeature(Feature):
         v = np.asarray(mesh.vert_properties, dtype=float)[:, :3][np.asarray(mesh.tri_verts)]
         n = np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
         ln = np.linalg.norm(n, axis=1)
-        ok = ln > 1e-12
+        ok = ln > (1e-3 * float(np.max(ln)) if len(ln) else 1e-12)
         n = n[ok] / ln[ok, None]
         d = np.einsum("ij,ij->i", n, v[ok, 0])
-        _, keep = np.unique(np.round(np.column_stack((n, d)), 6), axis=0, return_index=True)
+        _, keep = np.unique(np.round(np.column_stack((n, d)), 4), axis=0, return_index=True)
         return n[keep], d[keep]
 
     @classmethod

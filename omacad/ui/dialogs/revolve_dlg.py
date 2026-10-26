@@ -99,7 +99,8 @@ class RevolveDialog(BaseFeatureDialog):
                 tag = "construction line" if e.is_construction else "line"
                 self.cmb_axis.addItem(f"{'⎯ ' if e.is_construction else ''}{tag} ({e.p1[0]:.1f}, {e.p1[1]:.1f}) → ({e.p2[0]:.1f}, {e.p2[1]:.1f})")
                 self.axis_keys.append(("line", e.entity_id))
-        for text, key in (("Sketch Y axis (vertical)", ("v",)), ("Sketch X axis (horizontal)", ("u",))):
+        u_lbl, v_lbl = sk.plane.axis_names() if sk is not None else ("X", "Y")
+        for text, key in ((f"Sketch {v_lbl} axis (vertical)", ("v",)), (f"Sketch {u_lbl} axis (horizontal)", ("u",))):
             self.cmb_axis.addItem(text)
             self.axis_keys.append(key)
         # a construction line is the natural axis; otherwise the vertical axis
