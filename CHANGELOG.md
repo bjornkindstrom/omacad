@@ -17,6 +17,11 @@
 - Sketch arc trimming at endpoint intersections (#123): improved sweep and boundary angle tolerance in trim calculations so arcs meeting at junctions cut correctly instead of dropping the entire arc.
 - Report problem and Request change bundle cleanup: save only marked or single window screenshot in reports to keep RFC and bug report sizes efficient.
 
+## 0.9.9.80.66 - 2026-10-26
+
+### Changed
+- Sketch constraints are one Constraints ▾ dropdown with full-size icons instead of the cramped 2-row grid (Settings > Sketch & View: turn off for one button per constraint).
+
 ## 0.9.9.80.64 - 2026-10-25
 
 ### Added

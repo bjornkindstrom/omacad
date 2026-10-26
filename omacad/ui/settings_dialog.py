@@ -335,9 +335,9 @@ class SettingsDialog(QDialog):
         self.chk_group_inspect.setToolTip("Puts measurement, sectioning and parameters into an Inspect ▾ dropdown menu.")
         lay_ui.addWidget(self.chk_group_inspect)
 
-        self.chk_group_constraints = QCheckBox("Compact 2-row layout for Sketch Constraints")
+        self.chk_group_constraints = QCheckBox("Sketch Constraints as a dropdown menu")
         self.chk_group_constraints.setChecked(bool(self.settings.get("group_constraints", True)))
-        self.chk_group_constraints.setToolTip("Arranges sketch constraints into a compact 2-row grid to save horizontal ribbon space.")
+        self.chk_group_constraints.setToolTip("Puts the sketch constraints into one Constraints ▾ dropdown with full-size icons. Off = one button per constraint.")
         lay_ui.addWidget(self.chk_group_constraints)
 
         lay_ui.addStretch()

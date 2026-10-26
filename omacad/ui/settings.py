@@ -49,7 +49,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "group_primitives": True,           # group Box/Cylinder/Sphere/Thread into Primitives dropdown
     "group_modify": False,              # group Combine/Split/Shell/Move into Modify dropdown
     "group_inspect": True,              # group Measure/Section/Params into Inspect dropdown
-    "group_constraints": True,          # compact 2-row grid or dropdown for sketch constraints
+    "group_constraints": True,          # constraints as one dropdown menu or separate buttons
     "theme_mode": "omarchy",            # "omarchy" = follow the Omarchy theme live, "fixed" = theme_name
     "theme_name": "studio",             # "studio", "graphite", "atelier" or "user:<name>" when theme_mode is "fixed"
     "icon_theme": "solid",              # "solid", "blueprint", "semantic"

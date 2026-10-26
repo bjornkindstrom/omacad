@@ -488,43 +488,18 @@ class Ribbon(QWidget):
                 btn.clicked.connect(lambda _=False, c=ctype: self.constraint_clicked.emit(c))
                 row.addWidget(btn)
             return
-        from PySide6.QtWidgets import QGridLayout
-        grid_widget = QWidget()
-        grid_layout = QGridLayout(grid_widget)
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(max(2, int(round(3 * scale))))
-        c_btn_size = max(24, int(round(34 * scale)))
-        c_icon_size = max(14, int(round(18 * scale)))
-        c_font_size = max(8, int(round(10 * scale)))
-        for i, (ctype, label, icon, tip) in enumerate(self.CONSTRAINTS):
-            c_btn = QToolButton()
-            c_btn.setFixedSize(c_btn_size, c_btn_size)
-            c_btn.setIcon(theme.tool_icon(icon, c_icon_size))
-            c_btn.setIconSize(QSize(c_icon_size, c_icon_size))
-            c_btn.setToolTip(f"{label}: {tip} (select elements first)")
-            style(c_btn, f"""
-                QToolButton {{
-                    background-color: rgba(45, 49, 54, 0.4);
-                    border: 1px solid #3E434B;
-                    border-radius: 3px;
-                    color: #D2D6DC;
-                    font-size: {c_font_size}px;
-                    padding: 1px;
-                }}
-                QToolButton:hover {{
-                    background-color: #353A42;
-                    border: 1px solid #5A6270;
-                    color: #FFFFFF;
-                }}
-                QToolButton:pressed {{
-                    background-color: #E26D28;
-                    border: 1px solid #FF7E36;
-                    color: #FFFFFF;
-                }}
-            """, studio=_STUDIO_BUTTON)
-            c_btn.clicked.connect(lambda _=False, c=ctype: self.constraint_clicked.emit(c))
-            grid_layout.addWidget(c_btn, i % 2, i // 2)
-        row.addWidget(grid_widget)
+        from PySide6.QtWidgets import QMenu, QToolButton
+        btn = RibbonButton("Constraints\n▾", "⟂")
+        btn.setToolTip("Sketch constraints: select elements first, then pick one")
+        btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(btn)
+        theme.style_menu(menu)
+        for ctype, label, icon, tip in self.CONSTRAINTS:
+            act = menu.addAction(theme.tool_icon(icon, 22), label)
+            act.setToolTip(tip + "  (select elements first)")
+            act.triggered.connect(lambda _=False, c=ctype: self.constraint_clicked.emit(c))
+        btn.setMenu(menu)
+        row.addWidget(btn)
 
     def _build_rect_button(self):
         """One rectangle button with a dropdown: the button itself draws the default rectangle,
