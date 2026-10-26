@@ -800,10 +800,11 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         if own is not None:         # the user's own picture replaces the built-in screenshots
             images = {"screenshot_own.png": png(own)}
         else:
-            images = {"screenshot_window.png": png(window_shot.toImage()), "screenshot_view.png": png(view_shot)}
             marked = dlg.marked_image()
             if marked is not None:
-                images["screenshot_marked.png"] = png(marked)   # the user's drawing on the window screenshot
+                images = {"screenshot_marked.png": png(marked)}
+            else:
+                images = {"screenshot_window.png": png(window_shot.toImage())}
         folder = feedback.build_bundle(self.doc, dlg.text(), images, extra)
         if dlg.fix_now() and feedback.launch_agent(folder, dlg.selected_agent()):
             self.status_label.setText(f"Report sent to {dlg.selected_agent()} (a terminal opened). Saved in {folder}")
@@ -829,10 +830,11 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         if own is not None:         # the user's own picture replaces the built-in screenshots
             images = {"screenshot_own.png": self._png(own)}
         else:
-            images = {"screenshot_window.png": self._png(window_shot.toImage()), "screenshot_view.png": self._png(view_shot)}
             marked = dlg.marked_image()
             if marked is not None:
-                images["screenshot_marked.png"] = self._png(marked)
+                images = {"screenshot_marked.png": self._png(marked)}
+            else:
+                images = {"screenshot_window.png": self._png(window_shot.toImage())}
         for i, (name, image) in enumerate(dlg.additional_images(), 1):
             safe_name = Path(name).name.replace("/", "_").replace("\\", "_")
             images[f"attachment_{i:02d}_{safe_name}"] = self._png(image)
