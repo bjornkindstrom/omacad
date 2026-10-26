@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.9.80.65 - 2026-10-26
+
+### Added
+- Sketch Palette toggle to show or hide construction geometry (#124): a new "Show Construction" checkbox toggles visibility and hit testing of dashed construction lines and circles during sketch editing.
+
+### Fixed
+- Shell on chamfered rotated cylinders (#88): filtered out microscopic sliver triangles from convex facet planes to prevent unintended chord planar cuts through cylindrical inner cavities.
+- ViewCube Home icon visibility in light themes (#113): Home icon pen now renders with high contrast against the light theme button background.
+- Sketch plane world axis naming in Revolve (#114) and Move tool (#122): axes are labeled according to their corresponding 3D world axes (e.g. X and Z on XZ plane, Y and Z on YZ plane) instead of assuming default XY names.
+- Sketch entity selection visibility in Studio theme (#115): selected sketch lines and curves now use an unmistakable high-contrast highlight color and distinct halo.
+- Persistent dimension entity highlight after sketch exit and extrusion (#116, #117): cleared lingering dimension entity picks upon leaving a sketch, starting new operations, or pressing Escape so they do not show up as selected edges on 3D bodies.
+- Dialog button text truncation in Studio theme (#118): adjusted button padding and set minimum widths so labels like "Send request" and "OK" fit comfortably without clipping.
+- Unicode parameter name autocomplete in expression fields (#119): parameter name pattern now supports Swedish and Unicode characters (e.g. matching `Längd` when typing `Lä`).
+- Studio canvas background brightness and grid visibility (#120, #121): lightened the canvas background, increased grid line contrast, and sharpened origin axes lines with positive and negative directions for better orientation.
+- Sketch arc trimming at endpoint intersections (#123): improved sweep and boundary angle tolerance in trim calculations so arcs meeting at junctions cut correctly instead of dropping the entire arc.
+- Report problem and Request change bundle cleanup: save only marked or single window screenshot in reports to keep RFC and bug report sizes efficient.
+
 ## 0.9.9.80.64 - 2026-10-25
 
 ### Added
