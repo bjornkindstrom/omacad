@@ -1,10 +1,14 @@
 # Changelog
 
-## 0.9.9.80.67 - 2026-10-26
+## 0.9.9.80.68 - 2026-10-26
 
 ### Added
 - Hole command: place one or more holes on a planar face or origin plane; supports simple, counterbore and countersink forms, depth or through-all, drill point, and optional entrance chamfer.
 - Sketch spline tool: click through-points and finish with Enter, double-click, or right-click; Esc cancels. Curves preview while drawing and are saved with the sketch.
+
+## 0.9.9.80.67 - 2026-10-26
+
+### Added
 - Symmetric sketch constraint: select two lines (or two circles) and a third line as the mirror line; the two are mirrored across it, e.g. to centre a rectangle between two sides. Ribbon button in the Constraints dropdown, Studio icon `c_symmetric`.
 
 ## 0.9.9.80.65 - 2026-10-26
