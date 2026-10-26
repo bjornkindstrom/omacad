@@ -68,7 +68,7 @@ EMOJI_TO_TOOL = {
     "⏮": "timeline_rewind", "⏮️": "timeline_rewind", "⏭": "timeline_end", "⏭️": "timeline_end",
     "▶️": "play", "⏸️": "pause",
     "━": "c_horizontal", "┃": "c_vertical", "•": "c_coincident", "∥": "c_parallel", "⟂": "c_perpendicular",
-    "＝": "c_equal", "◠": "c_tangent", "◎": "c_concentric", "⋈": "c_midpoint", "⇋": "c_symmetric", "🔒": "c_fix",
+    "＝": "c_equal", "◠": "c_tangent", "◎": "c_concentric", "⋈": "c_midpoint", "⇋": "c_symmetric", "⊙": "c_center", "🔒": "c_fix",
     "⬇️": "lay_flat", "🌐": "origin", "🎥": "camera", "🏷️": "rename", "👁": "eye", "👁️": "eye", "🚫": "eye_off",
     "💾": "save", "📂": "open", "📄": "document", "📤": "export", "🚪": "exit", "❓": "help", "ℹ️": "info",
     "🔳": "edges", "📁": "folder", "🔍": "analysis", "🔎": "find", "🧭": "locate", "🧱": "parametric",

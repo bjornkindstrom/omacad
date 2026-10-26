@@ -51,12 +51,16 @@ class SketchDimensionsMixin:
         self._ref_segments_cache = (sk.sketch_id, segs)
         return segs
 
-    def apply_constraint(self, ctype: str):
+    def apply_constraint(self, ctype: str, selected_order=None):
         """Applies a constraint to the selected sketch elements."""
         sk = self.doc.active_sketch
         if not sk:
-            return
-        sel = [e for e in sk.entities if e.entity_id in self.selected_entities]
+            return False
+        if selected_order:
+            by_id = {e.entity_id: e for e in sk.entities}
+            sel = [by_id[eid] for eid in selected_order if eid in by_id]
+        else:
+            sel = [e for e in sk.entities if e.entity_id in self.selected_entities]
         lines = [e for e in sel if isinstance(e, SketchLine)]
         circles = [e for e in sel if isinstance(e, SketchCircle)]
         unsupported = [e for e in sel if not isinstance(e, (SketchLine, SketchCircle))]
@@ -82,12 +86,36 @@ class SketchDimensionsMixin:
         elif ctype == "MIDPOINT" and len(lines) + len(circles) == 2 and lines:
             specs = [midpoint_spec(lines, circles)]
         elif ctype == "SYMMETRIC":
-            spec = symmetric_spec(lines, circles)
+            axis_id = selected_order[-1] if selected_order else None
+            # Keep the mirrored pair's reference order stable for duplicate detection; only the
+            # mirror-axis identity comes from the guide's final click.
+            line_ids = {e.entity_id for e in lines}
+            circle_ids = {e.entity_id for e in circles}
+            lines = [e for e in sk.entities if e.entity_id in line_ids]
+            circles = [e for e in sk.entities if e.entity_id in circle_ids]
+            spec = symmetric_spec(lines, circles, axis_id=axis_id)
             specs = [spec] if spec else []
+        elif ctype == "CENTER" and len(lines) == 8:
+            group_a = self._constraint_rectangle_group(sk, lines[0])
+            remaining = [line for line in lines if group_a is None or line.entity_id not in group_a]
+            group_b = self._constraint_rectangle_group(sk, remaining[0]) if remaining else None
+            selected_ids = {line.entity_id for line in lines}
+            if (group_a and group_b and not (set(group_a) & set(group_b))
+                    and selected_ids == set(group_a) | set(group_b)):
+                specs = [(ctype, group_a + group_b, [])]
         elif ctype == "FIX":
             specs = [(ctype, [e.entity_id], []) for e in lines + circles]
 
         requested = len(specs)
+        if ctype == "CENTER" and specs:
+            refs = specs[0][1]
+            selected_pair = {frozenset(refs[:4]), frozenset(refs[4:])}
+            for constraint in sk.constraints:
+                if constraint.ctype == "CENTER" and len(constraint.refs) == 8:
+                    existing_pair = {frozenset(constraint.refs[:4]), frozenset(constraint.refs[4:])}
+                    if selected_pair == existing_pair:
+                        self.status_message.emit("These rectangles are already centred.")
+                        return False
         existing = {(c.ctype, tuple(c.refs)) for c in sk.constraints}
         specs = [sp for sp in specs if (sp[0], tuple(sp[1])) not in existing]
         if not specs:
@@ -97,9 +125,10 @@ class SketchDimensionsMixin:
                 self.status_message.emit("Constraints work on lines and circles for now (not rectangles, arcs or slots).")
             else:
                 self.status_message.emit(self.CONSTRAINT_HINTS.get(ctype, ""))
-            return
-        self.doc.add_constraints(sk.sketch_id, specs)
+            return False
+        applied = self.doc.add_constraints(sk.sketch_id, specs)
         self.status_message.emit(self.doc.last_message)
+        return applied
 
     def draw_dim_picks(self, painter: QPainter):
         """Rings on the end points picked by the dimension tool, and a dashed link while placing."""

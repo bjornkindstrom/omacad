@@ -17,6 +17,13 @@ class PointerMixin:
     def mousePressEvent(self, event):
         x = event.position().x()
         y = event.position().y()
+        if self._constraint_guide is not None:
+            if event.button() == Qt.MouseButton.RightButton:
+                self.constraint_help.dismiss()
+                return
+            if event.button() == Qt.MouseButton.LeftButton:
+                self._constraint_guide_pick(x, y)
+                return
         if event.button() == Qt.MouseButton.LeftButton and self.picked_dim_entities[1]:
             self.picked_dim = None
             self.picked_dim_entities = (None, set())

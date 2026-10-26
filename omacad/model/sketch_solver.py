@@ -211,6 +211,28 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=(), corners=()):
     def circle(eid):
         return geo[eid] if isinstance(ents.get(eid), SketchCircle) else None
 
+    def center_handle(line_ids):
+        """Create an auxiliary solver point at the midpoint of a four-line loop's diagonal."""
+        corners = []
+        for eid in line_ids:
+            ent = ents.get(eid)
+            if not isinstance(ent, SketchLine):
+                return None
+            for name in ("p1", "p2"):
+                uv = getattr(ent, name)
+                handle = pts[(eid, name)]
+                if not any(math.hypot(uv[0] - old[0][0], uv[1] - old[0][1]) < 1e-5 for old in corners):
+                    corners.append((uv, handle))
+        if len(corners) != 4:
+            return None
+        a, b = max(((a, b) for i, a in enumerate(corners) for b in corners[i + 1:]),
+                   key=lambda pair: math.hypot(pair[0][0][0] - pair[1][0][0], pair[0][0][1] - pair[1][0][1]))
+        center = (sum(pt[0][0] for pt in corners) / 4.0, sum(pt[0][1] for pt in corners) / 4.0)
+        center_point = sys_.add_point_2d(center[0], center[1], wp)
+        diagonal = sys_.add_line_2d(a[1], b[1], wp)
+        sys_.midpoint(center_point, diagonal, wp)
+        return center_point, center
+
     for c in sketch.constraints:
         if any(r not in ents for r in c.refs):
             continue  # references an entity the solver does not handle (e.g. rectangle)
@@ -242,6 +264,22 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=(), corners=()):
         elif t == "SYMMETRIC" and len(c.refs) == 3 and len(c.pts) == 2 and line(c.refs[2]) and b \
                 and (a, c.pts[0]) in pts and (b, c.pts[1]) in pts:
             sys_.symmetric(pts[(a, c.pts[0])], pts[(b, c.pts[1])], geo[c.refs[2]], wp)
+        elif t == "CENTER" and len(c.refs) == 8:
+            center_a = center_handle(c.refs[:4])
+            center_b = center_handle(c.refs[4:])
+            if center_a is not None and center_b is not None:
+                reference_point, reference_uv = center_a
+                target_point, _target_uv = center_b
+                sys_.set_group(FIXED_GROUP)
+                anchor = sys_.add_point_2d(reference_uv[0], reference_uv[1], wp)
+                axis_start = sys_.add_point_2d(reference_uv[0], reference_uv[1] - 1.0, wp)
+                axis_end = sys_.add_point_2d(reference_uv[0], reference_uv[1] + 1.0, wp)
+                vertical_axis = sys_.add_line_2d(axis_start, axis_end, wp)
+                sys_.set_group(FREE_GROUP)
+                sys_.coincident(reference_point, anchor, wp)
+                # Keep only the horizontal centre alignment. The target may move vertically
+                # and can be positioned with the normal distance dimension between its edges.
+                sys_.coincident(target_point, vertical_axis, wp)
 
     for la, ea, lb, eb, _, _, _ in corners:
         # a fixed side already holds the corner: joining to it would make e.g. the opposite size dimension redundant
@@ -440,7 +478,7 @@ def _across(axis, b, c) -> Optional[float]:
     return abs(ax * dx + ay * dy) / (length * gap) if gap else 0.0
 
 
-def symmetric_spec(lines, circles):
+def symmetric_spec(lines, circles, axis_id=None):
     """(ctype, refs, pts) for a Symmetric constraint: two circles (their centres) or two lines (their nearest end
     points) mirrored across the third selected line. The mirror line is the one that puts the other two on opposite
     sides and most square to them. Returns None when no line fits that description."""
@@ -451,7 +489,8 @@ def symmetric_spec(lines, circles):
     if len(lines) != 3:
         return None
     best = None
-    for axis in lines:
+    axes = [line for line in lines if line.entity_id == axis_id] if axis_id else lines
+    for axis in axes:
         b, c = [l for l in lines if l is not axis]
         dev = _across(axis, b, c)
         if dev is not None and (best is None or dev < best[0]):

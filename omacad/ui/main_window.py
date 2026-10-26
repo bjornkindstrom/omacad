@@ -155,7 +155,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.viewport.face_extrude_requested.connect(self.on_extrude_face)
         self.viewport.canvas_face_requested.connect(self.prompt_canvas_on_face)
         self.viewport.move_body_requested.connect(self.prompt_move_body)
-        self.ribbon.constraint_clicked.connect(self.viewport.apply_constraint)
+        self.ribbon.constraint_clicked.connect(self.viewport.handle_constraint_clicked)
         self.viewport.status_message.connect(self.status_label.setText)
         self.viewport.plane_pick_cancelled.connect(self.on_plane_pick_cancelled)
         self.ribbon.extrude_clicked.connect(self.prompt_extrude)
@@ -644,6 +644,7 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
 
     def on_finish_sketch(self):
         self.viewport.set_sketch_tool("NONE")
+        self.viewport.constraint_help.dismiss()
         sketch = self.doc.finish_sketch()
         if sketch:
             self.status_label.setText(f"Finished {sketch.name} ({len(sketch.profiles)} closed profiles found).")

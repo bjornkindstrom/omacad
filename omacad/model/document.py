@@ -1885,6 +1885,11 @@ class Document:
         """Solve holding the dimension's anchor still; if other constraints need that anchor to move
         (e.g. a diameter change that shifts a circle held at an edge distance) retry without it."""
         anchor = self._anchor_for(dim)
+        if dim.dim_type == "LENGTH" and any(
+            constraint.ctype == "CENTER" and dim.target_entity_id in constraint.refs
+            for constraint in sketch.constraints
+        ):
+            anchor = {}  # width/height edits stay centred on their Center constraint axis
         ent = next((e for e in sketch.entities if e.entity_id == dim.target_entity_id), None)
         if ent is not None and getattr(ent, "group", None) and dim.dim_type in ("LENGTH", "DIAMETER", "RADIUS"):
             ctr = next((m for m in sketch.group_entities(ent) if m.entity_type == "circle"), None)

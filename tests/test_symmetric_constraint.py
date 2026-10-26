@@ -41,6 +41,21 @@ def test_the_mirror_line_is_the_one_that_fits_not_the_one_clicked_first():
         assert symmetric_spec(lines, [])[1][2] == axis.entity_id
 
 
+def test_an_explicitly_picked_mirror_line_is_honored():
+    doc = Document()
+    sk = doc.start_sketch()
+    left = sk.add_line((-30.0, 0.0), (-30.0, 10.0))
+    right = sk.add_line((22.0, 1.0), (22.0, 12.0))
+    axis = sk.add_line((0.0, -5.0), (0.0, 15.0))
+    lines = [left, right, axis]
+
+    assert symmetric_spec(lines, [], axis_id=axis.entity_id)[1][2] == axis.entity_id
+    # A line that does not mirror the other two must not be substituted for the clicked axis.
+    assert symmetric_spec(lines, [], axis_id=left.entity_id) is None
+
+
+
+
 def test_two_circles_mirror_across_a_line():
     doc = Document()
     sk = doc.start_sketch()

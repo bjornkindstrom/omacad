@@ -137,6 +137,15 @@ class ViewportEventsMixin:
                 tool_dlg.accept()
                 return
 
+        if (self._constraint_guide is not None or self.constraint_help.isVisible()) and event.key() == Qt.Key.Key_Escape:
+            guide_active = self._constraint_guide is not None
+            self.constraint_help.dismiss()
+            if guide_active:
+                self.selected_entities.clear()
+                self.selection_changed.emit()
+                self.update()
+            return
+
         if self.measure is not None and event.key() == Qt.Key.Key_Escape:
             self.end_measure()
             return

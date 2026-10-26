@@ -12,6 +12,8 @@ class SketchOperationMixin:
 
     def set_sketch_tool(self, tool_name: str):
         """Sets the active 2D sketching tool and resets temporary anchors."""
+        if hasattr(self, "constraint_help") and self.constraint_help.isVisible():
+            self.constraint_help.dismiss()
         self._dim_pending = []
         self._dim_place = None
         self._dim_side = None

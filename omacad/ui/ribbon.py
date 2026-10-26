@@ -478,6 +478,7 @@ class Ribbon(QWidget):
         ("CONCENTRIC", "Concentric", "◎", "Share same centre point for two circles/arcs"),
         ("MIDPOINT", "Midpoint", "⋈", "Put an end point or circle centre on the middle of a line (select it, then the line)"),
         ("SYMMETRIC", "Symmetric", "⇋", "Mirror two lines or circles across a third selected line"),
+        ("CENTER", "Center", "⊙", "Align two rectangle centres horizontally; dimension the vertical edge gap"),
         ("FIX", "Fix", "🔒", "Lock selected lines/circles/points in place"),
     )
 

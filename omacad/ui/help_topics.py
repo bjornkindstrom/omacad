@@ -122,9 +122,11 @@ EXTRA = [
           "tree hide show rename"),
     # sketch
     Topic("Constraints", "SKETCH · CONSTRAINTS", "Select elements, then Horizontal, Vertical, Coincident, Parallel, "
-          "Perpendicular, Equal, Tangent, Concentric, Midpoint, Symmetric or Fix. Symmetric: two lines or circles "
-          "mirrored across a third selected line (centres a rectangle between two sides). Also in an element's right-click menu.", "",
-          "SKETCH › CONSTRAINTS", "horizontal vertical parallel perpendicular equal tangent concentric midpoint symmetric fix lock"),
+          "Perpendicular, Equal, Tangent, Concentric, Midpoint, Symmetric, Center or Fix. Center: choose two "
+          "square-cornered rectangles to align their horizontal centres; dimension an edge gap for vertical offset. "
+          "Symmetric: two lines or circles mirrored across a "
+          "third selected line. Also in an element's right-click menu.", "",
+          "SKETCH › CONSTRAINTS", "horizontal vertical parallel perpendicular equal tangent concentric midpoint symmetric center fix lock"),
     Topic("Rectangle", "SKETCH · CREATE", "2-point, centre, rounded and centre-rounded: the arrow on the button picks "
           "the kind and which one the button draws.", "R", "SKETCH › CREATE", "box square rounded"),
     Topic("Typing values while drawing", "SKETCH · CREATE", "While drawing, Tab opens the size fields; type numbers, "

@@ -65,6 +65,8 @@ from omacad.ui.dyn_input import DynInput
 from omacad.ui import smart_circle
 from omacad.ui.smart_circle import SmartCircle
 from omacad.ui.sketch_palette import SketchPalette
+from omacad.ui.constraint_help import ConstraintHelp
+from omacad.ui.constraint_help import GUIDE_STEPS
 from omacad.ui import theme
 from omacad.ui.theme import qcolor
 
@@ -175,6 +177,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
 
         # Sketch element selection (click / Ctrl+click, Delete)
         self.selected_entities: set = set()
+        self._constraint_guide = None
         self.hover_entity_id: Optional[str] = None
         self._ref_segments_cache = None  # (sketch_id, segments) of body edges lying in the sketch plane
 
@@ -279,9 +282,173 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
 
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.constraint_help = ConstraintHelp(self)
+        self.constraint_help.dismissed.connect(self._constraint_help_dismissed)
+        self._place_constraint_help()
+
+    def _constraint_help_dismissed(self):
+        self._constraint_guide = None
+
+    def handle_constraint_clicked(self, ctype: str):
+        """Start the click-by-click selection guide for a ribbon constraint."""
+        sketch = self.doc.active_sketch
+        if sketch is None:
+            return
+        if ctype not in GUIDE_STEPS:
+            return
+        self._constraint_guide = {"ctype": ctype, "picked": []}
+        if self.selected_entities:
+            self.selected_entities.clear()
+            self.selection_changed.emit()
+            self.update()
+        self._place_constraint_help()
+        self.constraint_help.begin_guide(ctype)
+
+    def _constraint_guide_pick(self, x: float, y: float):
+        guide = self._constraint_guide
+        sketch = self.doc.active_sketch
+        if not guide or sketch is None:
+            return
+        ent = self._pick_entity(x, y)
+        if ent is None:
+            self.constraint_help.set_progress(len(guide["picked"]), error="Click on the sketch geometry shown in the step.")
+            return
+
+        ctype, picked = guide["ctype"], guide["picked"]
+        if ctype == "CENTER":
+            group = self._constraint_rectangle_group(sketch, ent)
+            if group is None:
+                self.constraint_help.set_progress(len(guide.get("groups", [])), error="Click a side of a square-cornered rectangle.")
+                return
+            groups = guide.setdefault("groups", [])
+            if groups and set(groups[0]) & set(group):
+                self.constraint_help.set_progress(len(groups), error="Choose a different rectangle for the second step.")
+                return
+            groups.append(group)
+            guide["picked"] = groups[0] + group
+            self.selected_entities = set(guide["picked"])
+            self.selection_changed.emit()
+            self.update()
+            if len(groups) < 2:
+                self.constraint_help.set_progress(len(groups))
+                return
+            self._apply_constraint_guide(ctype, guide["picked"])
+            return
+
+        chosen = [next((item for item in sketch.entities if item.entity_id == eid), None) for eid in picked]
+        chosen = [item for item in chosen if item is not None]
+        if ent.entity_id in picked:
+            self.constraint_help.set_progress(len(picked), error="That item is already selected. Choose another one.")
+            return
+        if not self._constraint_guide_accepts(ctype, chosen, ent):
+            self.constraint_help.set_progress(len(picked), error=self._constraint_guide_error(ctype))
+            return
+
+        picked.append(ent.entity_id)
+        self.selected_entities = set(picked)
+        self.selection_changed.emit()
+        self.update()
+        if len(picked) < len(GUIDE_STEPS[ctype]):
+            self.constraint_help.set_progress(len(picked))
+            return
+
+        self._apply_constraint_guide(ctype, picked)
+
+    def _apply_constraint_guide(self, ctype, picked):
+        self.constraint_help.set_progress(len(GUIDE_STEPS[ctype]))
+        applied = self.apply_constraint(ctype, selected_order=picked)
+        if applied:
+            self._constraint_guide = None
+            self.constraint_help.set_progress(len(GUIDE_STEPS[ctype]), done=True)
+        else:
+            self._constraint_guide = None
+            self.selected_entities.clear()
+            self.selection_changed.emit()
+            self.update()
+            message = (
+                "That line does not mirror the first two. Restart Symmetric and choose the centreline last."
+                if ctype == "SYMMETRIC" else
+                "These rectangle centres could not be aligned. Check for conflicting constraints and try again."
+                if ctype == "CENTER" else
+                "It could not be added. Choose another geometry and start again."
+            )
+            self.constraint_help.set_progress(0, error=message)
+
+    @staticmethod
+    def _constraint_rectangle_group(sketch, ent):
+        """Find the four connected, square-cornered sketch lines for the rectangle under the click."""
+        if not isinstance(ent, SketchLine):
+            return None
+        ids = sketch.connected_entities(ent.entity_id)
+        lines = [item for item in sketch.entities if item.entity_id in ids and isinstance(item, SketchLine)]
+        if len(lines) != 4:
+            return None
+        corners = {}
+        for line in lines:
+            for point, other in ((line.p1, line.p2), (line.p2, line.p1)):
+                key = (round(point[0], 6), round(point[1], 6))
+                corners.setdefault(key, []).append((other[0] - point[0], other[1] - point[1]))
+        if len(corners) != 4 or any(len(edges) != 2 for edges in corners.values()):
+            return None
+        for edges in corners.values():
+            a, b = edges
+            denom = math.hypot(*a) * math.hypot(*b)
+            if denom < 1e-9 or abs((a[0] * b[0] + a[1] * b[1]) / denom) > 0.02:
+                return None
+        return [line.entity_id for line in lines]
+
+    @staticmethod
+    def _constraint_guide_accepts(ctype, chosen, ent):
+        line, circle = isinstance(ent, SketchLine), isinstance(ent, SketchCircle)
+        if ctype in ("HORIZONTAL", "VERTICAL", "PARALLEL", "PERPENDICULAR", "COINCIDENT"):
+            return line
+        if ctype == "FIX":
+            return line or circle
+        if ctype == "EQUAL":
+            return (line or circle) and (not chosen or isinstance(chosen[0], type(ent)))
+        if ctype == "TANGENT":
+            if not chosen:
+                return line or circle
+            first = chosen[0]
+            return (isinstance(first, SketchLine) and circle) or (isinstance(first, SketchCircle) and (line or circle))
+        if ctype == "CONCENTRIC":
+            return circle
+        if ctype == "MIDPOINT":
+            return (line or circle) if not chosen else line
+        if ctype == "SYMMETRIC":
+            if len(chosen) < 2:
+                return (line or circle) if not chosen else isinstance(chosen[0], type(ent))
+            return line
+        return False
+
+    @staticmethod
+    def _constraint_guide_error(ctype):
+        hints = {
+            "HORIZONTAL": "Choose a straight line.", "VERTICAL": "Choose a straight line.",
+            "PARALLEL": "Choose a straight line.", "PERPENDICULAR": "Choose a straight line.",
+            "COINCIDENT": "Choose a straight line.", "FIX": "Choose a line or circle.",
+            "EQUAL": "Choose a line or circle matching the first item.",
+            "TANGENT": "Choose a line and circle, or two circles.",
+            "CONCENTRIC": "Choose a circle.", "MIDPOINT": "Choose a line as the target.",
+            "SYMMETRIC": "Choose the same kind of element, then a straight mirror line.",
+        }
+        return hints.get(ctype, "Choose supported sketch geometry.")
+
+    def _place_constraint_help(self):
+        if not hasattr(self, "constraint_help"):
+            return
+        width = min(360, max(220, self.width() - 24))
+        height = 352
+        self.constraint_help.setGeometry(
+            max(8, self.width() - width - 16),
+            max(8, self.height() - height - 16),
+            width,
+            height,
+        )
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._place_constraint_help()
         if hasattr(self, 'sketch_palette'):
             self.sketch_palette.place_default(self.size())
         if hasattr(self, '_on_viewport_resized') and callable(self._on_viewport_resized):
@@ -289,6 +456,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
 
     def set_document(self, document: Document) -> None:
         """Switch to another document (File > New/Open) and drop all state tied to the old one."""
+        self.constraint_help.dismiss()
         self.doc = document
         self.doc.add_change_listener(self.on_document_changed)
         self.selected_entities = set()
@@ -368,7 +536,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
     CONSTRAINT_GLYPHS = {
         "HORIZONTAL": "H", "VERTICAL": "V", "PARALLEL": "∥", "PERPENDICULAR": "⟂",
         "EQUAL": "=", "TANGENT": "T", "CONCENTRIC": "◎", "COINCIDENT": "•", "FIX": "F", "POINT_ON_CIRCLE": "○",
-        "MIDPOINT": "M", "SYMMETRIC": "S",
+        "MIDPOINT": "M", "SYMMETRIC": "S", "CENTER": "⊙",
     }
     CONSTRAINT_HINTS = {
         "HORIZONTAL": "Horizontal: select one or more lines.",
@@ -381,6 +549,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         "COINCIDENT": "Coincident: select two lines (their nearest end points are joined).",
         "MIDPOINT": "Midpoint: select a circle or line (its nearest end point) and the line whose middle it goes to.",
         "SYMMETRIC": "Symmetric: select two lines (or two circles) and the line they mirror across.",
+        "CENTER": "Center: select two square-cornered rectangles to align their horizontal centres; use an edge distance for vertical offset.",
         "FIX": "Fix: select lines or circles to lock in place.",
     }
 
