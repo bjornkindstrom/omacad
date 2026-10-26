@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.67 - 2026-10-26
+
+### Added
+- Symmetric sketch constraint: select two lines (or two circles) and a third line as the mirror line; the two are mirrored across it, e.g. to centre a rectangle between two sides. Ribbon button in the Constraints dropdown, Studio icon `c_symmetric`.
+
 ## 0.9.9.80.65 - 2026-10-26
 
 ### Added

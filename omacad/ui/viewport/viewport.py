@@ -368,7 +368,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
     CONSTRAINT_GLYPHS = {
         "HORIZONTAL": "H", "VERTICAL": "V", "PARALLEL": "∥", "PERPENDICULAR": "⟂",
         "EQUAL": "=", "TANGENT": "T", "CONCENTRIC": "◎", "COINCIDENT": "•", "FIX": "F", "POINT_ON_CIRCLE": "○",
-        "MIDPOINT": "M",
+        "MIDPOINT": "M", "SYMMETRIC": "S",
     }
     CONSTRAINT_HINTS = {
         "HORIZONTAL": "Horizontal: select one or more lines.",
@@ -380,6 +380,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         "CONCENTRIC": "Concentric: select two circles.",
         "COINCIDENT": "Coincident: select two lines (their nearest end points are joined).",
         "MIDPOINT": "Midpoint: select a circle or line (its nearest end point) and the line whose middle it goes to.",
+        "SYMMETRIC": "Symmetric: select two lines (or two circles) and the line they mirror across.",
         "FIX": "Fix: select lines or circles to lock in place.",
     }
 

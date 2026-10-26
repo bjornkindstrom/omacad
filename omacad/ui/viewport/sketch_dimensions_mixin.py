@@ -8,7 +8,7 @@ from PySide6.QtGui import QCursor, QPainter, QPen, QBrush, QFont
 from PySide6.QtWidgets import QMenu
 from omacad.model.sketch import SketchArc, SketchCircle, SketchLine, SketchSlot, SketchText, point_of
 from omacad.model.dim_layout import offset_for_point
-from omacad.model.sketch_solver import midpoint_spec
+from omacad.model.sketch_solver import midpoint_spec, symmetric_spec
 from omacad.ui import theme
 from omacad.ui.theme import qcolor
 
@@ -81,6 +81,9 @@ class SketchDimensionsMixin:
             specs = [(ctype, [a.entity_id, b.entity_id], list(best))]
         elif ctype == "MIDPOINT" and len(lines) + len(circles) == 2 and lines:
             specs = [midpoint_spec(lines, circles)]
+        elif ctype == "SYMMETRIC":
+            spec = symmetric_spec(lines, circles)
+            specs = [spec] if spec else []
         elif ctype == "FIX":
             specs = [(ctype, [e.entity_id], []) for e in lines + circles]
 

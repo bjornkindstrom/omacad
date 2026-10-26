@@ -239,6 +239,9 @@ def _attempt(sketch, ents, fixed, use_dims, pinned=(), corners=()):
             _tangent(sys_, wp, ents, pts, geo, a, b)
         elif t == "MIDPOINT" and b and line(b) and c.pts and (a, c.pts[0]) in pts:
             sys_.midpoint(pts[(a, c.pts[0])], geo[b], wp)
+        elif t == "SYMMETRIC" and len(c.refs) == 3 and len(c.pts) == 2 and line(c.refs[2]) and b \
+                and (a, c.pts[0]) in pts and (b, c.pts[1]) in pts:
+            sys_.symmetric(pts[(a, c.pts[0])], pts[(b, c.pts[1])], geo[c.refs[2]], wp)
 
     for la, ea, lb, eb, _, _, _ in corners:
         # a fixed side already holds the corner: joining to it would make e.g. the opposite size dimension redundant
@@ -416,3 +419,47 @@ def midpoint_spec(lines, circles):
                 best = (d, a, b, name)
     _, a, b, name = best
     return ("MIDPOINT", [a.entity_id, b.entity_id], [name])
+
+
+def _across(axis, b, c) -> Optional[float]:
+    """How far the mirror of b's middle is from c's middle, or None when b and c do not lie on opposite sides of axis."""
+    ax, ay = axis.p2[0] - axis.p1[0], axis.p2[1] - axis.p1[1]
+    length = math.hypot(ax, ay)
+    if length == 0.0:
+        return None
+
+    def side(p):
+        return (ax * (p[1] - axis.p1[1]) - ay * (p[0] - axis.p1[0])) / length
+
+    mb = ((b.p1[0] + b.p2[0]) / 2.0, (b.p1[1] + b.p2[1]) / 2.0)
+    mc = ((c.p1[0] + c.p2[0]) / 2.0, (c.p1[1] + c.p2[1]) / 2.0)
+    if side(mb) * side(mc) >= 0.0:
+        return None
+    dx, dy = mc[0] - mb[0], mc[1] - mb[1]
+    gap = math.hypot(dx, dy)
+    return abs(ax * dx + ay * dy) / (length * gap) if gap else 0.0
+
+
+def symmetric_spec(lines, circles):
+    """(ctype, refs, pts) for a Symmetric constraint: two circles (their centres) or two lines (their nearest end
+    points) mirrored across the third selected line. The mirror line is the one that puts the other two on opposite
+    sides and most square to them. Returns None when no line fits that description."""
+    if circles:
+        if len(circles) != 2 or len(lines) != 1:
+            return None
+        return ("SYMMETRIC", [circles[0].entity_id, circles[1].entity_id, lines[0].entity_id], ["center", "center"])
+    if len(lines) != 3:
+        return None
+    best = None
+    for axis in lines:
+        b, c = [l for l in lines if l is not axis]
+        dev = _across(axis, b, c)
+        if dev is not None and (best is None or dev < best[0]):
+            best = (dev, axis, b, c)
+    if best is None:
+        return None
+    _, axis, b, c = best
+    pa, pb = min(((x, y) for x in ("p1", "p2") for y in ("p1", "p2")),
+                 key=lambda t: math.hypot(getattr(b, t[0])[0] - getattr(c, t[1])[0],
+                                          getattr(b, t[0])[1] - getattr(c, t[1])[1]))
+    return ("SYMMETRIC", [b.entity_id, c.entity_id, axis.entity_id], [pa, pb])
