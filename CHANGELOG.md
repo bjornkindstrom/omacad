@@ -10,7 +10,7 @@
 - Unconnected endpoints indicator and drag-to-join: open/unconnected endpoints of sketch curves show an orange endpoint dot. Clicking and dragging the dot stretches the endpoint (with magnetic snap to nearby points/lines) and automatically creates a COINCIDENT constraint when dropped on another endpoint, making the dot disappear as the loop closes.
 - Fully constrained sketches are now drawn with black lines (Fusion 360-style) instead of cyan when degrees of freedom reach 0 (`dof == 0`). A subtle light rim keeps the black lines crisp on dark canvas/models.
 - Spline point editing and tangent handles (#130): selected splines show fit points and green circular tangent handles (Fusion 360-style). Dragging fit points moves them; dragging tangent handles adjusts the curvature vector. Double-clicking a spline or right-clicking "Insert Fit Point" adds new points along the curve.
-- Sketch Offset now supports splines: independent sampled spline copies with preview, save/load and undo. Positive distances offset open curves to the left and closed curves outward; collapsed offsets leave the sketch unchanged.
+- Sketch Offset now supports splines with sparse fit-points: independent sampled spline copies with preview, save/load and undo. Fit points are kept compact and clean without point-count explosion on small or large offsets. Positive distances offset open curves to the left and closed curves outward; collapsed offsets leave the sketch unchanged.
 ## 0.9.9.80.68 - 2026-10-26
 
 ### Added

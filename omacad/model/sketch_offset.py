@@ -34,24 +34,42 @@ def offset_spline(spline, distance: float):
     else:
         result = curve.offset_curve(distance)
         parts = list(result.geoms) if hasattr(result, "geoms") else [result]
-    tolerance = min(0.01, max(1e-6, abs(distance) * 0.002))
+    tolerance = min(0.01, max(0.005, abs(distance) * 0.002))
     return [points for part in parts if not part.is_empty and part.length > EPS
             for points in [_fit_offset_spline(part, tolerance)] if points]
 
 
 def _fit_offset_spline(part, tolerance):
-    """Avoid loops from interpolating unevenly spaced buffer/offset vertices."""
-    from shapely.geometry import LineString
+    """Avoid loops from interpolating unevenly spaced buffer/offset vertices and cap point counts."""
+    from shapely.geometry import LineString, Polygon
     from omacad.model.sketch_entities import SketchSpline
 
+    closed = getattr(part, "is_ring", False)
+    # Scale allowed deviation by curve size so large offsets don't explode to thousands of points
+    max_dev = max(0.008, tolerance * 4, part.length * 0.001)
+
+    def is_acceptable(pts):
+        fit_pts = SketchSpline("", pts).get_points()
+        if closed:
+            poly = Polygon(fit_pts)
+            if not poly.is_valid:
+                return False
+        fitted = LineString(fit_pts)
+        return fitted.is_simple and fitted.hausdorff_distance(part) <= max_dev
+
+    # 1. Try Douglas-Peucker simplified points
     points = list(part.simplify(tolerance).coords)
-    for attempt in range(8):
-        fitted = LineString(SketchSpline("", points).get_points())
-        if fitted.is_simple and fitted.hausdorff_distance(part) <= tolerance * 4:
-            return points
-        count = max(16, len(points) * 2)
+    if is_acceptable(points):
+        return points
+
+    # 2. If unevenly spaced vertices cause self-intersection or deviation, uniformly resample
+    # using moderate point counts (e.g. 32 to 128) rather than exploding to thousands of points
+    for count in (32, 48, 64, 96, 128):
         points = [part.interpolate(i / count, normalized=True).coords[0] for i in range(count + 1)]
-    return []
+        if is_acceptable(points):
+            return points
+
+    return points
 
 
 class Seg:
