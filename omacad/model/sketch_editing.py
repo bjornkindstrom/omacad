@@ -140,7 +140,7 @@ class SketchEditingMixin:
 
     def offset_entities(self, ids, distance: float) -> list:
         """Parallel copies of the given elements, `distance` mm away: outward for closed shapes and circles
-        (negative = inward), to the left of the drawing direction for open lines. Returns the new elements."""
+        (negative = inward), to the left of the drawing direction for open curves. Returns the new elements."""
         from shapely.geometry import LineString, Polygon
         from shapely.ops import linemerge
         ids = set(ids)
@@ -157,6 +157,12 @@ class SketchEditingMixin:
                     new.append(c)
             elif isinstance(ent, (SketchRect, SketchCenterRect, SketchSlot)):
                 segs.extend(ent.to_lines())
+            elif isinstance(ent, SketchSpline):
+                from omacad.model.sketch_offset import offset_spline
+                for points in offset_spline(ent, distance):
+                    spline = SketchSpline(self._new_entity_id("spline"), points)
+                    self.entities.append(spline)
+                    new.append(spline)
         # lines and arcs: whole chains, radii follow along, joints are remade
         from omacad.model.sketch_offset import offset_entities_chains
         chain_in = [e for e in self.entities if e.entity_id in ids and not e.is_construction and isinstance(e, (SketchLine, SketchArc))]

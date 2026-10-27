@@ -5,6 +5,8 @@
 ### Fixed
 - Construction button (#125): the ribbon button now always mirrors the real construction mode, and the mode resets when a sketch ends, so the button no longer looks off while construction is on. The checked state already has a distinct fill (`QToolButton:checked`) in the themes checked, so no extra `suggested` style was added.
 
+### Added
+- Sketch Offset now supports splines: independent sampled spline copies with preview, save/load and undo. Positive distances offset open curves to the left and closed curves outward; collapsed offsets leave the sketch unchanged.
 ## 0.9.9.80.68 - 2026-10-26
 
 ### Added

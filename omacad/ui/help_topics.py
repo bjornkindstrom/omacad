@@ -81,8 +81,10 @@ MORE = {
                "round hole"),
     "text": ("Type the text, pick font and height, click where it goes, or on a circle, arc or line for Text On "
              "Path. The letters are profiles: extrude or emboss them.", "letters font engrave label"),
-    "offset_sketch": ("Click curves (Shift/Ctrl+click toggles one), type the distance: + outward, − inward.",
-                      "parallel copy inset outset"),
+    "offset_sketch": ("Click curves, including splines (Shift/Ctrl+click toggles one), then type the distance. "
+                      "Closed shapes: + outward, − inward. Open curves: + left of the drawing direction, − right. "
+                      "Spline offsets are independent sampled splines; tight curves may split or disappear.",
+                      "parallel copy inset outset spline"),
     "dimension": ("Click a line, circle, two lines or two points and type the value; a parameter name or formula "
                   "makes it follow the parameters (shown as ƒx).", "size constraint driving"),
     "fix_sketch": ("When what you drew does not make a face: removes doubled lines, joins ends that nearly meet, "

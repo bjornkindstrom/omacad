@@ -8,6 +8,52 @@ EPS = 1e-6
 Pt = Tuple[float, float]
 
 
+def offset_spline(spline, distance: float):
+    """Sample an independent spline offset; closed curves use positive = outward.
+
+    Keep the fit points sparse while retaining detail relative to the requested
+    distance. Split offsets become separate splines rather than joined bridges.
+    """
+    from shapely.geometry import LineString, Polygon
+
+    points = spline.get_points(samples_per_span=64)
+    if len(points) < 2 or not math.isfinite(distance):
+        return []
+    curve = LineString(points)
+    if curve.length < EPS:
+        return []
+    closed = _close(points[0], points[-1], EPS)
+    if closed:
+        shape = Polygon(points)
+        if not shape.is_valid:
+            shape = shape.buffer(0)
+        result = shape.buffer(distance)
+        polygons = list(result.geoms) if hasattr(result, "geoms") else [result]
+        parts = [ring for poly in polygons if not poly.is_empty
+                 for ring in [poly.exterior, *poly.interiors]]
+    else:
+        result = curve.offset_curve(distance)
+        parts = list(result.geoms) if hasattr(result, "geoms") else [result]
+    tolerance = min(0.01, max(1e-6, abs(distance) * 0.002))
+    return [points for part in parts if not part.is_empty and part.length > EPS
+            for points in [_fit_offset_spline(part, tolerance)] if points]
+
+
+def _fit_offset_spline(part, tolerance):
+    """Avoid loops from interpolating unevenly spaced buffer/offset vertices."""
+    from shapely.geometry import LineString
+    from omacad.model.sketch_entities import SketchSpline
+
+    points = list(part.simplify(tolerance).coords)
+    for attempt in range(8):
+        fitted = LineString(SketchSpline("", points).get_points())
+        if fitted.is_simple and fitted.hausdorff_distance(part) <= tolerance * 4:
+            return points
+        count = max(16, len(points) * 2)
+        points = [part.interpolate(i / count, normalized=True).coords[0] for i in range(count + 1)]
+    return []
+
+
 class Seg:
     """One element in travel direction: a line p -> q, or an arc round c from angle a0 to a1 (ccw or not)."""
 

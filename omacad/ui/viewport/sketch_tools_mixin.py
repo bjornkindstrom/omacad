@@ -87,7 +87,7 @@ class SketchToolsMixin:
             self.update()
 
         try:
-            res = self.prompt_dimension_value("Offset", "Distance (negative = inward for a closed shape, positive = outward; for a single line: positive = left of its direction):",
+            res = self.prompt_dimension_value("Offset", "Distance (negative = inward for a closed shape, positive = outward; for an open curve: positive = left of its direction):",
                                               5.0, lo=-5000.0, hi=5000.0, on_change=preview)
         finally:
             self.offset_preview = None

@@ -103,3 +103,146 @@ def test_offset_of_a_circle_and_lines_together():
     assert [e.entity_type for e in new if e.entity_type == "circle"][0] == "circle"
     c = [e for e in new if e.entity_type == "circle"][0]
     assert c.radius == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize("distance", [1.0, -1.0])
+def test_open_spline_offset_distance_and_direction(distance):
+    from shapely.geometry import LineString, Point
+    from omacad.model.sketch import Sketch, SketchSpline
+
+    sk = Document().start_sketch("XY")
+    spline = sk.add_spline([(0, 0), (10, 5), (20, -5), (30, 0)])
+    before = spline.to_dict()
+    new = sk.offset_entities([spline.entity_id], distance)
+    assert len(new) == 1 and isinstance(new[0], SketchSpline)
+    original = LineString(spline.get_points(64))
+    offset = LineString(new[0].get_points())
+    assert offset.is_simple
+    for point in new[0].get_points():
+        assert original.distance(Point(point)) == pytest.approx(abs(distance), rel=0.01)
+    assert offset.hausdorff_distance(original.offset_curve(distance)) < abs(distance) * 0.01
+    # Initial tangent points up and right, so left is up and left.
+    assert (new[0].points[0][0] < spline.points[0][0]) == (distance > 0)
+    assert (new[0].points[0][1] > spline.points[0][1]) == (distance > 0)
+    assert spline.to_dict() == before
+    assert len(new[0].points) < len(spline.get_points(64))
+    assert Sketch.from_dict(sk.to_dict()).to_dict() == sk.to_dict()
+
+
+@pytest.mark.parametrize("distance", [1.0, -1.0, 100.0])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_closed_spline_offset_is_closed_outward_for_positive_distance(distance, reverse):
+    from shapely.geometry import LineString
+
+    sk = Document().start_sketch("XY")
+    points = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+    spline = sk.add_spline(points[::-1] if reverse else points)
+    original = Polygon(spline.get_points(64))
+    new = sk.offset_entities([spline.entity_id], distance)
+    assert len(new) == 1
+    assert new[0].points[0] == new[0].points[-1]
+    result = Polygon(new[0].get_points())
+    assert result.is_valid
+    expected = original.buffer(distance)
+    assert result.area == pytest.approx(expected.area, rel=0.01)
+    assert LineString(result.exterior).hausdorff_distance(expected.exterior) < abs(distance) * 0.01
+
+
+def test_collapsed_and_degenerate_spline_offsets_leave_originals_intact():
+    from omacad.model.sketch import SketchSpline
+
+    sk = Document().start_sketch("XY")
+    sk.add_spline([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+    sk.entities.extend([SketchSpline("empty", []), SketchSpline("point", [(1, 1)]),
+                        SketchSpline("same", [(1, 1), (1, 1)])])
+    before = sk.to_dict()
+    assert sk.offset_entities([e.entity_id for e in sk.entities], -1000) == []
+    assert sk.to_dict() == before
+
+
+def test_spline_offset_in_mixed_selection_ignores_construction_and_unselected():
+    sk = Document().start_sketch("XY")
+    spline = sk.add_spline([(0, 0), (5, 8), (10, 0)])
+    sk.add_spline([(0, 50), (5, 58), (10, 50)], is_construction=True)
+    unselected = sk.add_spline([(0, 80), (5, 88), (10, 80)])
+    sk.add_circle((50, 50), 5)
+    sk.add_line((50, 0), (60, 0))
+    new = sk.offset_entities([e.entity_id for e in sk.entities if e is not unselected], 1)
+    assert sorted(e.entity_type for e in new) == ["circle", "line", "spline"]
+    assert len({e.entity_id for e in sk.entities}) == len(sk.entities)
+    assert spline in sk.entities and unselected in sk.entities
+
+
+@pytest.mark.parametrize("distance", [1.0, -1000.0, None])
+def test_spline_offset_ui_preview_commit_undo_and_empty_result(distance):
+    from PySide6.QtWidgets import QApplication
+    from omacad.ui.viewport.viewport import Viewport3D
+
+    app = QApplication.instance() or QApplication([])
+    doc = Document()
+    sk = doc.start_sketch("XY")
+    spline = sk.add_spline([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+    viewport = Viewport3D(doc)
+    viewport.selected_entities = {spline.entity_id}
+    messages = []
+    viewport.status_message.connect(messages.append)
+    before = sk.to_dict()
+    undo_count = len(doc.undo_stack)
+
+    def prompt(*args, **kwargs):
+        kwargs["on_change"](1.0)
+        assert viewport.offset_preview is not None
+        assert sk.to_dict() == before
+        return None if distance is None else (distance, None)
+
+    viewport.prompt_dimension_value = prompt
+    try:
+        viewport.offset_selected()
+        assert viewport.offset_preview is None
+        if distance == 1.0:
+            after = sk.to_dict()
+            assert len(sk.entities) == 2
+            assert len(doc.undo_stack) == undo_count + 1
+            doc.undo()
+            assert doc.active_sketch.to_dict() == before
+            doc.redo()
+            assert doc.active_sketch.to_dict() == after
+        else:
+            assert sk.to_dict() == before
+            assert len(doc.undo_stack) == undo_count
+            if distance is not None:
+                assert "nothing could be offset" in messages[-1]
+    finally:
+        viewport.close()
+        viewport.deleteLater()
+        app.processEvents()
+
+
+@pytest.mark.parametrize("distance", [5.0, -5.0])
+def test_requested_spline_offsets_at_the_entered_distance(distance):
+    from shapely.geometry import LineString, Point
+
+    sk = Document().start_sketch("XZ")
+    # Lennart's #131 sketch: the curve shown selected in the attached screenshot.
+    spline = sk.add_spline([(25, 0), (30, 10), (25, 25),
+                            (19.07748031616211, 30.92251968383789), (15, 40)])
+    original = LineString(spline.get_points(64))
+    new = sk.offset_entities([spline.entity_id], distance)
+    assert len(new) == 1
+    assert LineString(new[0].get_points()).is_simple
+    assert all(original.distance(Point(p)) == pytest.approx(abs(distance), rel=0.01)
+               for p in new[0].get_points())
+
+
+def test_large_open_spline_offset_keeps_disconnected_parts_separate():
+    from shapely.geometry import LineString, MultiLineString
+
+    sk = Document().start_sketch("XY")
+    spline = sk.add_spline([(0, 0), (10, 5), (20, -5), (30, 0)])
+    target = LineString(spline.get_points(64)).offset_curve(100)
+    assert target.geom_type == "MultiLineString"
+    new = sk.offset_entities([spline.entity_id], 100)
+    assert len(new) == len(target.geoms)
+    result = MultiLineString([e.get_points() for e in new])
+    assert all(part.is_simple for part in result.geoms)
+    assert result.hausdorff_distance(target) < 1.0

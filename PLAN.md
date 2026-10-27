@@ -1,5 +1,7 @@
 # Omacad – färdplan
 
+Genomfört 0.9.9.80.69: Offset av öppna och slutna splines, med förhandsvisning och ångra.
+
 Genomfört 0.9.9.80.64: infoga Canvas på plana kroppsytor via högerklick eller planlistan.
 
 Genomfört 0.9.9.80.63: linjärt mönster av ihåliga kroppar ger kompletta kopior efter OK.
