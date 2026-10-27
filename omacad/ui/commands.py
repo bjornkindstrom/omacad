@@ -102,7 +102,7 @@ _ALL = [
        ("sketch",)),
     _c("text", "Text", "🔤", "Letters in a frame or along a circle, arc or line; they can be extruded or embossed",
        "", "sketch_tool_selected", "TEXT", ("sketch",)),
-    _c("offset_sketch", "Offset", "⧉", "Click curves to offset (Shift/Ctrl+click toggles one), type the distance",
+    _c("offset_sketch", "Offset", "⧉", "Click curves, including splines, to offset (Shift/Ctrl+click toggles one), type the distance",
        "O", "sketch_tool_selected", "OFFSET", ("sketch",)),
     _c("mirror_sketch", "Mirror", "🪞", "Pick curves to mirror, then the mirror line", "Shift+M",
        "sketch_tool_selected", "MIRROR", ("sketch",)),

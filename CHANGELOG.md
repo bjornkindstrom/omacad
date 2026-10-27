@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.69 - 2026-10-27
+
+### Added
+- Sketch Offset now supports splines: independent sampled spline copies with preview, save/load and undo. Positive distances offset open curves to the left and closed curves outward; collapsed offsets leave the sketch unchanged.
+
 ## 0.9.9.80.68 - 2026-10-26
 
 ### Added

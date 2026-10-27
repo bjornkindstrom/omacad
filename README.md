@@ -1,5 +1,7 @@
 # Omacad ⚡
 
+Offset (`O`) fungerar nu på splines: välj kurvan och ange avstånd med förhandsvisning. Öppna kurvor: positivt åt vänster i ritriktningen; slutna: positivt utåt. Resultatet är en fristående spline som kan ångras (0.9.9.80.69).
+
 Canvas kan nu infogas på en plan kroppsyta: högerklicka på ytan → Insert Canvas on this Face, eller välj ytan i Canvas-dialogens planlista (0.9.9.80.64).
 
 Linjärt Pattern kopierar nu hela ihåliga kroppar, med hål och avrundningar, både i förhandsvisningen och efter OK (0.9.9.80.63).

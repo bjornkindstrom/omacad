@@ -1,5 +1,7 @@
 # Omacad – progress and roadmap
 
+- Sketch Offset supports open and closed splines with independent sampled copies, preview and undo (0.9.9.80.69).
+
 - Canvas placement on planar body faces through the face context menu and placement list (0.9.9.80.64).
 
 - Linear Pattern preserves hollow bodies and fillets in preview and committed copies (0.9.9.80.63).
