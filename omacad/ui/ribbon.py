@@ -615,7 +615,7 @@ class Ribbon(QWidget):
                 self.btn_line, self.btn_rect, self.btn_circle, self.btn_arc,
                 self.btn_slot, self.btn_polygon, self.btn_text, self.btn_fillet_sk,
                 self.btn_trim_sk, self.btn_mirror_sk, self.btn_offset_sk,
-                self.btn_dim, self.btn_move, self.btn_rotate_sk, self.btn_construct,
+                self.btn_dim, self.btn_move, self.btn_rotate_sk,
             ):
                 btn.setChecked(False)
 
