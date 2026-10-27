@@ -194,8 +194,8 @@ class OverlayMixin:
                             painter.drawEllipse(QPointF(*scr_pt), 4.0, 4.0)
                     painter.setBrush(Qt.BrushStyle.NoBrush)
 
-        # 2c. Unconnected Endpoint Dots (free ends of lines/arcs waiting to be joined)
-        if self.doc.active_sketch and self.sketch_tool == "NONE":
+        # 2c. Unconnected Endpoint Dots (free ends of lines/arcs/splines waiting to be joined)
+        if self.doc.active_sketch:
             sk = self.doc.active_sketch
             plane = sk.plane
             free_ends = self._free_endpoints()

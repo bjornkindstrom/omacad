@@ -273,6 +273,8 @@ class SketchMoveMixin:
                 ent.p_start = (float(target_uv[0]), float(target_uv[1]))
             elif pname == "p_end":
                 ent.p_end = (float(target_uv[0]), float(target_uv[1]))
+        elif getattr(ent, "entity_type", "") == "spline":
+            ent.points[pname] = (float(target_uv[0]), float(target_uv[1]))
 
         sk.solve_profiles()
         self.update()
@@ -290,7 +292,7 @@ class SketchMoveMixin:
             ent = sk.get_entity(d["entity_id"])
             if ent is not None:
                 pname = d["point_name"]
-                cur_pt = ent.p1 if pname == "p1" else (ent.p2 if pname == "p2" else (ent.p_start if pname == "p_start" else ent.p_end))
+                cur_pt = ent.points[pname] if getattr(ent, "entity_type", "") == "spline" else (ent.p1 if pname == "p1" else (ent.p2 if pname == "p2" else (ent.p_start if pname == "p_start" else ent.p_end)))
                 # Check if it was placed on/snapped to another endpoint or curve to connect them
                 tol = max(0.3, min(8.0, self._entity_tolerance() * 1.25))
                 for other in sk.entities:

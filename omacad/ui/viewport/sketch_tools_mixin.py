@@ -79,6 +79,9 @@ class SketchToolsMixin:
             elif getattr(e, "entity_type", "") == "arc":
                 ends.append((e, "p_start", e.p_start))
                 ends.append((e, "p_end", e.p_end))
+            elif getattr(e, "entity_type", "") == "spline" and len(getattr(e, "points", [])) >= 2:
+                ends.append((e, 0, e.points[0]))
+                ends.append((e, len(e.points) - 1, e.points[-1]))
 
         free = []
         for i, (e, name, pt) in enumerate(ends):
