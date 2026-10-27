@@ -62,6 +62,47 @@ class SketchToolsMixin:
                     return {"entity": spline, "kind": "point", "index": i, "handle_sign": 1.0}
 
         return None
+
+    def _free_endpoints(self):
+        """Returns list of (entity, point_name, (u, v)) for endpoints of lines and arcs not connected to anything."""
+        if not self.doc.active_sketch:
+            return []
+        sk = self.doc.active_sketch
+        tol = 1e-4
+        ends = []
+        for e in sk.entities:
+            if e.is_construction or getattr(e, "projected", False):
+                continue
+            if getattr(e, "entity_type", "") == "line":
+                ends.append((e, "p1", e.p1))
+                ends.append((e, "p2", e.p2))
+            elif getattr(e, "entity_type", "") == "arc":
+                ends.append((e, "p_start", e.p_start))
+                ends.append((e, "p_end", e.p_end))
+
+        free = []
+        for i, (e, name, pt) in enumerate(ends):
+            coincident = False
+            for j, (oe, oname, opt) in enumerate(ends):
+                if i != j and abs(pt[0] - opt[0]) < tol and abs(pt[1] - opt[1]) < tol:
+                    coincident = True
+                    break
+            if not coincident:
+                free.append((e, name, pt))
+        return free
+
+    def _pick_free_endpoint(self, x: float, y: float):
+        """Checks if (x, y) hits a free endpoint dot."""
+        if not self._can_select_sketch_entities() or not self.doc.active_sketch:
+            return None
+        sk = self.doc.active_sketch
+        plane = sk.plane
+        tol_px = 9.0
+        for e, name, pt in self._free_endpoints():
+            scr = self.world_to_screen(plane.uv_to_world(*pt))
+            if scr and math.hypot(scr[0] - x, scr[1] - y) <= tol_px:
+                return {"entity": e, "point_name": name, "uv": pt}
+        return None
     def _update_entity_hover(self, x: float, y: float):
         active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and (self.sketch_tool in ("DIMENSION", "OFFSET") or self.measure is not None))
         if self.sketch_tool == "TEXT":

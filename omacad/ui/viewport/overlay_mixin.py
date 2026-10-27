@@ -194,6 +194,22 @@ class OverlayMixin:
                             painter.drawEllipse(QPointF(*scr_pt), 4.0, 4.0)
                     painter.setBrush(Qt.BrushStyle.NoBrush)
 
+        # 2c. Unconnected Endpoint Dots (free ends of lines/arcs waiting to be joined)
+        if self.doc.active_sketch and self.sketch_tool == "NONE":
+            sk = self.doc.active_sketch
+            plane = sk.plane
+            free_ends = self._free_endpoints()
+            if free_ends:
+                dot_pen = QPen(QColor(255, 255, 255, 240), 1.6)
+                dot_brush = QBrush(QColor(240, 140, 30, 240))  # Vivid orange dot
+                painter.setPen(dot_pen)
+                painter.setBrush(dot_brush)
+                for _ent, _name, pt in free_ends:
+                    scr_pt = self.world_to_screen(plane.uv_to_world(*pt))
+                    if scr_pt:
+                        painter.drawEllipse(QPointF(*scr_pt), 4.5, 4.5)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+
         self.draw_constraint_badges(painter)
         self.draw_dim_picks(painter)
 

@@ -424,6 +424,9 @@ class ViewportEventsMixin:
                     else:
                         self._show_general_menu(event)
             return
+        if self._endpoint_drag is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._endpoint_drag_release()
+            return
         if self._spline_drag is not None and event.button() == Qt.MouseButton.LeftButton:
             self._spline_drag_release()
             return

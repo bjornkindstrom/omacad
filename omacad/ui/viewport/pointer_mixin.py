@@ -291,7 +291,25 @@ class PointerMixin:
 
         # Press on a sketch element: select it and prepare a drag-move
         if event.button() == Qt.MouseButton.LeftButton and self._can_select_sketch_entities():
-            # Check spline point or tangent handle first
+            # Check free endpoint dot first (to stretch and connect lines/arcs)
+            free_end = self._pick_free_endpoint(x, y)
+            if free_end is not None:
+                sk = self.doc.active_sketch
+                ent = free_end["entity"]
+                self._endpoint_drag = {
+                    "sketch_id": sk.sketch_id,
+                    "entity_id": ent.entity_id,
+                    "point_name": free_end["point_name"],
+                    "before": sk.to_dict(),
+                    "press_uv": self.get_sketch_plane_uv(x, y),
+                    "moved": False,
+                }
+                self.selected_entities = {ent.entity_id}
+                self.selection_changed.emit()
+                self._press_pos = None
+                return
+
+            # Check spline point or tangent handle next
             handle = self._pick_spline_handle(x, y)
             if handle is not None:
                 sk = self.doc.active_sketch
@@ -413,6 +431,9 @@ class PointerMixin:
                 self._dim_hover_uv = uv
                 _kind, measured, label = self._dim_points_kind(self._dim_place, uv[0], uv[1])
                 self._dim_box.set_measure(label, measured)
+        if self._endpoint_drag is not None:
+            self._endpoint_drag_move(event)
+            return
         if self._spline_drag is not None:
             self._spline_drag_move(event)
             return

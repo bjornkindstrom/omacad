@@ -227,3 +227,106 @@ class SketchMoveMixin:
         else:
             sk.restore_from_dict(d["before"])
         self.update()
+
+    def _endpoint_drag_move(self, event):
+        d = self._endpoint_drag
+        if not d:
+            return
+        uv = self.get_sketch_plane_uv(event.position().x(), event.position().y())
+        if uv is None:
+            return
+        d["moved"] = True
+        sk = self.doc.active_sketch
+        if not sk or sk.sketch_id != d["sketch_id"]:
+            return
+
+        # Magnetic snap to existing geometry endpoints or lines
+        tol = max(0.3, min(8.0, self._entity_tolerance() * 1.25))
+        snap = SketchSnapper.snap(
+            raw_uv=uv,
+            sketch=sk,
+            snap_distance=tol,
+            grid_step=5.0,
+            enable_grid_snap=self.sketch_palette.chk_snap_grid.isChecked(),
+            enable_geom_snap=self.sketch_palette.chk_snap_points.isChecked(),
+            reference_segments=self._reference_segments(),
+        )
+        target_uv = snap.uv
+        self.active_snap = snap if snap.snap_type != "NONE" else None
+
+        ent = sk.get_entity(d["entity_id"])
+        if ent is None:
+            return
+        pname = d["point_name"]
+        if getattr(ent, "entity_type", "") == "line":
+            if pname == "p1":
+                ent.p1 = (float(target_uv[0]), float(target_uv[1]))
+            elif pname == "p2":
+                ent.p2 = (float(target_uv[0]), float(target_uv[1]))
+            # Update length dimension if attached
+            length = math.hypot(ent.p2[0] - ent.p1[0], ent.p2[1] - ent.p1[1])
+            for dim in sk.dimensions:
+                if dim.target_entity_id == ent.entity_id and dim.dim_type == "LENGTH":
+                    dim.value = length
+        elif getattr(ent, "entity_type", "") == "arc":
+            if pname == "p_start":
+                ent.p_start = (float(target_uv[0]), float(target_uv[1]))
+            elif pname == "p_end":
+                ent.p_end = (float(target_uv[0]), float(target_uv[1]))
+
+        sk.solve_profiles()
+        self.update()
+
+    def _endpoint_drag_release(self):
+        d = self._endpoint_drag
+        self._endpoint_drag = None
+        self.active_snap = None
+        if not d:
+            return
+        sk = self.doc.active_sketch
+        if not sk or sk.sketch_id != d["sketch_id"]:
+            return
+        if d["moved"]:
+            ent = sk.get_entity(d["entity_id"])
+            if ent is not None:
+                pname = d["point_name"]
+                cur_pt = ent.p1 if pname == "p1" else (ent.p2 if pname == "p2" else (ent.p_start if pname == "p_start" else ent.p_end))
+                # Check if it was placed on/snapped to another endpoint or curve to connect them
+                tol = max(0.3, min(8.0, self._entity_tolerance() * 1.25))
+                for other in sk.entities:
+                    if other.entity_id == ent.entity_id or other.is_construction or getattr(other, "projected", False):
+                        continue
+                    if getattr(other, "entity_type", "") == "line":
+                        for oname, opt in (("p1", other.p1), ("p2", other.p2)):
+                            if math.hypot(cur_pt[0] - opt[0], cur_pt[1] - opt[1]) <= tol:
+                                # Snap exactly onto the point and add COINCIDENT constraint
+                                if pname == "p1":
+                                    ent.p1 = opt
+                                elif pname == "p2":
+                                    ent.p2 = opt
+                                elif pname == "p_start":
+                                    ent.p_start = opt
+                                elif pname == "p_end":
+                                    ent.p_end = opt
+                                from omacad.model.sketch_types import SketchConstraint
+                                cid = sk._new_entity_id("c")
+                                sk.constraints.append(SketchConstraint(cid, "COINCIDENT", [ent.entity_id, other.entity_id], [pname, oname]))
+                                break
+                    elif getattr(other, "entity_type", "") == "arc":
+                        for oname, opt in (("p_start", other.p_start), ("p_end", other.p_end)):
+                            if math.hypot(cur_pt[0] - opt[0], cur_pt[1] - opt[1]) <= tol:
+                                if pname == "p1":
+                                    ent.p1 = opt
+                                elif pname == "p2":
+                                    ent.p2 = opt
+                                from omacad.model.sketch_types import SketchConstraint
+                                cid = sk._new_entity_id("c")
+                                sk.constraints.append(SketchConstraint(cid, "COINCIDENT", [ent.entity_id, other.entity_id], [pname, oname]))
+                                break
+            sk.solve_profiles()
+            if self.doc.record_sketch_change(sk, d["before"]):
+                self.doc.timeline.recompute(self.doc)
+                self.doc.notify_changed()
+        else:
+            sk.restore_from_dict(d["before"])
+        self.update()

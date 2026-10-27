@@ -195,6 +195,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         # Moving sketch elements (mouse drag or Move tool)
         self._dim_drag = None   # pressed dimension badge: click = edit value, drag = move the dimension line
         self._spline_drag = None  # dragging a spline point or tangent handle: dict(sketch_id, entity_id, kind, index, before)
+        self._endpoint_drag = None  # dragging an unconnected endpoint: dict(sketch_id, entity_id, point_name, before)
         self._drag = None   # pending/active mouse drag: dict(press_uv, press_pos, moved)
         self._move = None   # active move: dict(ids, orig, before, delta)
 
@@ -480,7 +481,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
         self._near_points = []
         self.sketch_start_uv = self.sketch_second_uv = self.sketch_current_uv = None
         self.active_snap = None
-        self._drag = self._move = self._dim_drag = self._spline_drag = None
+        self._drag = self._move = self._dim_drag = self._spline_drag = self._endpoint_drag = None
         self._dim_pending, self._dim_place = [], None
         self.picked_dim = None
         self.picked_dim_entities = (None, set())
