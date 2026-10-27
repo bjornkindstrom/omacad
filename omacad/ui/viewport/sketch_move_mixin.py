@@ -184,3 +184,46 @@ class SketchMoveMixin:
             self.selected_entities = {d["ent_id"]}  # plain click inside a multi-selection narrows it
             self.selection_changed.emit()
         self.update()
+
+    def _spline_drag_move(self, event):
+        d = self._spline_drag
+        if not d:
+            return
+        uv = self.get_sketch_plane_uv(event.position().x(), event.position().y())
+        if uv is None:
+            return
+        d["moved"] = True
+        sk = self.doc.active_sketch
+        if not sk or sk.sketch_id != d["sketch_id"]:
+            return
+        ent = sk.get_entity(d["entity_id"])
+        from omacad.model.sketch_entities import SketchSpline
+        if not isinstance(ent, SketchSpline):
+            return
+
+        idx = d["index"]
+        if d["kind"] == "point":
+            sk.move_spline_point(ent.entity_id, idx, uv)
+        elif d["kind"] == "tangent":
+            # uv is the dragged handle tip pos. The tangent vector is (uv - pt) * sign
+            pt = ent.points[idx]
+            sign = d["handle_sign"]
+            vec = ((uv[0] - pt[0]) * sign, (uv[1] - pt[1]) * sign)
+            sk.set_spline_tangent(ent.entity_id, idx, vec)
+        self.update()
+
+    def _spline_drag_release(self):
+        d = self._spline_drag
+        self._spline_drag = None
+        if not d:
+            return
+        sk = self.doc.active_sketch
+        if not sk or sk.sketch_id != d["sketch_id"]:
+            return
+        if d["moved"]:
+            if self.doc.record_sketch_change(sk, d["before"]):
+                self.doc.timeline.recompute(self.doc)
+                self.doc.notify_changed()
+        else:
+            sk.restore_from_dict(d["before"])
+        self.update()

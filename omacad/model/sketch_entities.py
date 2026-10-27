@@ -373,9 +373,19 @@ class SketchArc(SketchEntity):
 class SketchSpline(SketchEntity):
     """Smooth interpolating spline through sketch points, sampled for display and profile operations."""
 
-    def __init__(self, entity_id: str, points, is_construction: bool = False):
+    def __init__(self, entity_id: str, points, is_construction: bool = False, tangents=None):
         super().__init__(entity_id=entity_id, entity_type="spline", is_construction=is_construction)
         self.points = [(float(p[0]), float(p[1])) for p in points]
+        # optional explicit tangent vectors (Hermite derivative per span parameter) by point index
+        self.tangents = {int(k): (float(v[0]), float(v[1])) for k, v in (tangents or {}).items()}
+
+    def tangent_at(self, i: int):
+        """Tangent vector at point i: the explicit one, else the Catmull-Rom default."""
+        if i in self.tangents:
+            return self.tangents[i]
+        pts = self.points
+        a, b = pts[max(0, i - 1)], pts[min(len(pts) - 1, i + 1)]
+        return (0.5 * (b[0] - a[0]), 0.5 * (b[1] - a[1]))
 
     def get_points(self, samples_per_span: int = 16):
         if len(self.points) < 2:
@@ -383,19 +393,12 @@ class SketchSpline(SketchEntity):
         points = self.points
         out = []
         for i in range(len(points) - 1):
-            p0 = points[max(0, i - 1)]
             p1, p2 = points[i], points[i + 1]
-            p3 = points[min(len(points) - 1, i + 2)]
+            m1, m2 = self.tangent_at(i), self.tangent_at(i + 1)
+            # the clamped end tangent of the old Catmull-Rom curve was (p2-p0)/2 with p0=p1, i.e. same formula
             for j in range(samples_per_span):
                 t = j / samples_per_span
-                t2, t3 = t * t, t * t * t
-                x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t
-                           + (2*p0[0] - 5*p1[0] + 4*p2[0] - p3[0]) * t2
-                           + (-p0[0] + 3*p1[0] - 3*p2[0] + p3[0]) * t3)
-                y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t
-                           + (2*p0[1] - 5*p1[1] + 4*p2[1] - p3[1]) * t2
-                           + (-p0[1] + 3*p1[1] - 3*p2[1] + p3[1]) * t3)
-                out.append((x, y))
+                out.append(_hermite(p1, p2, m1, m2, t))
         out.append(points[-1])
         return out
 
@@ -405,11 +408,22 @@ class SketchSpline(SketchEntity):
 
     def to_dict(self):
         return {"entity_id": self.entity_id, "entity_type": "spline", "points": [list(p) for p in self.points],
-                "is_construction": self.is_construction}
+                "is_construction": self.is_construction,
+                **({"tangents": {str(k): list(v) for k, v in self.tangents.items()}} if self.tangents else {})}
 
     @classmethod
     def from_dict(cls, data):
-        return cls(data["entity_id"], data.get("points", []), data.get("is_construction", False))
+        return cls(data["entity_id"], data.get("points", []), data.get("is_construction", False),
+                   tangents=data.get("tangents"))
+
+
+def _hermite(p1, p2, m1, m2, t):
+    t2, t3 = t * t, t * t * t
+    h00, h10, h01, h11 = 2*t3 - 3*t2 + 1, t3 - 2*t2 + t, -2*t3 + 3*t2, t3 - t2
+    return (h00*p1[0] + h10*m1[0] + h01*p2[0] + h11*m2[0],
+            h00*p1[1] + h10*m1[1] + h01*p2[1] + h11*m2[1])
+
+
 class SketchSlot(SketchEntity):
     """Center-to-center elongated slot / pill."""
 
@@ -696,6 +710,7 @@ def rotate_entity(ent: "SketchEntity", angle_deg: float, origin: Tuple[float, fl
         ent.angle += angle_deg
     elif isinstance(ent, SketchSpline):
         ent.points = [rotate_point(p, angle_deg, origin) for p in ent.points]
+        ent.tangents = {k: rotate_point(v, angle_deg, (0.0, 0.0)) for k, v in ent.tangents.items()}
 def entity_key_points(ent: "SketchEntity") -> List[Tuple[float, float]]:
     """Points on an entity that are worth snapping when it is dragged (ends, corners, centres)."""
     if isinstance(ent, SketchLine):

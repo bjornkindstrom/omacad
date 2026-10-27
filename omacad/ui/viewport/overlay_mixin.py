@@ -153,6 +153,47 @@ class OverlayMixin:
                     painter.setBrush(QBrush(qcolor(226, 109, 40, 45)))  # Fusion Orange translucent profile fill
                     painter.drawPolygon(QPolygonF(poly_scr))
 
+        # 2b. Selected Spline Fit Points and Tangent Handles (Fusion 360-style)
+        if self.doc.active_sketch and self.selected_entities:
+            from omacad.model.sketch_entities import SketchSpline
+            sk = self.doc.active_sketch
+            plane = sk.plane
+            for ent_id in self.selected_entities:
+                ent = sk.get_entity(ent_id)
+                if isinstance(ent, SketchSpline):
+                    n_pts = len(ent.points)
+                    # Draw tangent handles (lines and green circle endpoints)
+                    handle_pen = QPen(QColor(80, 200, 120, 220), 1.6, Qt.PenStyle.DashLine)
+                    tip_pen = QPen(QColor(255, 255, 255, 240), 1.5)
+                    tip_brush = QBrush(QColor(40, 190, 80, 230))
+                    for i in range(n_pts):
+                        pt = ent.points[i]
+                        scr_pt = self.world_to_screen(plane.uv_to_world(*pt))
+                        if not scr_pt:
+                            continue
+                        t_vec = ent.tangent_at(i)
+                        signs = (1.0, -1.0) if (0 < i < n_pts - 1) else (1.0 if i == 0 else -1.0,)
+                        for s in signs:
+                            tip_uv = (pt[0] + s * t_vec[0], pt[1] + s * t_vec[1])
+                            scr_tip = self.world_to_screen(plane.uv_to_world(*tip_uv))
+                            if scr_tip:
+                                painter.setPen(handle_pen)
+                                painter.drawLine(QPointF(*scr_pt), QPointF(*scr_tip))
+                                painter.setPen(tip_pen)
+                                painter.setBrush(tip_brush)
+                                painter.drawEllipse(QPointF(*scr_tip), 4.5, 4.5)
+
+                    # Draw fit points (white circles with dark border)
+                    pt_pen = QPen(QColor(30, 30, 30, 240), 1.8)
+                    pt_brush = QBrush(QColor(255, 255, 255, 255))
+                    painter.setPen(pt_pen)
+                    painter.setBrush(pt_brush)
+                    for pt in ent.points:
+                        scr_pt = self.world_to_screen(plane.uv_to_world(*pt))
+                        if scr_pt:
+                            painter.drawEllipse(QPointF(*scr_pt), 4.0, 4.0)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+
         self.draw_constraint_badges(painter)
         self.draw_dim_picks(painter)
 

@@ -54,6 +54,24 @@ class ViewportEventsMixin:
             ent = self._pick_entity(x, y)
             if ent is not None:
                 self._drag = None
+                from omacad.model.sketch_entities import SketchSpline
+                if isinstance(ent, SketchSpline) and not getattr(ent, "projected", False):
+                    # Double-click on a spline inserts a point at cursor position
+                    uv = self.get_sketch_plane_uv(x, y)
+                    if uv is not None:
+                        sk = self.doc.active_sketch
+                        before = sk.to_dict()
+                        try:
+                            idx = sk.insert_spline_point(ent.entity_id, uv)
+                            if self.doc.record_sketch_change(sk, before):
+                                self.doc.timeline.recompute(self.doc)
+                            self.selected_entities = {ent.entity_id}
+                            self.selection_changed.emit()
+                            self.status_message.emit(f"Inserted spline point #{idx + 1}")
+                            self.update()
+                            return
+                        except Exception:
+                            pass
                 if isinstance(ent, SketchText):
                     self.selected_entities = {ent.entity_id}
                     self.selection_changed.emit()
@@ -405,6 +423,9 @@ class ViewportEventsMixin:
                         self._show_element_menu(event, ent)
                     else:
                         self._show_general_menu(event)
+            return
+        if self._spline_drag is not None and event.button() == Qt.MouseButton.LeftButton:
+            self._spline_drag_release()
             return
         if self._dim_drag is not None and event.button() == Qt.MouseButton.LeftButton:
             self._dim_drag_release()

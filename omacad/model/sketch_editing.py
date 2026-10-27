@@ -2,6 +2,7 @@
 
 from typing import List, Tuple, Optional, Dict
 import math
+from omacad.model.sketch_entities import _hermite
 import numpy as np
 import shapely
 from shapely.geometry import LineString, Polygon, Point, MultiPoint
@@ -260,7 +261,8 @@ class SketchEditingMixin:
             elif isinstance(ent, SketchArc):
                 n = SketchArc(self._new_entity_id("arc"), mp(ent.p_start), mp(ent.p_mid), mp(ent.p_end), is_construction=c)
             elif isinstance(ent, SketchSpline):
-                n = SketchSpline(self._new_entity_id("spline"), [mp(p) for p in ent.points], is_construction=c)
+                n = SketchSpline(self._new_entity_id("spline"), [mp(p) for p in ent.points], is_construction=c,
+                                 tangents={k: tuple(a - b for a, b in zip(mp(v), mp((0.0, 0.0)))) for k, v in ent.tangents.items()})
             elif isinstance(ent, SketchSlot):
                 n = SketchSlot(self._new_entity_id("slot"), mp(ent.center1), mp(ent.center2), ent.radius, is_construction=c)
             elif isinstance(ent, SketchText):
@@ -606,6 +608,54 @@ class SketchEditingMixin:
         self.solve_profiles()
         return spline
 
+    def _editable_spline(self, entity_id: str) -> SketchSpline:
+        ent = next((e for e in self.entities if e.entity_id == entity_id), None)
+        if not isinstance(ent, SketchSpline):
+            raise ValueError("Not a spline.")
+        if getattr(ent, "projected", False):
+            raise ValueError("A projected spline cannot be edited.")
+        return ent
+
+    def move_spline_point(self, entity_id: str, index: int, pos) -> None:
+        ent = self._editable_spline(entity_id)
+        ent.points[index] = (float(pos[0]), float(pos[1]))
+        self.solve_profiles()
+
+    def set_spline_tangent(self, entity_id: str, index: int, vec) -> None:
+        ent = self._editable_spline(entity_id)
+        if not 0 <= index < len(ent.points):
+            raise IndexError(index)
+        ent.tangents[index] = (float(vec[0]), float(vec[1]))
+        self.solve_profiles()
+
+    def insert_spline_point(self, entity_id: str, pos) -> int:
+        """Inserts a fit point at the curve sample nearest `pos`, keeping the curve unchanged. Returns its index."""
+        ent = self._editable_spline(entity_id)
+        n = len(ent.points)
+        samples = 16
+        pts = ent.get_points(samples)
+        k = min(range(len(pts) - 1), key=lambda i: _seg_dist(pts[i], pts[i + 1], pos))
+        span = min(k // samples, n - 2)
+        a, b = pts[k], pts[k + 1]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        L = dx * dx + dy * dy
+        f = 0.0 if L == 0 else max(0.0, min(1.0, ((pos[0]-a[0])*dx + (pos[1]-a[1])*dy) / L))
+        t = (k - span * samples + f) / samples
+        p1, p2 = ent.points[span], ent.points[span + 1]
+        m1, m2 = ent.tangent_at(span), ent.tangent_at(span + 1)
+        newp = _hermite(p1, p2, m1, m2, t)
+        # tangent of the curve at the new point, taken per half span (a span is parameter length 1 -> halve it)
+        h = 1e-4
+        q0, q1 = _hermite(p1, p2, m1, m2, max(0.0, t - h)), _hermite(p1, p2, m1, m2, min(1.0, t + h))
+        sc = 0.5 / (min(1.0, t + h) - max(0.0, t - h))
+        d = ((q1[0] - q0[0]) * sc, (q1[1] - q0[1]) * sc)
+        # existing explicit tangents keep their point; shift indices after the insert
+        ent.tangents = {(k2 + 1 if k2 > span else k2): v for k2, v in ent.tangents.items()}
+        ent.points.insert(span + 1, newp)
+        ent.tangents[span + 1] = d
+        self.solve_profiles()
+        return span + 1
+
     def add_slot(self, center1: Tuple[float, float], center2: Tuple[float, float], radius: float, is_construction: bool = False) -> SketchSlot:
         ent_id = self._new_entity_id("slot")
         slot = SketchSlot(ent_id, center1, center2, radius, is_construction=is_construction)
@@ -851,3 +901,10 @@ class SketchEditingMixin:
 
         self.solve_profiles()
         return arc
+
+
+def _seg_dist(a, b, p) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L = dx * dx + dy * dy
+    f = 0.0 if L == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L))
+    return math.hypot(a[0] + f * dx - p[0], a[1] + f * dy - p[1])

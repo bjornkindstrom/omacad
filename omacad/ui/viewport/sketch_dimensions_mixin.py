@@ -353,6 +353,11 @@ class SketchDimensionsMixin:
             heading("Text")
             add("edit_text", "✏️ Edit Text…", "Change the words, the font, the height, the alignment or the path.")
             add("explode_text", "💥 Explode Text", "Turns the text into ordinary lines. It can no longer be edited as text.")
+        else:
+            from omacad.model.sketch_entities import SketchSpline
+            if isinstance(ent, SketchSpline):
+                heading("Spline")
+                add("insert_point", "➕ Insert Fit Point", "Adds a fit point to the curve at the cursor position.")
         menu.addSeparator()
         add("fillet", "╭ Fillet corner…  (F)", "Rounds a corner between lines with an arc.")
         add("offset", "↔️ Offset…  (O)", "Makes a parallel copy at a distance you type (select several, or double-click, to offset a whole shape).")
@@ -369,6 +374,21 @@ class SketchDimensionsMixin:
         if key is None:
             return
         pt = lambda name: [("pt", ent, name)]
+        if key == "insert_point":
+            uv = self.get_sketch_plane_uv(event.position().x(), event.position().y())
+            if uv is not None:
+                before = sk.to_dict()
+                try:
+                    idx = sk.insert_spline_point(ent.entity_id, uv)
+                    if self.doc.record_sketch_change(sk, before):
+                        self.doc.timeline.recompute(self.doc)
+                    self.selected_entities = {ent.entity_id}
+                    self.selection_changed.emit()
+                    self.status_message.emit(f"Inserted spline point #{idx + 1}")
+                    self.update()
+                except Exception as e:
+                    self.status_message.emit(f"Could not insert point: {e}")
+            return
         if key == "edit_text":
             self.text_edit_requested.emit(ent.entity_id)
             return

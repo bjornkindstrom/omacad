@@ -29,6 +29,39 @@ class SketchToolsMixin:
             return None
         show_const = self.sketch_palette.chk_show_construction.isChecked()
         return self.doc.active_sketch.hit_test(uv[0], uv[1], self._entity_tolerance(), include_construction=show_const)
+
+    def _pick_spline_handle(self, x: float, y: float):
+        """Checks if (x, y) hits a fit point or tangent handle on a selected spline.
+        Returns dict(entity, kind: 'point'|'tangent', index: int, handle_sign: float) or None."""
+        if not self._can_select_sketch_entities() or not self.doc.active_sketch:
+            return None
+        sk = self.doc.active_sketch
+        plane = sk.plane
+        sel_splines = [e for e in sk.entities if e.entity_id in self.selected_entities and isinstance(e, SketchSpline)]
+        if not sel_splines:
+            return None
+
+        # Search tangent handles first (tip circles), then fit points
+        tol_px = 9.0
+        for spline in sel_splines:
+            # 1. Tangent handles
+            for i in range(len(spline.points)):
+                pt = spline.points[i]
+                t_vec = spline.tangent_at(i)
+                # Show handle in positive and (if not start) negative direction
+                for sign in (1.0, -1.0) if (0 < i < len(spline.points) - 1) else (1.0 if i == 0 else -1.0,):
+                    tip_uv = (pt[0] + sign * t_vec[0], pt[1] + sign * t_vec[1])
+                    scr = self.world_to_screen(plane.uv_to_world(*tip_uv))
+                    if scr and math.hypot(scr[0] - x, scr[1] - y) <= tol_px:
+                        return {"entity": spline, "kind": "tangent", "index": i, "handle_sign": sign}
+
+            # 2. Fit points
+            for i, pt in enumerate(spline.points):
+                scr = self.world_to_screen(plane.uv_to_world(*pt))
+                if scr and math.hypot(scr[0] - x, scr[1] - y) <= tol_px:
+                    return {"entity": spline, "kind": "point", "index": i, "handle_sign": 1.0}
+
+        return None
     def _update_entity_hover(self, x: float, y: float):
         active = self._can_select_sketch_entities() or (self.doc.active_sketch is not None and (self.sketch_tool in ("DIMENSION", "OFFSET") or self.measure is not None))
         if self.sketch_tool == "TEXT":

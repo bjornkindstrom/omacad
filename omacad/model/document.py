@@ -1758,6 +1758,32 @@ class Document:
         self.selected_body_ids = [b for b in self.selected_body_ids if b in self.bodies]
         self.notify_changed()
 
+    def _edit_spline(self, sketch_id: str, method: str, *args):
+        sketch = self.sketches.get(sketch_id)
+        if not sketch:
+            raise KeyError(sketch_id)
+        before = sketch.to_dict()
+        try:
+            result = getattr(sketch, method)(*args)
+        except Exception:
+            sketch.restore_from_dict(before)
+            raise
+        if self.record_sketch_change(sketch, before):
+            self.timeline.recompute(self)
+        return result
+
+    def move_spline_point(self, sketch_id: str, entity_id: str, index: int, pos):
+        """One undo step: moves a spline fit point."""
+        return self._edit_spline(sketch_id, "move_spline_point", entity_id, index, pos)
+
+    def insert_spline_point(self, sketch_id: str, entity_id: str, pos) -> int:
+        """One undo step: adds a fit point on the curve nearest pos."""
+        return self._edit_spline(sketch_id, "insert_spline_point", entity_id, pos)
+
+    def set_spline_tangent(self, sketch_id: str, entity_id: str, index: int, vec):
+        """One undo step: sets the tangent handle at a fit point."""
+        return self._edit_spline(sketch_id, "set_spline_tangent", entity_id, index, vec)
+
     def delete_sketch_entities(self, sketch_id: str, entity_ids) -> int:
         """Deletes sketch entities and recomputes features that depend on the sketch."""
         sketch = self.sketches.get(sketch_id)

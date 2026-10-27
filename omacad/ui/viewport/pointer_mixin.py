@@ -291,6 +291,25 @@ class PointerMixin:
 
         # Press on a sketch element: select it and prepare a drag-move
         if event.button() == Qt.MouseButton.LeftButton and self._can_select_sketch_entities():
+            # Check spline point or tangent handle first
+            handle = self._pick_spline_handle(x, y)
+            if handle is not None:
+                sk = self.doc.active_sketch
+                ent = handle["entity"]
+                if not getattr(ent, "projected", False):
+                    self._spline_drag = {
+                        "sketch_id": sk.sketch_id,
+                        "entity_id": ent.entity_id,
+                        "kind": handle["kind"],
+                        "index": handle["index"],
+                        "handle_sign": handle["handle_sign"],
+                        "before": sk.to_dict(),
+                        "press_uv": self.get_sketch_plane_uv(x, y),
+                        "moved": False,
+                    }
+                    self._press_pos = None
+                    return
+
             ent = self._pick_entity(x, y)
             if ent is not None:
                 if event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
@@ -394,6 +413,9 @@ class PointerMixin:
                 self._dim_hover_uv = uv
                 _kind, measured, label = self._dim_points_kind(self._dim_place, uv[0], uv[1])
                 self._dim_box.set_measure(label, measured)
+        if self._spline_drag is not None:
+            self._spline_drag_move(event)
+            return
         if self._dim_drag is not None:
             self._dim_drag_move(event)
             return
