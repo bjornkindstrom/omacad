@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QMessageBox, QColorDialog, QPushButton
+from PySide6.QtWidgets import QMessageBox, QColorDialog, QPushButton, QDialogButtonBox
 from omacad.model.timeline import (
     ExtrudeFeature, SplitBodyFeature, ShellFeature, MoveFeature
 )
@@ -564,9 +564,14 @@ class BodyPromptsMixin:
 
         dlg = QColorDialog(initial, self)
         dlg.setWindowTitle(f"Färg / Appearance – {body_name}")
+        dlg.setOption(QColorDialog.ColorDialogOption.DontUseNativeDialog, True)
 
         btn_reset = QPushButton("Återställ till ofärgad (Reset)")
-        dlg.layout().addWidget(btn_reset)
+        box = dlg.findChild(QDialogButtonBox)
+        if box is not None:
+            box.addButton(btn_reset, QDialogButtonBox.ButtonRole.ActionRole)
+        elif dlg.layout() is not None:
+            dlg.layout().addWidget(btn_reset)
 
         reset_clicked = [False]
 
