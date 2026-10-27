@@ -107,6 +107,7 @@ class Viewport3D(DimensionOverlayMixin, ViewportEventsMixin, MeasureMixin, Conte
     move_gizmo_axis_selected = Signal(str)
     body_clicked = Signal(str)  # body_id of clicked 3D body
     move_body_requested = Signal(str)  # right-click on a face moves its owning whole body
+    body_color_requested = Signal(str)  # right-click on a face sets its owning whole body color
     plane_clicked = Signal(str)  # an origin plane ("XY") or construction plane id clicked without a tool
     text_place_requested = Signal(object, object)   # Text tool click: (anchor uv or None, path entity id or None)
     text_edit_requested = Signal(str)               # a text element chosen for editing (Text tool click, right-click menu)

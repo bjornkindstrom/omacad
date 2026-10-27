@@ -222,6 +222,10 @@ class Timeline:
         for bid in hidden:       # the rebuilt bodies are fresh objects: a body the user hid stays hidden
             if bid in doc.bodies:
                 doc.bodies[bid].visible = False
+        body_colors = getattr(doc, "body_colors", {})
+        for bid, col in body_colors.items():
+            if bid in doc.bodies:
+                doc.bodies[bid].color = list(col)
         if active and active.sketch_id not in doc.sketches:
             doc.sketches[active.sketch_id] = active
 

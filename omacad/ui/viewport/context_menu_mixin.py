@@ -73,6 +73,8 @@ class ContextMenuMixin:
             self.offset_face_requested.emit(arg)
         elif kind == "offset_plane":
             self.offset_base_picked.emit(arg)
+        elif kind == "body_color":
+            self.body_color_requested.emit(arg)
         elif kind == "move_body":
             self.move_body_requested.emit(arg)
         elif kind == "join_bodies":
@@ -256,6 +258,7 @@ class ContextMenuMixin:
         acts: dict = {}
         if face.body_id in self.doc.bodies:
             menu.addSeparator()
+            acts[theme.action_with_icon(menu, "🎨 Appearance / Färg…")] = ("body_color", face.body_id)
             acts[theme.action_with_icon(menu, "↔️ Move this Body…")] = ("move_body", face.body_id)
             acts[theme.action_with_icon(menu, "⬇️ Lay this face on the ground (XY)")] = ("lay", "ground")
             acts[theme.action_with_icon(menu, "⬇️ Lay this face on a face or plane…")] = ("lay", "pick")

@@ -100,6 +100,9 @@ class Document:
         # Saved section views: id -> dict(name, origin, normal, offset, flip, active); at most one is active
         self.sections: Dict[str, dict] = {}
 
+        # Custom body colors: body_id -> [r, g, b, a]
+        self.body_colors: Dict[str, List[float]] = {}
+
         # Canvases / calibrated reference images: id -> dict(name, plane_id, image_data, width_mm, height_mm, origin_uv, rotation_deg, opacity, visible)
         self.canvases: Dict[str, dict] = {}
         # Starred values in named groups (Björn #110): [{"name": ..., "items": [["parameter", fid, key] |
@@ -1578,6 +1581,24 @@ class Document:
         if body_id in self.bodies:
             self.bodies[body_id].visible = not self.bodies[body_id].visible
             self.notify_changed()
+
+    DEFAULT_BODY_COLOR = [0.72, 0.77, 0.82, 1.0]
+
+    @undoable("Change Body Color")
+    def set_body_color(self, body_id: str, color: Optional[List[float]]) -> None:
+        """Sets a body's color [r, g, b, a] (0..1) or resets to default if None."""
+        if color is None:
+            self.body_colors.pop(body_id, None)
+            if body_id in self.bodies:
+                self.bodies[body_id].color = list(self.DEFAULT_BODY_COLOR)
+        else:
+            rgba = [float(c) for c in color]
+            if len(rgba) == 3:
+                rgba.append(1.0)
+            self.body_colors[body_id] = rgba
+            if body_id in self.bodies:
+                self.bodies[body_id].color = list(rgba)
+        self.notify_changed()
 
     @staticmethod
     def angled_plane(normal, origin, distance: float = 0.0, angle: float = 0.0, axis_point=None, axis_dir=None):

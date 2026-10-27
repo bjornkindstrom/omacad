@@ -46,6 +46,7 @@ class BrowserTree(QWidget):
     find_in_window_requested = Signal(str, str)      # kind ("body"/"sketch"), id
     find_in_timeline_requested = Signal(str, str)
     delete_sketch_requested = Signal(str)
+    body_color_requested = Signal(str)
 
     def __init__(self, document: Document, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -650,6 +651,8 @@ class BrowserTree(QWidget):
             add("🗑️ Delete", lambda: self.doc.delete_construction_plane(item_id))
 
         elif item_type == "body":
+            add("🎨 Appearance / Färg…", lambda: self.body_color_requested.emit(item_id))
+            menu.addSeparator()
             add("✥ Move…", lambda: self.move_body_requested.emit(item_id))
             add("🐚 Shell…", lambda: self.shell_body_requested.emit(item_id))
             add("🪚 Split Body…", lambda: self.split_body_requested.emit(item_id, ""))

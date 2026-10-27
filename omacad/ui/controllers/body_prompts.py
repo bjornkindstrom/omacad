@@ -4,7 +4,8 @@ import os
 from typing import Optional
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QMessageBox, QColorDialog, QPushButton
 from omacad.model.timeline import (
     ExtrudeFeature, SplitBodyFeature, ShellFeature, MoveFeature
 )
@@ -540,3 +541,50 @@ class BodyPromptsMixin:
 
         refresh_preview()
         dlg.show()
+
+    def prompt_body_color(self, body_id: str = ""):
+        """Prompt to change the color of a body or reset to default uncolored."""
+        if not body_id:
+            if self.doc.selected_body_ids:
+                body_id = self.doc.selected_body_ids[0]
+            elif self.doc.bodies:
+                body_id = next(iter(self.doc.bodies))
+        if not body_id or body_id not in self.doc.bodies:
+            return
+
+        body = self.doc.bodies[body_id]
+        body_name = body.name or body_id
+
+        # Determine current color
+        cur_rgba = getattr(self.doc, "body_colors", {}).get(body_id)
+        if cur_rgba is None:
+            initial = QColor(int(body.color[0] * 255), int(body.color[1] * 255), int(body.color[2] * 255))
+        else:
+            initial = QColor(int(cur_rgba[0] * 255), int(cur_rgba[1] * 255), int(cur_rgba[2] * 255))
+
+        dlg = QColorDialog(initial, self)
+        dlg.setWindowTitle(f"Färg / Appearance – {body_name}")
+
+        btn_reset = QPushButton("Återställ till ofärgad (Reset)")
+        dlg.layout().addWidget(btn_reset)
+
+        reset_clicked = [False]
+
+        def on_reset():
+            reset_clicked[0] = True
+            dlg.accept()
+
+        btn_reset.clicked.connect(on_reset)
+
+        if dlg.exec():
+            if reset_clicked[0]:
+                self.doc.set_body_color(body_id, None)
+                self.status_label.setText(f"Återställde {body_name} till ofärgad.")
+            else:
+                col = dlg.selectedColor()
+                if col.isValid():
+                    rgba = [col.redF(), col.greenF(), col.blueF(), 1.0]
+                    self.doc.set_body_color(body_id, rgba)
+                    self.status_label.setText(f"Ändrade färg på {body_name}.")
+            self.viewport.update()
+
