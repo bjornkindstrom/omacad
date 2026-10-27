@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.9.80.69 - 2026-10-27
+
+### Fixed
+- Construction button (#125): the ribbon button now always mirrors the real construction mode, and the mode resets when a sketch ends, so the button no longer looks off while construction is on.
+
 ## 0.9.9.80.68 - 2026-10-26
 
 ### Added

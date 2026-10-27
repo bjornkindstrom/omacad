@@ -202,9 +202,8 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
         self.viewport.sketch_tool_changed.connect(self.sync_sketch_tool_from_viewport)
         self.ribbon.toggle_construction_clicked.connect(self.viewport.toggle_construction_mode)
         self.ribbon.construction_tool_requested.connect(self.start_construction_tool)
-        self.viewport.construction_mode_changed.connect(
-            lambda val: getattr(self.ribbon, "btn_construct", None) and self.ribbon.btn_construct.setChecked(val)
-        )
+        self.viewport.construction_mode_changed.connect(self._sync_construction_button)
+        self.doc.add_change_listener(self._reset_construction_outside_sketch)
         self.ribbon.finish_sketch_clicked.connect(self.on_finish_sketch)
         self.ribbon.fix_sketch_clicked.connect(self.on_fix_sketch)
         self.viewport.finish_sketch_requested.connect(self.on_finish_sketch)
@@ -622,6 +621,18 @@ class MainWindow(QMainWindow, ToolPromptsMixin, TextPromptsMixin, EmbossPromptMi
             return
         if tool_name != "ROTATE":
             self.status_label.setText(f"Sketch Tool: {tool_name}. Click on grid plane to place points.")
+
+    def _sync_construction_button(self, val=None):
+        """The viewport's construction mode is the truth; the ribbon button only mirrors it."""
+        btn = getattr(self.ribbon, "btn_construct", None)
+        if btn is not None:
+            btn.setChecked(self.viewport.construction_mode if val is None else bool(val))
+
+    def _reset_construction_outside_sketch(self):
+        if self.doc.active_sketch is None and self.viewport.construction_mode:
+            self.viewport.toggle_construction_mode()
+        else:
+            self._sync_construction_button()
 
     def sync_sketch_tool_from_viewport(self, tool_name: str):
         self.ribbon.btn_line.setChecked(tool_name == "LINE")
