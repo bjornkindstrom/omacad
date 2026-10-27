@@ -6,6 +6,7 @@
 - Construction button (#125): the ribbon button now always mirrors the real construction mode, and the mode resets when a sketch ends, so the button no longer looks off while construction is on. The checked state already has a distinct fill (`QToolButton:checked`) in the themes checked, so no extra `suggested` style was added.
 
 ### Added
+- Fully constrained sketches are now drawn with black lines (Fusion 360-style) instead of cyan when degrees of freedom reach 0 (`dof == 0`). A subtle light rim keeps the black lines crisp on dark canvas/models.
 - Spline point editing and tangent handles (#130): selected splines show fit points and green circular tangent handles (Fusion 360-style). Dragging fit points moves them; dragging tangent handles adjusts the curvature vector. Double-clicking a spline or right-clicking "Insert Fit Point" adds new points along the curve.
 - Sketch Offset now supports splines: independent sampled spline copies with preview, save/load and undo. Positive distances offset open curves to the left and closed curves outward; collapsed offsets leave the sketch unchanged.
 ## 0.9.9.80.68 - 2026-10-26

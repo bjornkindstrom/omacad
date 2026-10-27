@@ -18,6 +18,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "arrow_color": None,                # None = follow theme highlight
     "measure_color": "#FFAA3C",         # Accent orange
     "sketch_line_color": "#4CE0FF",     # Vibrant cyan
+    "sketch_fully_constrained_color": "#000000",  # Black when fully constrained (Fusion 360-style)
     "sketch_construction_color": "#FFCC4D", # Amber / gold
     "sketch_finished_color": None,      # lines of sketches that are not being edited; None = a grey that suits the theme
     "highlight_color": None,            # None = follow theme highlight
@@ -178,6 +179,10 @@ class SettingsManager(QObject):
     def sketch_line_color_rgb01(self) -> Tuple[float, float, float]:
         rgb = hex_to_rgb01(self.get("sketch_line_color"))
         return rgb if rgb is not None else (0.30, 0.88, 1.0)
+
+    def sketch_fully_constrained_color_rgb01(self) -> Tuple[float, float, float]:
+        rgb = hex_to_rgb01(self.get("sketch_fully_constrained_color"))
+        return rgb if rgb is not None else (0.05, 0.05, 0.06)
 
     def sketch_construction_color_rgb01(self) -> Tuple[float, float, float]:
         rgb = hex_to_rgb01(self.get("sketch_construction_color"))

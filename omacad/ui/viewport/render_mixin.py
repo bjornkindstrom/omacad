@@ -505,7 +505,7 @@ class RenderGLMixin:
         return dash_lines(flat_segments, self.world_to_screen, dash_px, gap_px)
 
     def draw_thick_lines(self, mvp: np.ndarray, flat_segments, rgba, width_px: float, halo: bool = True,
-                         halo_px: float = 3.5):
+                         halo_px: float = 3.5, halo_color=None):
         """Draws line segments (flat [x1,y1,z1,x2,y2,z2,...]) as screen-space quads.
         A dark halo under the coloured core keeps them readable on light faces and dark grid alike."""
         if self.prog_thick is None or self.vbo_thick is None:
@@ -541,7 +541,8 @@ class RenderGLMixin:
 
         passes = []
         if halo:
-            passes.append(((0.03, 0.04, 0.06, 0.85), width_px + halo_px))
+            h_col = halo_color if halo_color is not None else (0.03, 0.04, 0.06, 0.85)
+            passes.append((h_col, width_px + halo_px))
         passes.append((rgba, width_px))
         for col, w in passes:
             GL.glUniform4f(loc_col, *col)
@@ -625,8 +626,15 @@ class RenderGLMixin:
             halo_px = 0.4 + 0.8 * line_w             # a thin dark rim, not a second line
             if normal_lines:
                 if is_active:
-                    scol = get_settings().sketch_line_color_rgb01()
-                    self.draw_thick_lines(mvp, normal_lines, (*scol, 1.0), line_w, halo_px=halo_px)
+                    is_fully_constrained = (sketch.dof == 0)
+                    if is_fully_constrained:
+                        scol = get_settings().sketch_fully_constrained_color_rgb01()
+                        # On dark background or canvas, a subtle lighter rim keeps black lines visible
+                        halo_col = (0.75, 0.78, 0.82, 0.75) if sum(theme.palette().canvas_rgb01()) / 3 < 0.5 else (0.03, 0.04, 0.06, 0.85)
+                    else:
+                        scol = get_settings().sketch_line_color_rgb01()
+                        halo_col = (0.03, 0.04, 0.06, 0.85)
+                    self.draw_thick_lines(mvp, normal_lines, (*scol, 1.0), line_w, halo_px=halo_px, halo_color=halo_col)
                 else:
                     fcol = get_settings().sketch_finished_color_rgb01()    # grey by default (Björn #90)
                     self.draw_thick_lines(mvp, normal_lines, (*fcol, 1.0), line_w, halo=False)   # no dark rim
