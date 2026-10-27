@@ -33,7 +33,7 @@ def test_every_ribbon_command_has_help():
 
 
 def test_search_finds_by_other_words():
-    assert search("hole")[0].title in ("Offset Face", "Circle")
+    assert search("hole")[0].title == "Hole"
     assert "Fillet" in [t.title for t in search("round radius")]
     assert [t.title for t in search("boolean")] == ["Combine"]
     assert search("print")                                       # export to a slicer
