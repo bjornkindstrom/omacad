@@ -34,21 +34,24 @@ def offset_spline(spline, distance: float):
     else:
         result = curve.offset_curve(distance)
         parts = list(result.geoms) if hasattr(result, "geoms") else [result]
-    tolerance = min(0.01, max(0.005, abs(distance) * 0.002))
     return [points for part in parts if not part.is_empty and part.length > EPS
-            for points in [_fit_offset_spline(part, tolerance)] if points]
+            for points in [_fit_offset_spline(part, distance)] if points]
 
 
-def _fit_offset_spline(part, tolerance):
-    """Avoid loops from interpolating unevenly spaced buffer/offset vertices and cap point counts."""
+def _fit_offset_spline(part, distance):
+    """Avoid loops from interpolating unevenly spaced buffer/offset vertices and pick
+    a compact set of control points (aiming for ~6-8 points on open splines) while
+    preserving curve shape and quality."""
     from shapely.geometry import LineString, Polygon
     from omacad.model.sketch_entities import SketchSpline
 
     closed = getattr(part, "is_ring", False)
-    # Scale allowed deviation by curve size so large offsets don't explode to thousands of points
-    max_dev = max(0.008, tolerance * 4, part.length * 0.001)
+    # Balanced tolerance: up to 0.18 mm or 8% of distance for sparse, clean control points
+    max_dev = max(0.18, abs(distance) * 0.08)
 
     def is_acceptable(pts):
+        if len(pts) < 2:
+            return False
         fit_pts = SketchSpline("", pts).get_points()
         if closed:
             poly = Polygon(fit_pts)
@@ -57,19 +60,42 @@ def _fit_offset_spline(part, tolerance):
         fitted = LineString(fit_pts)
         return fitted.is_simple and fitted.hausdorff_distance(part) <= max_dev
 
-    # 1. Try Douglas-Peucker simplified points
-    points = list(part.simplify(tolerance).coords)
-    if is_acceptable(points):
-        return points
+    # 1. Try Douglas-Peucker simplification with aggressive tolerance ladder
+    ladder = [0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0.02, 0.01]
+    for tol in ladder:
+        try:
+            simp = part.simplify(tol)
+            pts = list(simp.coords)
+            if is_acceptable(pts):
+                # On open curves, if slightly above 8 points (e.g. 9-11), prune least-critical points down to ~8
+                if not closed and len(pts) > 8:
+                    best_pts = pts
+                    while len(best_pts) > 8:
+                        candidate = None
+                        min_h = 1e9
+                        for i in range(1, len(best_pts) - 1):
+                            cand = best_pts[:i] + best_pts[i + 1:]
+                            h = LineString(SketchSpline("", cand).get_points()).hausdorff_distance(part)
+                            if h < min_h:
+                                min_h = h
+                                candidate = cand
+                        if candidate and min_h <= max_dev:
+                            best_pts = candidate
+                        else:
+                            break
+                    if len(best_pts) <= 8 and is_acceptable(best_pts):
+                        return best_pts
+                return pts
+        except Exception:
+            continue
 
-    # 2. If unevenly spaced vertices cause self-intersection or deviation, uniformly resample
-    # using moderate point counts (e.g. 32 to 128) rather than exploding to thousands of points
-    for count in (32, 48, 64, 96, 128):
+    # 2. Resample fallback using compact point counts
+    for count in (6, 8, 12, 16, 24, 32):
         points = [part.interpolate(i / count, normalized=True).coords[0] for i in range(count + 1)]
         if is_acceptable(points):
             return points
 
-    return points
+    return list(part.coords)
 
 
 class Seg:

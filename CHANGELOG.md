@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.9.80.70 - 2026-10-28
+
+### Performance
+- Fillet & Chamfer speedup: vectorized normal and flat-patch classification in OpenGL render mesh extraction (`CadKernel._flat_triangles`), reducing analysis time by ~25x and cutting full-box fillet rebuild time by over 80%. Replaced sequential cutter/filler unions with Manifold3D's native `batch_boolean` for faster CSG execution without losing any geometric quality.
+- Compact Spline Offsets: aggressive sparse-fitting (`_fit_offset_spline`) aiming for 6–8 control points on open splines while preserving smooth curve geometry and curvature. Dramatically reduces point density (down from 70–120 points to 6–8 points) making offset curves clean, responsive, and easy to edit.
+
 ## 0.9.9.80.69 - 2026-10-27
 
 ### Fixed

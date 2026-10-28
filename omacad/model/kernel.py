@@ -721,13 +721,22 @@ class CadKernel:
         directions = {}          # patch -> first sharp edge direction
         flat_roots = set()
         edges = tm.face_adjacency_edges[sharp]
-        for (a, b), (p, q) in zip(adj[sharp], edges):
-            d = v[q] - v[p]
-            d = d / (np.linalg.norm(d) or 1.0)
+        diffs = v[edges[:, 1]] - v[edges[:, 0]]
+        norms = np.linalg.norm(diffs, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        d_vec = diffs / norms
+        for (a, b), d in zip(adj[sharp], d_vec):
             for patch in (root(a), root(b)):
-                first = directions.setdefault(patch, d)
-                if np.linalg.norm(np.cross(first, d)) > 0.1:
-                    flat_roots.add(patch)
+                first = directions.get(patch)
+                if first is None:
+                    directions[patch] = d
+                else:
+                    # Inline cross-product norm squared: avoids expensive numpy dispatch per edge
+                    cx = first[1] * d[2] - first[2] * d[1]
+                    cy = first[2] * d[0] - first[0] * d[2]
+                    cz = first[0] * d[1] - first[1] * d[0]
+                    if (cx * cx + cy * cy + cz * cz) > 0.01:
+                        flat_roots.add(patch)
         return np.array([root(i) in flat_roots for i in range(len(f))], dtype=bool)
 
     @staticmethod

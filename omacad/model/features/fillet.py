@@ -742,13 +742,20 @@ class FilletFeature(Feature):
                 continue
             try:
                 result = body.manifold
-                if cut.get(body_id):
-                    combined = cut[body_id][0]
-                    for t in cut[body_id][1:]:
-                        combined = combined + t
+                cut_tools = cut.get(body_id)
+                if cut_tools:
+                    if len(cut_tools) == 1:
+                        combined = cut_tools[0]
+                    else:
+                        combined = m3d.Manifold.batch_boolean(cut_tools, m3d.OpType.Add)
                     result = result - combined
-                for t in add.get(body_id, []):
-                    result = result + t
+                add_tools = add.get(body_id)
+                if add_tools:
+                    if len(add_tools) == 1:
+                        combined_add = add_tools[0]
+                    else:
+                        combined_add = m3d.Manifold.batch_boolean(add_tools, m3d.OpType.Add)
+                    result = result + combined_add
             except Exception:
                 self.skipped += len(cut.get(body_id, [])) + len(add.get(body_id, []))
                 continue
