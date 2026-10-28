@@ -4,6 +4,7 @@
 
 ### Fixed
 - Construction button (#125): the ribbon button now always mirrors the real construction mode, and the mode resets when a sketch ends, so the button no longer looks off while construction is on. The checked state already has a distinct fill (`QToolButton:checked`) in the themes checked, so no extra `suggested` style was added.
+- Micro-facet sliver cleanup on chamfers and boolean operations: tightened facet topology classification (`SLIVER_AREA = 0.03 mm²`, `SLIVER_MIN_WIDTH = 0.04 mm`) so hair-thin slivers and leftover chips where chamfers meet threads/cuts no longer fragment planar faces into clickable micro-slivers.
 
 ### Added
 - Body color & Appearance picker: Right-click any 3D body in the browser or directly on a body face in the 3D viewport to choose "🎨 Appearance / Färg…". Opens a full color picker dialog with an "Återställ till ofärgad (Reset)" button to quickly restore the default solid appearance. Color customizations support full undo/redo, timeline recomputation, and file save/load.

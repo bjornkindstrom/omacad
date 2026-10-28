@@ -2,7 +2,8 @@
 
 import numpy as np
 
-SLIVER_AREA = 1e-3  # mm^2: boolean operations leave hair-thin triangles; they are not faces
+SLIVER_AREA = 0.03  # mm^2: boolean operations leave hair-thin triangles; they are not faces
+SLIVER_MIN_WIDTH = 0.04  # mm: strips narrower than this are boolean cut leftovers or facet artifacts
 
 
 def _group_min_width(v, f, tm, tri_ids) -> float:
@@ -44,10 +45,10 @@ def _coplanar(a_idx, b_idx, normals, v, f, areas, tol) -> bool:
     return small and d > 1.0 - 1e-4 and off < 1e-3
 
 def _sliver_roots(v, f, tm, groups) -> set:
-    """Groups that are leftovers of boolean operations: almost no area, or hair-thin (< 0.02 mm wide)."""
+    """Groups that are leftovers of boolean operations: almost no area, or hair-thin (< SLIVER_MIN_WIDTH wide)."""
     out = set()
     for r, ids in groups.items():
-        if float(tm.area_faces[ids].sum()) < SLIVER_AREA or _group_min_width(v, f, tm, ids) < 0.02:
+        if float(tm.area_faces[ids].sum()) < SLIVER_AREA or _group_min_width(v, f, tm, ids) < SLIVER_MIN_WIDTH:
             out.add(r)
     return out
 
