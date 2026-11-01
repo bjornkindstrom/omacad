@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.9.80.71 - 2026-11-01
+
+### Changed
+- Linked objects now follow their original completely: steps added to the original after the link (shell, fillet, extrude…) also appear on the linked copy. The link moves behind the original's new steps in the timeline, and the copy's own steps move with it. A link made from an older step stays frozen at that step.
+- Copies (linked and independent) are placed to the right of the original (its width plus half of it, at least 5 mm) so they never touch; a linked copy keeps its distance when the original grows.
+
+### Added
+- A small chain-link badge above every linked body in the 3D view (blue = follows the original, grey = frozen at an older step).
+
 ## 0.9.9.80.70 - 2026-10-28
 
 ### Performance

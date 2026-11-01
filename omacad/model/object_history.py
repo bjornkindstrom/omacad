@@ -84,6 +84,7 @@ class ObjectHistory:
         self.owners = {k: v for k, v in self.owners.items() if k in valid}
         self.outputs = {k: v for k, v in self.outputs.items() if k in valid}
         objects, bodies, sketches, last_body = {}, {}, {}, {}
+        position = {f.feature_id: i for i, f in enumerate(features)}
         states = getattr(doc, 'step_states', {})
         state_ids = getattr(doc.timeline, '_step_feature_ids', ())
         for index, feat in enumerate(features):
@@ -143,7 +144,8 @@ class ObjectHistory:
             deps += [s for s in self.dependencies.get(fid, []) if s in valid]
             if len(obj.feature_ids) > 1:
                 deps.append(obj.feature_ids[-2])
-            self.dependencies[fid] = list(dict.fromkeys(d for d in deps if d != fid))
+            # only earlier steps: a linked object moved behind its original's new steps leaves no backward link
+            self.dependencies[fid] = list(dict.fromkeys(d for d in deps if d != fid and position.get(d, index) < index))
             if feat.feature_type == 'sketch':
                 sketches[feat.sketch.sketch_id] = fid
             tool = bodies.get(getattr(feat, 'tool_body_id', None))
