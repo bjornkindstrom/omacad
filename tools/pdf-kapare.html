@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF-kapare</title>
+<style>
+:root{--bg:#f4f5f7;--panel:#fff;--text:#1d2025;--muted:#6a707a;--border:#d5d9e0;--accent:#2563eb;--on-accent:#fff;--sel:rgba(37,99,235,.28);--guide:#e11d48}
+@media (prefers-color-scheme:dark){:root{--bg:#16181c;--panel:#20242a;--text:#e6e8eb;--muted:#9aa1ab;--border:#363b44;--accent:#5b8cff;--on-accent:#0b1020;--sel:rgba(91,140,255,.35);--guide:#fb7185}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,sans-serif;display:flex;flex-direction:column;height:100vh}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border)}
+h1{font-size:16px;margin:0 8px 0 0}
+button,select,input[type=number]{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 10px}
+button{cursor:pointer}button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.sep{width:1px;align-self:stretch;background:var(--border);margin:0 4px}
+main{flex:1;display:flex;min-height:0}
+#viewer{flex:1;overflow:auto;padding:20px;text-align:center}
+#drop{margin:15vh auto;max-width:420px;padding:40px 20px;border:2px dashed var(--border);border-radius:12px;color:var(--muted)}
+#viewer.over #drop{border-color:var(--accent)}
+#stage{position:relative;display:inline-block;box-shadow:0 2px 12px rgba(0,0,0,.25);background:#fff;margin:auto;touch-action:none}
+#stage canvas{display:block}
+#cells,#guides{position:absolute;inset:0}
+.cell{position:absolute;border:1px dashed rgba(0,0,0,.25);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:#334}
+.cell:hover{background:rgba(37,99,235,.12)}
+.cell.on{background:var(--sel);border:2px solid var(--accent)}
+.cell b{background:rgba(255,255,255,.85);border-radius:10px;padding:0 6px;opacity:0}
+.cell.on b,.cell:hover b{opacity:1}
+.guide{position:absolute;background:var(--guide);z-index:2}
+.guide.v{top:0;bottom:0;width:1px;cursor:ew-resize}
+.guide.h{left:0;right:0;height:1px;cursor:ns-resize}
+.guide::before{content:"";position:absolute}
+.guide.v::before{left:-5px;right:-5px;top:0;bottom:0}
+.guide.h::before{top:-5px;bottom:-5px;left:0;right:0}
+.guide .x{position:absolute;width:18px;height:18px;line-height:16px;text-align:center;border-radius:50%;background:var(--guide);color:#fff;font-size:13px;cursor:pointer;display:none}
+.guide.v .x{top:4px;left:-9px}.guide.h .x{left:4px;top:-9px}
+.guide:hover .x,.guide.drag .x{display:block}
+aside{width:260px;background:var(--panel);border-left:1px solid var(--border);padding:12px;overflow:auto}
+aside h2{font-size:13px;margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+aside h2:first-child{margin-top:0}
+.row{display:flex;gap:6px;align-items:center;margin:4px 0}
+.row input[type=number]{width:90px}
+.row span{flex:1;color:var(--muted)}
+.hint{color:var(--muted);font-size:12px}
+@media (max-width:760px){main{flex-direction:column}aside{width:auto;border-left:0;border-top:1px solid var(--border);max-height:40vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>PDF-kapare</h1>
+  <button id="open" class="primary">Öppna PDF…</button>
+  <input id="file" type="file" accept="application/pdf" hidden>
+  <span class="sep"></span>
+  <button id="prev" disabled>◀</button>
+  <span id="pageInfo">–</span>
+  <button id="next" disabled>▶</button>
+  <span class="sep"></span>
+  <button id="zout" disabled>−</button>
+  <button id="zin" disabled>+</button>
+  <button id="fit" disabled>Anpassa</button>
+</header>
+<main>
+  <div id="viewer">
+    <div id="drop">Dra in en PDF här eller klicka på <b>Öppna PDF…</b></div>
+    <div id="stage" hidden><canvas id="canvas"></canvas><div id="cells"></div><div id="guides"></div></div>
+  </div>
+  <aside>
+    <h2>Hjälplinjer (denna sida)</h2>
+    <div class="row">
+      <button id="addV" disabled>＋ Vertikal</button>
+      <button id="addH" disabled>＋ Horisontell</button>
+    </div>
+    <div class="hint">Dra linjen för att flytta den. Håll musen över den och klicka × för att ta bort.</div>
+    <div id="list"></div>
+    <div class="row"><button id="clearGuides" disabled>Ta bort alla linjer</button></div>
+
+    <h2>Markering</h2>
+    <div class="hint">Klicka på rutorna mellan linjerna för att välja vilka som ska sparas.</div>
+    <div class="row">
+      <button id="selAll" disabled>Alla</button>
+      <button id="selNone" disabled>Ingen</button>
+      <span id="selCount"></span>
+    </div>
+
+    <h2>Spara</h2>
+    <div class="row"><span>Upplösning</span>
+      <select id="dpi"><option value="72">72 dpi</option><option value="150" selected>150 dpi</option><option value="200">200 dpi</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></div>
+    <div class="row"><span>Format</span>
+      <select id="fmt"><option value="png">PNG</option><option value="jpg">JPG</option></select></div>
+    <div class="row"><span>Markerade på</span>
+      <select id="scope"><option value="page">denna sida</option><option value="all">alla sidor</option></select></div>
+    <div class="row"><button id="saveZip" class="primary" disabled>Spara som ZIP</button></div>
+    <div class="row"><button id="saveEach" disabled>Spara som separata filer</button></div>
+    <div id="status" class="hint"></div>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const PDF_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+let pdf = null, pdfName = "dokument", pageNum = 1, zoom = 1; // zoom = css px per pdf point
+let pageSize = {w: 595, h: 842};
+const guides = {}; // page -> {v:[fractions], h:[fractions]}
+const picks = {};  // page -> [[fx, fy]] clicked points; a cell is selected if it contains one
+let renderTask = null, activeGuide = null;
+const dpr = window.devicePixelRatio || 1;
+
+const status = t => $("status").textContent = t || "";
+const G = p => guides[p || pageNum] || (guides[p || pageNum] = {v: [], h: []});
+const P = p => picks[p || pageNum] || (picks[p || pageNum] = []);
+const mm = pt => pt * 25.4 / 72;
+
+async function initWorker() {
+  try {
+    const src = await (await fetch(PDF_BASE + "pdf.worker.min.js")).text();
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([src], {type: "text/javascript"}));
+  } catch (e) { status("Kunde inte ladda PDF-motorn (kräver internet första gången): " + e.message); }
+}
+const workerReady = initWorker();
+
+async function openFile(file) {
+  if (!file) return;
+  await workerReady;
+  try {
+    status("Läser " + file.name + "…");
+    const doc = await pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+    pdf = doc; pdfName = file.name.replace(/\.pdf$/i, "");
+    for (const k in guides) delete guides[k];
+    for (const k in picks) delete picks[k];
+    pageNum = 1;
+    $("drop").hidden = true; $("stage").hidden = false;
+    for (const id of ["zout", "zin", "fit", "addV", "addH", "selAll", "selNone"]) $(id).disabled = false;
+    await fitWidth();
+    status("");
+  } catch (e) { status("Kunde inte öppna PDF: " + e.message); }
+}
+
+async function fitWidth() {
+  const page = await pdf.getPage(pageNum);
+  const vp = page.getViewport({scale: 1});
+  zoom = Math.max(0.1, ($("viewer").clientWidth - 40) / vp.width);
+  return render();
+}
+
+async function render() {
+  if (!pdf) return;
+  const page = await pdf.getPage(pageNum);
+  const base = page.getViewport({scale: 1});
+  pageSize = {w: base.width, h: base.height};
+  const vp = page.getViewport({scale: zoom * dpr});
+  const canvas = $("canvas");
+  canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+  canvas.style.width = base.width * zoom + "px"; canvas.style.height = base.height * zoom + "px";
+  $("stage").style.width = base.width * zoom + "px"; $("stage").style.height = base.height * zoom + "px";
+  if (renderTask) renderTask.cancel();
+  renderTask = page.render({canvasContext: canvas.getContext("2d"), viewport: vp});
+  try { await renderTask.promise; } catch (e) { if (e.name !== "RenderingCancelledException") throw e; }
+  $("pageInfo").textContent = "Sida " + pageNum + " / " + pdf.numPages;
+  $("prev").disabled = pageNum <= 1; $("next").disabled = pageNum >= pdf.numPages;
+  drawGuides(); drawCells(); drawList();
+}
+
+// ---- guides -------------------------------------------------------------
+function drawGuides() {
+  const layer = $("guides"); layer.innerHTML = "";
+  const W = pageSize.w * zoom, H = pageSize.h * zoom;
+  for (const dir of ["v", "h"]) {
+    G()[dir].forEach((f, i) => {
+      const el = document.createElement("div");
+      el.className = "guide " + dir;
+      el.style[dir === "v" ? "left" : "top"] = f * (dir === "v" ? W : H) + "px";
+      const x = document.createElement("span"); x.className = "x"; x.textContent = "×"; x.title = "Ta bort";
+      x.addEventListener("pointerdown", e => e.stopPropagation());
+      x.addEventListener("click", e => { e.stopPropagation(); removeGuide(dir, i); });
+      el.appendChild(x);
+      el.addEventListener("pointerdown", e => startDrag(e, el, dir, i));
+      layer.appendChild(el);
+    });
+  }
+}
+
+function startDrag(e, el, dir, i) {
+  e.preventDefault(); activeGuide = {dir, i};
+  el.setPointerCapture(e.pointerId); el.classList.add("drag");
+  const rect = $("stage").getBoundingClientRect();
+  const move = ev => {
+    const f = dir === "v" ? (ev.clientX - rect.left) / rect.width : (ev.clientY - rect.top) / rect.height;
+    const c = Math.min(1, Math.max(0, f));
+    G()[dir][i] = c;
+    el.style[dir === "v" ? "left" : "top"] = c * 100 + "%";
+    drawCells();
+  };
+  const up = () => {
+    el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up);
+    G()[dir].sort((a, b) => a - b); activeGuide = null;
+    drawGuides(); drawCells(); drawList();
+  };
+  el.addEventListener("pointermove", move); el.addEventListener("pointerup", up);
+}
+
+function addGuide(dir) {
+  const arr = G()[dir];
+  // put the new line in the middle of the widest gap so lines don't stack
+  const pts = [0, ...arr, 1].sort((a, b) => a - b);
+  let best = 0, at = .5;
+  for (let k = 1; k < pts.length; k++) if (pts[k] - pts[k - 1] > best) { best = pts[k] - pts[k - 1]; at = (pts[k] + pts[k - 1]) / 2; }
+  arr.push(at); arr.sort((a, b) => a - b);
+  drawGuides(); drawCells(); drawList();
+}
+function removeGuide(dir, i) {
+  G()[dir].splice(i, 1); activeGuide = null;
+  drawGuides(); drawCells(); drawList();
+}
+function drawList() {
+  const box = $("list"); box.innerHTML = "";
+  for (const [dir, label, size] of [["v", "Vertikal", pageSize.w], ["h", "Horisontell", pageSize.h]]) {
+    G()[dir].forEach((f, i) => {
+      const row = document.createElement("div"); row.className = "row";
+      const s = document.createElement("span"); s.textContent = label + " " + (i + 1);
+      const inp = document.createElement("input");
+      inp.type = "number"; inp.step = "0.5"; inp.min = 0; inp.max = mm(size).toFixed(1);
+      inp.value = mm(f * size).toFixed(1); inp.title = "Avstånd från " + (dir === "v" ? "vänster" : "överkant") + " i mm";
+      inp.addEventListener("change", () => {
+        const v = parseFloat(inp.value); if (isNaN(v)) return;
+        G()[dir][i] = Math.min(1, Math.max(0, v * 72 / 25.4 / size));
+        G()[dir].sort((a, b) => a - b); drawGuides(); drawCells(); drawList();
+      });
+      const u = document.createElement("small"); u.textContent = "mm";
+      const del = document.createElement("button"); del.textContent = "×"; del.title = "Ta bort";
+      del.addEventListener("click", () => removeGuide(dir, i));
+      row.append(s, inp, u, del); box.appendChild(row);
+    });
+  }
+  $("clearGuides").disabled = !pdf || !(G().v.length + G().h.length);
+}
+
+// ---- cells --------------------------------------------------------------
+function cellsOf(p) {
+  const xs = [0, ...G(p).v, 1].sort((a, b) => a - b), ys = [0, ...G(p).h, 1].sort((a, b) => a - b);
+  const out = []; let n = 0;
+  for (let r = 0; r + 1 < ys.length; r++) for (let c = 0; c + 1 < xs.length; c++) {
+    n++;
+    if (xs[c + 1] - xs[c] < 0.0005 || ys[r + 1] - ys[r] < 0.0005) continue;
+    out.push({r: r + 1, c: c + 1, n, x0: xs[c], x1: xs[c + 1], y0: ys[r], y1: ys[r + 1]});
+  }
+  return out;
+}
+const isOn = (cell, p) => P(p).some(([x, y]) => x >= cell.x0 && x < cell.x1 && y >= cell.y0 && y < cell.y1);
+
+function drawCells() {
+  const layer = $("cells"); layer.innerHTML = "";
+  const cells = cellsOf();
+  for (const cell of cells) {
+    const el = document.createElement("div");
+    el.className = "cell" + (isOn(cell) ? " on" : "");
+    Object.assign(el.style, {left: cell.x0 * 100 + "%", top: cell.y0 * 100 + "%", width: (cell.x1 - cell.x0) * 100 + "%", height: (cell.y1 - cell.y0) * 100 + "%"});
+    el.innerHTML = "<b>" + cell.n + "</b>";
+    el.addEventListener("click", () => toggle(cell));
+    layer.appendChild(el);
+  }
+  updateCount();
+}
+function toggle(cell) {
+  if (isOn(cell)) picks[pageNum] = P().filter(([x, y]) => !(x >= cell.x0 && x < cell.x1 && y >= cell.y0 && y < cell.y1));
+  else P().push([(cell.x0 + cell.x1) / 2, (cell.y0 + cell.y1) / 2]);
+  drawCells();
+}
+function selectedOn(p) { return cellsOf(p).filter(c => isOn(c, p)); }
+function updateCount() {
+  const here = selectedOn(pageNum).length;
+  let all = 0; if (pdf) for (let p = 1; p <= pdf.numPages; p++) all += selectedOn(p).length;
+  $("selCount").textContent = here + " markerade" + (all !== here ? " (" + all + " totalt)" : "");
+  const any = $("scope").value === "all" ? all : here;
+  $("saveZip").disabled = $("saveEach").disabled = !any;
+}
+
+// ---- export -------------------------------------------------------------
+async function exportCells() {
+  const scope = $("scope").value, dpi = +$("dpi").value, fmt = $("fmt").value;
+  const mime = fmt === "png" ? "image/png" : "image/jpeg";
+  const pages = scope === "all" ? [...Array(pdf.numPages)].map((_, i) => i + 1) : [pageNum];
+  const files = [];
+  for (const p of pages) {
+    const cells = selectedOn(p); if (!cells.length) continue;
+    status("Renderar sida " + p + "…");
+    const page = await pdf.getPage(p);
+    let scale = dpi / 72;
+    const b = page.getViewport({scale: 1});
+    scale = Math.min(scale, 16000 / Math.max(b.width, b.height)); // browser canvas limit
+    const vp = page.getViewport({scale});
+    const full = document.createElement("canvas"); full.width = Math.ceil(vp.width); full.height = Math.ceil(vp.height);
+    const ctx = full.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, full.width, full.height);
+    await page.render({canvasContext: ctx, viewport: vp}).promise;
+    for (const c of cells) {
+      const sx = Math.round(c.x0 * full.width), sy = Math.round(c.y0 * full.height);
+      const w = Math.max(1, Math.round(c.x1 * full.width) - sx), h = Math.max(1, Math.round(c.y1 * full.height) - sy);
+      const out = document.createElement("canvas"); out.width = w; out.height = h;
+      const o = out.getContext("2d"); o.fillStyle = "#fff"; o.fillRect(0, 0, w, h);
+      o.drawImage(full, sx, sy, w, h, 0, 0, w, h);
+      const blob = await new Promise(r => out.toBlob(r, mime, 0.92));
+      files.push({name: `${pdfName}_sida${p}_rad${c.r}_kol${c.c}.${fmt}`, blob});
+    }
+  }
+  return files;
+}
+function download(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+async function save(zip) {
+  try {
+    const files = await exportCells();
+    if (!files.length) return status("Inget markerat.");
+    if (zip) {
+      if (typeof JSZip === "undefined") return status("ZIP-biblioteket kunde inte laddas; använd separata filer.");
+      const z = new JSZip(); files.forEach(f => z.file(f.name, f.blob));
+      download(await z.generateAsync({type: "blob"}), pdfName + "_bilder.zip");
+    } else {
+      for (const f of files) { download(f.blob, f.name); await new Promise(r => setTimeout(r, 250)); }
+    }
+    status("Sparade " + files.length + " bild" + (files.length > 1 ? "er" : "") + ".");
+  } catch (e) { status("Fel vid sparning: " + e.message); }
+}
+
+// ---- wiring -------------------------------------------------------------
+$("open").onclick = () => $("file").click();
+$("file").onchange = e => { openFile(e.target.files[0]); e.target.value = ""; };
+const viewer = $("viewer");
+viewer.addEventListener("dragover", e => { e.preventDefault(); viewer.classList.add("over"); });
+viewer.addEventListener("dragleave", () => viewer.classList.remove("over"));
+viewer.addEventListener("drop", e => { e.preventDefault(); viewer.classList.remove("over"); openFile(e.dataTransfer.files[0]); });
+$("prev").onclick = () => { if (pageNum > 1) { pageNum--; render(); } };
+$("next").onclick = () => { if (pageNum < pdf.numPages) { pageNum++; render(); } };
+$("zin").onclick = () => { zoom *= 1.2; render(); };
+$("zout").onclick = () => { zoom /= 1.2; render(); };
+$("fit").onclick = fitWidth;
+$("addV").onclick = () => addGuide("v");
+$("addH").onclick = () => addGuide("h");
+$("clearGuides").onclick = () => { G().v = []; G().h = []; drawGuides(); drawCells(); drawList(); };
+$("selAll").onclick = () => { picks[pageNum] = cellsOf(pageNum).map(c => [(c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2]); drawCells(); };
+$("selNone").onclick = () => { picks[pageNum] = []; drawCells(); };
+$("scope").onchange = updateCount;
+$("saveZip").onclick = () => save(true);
+$("saveEach").onclick = () => save(false);
+</script>
+</body>
+</html>
