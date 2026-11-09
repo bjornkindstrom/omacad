@@ -93,6 +93,8 @@ aside h2:first-child{margin-top:0}
       <select id="scope"><option value="page">denna sida</option><option value="all">alla sidor</option></select></div>
     <div class="row"><button id="saveZip" class="primary" disabled>Spara som ZIP</button></div>
     <div class="row"><button id="saveEach" disabled>Spara som separata filer</button></div>
+    <div class="row"><button id="saveDir" disabled>Spara till mapp…</button></div>
+    <div class="hint">"Spara till mapp" (Chrome/Edge) låter dig välja var bilderna hamnar. Annars hamnar filerna i webbläsarens nedladdningsmapp (Hämtade filer/Downloads). Flera separata filer kan blockeras av webbläsaren: tillåt "flera nedladdningar" när den frågar, eller använd ZIP/mapp.</div>
     <div id="status" class="hint"></div>
   </aside>
 </main>
@@ -276,7 +278,8 @@ function updateCount() {
   let all = 0; if (pdf) for (let p = 1; p <= pdf.numPages; p++) all += selectedOn(p).length;
   $("selCount").textContent = here + " markerade" + (all !== here ? " (" + all + " totalt)" : "");
   const any = $("scope").value === "all" ? all : here;
-  $("saveZip").disabled = $("saveEach").disabled = !any;
+  $("saveZip").disabled = $("saveEach").disabled = $("saveDir").disabled = !any;
+  if (!window.showDirectoryPicker) $("saveDir").hidden = true;
 }
 
 // ---- export -------------------------------------------------------------
@@ -312,10 +315,19 @@ function download(blob, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
-async function save(zip) {
+async function save(zip, dirMode) {
   try {
+    let dir = null;
+    if (dirMode) dir = await window.showDirectoryPicker({mode: "readwrite"});
     const files = await exportCells();
     if (!files.length) return status("Inget markerat.");
+    if (dir) {
+      for (const f of files) {
+        const h = await dir.getFileHandle(f.name, {create: true}), w = await h.createWritable();
+        await w.write(f.blob); await w.close();
+      }
+      return status("Sparade " + files.length + " bilder i mappen \"" + dir.name + "\".");
+    }
     if (zip) {
       if (typeof JSZip === "undefined") return status("ZIP-biblioteket kunde inte laddas; använd separata filer.");
       const z = new JSZip(); files.forEach(f => z.file(f.name, f.blob));
@@ -323,8 +335,9 @@ async function save(zip) {
     } else {
       for (const f of files) { download(f.blob, f.name); await new Promise(r => setTimeout(r, 250)); }
     }
-    status("Sparade " + files.length + " bild" + (files.length > 1 ? "er" : "") + ".");
-  } catch (e) { status("Fel vid sparning: " + e.message); }
+    status("Sparade " + files.length + " bild" + (files.length > 1 ? "er" : "") + " i webbläsarens nedladdningsmapp.");
+  } catch (e) {
+    if (e.name === "AbortError") return status(""); status("Fel vid sparning: " + e.message); }
 }
 
 // ---- wiring -------------------------------------------------------------
@@ -347,6 +360,7 @@ $("selNone").onclick = () => { picks[pageNum] = []; drawCells(); };
 $("scope").onchange = updateCount;
 $("saveZip").onclick = () => save(true);
 $("saveEach").onclick = () => save(false);
+$("saveDir").onclick = () => save(false, true);
 </script>
 </body>
 </html>
